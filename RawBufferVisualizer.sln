@@ -14,6 +14,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.BitmapA
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.OpenCvSharpAdapter", "src\RawBufferVisualizer.OpenCvSharpAdapter\RawBufferVisualizer.OpenCvSharpAdapter.csproj", "{A642DA43-6146-487C-9B83-74DB8E77518E}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.VisualStudio.ObjectSource", "src\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj", "{B56C6421-1E2F-4EB5-8074-B9C686E93F9E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.VisualStudio", "src\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj", "{368A426B-B2C8-4446-8417-6E04E5A45C1E}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.Samples", "samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj", "{1C59730F-F25D-49F2-8CA9-B8D7FAD17F0D}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.Tests", "tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj", "{89169438-3429-44B1-987D-BA20795E9194}"
@@ -48,6 +52,14 @@ Global
 		{A642DA43-6146-487C-9B83-74DB8E77518E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{A642DA43-6146-487C-9B83-74DB8E77518E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{A642DA43-6146-487C-9B83-74DB8E77518E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B56C6421-1E2F-4EB5-8074-B9C686E93F9E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B56C6421-1E2F-4EB5-8074-B9C686E93F9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B56C6421-1E2F-4EB5-8074-B9C686E93F9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B56C6421-1E2F-4EB5-8074-B9C686E93F9E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{368A426B-B2C8-4446-8417-6E04E5A45C1E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{368A426B-B2C8-4446-8417-6E04E5A45C1E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{368A426B-B2C8-4446-8417-6E04E5A45C1E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{368A426B-B2C8-4446-8417-6E04E5A45C1E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{1C59730F-F25D-49F2-8CA9-B8D7FAD17F0D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{1C59730F-F25D-49F2-8CA9-B8D7FAD17F0D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{1C59730F-F25D-49F2-8CA9-B8D7FAD17F0D}.Release|Any CPU.ActiveCfg = Release|Any CPU
@@ -60,3 +72,4 @@ Global
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
+EndGlobal

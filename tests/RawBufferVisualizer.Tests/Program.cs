@@ -7,6 +7,8 @@ using RawBufferVisualizer.BitmapAdapter;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.OpenCvSharpAdapter;
 using RawBufferVisualizer.Sdk;
+using RawBufferVisualizer.VisualStudio;
+using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.Tests
 {
@@ -28,6 +30,8 @@ namespace RawBufferVisualizer.Tests
                 TileRenderMatchesFullRender();
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
+                VisualizerTransferRoundTrips();
+                VisualizerBridgeWritesLaunchSnapshot();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
@@ -268,6 +272,57 @@ namespace RawBufferVisualizer.Tests
                 Assert(snapshot.Descriptor.Width == 2 && snapshot.Descriptor.Height == 1, "Bitmap dimensions failed.");
                 Assert(snapshot.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Bitmap pixel format failed.");
                 Assert(snapshot.Buffer.Length >= 6, "Bitmap buffer length failed.");
+            }
+        }
+
+        private static void VisualizerTransferRoundTrips()
+        {
+            var descriptor = CreateDescriptor(2, 2, 2, RawPixelFormat.Mono8, 8);
+            var snapshot = RawBufferSnapshot.FromByteArray(new byte[] { 1, 2, 3, 4 }, descriptor);
+            var transfer = RawBufferSnapshotObjectSource.CreateTransfer(snapshot, "camera0");
+            snapshot.Buffer[0] = 99;
+
+            Assert(transfer.DisplayName == "camera0", "Visualizer transfer display name failed.");
+            Assert(transfer.SourceType == typeof(RawBufferSnapshot).FullName, "Visualizer transfer source type failed.");
+            Assert(transfer.Buffer[0] == 1, "Visualizer transfer should clone the source buffer.");
+            Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 2, "Visualizer transfer descriptor failed.");
+
+            var restored = transfer.ToSnapshot();
+            Assert(restored.Buffer[3] == 4, "Visualizer transfer buffer roundtrip failed.");
+            Assert(restored.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Visualizer transfer descriptor roundtrip failed.");
+        }
+
+        private static void VisualizerBridgeWritesLaunchSnapshot()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var viewerPath = Path.Combine(directory, "RawBufferVisualizer.Wpf.exe");
+                File.WriteAllBytes(viewerPath, new byte[] { 0 });
+
+                var descriptor = CreateDescriptor(2, 1, 2, RawPixelFormat.Mono8, 8);
+                var snapshot = RawBufferSnapshot.FromByteArray(new byte[] { 7, 8 }, descriptor);
+                var transfer = RawBufferSnapshotObjectSource.CreateTransfer(snapshot, "camera:0");
+                var request = StandaloneViewerBridge.PrepareLaunch(transfer, viewerPath, directory);
+
+                Assert(File.Exists(request.MetadataPath), "Visualizer bridge metadata file was not created.");
+                Assert(Path.GetFileName(request.MetadataPath).StartsWith("camera_0", StringComparison.Ordinal), "Visualizer bridge should sanitize snapshot names.");
+
+                var loaded = RawBufferSnapshot.Load(request.MetadataPath);
+                Assert(loaded.Buffer.Length == 2 && loaded.Buffer[1] == 8, "Visualizer bridge snapshot buffer failed.");
+                Assert(loaded.Descriptor.Width == 2 && loaded.Descriptor.Height == 1, "Visualizer bridge snapshot descriptor failed.");
+
+                var startInfo = request.CreateStartInfo();
+                Assert(startInfo.FileName == Path.GetFullPath(viewerPath), "Visualizer launch file path failed.");
+                Assert(startInfo.Arguments.Contains(request.MetadataPath), "Visualizer launch argument failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
             }
         }
 

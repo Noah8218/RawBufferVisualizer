@@ -61,6 +61,13 @@ src\RawBufferVisualizer.VisualStudio.ObjectSource\
 - Prefer `netstandard2.0` where practical so .NET Framework and modern .NET debuggee apps can use the same object source.
 - Converts supported objects into a serializable snapshot transfer shape.
 
+## Current Prototype Status
+
+- `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot` into `VisualizerSnapshotTransfer`.
+- `RawBufferVisualizer.VisualStudio` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot.
+- `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request.
+- Full Visual Studio debugger visualizer registration is the next step.
+
 ## Data Contract
 
 The transfer shape should be intentionally small and stable:
