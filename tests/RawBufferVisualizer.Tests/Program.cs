@@ -21,6 +21,7 @@ namespace RawBufferVisualizer.Tests
                 Mono12PackedLsbInspects();
                 Bgr24KeepsChannelOrder();
                 TilePlannerSplitsLargeImage();
+                TileRenderMatchesFullRender();
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
                 BitmapAdapterCreatesSnapshot();
@@ -85,6 +86,31 @@ namespace RawBufferVisualizer.Tests
                 ByteOrder = RawByteOrder.LittleEndian
             };
             Assert(RawImageTilePlanner.EstimateBgraByteCount(descriptor) == 1073741824L, "BGRA memory estimate failed.");
+        }
+
+        private static void TileRenderMatchesFullRender()
+        {
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 4,
+                Height = 3,
+                Stride = 4,
+                PixelFormat = RawPixelFormat.Mono8,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+            var buffer = new byte[]
+            {
+                1, 2, 3, 4,
+                5, 6, 7, 8,
+                9, 10, 11, 12
+            };
+
+            var full = RawBufferRenderer.Render(buffer, descriptor);
+            var tile = RawBufferRenderer.RenderTile(buffer, descriptor, 1, 1, 2, 2);
+            Assert(tile.Width == 2 && tile.Height == 2, "Tile render dimensions failed.");
+            Assert(tile.Bgra32[0] == full.Bgra32[((1 * descriptor.Width) + 1) * 4], "Tile render first pixel failed.");
+            Assert(tile.Bgra32[12] == full.Bgra32[((2 * descriptor.Width) + 2) * 4], "Tile render last pixel failed.");
         }
 
         private static void Mono10PackedLsbRenders()

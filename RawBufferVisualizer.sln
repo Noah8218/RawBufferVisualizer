@@ -8,6 +8,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.Sdk", "
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.Wpf", "src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj", "{97F622B6-0D4B-421F-89C7-ED6D5F917B3F}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.OpenGlCanvas", "src\RawBufferVisualizer.OpenGlCanvas\RawBufferVisualizer.OpenGlCanvas.csproj", "{1911011B-54BC-47E2-8FAF-AF06436A5C5C}"
+EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.BitmapAdapter", "src\RawBufferVisualizer.BitmapAdapter\RawBufferVisualizer.BitmapAdapter.csproj", "{5B930CE6-5078-4C07-A666-D7524F37E2A5}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.OpenCvSharpAdapter", "src\RawBufferVisualizer.OpenCvSharpAdapter\RawBufferVisualizer.OpenCvSharpAdapter.csproj", "{A642DA43-6146-487C-9B83-74DB8E77518E}"
@@ -34,6 +36,10 @@ Global
 		{97F622B6-0D4B-421F-89C7-ED6D5F917B3F}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{97F622B6-0D4B-421F-89C7-ED6D5F917B3F}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{97F622B6-0D4B-421F-89C7-ED6D5F917B3F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1911011B-54BC-47E2-8FAF-AF06436A5C5C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1911011B-54BC-47E2-8FAF-AF06436A5C5C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1911011B-54BC-47E2-8FAF-AF06436A5C5C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1911011B-54BC-47E2-8FAF-AF06436A5C5C}.Release|Any CPU.Build.0 = Release|Any CPU
 		{5B930CE6-5078-4C07-A666-D7524F37E2A5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{5B930CE6-5078-4C07-A666-D7524F37E2A5}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{5B930CE6-5078-4C07-A666-D7524F37E2A5}.Release|Any CPU.ActiveCfg = Release|Any CPU

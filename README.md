@@ -12,17 +12,19 @@ Raw Buffer Visualizer is a Windows desktop utility for C# machine-vision develop
 - OpenCvSharp adapter for `Mat` snapshots.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
-- Large-image guard: CPU BGRA preview is skipped above 512 MB, and the viewer reports an OpenGL tile plan instead of allocating the full rendered image.
+- WPF OpenGL canvas for tiled texture display.
+- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB, while OpenGL display remains tiled.
 
-## Large image direction
+## WPF OpenGL image canvas
 
-The OpenGL viewer path should use tiled texture upload instead of one full-frame bitmap. The current shared rule is:
+The viewer uses tiled texture upload instead of one full-frame WPF bitmap. The current shared rule is:
 
 - default tile size: `5000 x 5000`
 - tile planner: `RawImageTilePlanner.CreateTiles(width, height)`
 - memory estimate: `RawImageTilePlanner.EstimateBgraByteCount(descriptor)`
+- WPF canvas project: `RawBufferVisualizer.OpenGlCanvas`
 
-This mirrors the existing OpenGL image canvas approach in the local reference project while keeping this MVP compatible with `net472` and modern .NET.
+This mirrors the local OpenGL ImageCanvas tiling approach, but the control is implemented as a WPF `UserControl` instead of a WinForms host.
 
 ## Snapshot format
 

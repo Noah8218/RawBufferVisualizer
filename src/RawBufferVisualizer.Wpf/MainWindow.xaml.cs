@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using RawBufferVisualizer.Core;
+using RawBufferVisualizer.OpenGlCanvas;
 using RawBufferVisualizer.Sdk;
 using Line = System.Windows.Shapes.Line;
 
@@ -41,6 +42,7 @@ namespace RawBufferVisualizer.Wpf
         {
             FormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat)).Cast<RawPixelFormat>();
             ByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder)).Cast<RawByteOrder>();
+            OpenGlImageView.PixelHovered += OpenGlImageView_PixelHovered;
             ApplyDescriptorToFields();
             UpdateStatus();
         }
@@ -88,9 +90,9 @@ namespace RawBufferVisualizer.Wpf
 
         private void SavePng_Click(object sender, RoutedEventArgs e)
         {
-            if (_rendered == null || ImageView.Source == null)
+            if (_rendered == null)
             {
-                MessageBox.Show(this, "No rendered image to save.", "Save PNG", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, "PNG export is available only when the CPU preview cache is enabled.", "Save PNG", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -108,7 +110,7 @@ namespace RawBufferVisualizer.Wpf
             using (var stream = File.Create(dialog.FileName))
             {
                 var encoder = new PngBitmapEncoder();
-                encoder.Frames.Add(BitmapFrame.Create((BitmapSource)ImageView.Source));
+                encoder.Frames.Add(BitmapFrame.Create(CreateBitmapSource(_rendered)));
                 encoder.Save(stream);
             }
         }
@@ -233,31 +235,34 @@ namespace RawBufferVisualizer.Wpf
                 return;
             }
 
+            try
+            {
+                OpenGlImageView.LoadRawBuffer(_buffer, _descriptor);
+            }
+            catch (Exception ex)
+            {
+                ClearPreview();
+                DiagnosticsList.Items.Add("Error: OpenGL upload failed. " + ex.Message);
+                UpdateStatus();
+                return;
+            }
+
             var estimatedPreviewBytes = RawImageTilePlanner.EstimateBgraByteCount(_descriptor);
             if (estimatedPreviewBytes > MaxCpuPreviewBytes)
             {
-                ClearPreview();
-                var tileCount = RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height).Count;
+                _rendered = null;
+                HistogramCanvas.Children.Clear();
                 DiagnosticsList.Items.Add(string.Format(
                     CultureInfo.InvariantCulture,
-                    "Warning: CPU preview skipped because BGRA preview would require {0:N0} bytes. OpenGL tile plan is {1:N0} tiles at up to {2:N0} px.",
+                    "Info: CPU histogram and PNG cache skipped because BGRA preview would require {0:N0} bytes. OpenGL uploaded {1:N0} tiles.",
                     estimatedPreviewBytes,
-                    tileCount,
-                    RawImageTilePlanner.DefaultTileSize));
+                    OpenGlImageView.TileCount));
                 FileText.Text = _currentPath ?? string.Empty;
-                StatusText.Text = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0} x {1}, {2}, OpenGL tiles: {3:N0}",
-                    _descriptor.Width,
-                    _descriptor.Height,
-                    _descriptor.PixelFormat,
-                    tileCount);
+                UpdateStatus();
                 return;
             }
 
             _rendered = RawBufferRenderer.Render(_buffer, _descriptor);
-            var bitmap = CreateBitmapSource(_rendered);
-            ImageView.Source = bitmap;
             FileText.Text = _currentPath ?? string.Empty;
             DrawHistogram();
             UpdateStatus();
@@ -281,7 +286,7 @@ namespace RawBufferVisualizer.Wpf
         private void ClearPreview()
         {
             _rendered = null;
-            ImageView.Source = null;
+            OpenGlImageView.ClearImage();
             HistogramCanvas.Children.Clear();
         }
 
@@ -326,18 +331,15 @@ namespace RawBufferVisualizer.Wpf
             }
         }
 
-        private void ImageView_MouseMove(object sender, MouseEventArgs e)
+        private void OpenGlImageView_PixelHovered(object? sender, RawOpenGlPixelEventArgs e)
         {
-            if (_buffer == null || _rendered == null || ImageView.Source == null)
+            if (_buffer == null || e.X < 0 || e.Y < 0)
             {
+                PixelText.Text = string.Empty;
                 return;
             }
 
-            var position = e.GetPosition(ImageView);
-            var zoom = Math.Max(ZoomSlider.Value, 0.1);
-            var x = (int)(position.X / zoom);
-            var y = (int)(position.Y / zoom);
-            PixelText.Text = RawPixelInspector.Describe(_buffer, _descriptor, x, y);
+            PixelText.Text = RawPixelInspector.Describe(_buffer, _descriptor, e.X, e.Y);
         }
 
         private void Window_DragOver(object sender, DragEventArgs e)
@@ -362,13 +364,12 @@ namespace RawBufferVisualizer.Wpf
 
         private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
-            if (ImageScale == null)
+            if (OpenGlImageView == null)
             {
                 return;
             }
 
-            ImageScale.ScaleX = e.NewValue;
-            ImageScale.ScaleY = e.NewValue;
+            OpenGlImageView.SetZoomScale(e.NewValue);
             UpdateStatus();
         }
 
@@ -387,11 +388,12 @@ namespace RawBufferVisualizer.Wpf
 
             StatusText.Text = string.Format(
                 CultureInfo.InvariantCulture,
-                "{0} x {1}, {2}, {3:N0} bytes",
+                "{0} x {1}, {2}, {3:N0} bytes, GL tiles {4:N0}",
                 _descriptor.Width,
                 _descriptor.Height,
                 _descriptor.PixelFormat,
-                _buffer.Length);
+                _buffer.Length,
+                OpenGlImageView.TileCount);
         }
     }
 }

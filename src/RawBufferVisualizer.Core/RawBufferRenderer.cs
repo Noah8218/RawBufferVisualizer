@@ -7,14 +7,24 @@ namespace RawBufferVisualizer.Core
     {
         public static RenderedImage Render(byte[] buffer, RawImageDescriptor descriptor, RawRenderOptions? options = null)
         {
+            return RenderTile(buffer, descriptor, 0, 0, descriptor.Width, descriptor.Height, options);
+        }
+
+        public static RenderedImage RenderTile(byte[] buffer, RawImageDescriptor descriptor, int x, int y, int width, int height, RawRenderOptions? options = null)
+        {
             var diagnostics = RawBufferDiagnostics.Analyze(buffer, descriptor);
             if (RawBufferDiagnostics.HasErrors(diagnostics))
             {
                 throw new ArgumentException(string.Join(Environment.NewLine, ToStrings(diagnostics)));
             }
 
+            if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > descriptor.Width || y + height > descriptor.Height)
+            {
+                throw new ArgumentOutOfRangeException("x", "Tile bounds must be inside the image.");
+            }
+
             options = options ?? new RawRenderOptions();
-            var pixelByteCount = RawImageTilePlanner.EstimateBgraByteCount(descriptor);
+            var pixelByteCount = checked((long)width * height * 4);
             if (pixelByteCount > int.MaxValue)
             {
                 throw new InvalidOperationException("Rendered image exceeds a single BGRA buffer. Use tiled rendering for this image.");
@@ -26,40 +36,40 @@ namespace RawBufferVisualizer.Core
             {
                 case RawPixelFormat.Mono8:
                 case RawPixelFormat.Binary:
-                    RenderMono8(buffer, descriptor, pixels, descriptor.PixelFormat == RawPixelFormat.Binary);
+                    RenderMono8(buffer, descriptor, pixels, x, y, width, height, descriptor.PixelFormat == RawPixelFormat.Binary);
                     break;
                 case RawPixelFormat.Mono16:
-                    RenderMono16(buffer, descriptor, pixels, options);
+                    RenderMono16(buffer, descriptor, pixels, x, y, width, height, options);
                     break;
                 case RawPixelFormat.Mono10PackedLsb:
-                    RenderPackedMono(buffer, descriptor, pixels, 10, options);
+                    RenderPackedMono(buffer, descriptor, pixels, x, y, width, height, 10, options);
                     break;
                 case RawPixelFormat.Mono12PackedLsb:
-                    RenderPackedMono(buffer, descriptor, pixels, 12, options);
+                    RenderPackedMono(buffer, descriptor, pixels, x, y, width, height, 12, options);
                     break;
                 case RawPixelFormat.Float32:
-                    RenderFloat32(buffer, descriptor, pixels, options);
+                    RenderFloat32(buffer, descriptor, pixels, x, y, width, height, options);
                     break;
                 case RawPixelFormat.RGB24:
-                    RenderRgb24(buffer, descriptor, pixels, true);
+                    RenderRgb24(buffer, descriptor, pixels, x, y, width, height, true);
                     break;
                 case RawPixelFormat.BGR24:
-                    RenderRgb24(buffer, descriptor, pixels, false);
+                    RenderRgb24(buffer, descriptor, pixels, x, y, width, height, false);
                     break;
                 case RawPixelFormat.BGRA32:
-                    RenderBgra32(buffer, descriptor, pixels);
+                    RenderBgra32(buffer, descriptor, pixels, x, y, width, height);
                     break;
                 case RawPixelFormat.BayerRGGB8:
                 case RawPixelFormat.BayerGRBG8:
                 case RawPixelFormat.BayerGBRG8:
                 case RawPixelFormat.BayerBGGR8:
-                    RenderBayer8(buffer, descriptor, pixels);
+                    RenderBayer8(buffer, descriptor, pixels, x, y, width, height);
                     break;
                 default:
                     throw new NotSupportedException("Unsupported pixel format: " + descriptor.PixelFormat);
             }
 
-            return new RenderedImage(descriptor.Width, descriptor.Height, pixels);
+            return new RenderedImage(width, height, pixels);
         }
 
         private static IEnumerable<string> ToStrings(IReadOnlyList<RawDiagnostic> diagnostics)
@@ -70,21 +80,54 @@ namespace RawBufferVisualizer.Core
             }
         }
 
-        private static void RenderPackedMono(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int bitsPerPixel, RawRenderOptions options)
+        public static RawRenderOptions CreateFixedScaleOptions(byte[] buffer, RawImageDescriptor descriptor)
+        {
+            var options = new RawRenderOptions();
+            Tuple<double, double>? levels = null;
+            switch (descriptor.PixelFormat)
+            {
+                case RawPixelFormat.Mono16:
+                    levels = GetMono16Levels(buffer, descriptor, options);
+                    break;
+                case RawPixelFormat.Mono10PackedLsb:
+                    levels = GetPackedMonoLevels(buffer, descriptor, 10, options);
+                    break;
+                case RawPixelFormat.Mono12PackedLsb:
+                    levels = GetPackedMonoLevels(buffer, descriptor, 12, options);
+                    break;
+                case RawPixelFormat.Float32:
+                    levels = GetFloat32Levels(buffer, descriptor, options);
+                    break;
+            }
+
+            if (levels == null)
+            {
+                return options;
+            }
+
+            return new RawRenderOptions
+            {
+                AutoScale = false,
+                BlackLevel = levels.Item1,
+                WhiteLevel = levels.Item2 <= levels.Item1 ? levels.Item1 + 1 : levels.Item2
+            };
+        }
+
+        private static void RenderPackedMono(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, int bitsPerPixel, RawRenderOptions options)
         {
             var levels = GetPackedMonoLevels(buffer, descriptor, bitsPerPixel, options);
             var black = levels.Item1;
             var white = levels.Item2 <= black ? black + 1 : levels.Item2;
 
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                var sourceRow = y * descriptor.Stride;
-                var targetRow = y * descriptor.Width * 4;
-                for (var x = 0; x < descriptor.Width; x++)
+                var sourceRow = (y + tileY) * descriptor.Stride;
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
                 {
-                    var raw = ReadPackedLsb(buffer, sourceRow, x, bitsPerPixel);
+                    var raw = ReadPackedLsb(buffer, sourceRow, x + tileX, bitsPerPixel);
                     var value = ToByte(raw, black, white);
-                    WriteBgra(pixels, targetRow + (x * 4), value, value, value, 255);
+                    WriteBgra(pixels, targetRow + (tileX * 4), value, value, value, 255);
                 }
             }
         }
@@ -120,40 +163,40 @@ namespace RawBufferVisualizer.Core
             return Tuple.Create((double)min, (double)max);
         }
 
-        private static void RenderMono8(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, bool binary)
+        private static void RenderMono8(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, bool binary)
         {
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                var sourceRow = y * descriptor.Stride;
-                var targetRow = y * descriptor.Width * 4;
-                for (var x = 0; x < descriptor.Width; x++)
+                var sourceRow = (y + tileY) * descriptor.Stride;
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
                 {
-                    var value = buffer[sourceRow + x];
+                    var value = buffer[sourceRow + x + tileX];
                     if (binary)
                     {
                         value = value == 0 ? (byte)0 : (byte)255;
                     }
 
-                    WriteBgra(pixels, targetRow + (x * 4), value, value, value, 255);
+                    WriteBgra(pixels, targetRow + (tileX * 4), value, value, value, 255);
                 }
             }
         }
 
-        private static void RenderMono16(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, RawRenderOptions options)
+        private static void RenderMono16(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, RawRenderOptions options)
         {
             var levels = GetMono16Levels(buffer, descriptor, options);
             var black = levels.Item1;
             var white = levels.Item2 <= black ? black + 1 : levels.Item2;
 
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                var sourceRow = y * descriptor.Stride;
-                var targetRow = y * descriptor.Width * 4;
-                for (var x = 0; x < descriptor.Width; x++)
+                var sourceRow = (y + tileY) * descriptor.Stride;
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
                 {
-                    var raw = ReadUInt16(buffer, sourceRow + (x * 2), descriptor.ByteOrder);
+                    var raw = ReadUInt16(buffer, sourceRow + ((x + tileX) * 2), descriptor.ByteOrder);
                     var value = ToByte(raw, black, white);
-                    WriteBgra(pixels, targetRow + (x * 4), value, value, value, 255);
+                    WriteBgra(pixels, targetRow + (tileX * 4), value, value, value, 255);
                 }
             }
         }
@@ -188,21 +231,21 @@ namespace RawBufferVisualizer.Core
             return Tuple.Create((double)min, (double)max);
         }
 
-        private static void RenderFloat32(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, RawRenderOptions options)
+        private static void RenderFloat32(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, RawRenderOptions options)
         {
             var levels = GetFloat32Levels(buffer, descriptor, options);
             var black = levels.Item1;
             var white = levels.Item2 <= black ? black + 1 : levels.Item2;
 
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                var sourceRow = y * descriptor.Stride;
-                var targetRow = y * descriptor.Width * 4;
-                for (var x = 0; x < descriptor.Width; x++)
+                var sourceRow = (y + tileY) * descriptor.Stride;
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
                 {
-                    var raw = ReadSingle(buffer, sourceRow + (x * 4), descriptor.ByteOrder);
+                    var raw = ReadSingle(buffer, sourceRow + ((x + tileX) * 4), descriptor.ByteOrder);
                     var value = double.IsNaN(raw) || double.IsInfinity(raw) ? (byte)0 : ToByte(raw, black, white);
-                    WriteBgra(pixels, targetRow + (x * 4), value, value, value, 255);
+                    WriteBgra(pixels, targetRow + (tileX * 4), value, value, value, 255);
                 }
             }
         }
@@ -247,16 +290,16 @@ namespace RawBufferVisualizer.Core
             return Tuple.Create(min, max);
         }
 
-        private static void RenderRgb24(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, bool sourceIsRgb)
+        private static void RenderRgb24(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, bool sourceIsRgb)
         {
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                var sourceRow = y * descriptor.Stride;
-                var targetRow = y * descriptor.Width * 4;
-                for (var x = 0; x < descriptor.Width; x++)
+                var sourceRow = (y + tileY) * descriptor.Stride;
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
                 {
-                    var source = sourceRow + (x * 3);
-                    var target = targetRow + (x * 4);
+                    var source = sourceRow + ((x + tileX) * 3);
+                    var target = targetRow + (tileX * 4);
                     var c0 = buffer[source];
                     var c1 = buffer[source + 1];
                     var c2 = buffer[source + 2];
@@ -272,26 +315,28 @@ namespace RawBufferVisualizer.Core
             }
         }
 
-        private static void RenderBgra32(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels)
+        private static void RenderBgra32(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height)
         {
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                Buffer.BlockCopy(buffer, y * descriptor.Stride, pixels, y * descriptor.Width * 4, descriptor.Width * 4);
+                Buffer.BlockCopy(buffer, ((y + tileY) * descriptor.Stride) + (x * 4), pixels, tileY * width * 4, width * 4);
             }
         }
 
-        private static void RenderBayer8(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels)
+        private static void RenderBayer8(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height)
         {
             // ponytail: simple 3x3 demosaic, replace with a camera-tuned pipeline if color quality matters.
-            for (var y = 0; y < descriptor.Height; y++)
+            for (var tileY = 0; tileY < height; tileY++)
             {
-                var targetRow = y * descriptor.Width * 4;
-                for (var x = 0; x < descriptor.Width; x++)
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
                 {
-                    var r = AverageBayerColor(buffer, descriptor, x, y, 0);
-                    var g = AverageBayerColor(buffer, descriptor, x, y, 1);
-                    var b = AverageBayerColor(buffer, descriptor, x, y, 2);
-                    WriteBgra(pixels, targetRow + (x * 4), b, g, r, 255);
+                    var imageX = x + tileX;
+                    var imageY = y + tileY;
+                    var r = AverageBayerColor(buffer, descriptor, imageX, imageY, 0);
+                    var g = AverageBayerColor(buffer, descriptor, imageX, imageY, 1);
+                    var b = AverageBayerColor(buffer, descriptor, imageX, imageY, 2);
+                    WriteBgra(pixels, targetRow + (tileX * 4), b, g, r, 255);
                 }
             }
         }
