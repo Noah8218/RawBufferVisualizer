@@ -10,7 +10,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 ## Current roadmap
 
 1. Finish the standalone Windows Image Watch program.
-2. Publish the local repository to GitHub after a remote repository is available.
+2. Keep GitHub updated and produce release-ready Windows packages.
 3. Add Visual Studio integration after the standalone viewer is stable.
 
 ## Current MVP
@@ -26,6 +26,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF OpenGL canvas for tiled texture display.
 - Large-image guard: CPU histogram/PNG cache is skipped above 512 MB, while OpenGL display remains tiled.
+- Windows publish script for release-ready viewer zip packages.
 
 ## WPF OpenGL image canvas
 
@@ -106,6 +107,29 @@ For .NET Framework deployments, build the `net472` target:
 dotnet build .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net472
 ```
 
+## Publish a Windows package
+
+Create a self-contained Windows x64 package for GitHub Releases:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
+```
+
+The default output is:
+
+```text
+artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc\
+artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc.zip
+```
+
+Create a .NET Framework 4.7.2 package:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1 -Framework net472
+```
+
+Samples are copied into the package by default. Use `-SkipSamples` for a smaller package or `-NoZip` when only the publish folder is needed.
+
 ## SDK example
 
 ```csharp
@@ -144,9 +168,14 @@ snapshot.Save("mat.rbuf.json");
 
 ## GitHub setup
 
-Local git is enough for history on this machine. For GitHub sync, create an empty GitHub repository or provide a remote URL, then run:
+This repository currently tracks:
+
+```text
+https://github.com/Noah8218/RawBufferVisualizer.git
+```
+
+Push local commits with:
 
 ```powershell
-git remote add origin https://github.com/<owner>/<repo>.git
-git push -u origin codex/initial-mvp
+git push
 ```
