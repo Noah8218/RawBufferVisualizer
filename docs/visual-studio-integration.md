@@ -64,9 +64,28 @@ src\RawBufferVisualizer.VisualStudio.ObjectSource\
 ## Current Prototype Status
 
 - `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot` into `VisualizerSnapshotTransfer`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` includes the Visual Studio custom object source for `RawBufferSnapshot`.
 - `RawBufferVisualizer.VisualStudio` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot.
 - `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request.
-- Full Visual Studio debugger visualizer registration is the next step.
+- `RawBufferVisualizer.VisualStudio.Extensibility` registers a `RawBufferSnapshot` debugger visualizer provider.
+- The standalone viewer path is resolved from `RAW_BUFFER_VISUALIZER_VIEWER` or a side-by-side `RawBufferVisualizer.Wpf.exe`.
+- Manual Visual Studio installation and DataTip/Watch verification are the next steps.
+
+## Prototype Build
+
+Build the current extension prototype:
+
+```powershell
+dotnet build .\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj -c Release
+```
+
+Before manual Visual Studio testing, point the extension at a built viewer:
+
+```powershell
+$env:RAW_BUFFER_VISUALIZER_VIEWER = "C:\Tools\RawBufferVisualizer\RawBufferVisualizer.Wpf.exe"
+```
+
+Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload.
 
 ## Data Contract
 

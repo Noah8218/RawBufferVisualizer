@@ -32,6 +32,7 @@ namespace RawBufferVisualizer.Tests
                 SnapshotRoundTrips();
                 VisualizerTransferRoundTrips();
                 VisualizerBridgeWritesLaunchSnapshot();
+                ViewerPathResolverFindsConfiguredViewer();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
@@ -319,6 +320,30 @@ namespace RawBufferVisualizer.Tests
             }
             finally
             {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void ViewerPathResolverFindsConfiguredViewer()
+        {
+            var original = Environment.GetEnvironmentVariable(ViewerPathResolver.ViewerPathEnvironmentVariable);
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var viewerPath = Path.Combine(directory, "RawBufferVisualizer.Wpf.exe");
+                File.WriteAllBytes(viewerPath, new byte[] { 0 });
+                Environment.SetEnvironmentVariable(ViewerPathResolver.ViewerPathEnvironmentVariable, viewerPath);
+
+                var resolved = ViewerPathResolver.ResolveViewerExecutablePath();
+                Assert(resolved == Path.GetFullPath(viewerPath), "Viewer path resolver should use the configured viewer path.");
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable(ViewerPathResolver.ViewerPathEnvironmentVariable, original);
                 if (Directory.Exists(directory))
                 {
                     Directory.Delete(directory, true);
