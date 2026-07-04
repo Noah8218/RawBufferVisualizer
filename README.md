@@ -7,6 +7,7 @@ Raw Buffer Visualizer is a Windows desktop Image Watch utility for C# machine-vi
 The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `Mat`, `Bitmap`, `IntPtr`, pixel formats, large-image display, and inspection ergonomics. The final product goal is Visual Studio debugger integration similar to Image Watch.
 
 - Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
+- Visual Studio integration plan: [docs/visual-studio-integration.md](docs/visual-studio-integration.md)
 
 ## Current roadmap
 
@@ -205,6 +206,8 @@ The standalone viewer is the first surface. The final target is Visual Studio in
 - `Bitmap` and OpenCvSharp `Mat` adapters next
 - raw pointer buffers only when width, height, stride, pixel format, and ownership metadata are available
 - same viewer behavior for zoom, pixel inspection, histogram, diagnostics, and export
+
+The first implementation plan is documented in [docs/visual-studio-integration.md](docs/visual-studio-integration.md).
 
 ## GitHub setup
 

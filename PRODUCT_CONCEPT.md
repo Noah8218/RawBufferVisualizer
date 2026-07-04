@@ -77,6 +77,8 @@ The Visual Studio integration should start small:
 4. Reuse the standalone viewer surface instead of building a second UI.
 5. Keep adapters optional so user projects do not inherit dependencies they do not use.
 
+The current implementation direction is fixed in [docs/visual-studio-integration.md](docs/visual-studio-integration.md).
+
 ## Non-Goals For Now
 
 - Replacing HALCON, VisionPro, or OpenCV.
