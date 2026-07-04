@@ -8,14 +8,39 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class BitmapVisualizerObjectSource : VisualizerObjectSource
     {
+        private Bitmap? _cachedBitmap;
+        private VisualizerSnapshotTransfer? _cachedTransfer;
+
         public override void GetData(object target, Stream outgoingData)
+        {
+            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateMetadata(GetTransfer(target)));
+        }
+
+        public override void TransferData(object target, Stream incomingData, Stream outgoingData)
+        {
+            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
+            if (request == null)
+            {
+                throw new InvalidDataException("Chunk request is required.");
+            }
+
+            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(GetTransfer(target), request));
+        }
+
+        private VisualizerSnapshotTransfer GetTransfer(object target)
         {
             if (!(target is Bitmap bitmap))
             {
                 throw new NotSupportedException("Only System.Drawing.Bitmap is supported.");
             }
 
-            SerializeAsJson(outgoingData, BitmapVisualizerTransfer.CreateTransfer(bitmap));
+            if (!ReferenceEquals(bitmap, _cachedBitmap))
+            {
+                _cachedBitmap = bitmap;
+                _cachedTransfer = BitmapVisualizerTransfer.CreateTransfer(bitmap);
+            }
+
+            return _cachedTransfer ?? throw new InvalidOperationException("Bitmap transfer was not created.");
         }
     }
 

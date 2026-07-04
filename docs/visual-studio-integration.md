@@ -65,6 +65,7 @@ src\RawBufferVisualizer.VisualStudio.ObjectSource\
 
 - `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` into `VisualizerSnapshotTransfer`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `Bitmap`, and `Mat`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
 - `RawBufferVisualizer.VisualStudio` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot.
 - `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request.
 - `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `Bitmap`, and `Mat`.
@@ -114,9 +115,9 @@ public sealed class VisualizerSnapshotTransfer
 }
 ```
 
-The object source converts the target object into this transfer shape. The visualizer side writes it to the current `.rbuf.json` plus `.raw` format and opens the viewer.
+The object source converts the target object into this transfer shape internally. The extension requests `VisualizerSnapshotMetadata` first, then requests `VisualizerSnapshotChunk` blocks until the raw payload is written to disk. The current chunk size is 4 MiB.
 
-For large images, do not rely on one oversized serialization call. Use the visualizer object source message pattern to request metadata first and buffer chunks after that.
+This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currently snapshot their source object once inside the object source, then return chunks from that snapshot.
 
 ## Version Policy
 
@@ -132,7 +133,7 @@ For large images, do not rely on one oversized serialization call. Use the visua
 4. Done: add install/build notes for the extension.
 5. Done: add `Bitmap` support.
 6. Done: add OpenCvSharp `Mat` support.
-7. Add chunked transfer for large buffers.
+7. Done: add chunked transfer for large buffers.
 8. Add vendor or camera SDK adapters only after the generic descriptor-wrapper path is stable.
 
 ## Validation Checklist
@@ -141,7 +142,7 @@ For large images, do not rely on one oversized serialization call. Use the visua
 - Viewer opens from the visualizer with a generated temp snapshot.
 - Pixel format, width, height, stride, valid bits, and byte order match the debuggee object.
 - Mono, color, packed mono, float, and Bayer samples still render correctly after the VS path.
-- Large images do not freeze Visual Studio while transferring data.
+- Large images are transferred through metadata plus repeated chunk requests instead of one full-buffer response.
 - Missing viewer executable shows a clear actionable error.
 - Unsupported target types fail with a clear message, not a silent no-op.
 

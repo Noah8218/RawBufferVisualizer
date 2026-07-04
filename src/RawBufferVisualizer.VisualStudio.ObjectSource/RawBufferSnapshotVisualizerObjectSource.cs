@@ -14,7 +14,28 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new NotSupportedException("Only RawBufferSnapshot is supported.");
             }
 
-            SerializeAsJson(outgoingData, RawBufferSnapshotObjectSource.CreateTransfer(snapshot));
+            SerializeAsJson(
+                outgoingData,
+                VisualizerChunkedTransfer.CreateMetadata(
+                    snapshot.Descriptor,
+                    snapshot.Buffer.LongLength,
+                    typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot)));
+        }
+
+        public override void TransferData(object target, Stream incomingData, Stream outgoingData)
+        {
+            if (!(target is RawBufferSnapshot snapshot))
+            {
+                throw new NotSupportedException("Only RawBufferSnapshot is supported.");
+            }
+
+            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
+            if (request == null)
+            {
+                throw new InvalidDataException("Chunk request is required.");
+            }
+
+            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request));
         }
     }
 }

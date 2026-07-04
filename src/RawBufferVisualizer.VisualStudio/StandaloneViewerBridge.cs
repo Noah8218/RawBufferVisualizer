@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio
@@ -35,11 +36,59 @@ namespace RawBufferVisualizer.VisualStudio
             Directory.CreateDirectory(snapshotDirectory);
 
             var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(transfer.DisplayName) + ".rbuf.json");
-            transfer.ToSnapshot().Save(metadataPath);
+            var snapshot = transfer.ToSnapshot();
+            snapshot.Save(metadataPath);
+            if (snapshot.RawPath == null)
+            {
+                throw new InvalidOperationException("Snapshot raw file path was not created.");
+            }
 
             return new VisualizerLaunchRequest(
                 fullViewerPath,
                 metadataPath,
+                snapshot.RawPath,
+                Path.GetDirectoryName(fullViewerPath) ?? Directory.GetCurrentDirectory());
+        }
+
+        public static VisualizerLaunchRequest PrepareLaunch(
+            VisualizerSnapshotMetadata metadata,
+            string viewerExecutablePath,
+            string? snapshotRootDirectory = null)
+        {
+            if (metadata == null)
+            {
+                throw new ArgumentNullException(nameof(metadata));
+            }
+
+            if (string.IsNullOrWhiteSpace(viewerExecutablePath))
+            {
+                throw new ArgumentException("Viewer executable path is required.", nameof(viewerExecutablePath));
+            }
+
+            if (metadata.Descriptor == null)
+            {
+                throw new ArgumentException("Snapshot descriptor is required.", nameof(metadata));
+            }
+
+            var fullViewerPath = Path.GetFullPath(viewerExecutablePath);
+            if (!File.Exists(fullViewerPath))
+            {
+                throw new FileNotFoundException("Raw Buffer Visualizer executable was not found.", fullViewerPath);
+            }
+
+            var root = string.IsNullOrWhiteSpace(snapshotRootDirectory)
+                ? Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio")
+                : Path.GetFullPath(snapshotRootDirectory);
+            var snapshotDirectory = Path.Combine(root, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(snapshotDirectory);
+
+            var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
+            var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
+
+            return new VisualizerLaunchRequest(
+                fullViewerPath,
+                metadataPath,
+                rawPath,
                 Path.GetDirectoryName(fullViewerPath) ?? Directory.GetCurrentDirectory());
         }
 

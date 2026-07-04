@@ -6,12 +6,14 @@ namespace RawBufferVisualizer.VisualStudio
     {
         public string ViewerExecutablePath { get; private set; }
         public string MetadataPath { get; private set; }
+        public string RawPath { get; private set; }
         public string WorkingDirectory { get; private set; }
 
-        internal VisualizerLaunchRequest(string viewerExecutablePath, string metadataPath, string workingDirectory)
+        internal VisualizerLaunchRequest(string viewerExecutablePath, string metadataPath, string rawPath, string workingDirectory)
         {
             ViewerExecutablePath = viewerExecutablePath;
             MetadataPath = metadataPath;
+            RawPath = rawPath;
             WorkingDirectory = workingDirectory;
         }
 

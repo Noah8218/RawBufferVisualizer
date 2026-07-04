@@ -11,9 +11,34 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class OpenCvSharpMatVisualizerObjectSource : VisualizerObjectSource
     {
+        private object? _cachedMat;
+        private VisualizerSnapshotTransfer? _cachedTransfer;
+
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreateTransfer(target));
+            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateMetadata(GetTransfer(target)));
+        }
+
+        public override void TransferData(object target, Stream incomingData, Stream outgoingData)
+        {
+            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
+            if (request == null)
+            {
+                throw new InvalidDataException("Chunk request is required.");
+            }
+
+            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(GetTransfer(target), request));
+        }
+
+        private VisualizerSnapshotTransfer GetTransfer(object target)
+        {
+            if (!ReferenceEquals(target, _cachedMat))
+            {
+                _cachedMat = target;
+                _cachedTransfer = OpenCvSharpMatVisualizerTransfer.CreateTransfer(target);
+            }
+
+            return _cachedTransfer ?? throw new InvalidOperationException("Mat transfer was not created.");
         }
     }
 

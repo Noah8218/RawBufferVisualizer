@@ -123,6 +123,40 @@ namespace RawBufferVisualizer.Sdk
             RawPath = rawPath;
         }
 
+        public static string SaveMetadata(string metadataPath, RawImageDescriptor descriptor, string? rawFileName = null)
+        {
+            if (string.IsNullOrWhiteSpace(metadataPath))
+            {
+                throw new ArgumentException("Metadata path is required.", nameof(metadataPath));
+            }
+
+            if (descriptor == null)
+            {
+                throw new ArgumentNullException(nameof(descriptor));
+            }
+
+            var fullMetadataPath = Path.GetFullPath(metadataPath);
+            var directory = Path.GetDirectoryName(fullMetadataPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var rawPath = string.IsNullOrWhiteSpace(rawFileName)
+                ? GetDefaultRawPath(fullMetadataPath)
+                : Path.GetFullPath(Path.Combine(directory ?? string.Empty, rawFileName));
+
+            var dto = RawBufferSnapshotDto.From(descriptor);
+            dto.RawFile = Path.GetFileName(rawPath);
+            using (var stream = File.Create(fullMetadataPath))
+            {
+                var serializer = new DataContractJsonSerializer(typeof(RawBufferSnapshotDto));
+                serializer.WriteObject(stream, dto);
+            }
+
+            return rawPath;
+        }
+
         public static RawBufferSnapshot Load(string metadataPath)
         {
             if (string.IsNullOrWhiteSpace(metadataPath))

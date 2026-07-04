@@ -31,9 +31,11 @@ namespace RawBufferVisualizer.Tests
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
                 VisualizerTransferRoundTrips();
+                VisualizerChunkedTransferCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
                 MatVisualizerObjectSourceCreatesTransfer();
                 VisualizerBridgeWritesLaunchSnapshot();
+                VisualizerBridgePreparesChunkedLaunchSnapshot();
                 ViewerPathResolverFindsConfiguredViewer();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
@@ -295,6 +297,27 @@ namespace RawBufferVisualizer.Tests
             Assert(restored.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Visualizer transfer descriptor roundtrip failed.");
         }
 
+        private static void VisualizerChunkedTransferCreatesChunks()
+        {
+            var descriptor = CreateDescriptor(6, 1, 6, RawPixelFormat.Mono8, 8);
+            var snapshot = RawBufferSnapshot.FromByteArray(new byte[] { 1, 2, 3, 4, 5, 6 }, descriptor);
+            var transfer = RawBufferSnapshotObjectSource.CreateTransfer(snapshot, "chunked");
+            var metadata = VisualizerChunkedTransfer.CreateMetadata(transfer);
+            var chunk = VisualizerChunkedTransfer.CreateChunk(
+                transfer,
+                new VisualizerSnapshotChunkRequest
+                {
+                    Offset = 2,
+                    Count = 3
+                });
+
+            Assert(metadata.BufferLength == 6, "Chunk metadata buffer length failed.");
+            Assert(metadata.ChunkSize == VisualizerChunkedTransfer.DefaultChunkSize, "Chunk metadata size failed.");
+            Assert(chunk.Offset == 2, "Chunk offset failed.");
+            Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 3 && chunk.Buffer[2] == 5, "Chunk data failed.");
+            Assert(!chunk.IsLastChunk, "Chunk last flag failed.");
+        }
+
         private static void BitmapVisualizerObjectSourceCreatesTransfer()
         {
             using (var bitmap = new Bitmap(2, 1, PixelFormat.Format24bppRgb))
@@ -350,6 +373,41 @@ namespace RawBufferVisualizer.Tests
                 var startInfo = request.CreateStartInfo();
                 Assert(startInfo.FileName == Path.GetFullPath(viewerPath), "Visualizer launch file path failed.");
                 Assert(startInfo.Arguments.Contains(request.MetadataPath), "Visualizer launch argument failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void VisualizerBridgePreparesChunkedLaunchSnapshot()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var viewerPath = Path.Combine(directory, "RawBufferVisualizer.Wpf.exe");
+                File.WriteAllBytes(viewerPath, new byte[] { 0 });
+
+                var descriptor = CreateDescriptor(4, 1, 4, RawPixelFormat.Mono8, 8);
+                var metadata = VisualizerChunkedTransfer.CreateMetadata(
+                    descriptor,
+                    4,
+                    typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot),
+                    "chunked:0");
+                var request = StandaloneViewerBridge.PrepareLaunch(metadata, viewerPath, directory);
+                File.WriteAllBytes(request.RawPath, new byte[] { 1, 2, 3, 4 });
+
+                Assert(File.Exists(request.MetadataPath), "Chunked bridge metadata file was not created.");
+                Assert(File.Exists(request.RawPath), "Chunked bridge raw file was not created.");
+                Assert(Path.GetFileName(request.MetadataPath).StartsWith("chunked_0", StringComparison.Ordinal), "Chunked bridge should sanitize snapshot names.");
+
+                var loaded = RawBufferSnapshot.Load(request.MetadataPath);
+                Assert(loaded.Buffer.Length == 4 && loaded.Buffer[3] == 4, "Chunked bridge buffer failed.");
+                Assert(loaded.Descriptor.Width == 4 && loaded.Descriptor.Height == 1, "Chunked bridge descriptor failed.");
             }
             finally
             {

@@ -23,7 +23,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
-- Visual Studio debugger visualizer prototype for `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` transfer.
+- Visual Studio debugger visualizer prototype for chunked `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` transfer.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF tiled canvas for large-image display.
