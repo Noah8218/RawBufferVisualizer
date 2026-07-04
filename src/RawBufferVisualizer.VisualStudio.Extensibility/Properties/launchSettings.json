@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "RawBufferVisualizer.VisualStudio.Extensibility": {
+      "commandName": "Executable",
+      "executablePath": "$(DevEnvDir)devenv.exe",
+      "commandLineArgs": "/RootSuffix Exp",
+      "workingDirectory": "$(DevEnvDir)"
+    }
+  }
+}

@@ -96,10 +96,24 @@ artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.z
 Before manual Visual Studio testing, point the extension at a built viewer:
 
 ```powershell
-$env:RAW_BUFFER_VISUALIZER_VIEWER = "C:\Tools\RawBufferVisualizer\RawBufferVisualizer.Wpf.exe"
+dotnet build .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -c Debug -f net472
+setx RAW_BUFFER_VISUALIZER_VIEWER "C:\Git\RawBufferVisualizer\.build\bin\RawBufferVisualizer.Wpf\Debug\net472\RawBufferVisualizer.Wpf.exe"
 ```
 
-Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, press `F5`, then inspect `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables from DataTip, Watch, Locals, or Autos.
+Close and reopen Visual Studio after `setx`; existing Visual Studio processes do not inherit the new user environment variable.
+
+Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, select the `RawBufferVisualizer.VisualStudio.Extensibility` debug profile, press `F5`, then inspect `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables from DataTip, Watch, Locals, or Autos.
+
+If Visual Studio shows `A project with an Output Type of Class Library cannot be started directly`, the extension debug profile is not selected. Use the Start button dropdown and choose `RawBufferVisualizer.VisualStudio.Extensibility`, or open the project's Debug properties and verify:
+
+```text
+Profile: RawBufferVisualizer.VisualStudio.Extensibility
+Executable: $(DevEnvDir)devenv.exe
+Arguments: /RootSuffix Exp
+Working directory: $(DevEnvDir)
+```
+
+The expected result is a second Visual Studio window using the Experimental Instance. Open the target application in that second window, stop at a breakpoint, and use the visualizer icon next to a supported variable.
 
 ## Data Contract
 
