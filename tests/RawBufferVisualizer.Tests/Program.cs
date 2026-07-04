@@ -32,7 +32,9 @@ namespace RawBufferVisualizer.Tests
                 TilePlannerHandles100kImage();
                 TileRenderMatchesFullRender();
                 FileBackedSourceRendersLikeMemory();
+                FileBackedPackedSourceRendersLikeMemory();
                 FileBackedSourceHandles100kSampledTile();
+                FileBackedPackedSourceHandles100kSampledTile();
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
                 SnapshotReferenceLoadsMetadata();
@@ -270,6 +272,47 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void FileBackedPackedSourceRendersLikeMemory()
+        {
+            foreach (var format in new[] { RawPixelFormat.Mono10PackedLsb, RawPixelFormat.Mono12PackedLsb })
+            {
+                var bitsPerPixel = format == RawPixelFormat.Mono10PackedLsb ? 10 : 12;
+                var maxValue = (1 << bitsPerPixel) - 1;
+                var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+                try
+                {
+                    Directory.CreateDirectory(directory);
+                    var rawPath = Path.Combine(directory, format + ".raw");
+                    var descriptor = CreateDescriptor(17, 3, (17 * bitsPerPixel + 7) / 8, format, bitsPerPixel);
+                    var buffer = CreatePackedRows(descriptor.Width, descriptor.Height, bitsPerPixel, maxValue);
+                    File.WriteAllBytes(rawPath, buffer);
+
+                    using (var memorySource = RawImageSource.FromMemory(buffer, descriptor))
+                    using (var fileSource = RawImageSource.FromFile(rawPath, descriptor))
+                    {
+                        var options = fileSource.CreateRenderOptions();
+                        var memoryTile = memorySource.RenderTile(3, 1, 9, 2, options);
+                        var fileTile = fileSource.RenderTile(3, 1, 9, 2, options);
+                        AssertBytesEqual(memoryTile.Bgra32, fileTile.Bgra32, format + " file-backed tile render should match memory render.");
+
+                        var memorySampled = memorySource.RenderTileSampled(0, 0, 17, 3, 3, options);
+                        var fileSampled = fileSource.RenderTileSampled(0, 0, 17, 3, 3, options);
+                        AssertBytesEqual(memorySampled.Bgra32, fileSampled.Bgra32, format + " file-backed sampled render should match memory render.");
+
+                        var pixel = fileSource.DescribePixel(16, 2);
+                        Assert(pixel.Contains("X=16, Y=2") && pixel.Contains("Value=" + maxValue), format + " file-backed pixel inspector failed.");
+                    }
+                }
+                finally
+                {
+                    if (Directory.Exists(directory))
+                    {
+                        Directory.Delete(directory, true);
+                    }
+                }
+            }
+        }
+
         private static void FileBackedSourceHandles100kSampledTile()
         {
             var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
@@ -299,6 +342,46 @@ namespace RawBufferVisualizer.Tests
 
                     var pixel = source.DescribePixel(99999, 99999);
                     Assert(pixel.Contains("X=99999, Y=99999") && pixel.Contains("Value=33"), "100K file-backed pixel read failed.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void FileBackedPackedSourceHandles100kSampledTile()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "huge-mono10.rbuf.json");
+                var descriptor = CreateDescriptor(100000, 100000, 125000, RawPixelFormat.Mono10PackedLsb, 10);
+                var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, descriptor);
+                if (!CreateSparseFile(rawPath, descriptor.GetRequiredByteCount()))
+                {
+                    Console.WriteLine("Skipped 100K packed file-backed sparse raw test because this filesystem does not support sparse files.");
+                    return;
+                }
+
+                var reference = RawBufferSnapshot.LoadReference(metadataPath);
+                Assert(reference.RawByteLength == 12500000000L, "100K packed reference raw length failed.");
+
+                using (var source = RawImageSource.FromFile(reference.RawPath, reference.Descriptor))
+                {
+                    var diagnostics = source.Analyze();
+                    Assert(!RawBufferDiagnostics.HasErrors(diagnostics), "100K packed file-backed source diagnostics failed.");
+
+                    var sampled = source.RenderTileSampled(95000, 95000, 5000, 5000, 64, source.CreateRenderOptions());
+                    Assert(sampled.Width == 79 && sampled.Height == 79, "100K packed sampled tile dimensions failed.");
+                    Assert(sampled.Bgra32.Length == 79 * 79 * 4, "100K packed sampled tile byte length failed.");
+
+                    var pixel = source.DescribePixel(99999, 99999);
+                    Assert(pixel.Contains("X=99999, Y=99999") && pixel.Contains("Value="), "100K packed file-backed pixel read failed.");
                 }
             }
             finally
@@ -760,6 +843,26 @@ namespace RawBufferVisualizer.Tests
             {
                 var bytes = BitConverter.GetBytes(values[i]);
                 Buffer.BlockCopy(bytes, 0, buffer, i * 4, 4);
+            }
+
+            return buffer;
+        }
+
+        private static byte[] CreatePackedRows(int width, int height, int bitsPerPixel, int maxValue)
+        {
+            var stride = (width * bitsPerPixel + 7) / 8;
+            var buffer = new byte[stride * height];
+            for (var y = 0; y < height; y++)
+            {
+                var values = new int[width];
+                for (var x = 0; x < width; x++)
+                {
+                    values[x] = ((y * width) + x) % (maxValue + 1);
+                }
+
+                values[0] = 0;
+                values[width - 1] = maxValue;
+                Buffer.BlockCopy(PackLsb(values, bitsPerPixel), 0, buffer, y * stride, stride);
             }
 
             return buffer;

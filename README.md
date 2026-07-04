@@ -10,6 +10,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 
 - Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
 - Visual Studio integration plan: [docs/visual-studio-integration.md](docs/visual-studio-integration.md)
+- Image Watch UX analysis: [docs/image-watch-ux-analysis.md](docs/image-watch-ux-analysis.md)
 
 ## Current roadmap
 
@@ -84,7 +85,7 @@ OpenCvSharp Mat formats:
 
 Unsupported formats should fail with a clear diagnostics message instead of silently rendering the wrong image.
 
-File-backed large-image display is currently supported for row-addressable formats: `Mono8`, `Mono16`, `Binary`, `RGB24`, `BGR24`, `BGRA32`, `Float32`, and 8-bit Bayer formats. Packed `Mono10PackedLsb` and `Mono12PackedLsb` still use the in-memory path.
+File-backed large-image display is currently supported for all raw formats listed above. For very large packed `Mono10PackedLsb` and `Mono12PackedLsb` payloads, display uses the native 10-bit or 12-bit range instead of scanning the full file for autoscale levels.
 
 ## Download and run
 
@@ -135,6 +136,8 @@ Current large-image validation:
 | --- | --- |
 | `100000 x 100000` `Mono8` descriptor | Verified by automated tile-planner test |
 | `100000 x 100000` `Mono8` file-backed viewer smoke | Verified with sparse 10 GB `.raw` payload |
+| `100000 x 100000` `Mono10PackedLsb` file-backed viewer smoke | Verified with sparse 12.5 GB `.raw` payload |
+| `100000 x 100000` `Mono12PackedLsb` file-backed viewer smoke | Verified with sparse 15 GB `.raw` payload |
 | Source payload estimate | `10,000,000,000` bytes |
 | BGRA preview estimate | `40,000,000,000` bytes |
 | Tile size | `5000 x 5000` |
@@ -142,6 +145,10 @@ Current large-image validation:
 | Viewer status | `100000 x 100000, Mono8, 10,000,000,000 bytes, tiles 400` |
 
 ![Raw Buffer Visualizer showing a 100000 x 100000 file-backed Mono8 payload](docs/images/viewer-100k-file-backed.png)
+
+![Raw Buffer Visualizer showing a 100000 x 100000 file-backed Mono10PackedLsb payload](docs/images/viewer-100k-mono10packedlsb-file-backed.png)
+
+![Raw Buffer Visualizer showing a 100000 x 100000 file-backed Mono12PackedLsb payload](docs/images/viewer-100k-mono12packedlsb-file-backed.png)
 
 The large-image smoke test uses a sparse raw file so validation can cover 10 GB metadata, file length, tile count, window launch, and visible rendering without writing 10 GB of physical sample data.
 
@@ -198,6 +205,7 @@ Run 100K file-backed large-image smoke test:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -PixelFormat Mono10PackedLsb
 ```
 
 Create a sample buffer:

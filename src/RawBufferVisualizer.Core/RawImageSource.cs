@@ -52,8 +52,7 @@ namespace RawBufferVisualizer.Core
 
         public static bool CanStreamFormat(RawPixelFormat pixelFormat)
         {
-            return pixelFormat != RawPixelFormat.Mono10PackedLsb
-                && pixelFormat != RawPixelFormat.Mono12PackedLsb;
+            return true;
         }
 
         public IReadOnlyList<RawDiagnostic> Analyze()
@@ -199,11 +198,6 @@ namespace RawBufferVisualizer.Core
         public FileRawImageSource(string rawPath, RawImageDescriptor descriptor)
             : base(descriptor, GetFileLength(rawPath), Path.GetFullPath(rawPath))
         {
-            if (!CanStreamFormat(descriptor.PixelFormat))
-            {
-                throw new NotSupportedException("File-backed tiled display does not support " + descriptor.PixelFormat + " yet. Use an in-memory snapshot for this packed format.");
-            }
-
             _rawPath = Path.GetFullPath(rawPath);
         }
 
@@ -218,6 +212,10 @@ namespace RawBufferVisualizer.Core
             {
                 case RawPixelFormat.Mono16:
                     return CreateFixedRangeOptions(GetMaxForValidBits(SourceDescriptor.ValidBits, 16));
+                case RawPixelFormat.Mono10PackedLsb:
+                    return CreateFixedRangeOptions(1023);
+                case RawPixelFormat.Mono12PackedLsb:
+                    return CreateFixedRangeOptions(4095);
                 case RawPixelFormat.Float32:
                     return CreateFixedRangeOptions(1);
                 default:
@@ -245,6 +243,11 @@ namespace RawBufferVisualizer.Core
 
             EnsureTileBounds(SourceDescriptor, x, y, width, height);
             options = options ?? CreateRenderOptions();
+
+            if (IsPackedMono(SourceDescriptor.PixelFormat))
+            {
+                return RenderPackedTileSampled(x, y, width, height, sampleStep, options);
+            }
 
             var bytesPerPixel = GetStreamableBytesPerPixel(SourceDescriptor.PixelFormat);
             var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
@@ -277,6 +280,13 @@ namespace RawBufferVisualizer.Core
         public override string DescribePixel(int x, int y)
         {
             EnsureTileBounds(SourceDescriptor, x, y, 1, 1);
+            if (IsPackedMono(SourceDescriptor.PixelFormat))
+            {
+                var bitsPerPixel = GetPackedBitsPerPixel(SourceDescriptor.PixelFormat);
+                var value = ReadPackedPixel(x, y, bitsPerPixel);
+                return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, value);
+            }
+
             RawImageDescriptor pixelDescriptor;
             int localX;
             int localY;
@@ -315,6 +325,11 @@ namespace RawBufferVisualizer.Core
 
         private byte[] ReadTileWindow(int x, int y, int width, int height, bool includeBayerHalo, out RawImageDescriptor tileDescriptor, out int localX, out int localY)
         {
+            if (IsPackedMono(SourceDescriptor.PixelFormat))
+            {
+                return ReadPackedTileWindow(x, y, width, height, out tileDescriptor, out localX, out localY);
+            }
+
             var bytesPerPixel = GetStreamableBytesPerPixel(SourceDescriptor.PixelFormat);
             var windowX = x;
             var windowY = y;
@@ -365,6 +380,68 @@ namespace RawBufferVisualizer.Core
             localX = x - windowX;
             localY = y - windowY;
             return buffer;
+        }
+
+        private byte[] ReadPackedTileWindow(int x, int y, int width, int height, out RawImageDescriptor tileDescriptor, out int localX, out int localY)
+        {
+            var bitsPerPixel = GetPackedBitsPerPixel(SourceDescriptor.PixelFormat);
+            var localStride = GetPackedStride(width, bitsPerPixel);
+            var byteCount = checked((long)localStride * height);
+            if (byteCount > int.MaxValue)
+            {
+                throw new InvalidOperationException("Packed raw tile window is too large to stage in memory.");
+            }
+
+            var buffer = new byte[(int)byteCount];
+            using (var stream = OpenRawReadStream())
+            {
+                for (var row = 0; row < height; row++)
+                {
+                    var sourceRow = ReadPackedRowWindow(stream, y + row, x, width, bitsPerPixel, out var firstBitOffset);
+                    var targetRow = row * localStride;
+                    for (var tileX = 0; tileX < width; tileX++)
+                    {
+                        var value = ReadPackedBits(sourceRow, firstBitOffset + (tileX * bitsPerPixel), bitsPerPixel);
+                        WritePackedBits(buffer, targetRow + (tileX * bitsPerPixel / 8), (tileX * bitsPerPixel) % 8, bitsPerPixel, value);
+                    }
+                }
+            }
+
+            tileDescriptor = SourceDescriptor.Clone();
+            tileDescriptor.Width = width;
+            tileDescriptor.Height = height;
+            tileDescriptor.Stride = localStride;
+            localX = 0;
+            localY = 0;
+            return buffer;
+        }
+
+        private RenderedImage RenderPackedTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions options)
+        {
+            var bitsPerPixel = GetPackedBitsPerPixel(SourceDescriptor.PixelFormat);
+            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
+            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
+
+            using (var stream = OpenRawReadStream())
+            {
+                for (var sampledY = 0; sampledY < sampledHeight; sampledY++)
+                {
+                    var sourceY = y + (sampledY * sampleStep);
+                    var sourceRow = ReadPackedRowWindow(stream, sourceY, x, width, bitsPerPixel, out var firstBitOffset);
+                    var targetRow = sampledY * sampledWidth * 4;
+
+                    for (var sampledX = 0; sampledX < sampledWidth; sampledX++)
+                    {
+                        var tileX = sampledX * sampleStep;
+                        var value = ReadPackedBits(sourceRow, firstBitOffset + (tileX * bitsPerPixel), bitsPerPixel);
+                        var byteValue = ScaleToByte(value, options);
+                        WriteBgra(pixels, targetRow + (sampledX * 4), byteValue, byteValue, byteValue, 255);
+                    }
+                }
+            }
+
+            return new RenderedImage(sampledWidth, sampledHeight, pixels);
         }
 
         private void WriteSampledPixel(byte[] rowBuffer, int sourceOffset, byte[] pixels, int targetOffset, int x, int y, RawRenderOptions options)
@@ -443,6 +520,29 @@ namespace RawBufferVisualizer.Core
             ReadExactly(stream, target, targetOffset, byteCount);
         }
 
+        private byte[] ReadPackedRowWindow(FileStream stream, int y, int x, int width, int bitsPerPixel, out int firstBitOffset)
+        {
+            var startBit = checked(x * bitsPerPixel);
+            var endBit = checked((x + width) * bitsPerPixel);
+            var startByte = startBit / 8;
+            var endByte = (endBit + 7) / 8;
+            var byteCount = endByte - startByte;
+            var buffer = new byte[byteCount];
+            stream.Position = checked(((long)y * SourceDescriptor.Stride) + startByte);
+            ReadExactly(stream, buffer, 0, byteCount);
+            firstBitOffset = startBit - (startByte * 8);
+            return buffer;
+        }
+
+        private int ReadPackedPixel(int x, int y, int bitsPerPixel)
+        {
+            using (var stream = OpenRawReadStream())
+            {
+                var row = ReadPackedRowWindow(stream, y, x, 1, bitsPerPixel, out var firstBitOffset);
+                return ReadPackedBits(row, firstBitOffset, bitsPerPixel);
+            }
+        }
+
         private FileStream OpenRawReadStream()
         {
             return new FileStream(_rawPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
@@ -496,6 +596,54 @@ namespace RawBufferVisualizer.Core
                     return 4;
                 default:
                     throw new NotSupportedException("File-backed tiled display does not support " + format + " yet.");
+            }
+        }
+
+        private static bool IsPackedMono(RawPixelFormat format)
+        {
+            return format == RawPixelFormat.Mono10PackedLsb
+                || format == RawPixelFormat.Mono12PackedLsb;
+        }
+
+        private static int GetPackedBitsPerPixel(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono10PackedLsb:
+                    return 10;
+                case RawPixelFormat.Mono12PackedLsb:
+                    return 12;
+                default:
+                    throw new NotSupportedException("Pixel format is not packed mono: " + format);
+            }
+        }
+
+        private static int GetPackedStride(int width, int bitsPerPixel)
+        {
+            return (int)(((long)width * bitsPerPixel + 7) / 8);
+        }
+
+        private static int ReadPackedBits(byte[] buffer, int bitOffset, int bitsPerPixel)
+        {
+            var byteOffset = bitOffset / 8;
+            var shift = bitOffset % 8;
+            var value = 0;
+            var bytesToRead = (shift + bitsPerPixel + 7) / 8;
+            for (var i = 0; i < bytesToRead; i++)
+            {
+                value |= buffer[byteOffset + i] << (i * 8);
+            }
+
+            return (value >> shift) & ((1 << bitsPerPixel) - 1);
+        }
+
+        private static void WritePackedBits(byte[] buffer, int byteOffset, int shift, int bitsPerPixel, int value)
+        {
+            var bytesToWrite = (shift + bitsPerPixel + 7) / 8;
+            var packedValue = value << shift;
+            for (var i = 0; i < bytesToWrite; i++)
+            {
+                buffer[byteOffset + i] |= (byte)((packedValue >> (i * 8)) & 0xFF);
             }
         }
 

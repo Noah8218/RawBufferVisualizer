@@ -1,8 +1,10 @@
 param(
     [string]$Configuration = "Debug",
     [string]$ViewerFramework = "net472",
+    [ValidateSet("Mono8", "Mono10PackedLsb", "Mono12PackedLsb")]
+    [string]$PixelFormat = "Mono8",
     [string]$OutputDir = "artifacts\ui\large-file-backed",
-    [string]$CaptureFileName = "viewer-100k-file-backed.png"
+    [string]$CaptureFileName = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -21,16 +23,35 @@ New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 $sampleRoot = Join-Path $repoRoot "artifacts\large-file-backed"
 New-Item -ItemType Directory -Force -Path $sampleRoot | Out-Null
-$metadataPath = Join-Path $sampleRoot "huge-mono8.rbuf.json"
-$rawPath = Join-Path $sampleRoot "huge-mono8.raw"
+$sampleName = "huge-$($PixelFormat.ToLowerInvariant())"
+$metadataPath = Join-Path $sampleRoot "$sampleName.rbuf.json"
+$rawPath = Join-Path $sampleRoot "$sampleName.raw"
+if ([string]::IsNullOrWhiteSpace($CaptureFileName)) {
+    $CaptureFileName = "viewer-100k-$($PixelFormat.ToLowerInvariant())-file-backed.png"
+}
+
+switch ($PixelFormat) {
+    "Mono10PackedLsb" {
+        $validBits = 10
+        $stride = [int][Math]::Ceiling((100000 * 10) / 8.0)
+    }
+    "Mono12PackedLsb" {
+        $validBits = 12
+        $stride = [int][Math]::Ceiling((100000 * 12) / 8.0)
+    }
+    default {
+        $validBits = 8
+        $stride = 100000
+    }
+}
 
 $metadata = [ordered]@{
-    rawFile = "huge-mono8.raw"
+    rawFile = "$sampleName.raw"
     width = 100000
     height = 100000
-    stride = 100000
-    pixelFormat = "Mono8"
-    validBits = 8
+    stride = $stride
+    pixelFormat = $PixelFormat
+    validBits = $validBits
     byteOrder = "LittleEndian"
 } | ConvertTo-Json
 Set-Content -LiteralPath $metadataPath -Value $metadata -Encoding UTF8
@@ -58,8 +79,42 @@ public static class RawBufferLargeFileBackedNative {
 '@
 }
 
-function New-SparsePatternRaw([string]$path, [int]$width, [int]$height) {
-    $length = [int64]$width * [int64]$height
+function Set-PackedValue([byte[]]$row, [int]$x, [int]$bitsPerPixel, [int]$value) {
+    $bitOffset = $x * $bitsPerPixel
+    $byteOffset = [int][Math]::Floor($bitOffset / 8)
+    $shift = $bitOffset % 8
+    $packedValue = $value -shl $shift
+    $bytesToWrite = [int][Math]::Floor(($shift + $bitsPerPixel + 7) / 8)
+    for ($i = 0; $i -lt $bytesToWrite; $i++) {
+        $row[$byteOffset + $i] = [byte]($row[$byteOffset + $i] -bor (($packedValue -shr ($i * 8)) -band 0xFF))
+    }
+}
+
+function New-PatternRow([string]$pixelFormat, [int]$width, [int]$stride) {
+    $row = New-Object byte[] $stride
+    switch ($pixelFormat) {
+        "Mono10PackedLsb" {
+            for ($x = 0; $x -lt $width; $x++) {
+                Set-PackedValue $row $x 10 (64 + (($x / 512) % 960))
+            }
+        }
+        "Mono12PackedLsb" {
+            for ($x = 0; $x -lt $width; $x++) {
+                Set-PackedValue $row $x 12 (256 + (($x / 512) % 3840))
+            }
+        }
+        default {
+            for ($x = 0; $x -lt $width; $x++) {
+                $row[$x] = [byte](32 + (($x / 512) % 224))
+            }
+        }
+    }
+
+    $row
+}
+
+function New-SparsePatternRaw([string]$path, [int]$width, [int]$height, [int]$stride, [string]$pixelFormat) {
+    $length = [int64]$stride * [int64]$height
     $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
     try {
         $bytesReturned = 0
@@ -77,13 +132,10 @@ function New-SparsePatternRaw([string]$path, [int]$width, [int]$height) {
         }
 
         $stream.SetLength($length)
-        $row = New-Object byte[] $width
-        for ($x = 0; $x -lt $width; $x++) {
-            $row[$x] = [byte](32 + (($x / 512) % 224))
-        }
+        $row = New-PatternRow $pixelFormat $width $stride
 
         for ($y = 0; $y -lt $height; $y += 512) {
-            $stream.Position = [int64]$y * [int64]$width
+            $stream.Position = [int64]$y * [int64]$stride
             $stream.Write($row, 0, $row.Length)
         }
 
@@ -183,7 +235,7 @@ function Get-ElementName([System.Windows.Automation.AutomationElement]$root, [st
     $element.Current.Name
 }
 
-New-SparsePatternRaw $rawPath 100000 100000
+New-SparsePatternRaw $rawPath 100000 100000 $stride $PixelFormat
 
 $viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
 if (-not (Test-Path $viewerExe)) {
@@ -205,7 +257,7 @@ try {
 
     Wait-Until "100K status" {
         $status = Get-ElementName (Get-Root $hwnd) "StatusText"
-        $status -match "100000 x 100000, Mono8" -and $status -match "tiles 400"
+        $status -match "100000 x 100000, $PixelFormat" -and $status -match "tiles 400"
     } | Out-Null
 
     $capturePath = Join-Path $outputRoot $CaptureFileName
