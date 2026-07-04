@@ -39,6 +39,11 @@ if (-not (Test-Path -LiteralPath (Join-Path $buildOutput '.vsextension\extension
     throw "Visual Studio extension metadata was not created: $buildOutput\.vsextension\extension.json"
 }
 
+$vsixPath = Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+if (-not (Test-Path -LiteralPath $vsixPath)) {
+    throw "Visual Studio extension VSIX was not created: $vsixPath"
+}
+
 Get-ChildItem -LiteralPath $buildOutput -Force | Copy-Item -Destination $publishDir -Recurse -Force
 
 $readmePath = Join-Path $publishDir 'README.txt'
@@ -46,7 +51,8 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     'Raw Buffer Visualizer Visual Studio extension prototype',
     '',
     'This is the built VisualStudio.Extensibility output for manual validation.',
-    'It is not a Marketplace-ready installer yet.',
+    'Install RawBufferVisualizer.VisualStudio.Extensibility.vsix before testing the debugger visualizer.',
+    'It is not a Marketplace-ready package yet.',
     '',
     'Manual validation prerequisites:',
     '- Visual Studio 2022 17.9 or newer',
