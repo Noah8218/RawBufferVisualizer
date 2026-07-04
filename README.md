@@ -35,7 +35,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 No GitHub Release has been published yet. Until the first version tag is created, use the latest successful CI artifact:
 
 1. Open the latest successful [CI run](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml).
-2. Download `RawBufferVisualizer-net10.0-windows-win-x64-sc.zip` from `Artifacts`.
+2. Download `RawBufferVisualizer-net9.0-windows-win-x64-sc.zip` from `Artifacts`.
 3. Extract the zip to a writable folder such as `C:\Tools\RawBufferVisualizer`.
 4. Run `RawBufferVisualizer.Wpf.exe`.
 5. Click `Open Sample` to verify the viewer immediately.
@@ -120,7 +120,7 @@ The sample project creates `.rbuf.json` snapshots for every currently supported 
 Open the WPF viewer:
 
 ```powershell
-dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net10.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
+dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net9.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
 ```
 
 The viewer toolbar also includes `Open Sample` and `Sample Folder` when samples exist beside the packaged exe or under `artifacts\samples`.
@@ -142,8 +142,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
 The default output is:
 
 ```text
-artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc\
-artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc.zip
+artifacts\publish\RawBufferVisualizer-net9.0-windows-win-x64-sc\
+artifacts\publish\RawBufferVisualizer-net9.0-windows-win-x64-sc.zip
 ```
 
 Create a .NET Framework 4.7.2 package:

@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('net10.0-windows', 'net472')]
-    [string]$Framework = 'net10.0-windows',
+    [ValidateSet('net9.0-windows', 'net472')]
+    [string]$Framework = 'net9.0-windows',
 
     [ValidateSet('win-x64', 'win-x86', 'win-arm64')]
     [string]$Runtime = 'win-x64',
@@ -67,7 +67,7 @@ try {
     }
 
     if (-not $SkipSamples) {
-        & dotnet run --project (Join-Path $repoRoot 'samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj') --configuration Release --framework net10.0
+        & dotnet run --project (Join-Path $repoRoot 'samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj') --configuration Release --framework net9.0
         if ($LASTEXITCODE -ne 0) {
             throw "sample generation failed with exit code $LASTEXITCODE"
         }
