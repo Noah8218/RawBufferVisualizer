@@ -75,6 +75,12 @@ Run self-tests:
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj
 ```
 
+Run WPF sample smoke test:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeOpenSamples.ps1
+```
+
 Create a sample buffer:
 
 ```powershell
