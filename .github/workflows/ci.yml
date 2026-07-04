@@ -38,9 +38,19 @@ jobs:
       - name: Publish package
         run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
 
+      - name: Publish Visual Studio extension prototype
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1
+
       - name: Upload package
         uses: actions/upload-artifact@v7
         with:
           path: artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc.zip
+          if-no-files-found: error
+          archive: false
+
+      - name: Upload Visual Studio extension prototype
+        uses: actions/upload-artifact@v7
+        with:
+          path: artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip
           if-no-files-found: error
           archive: false

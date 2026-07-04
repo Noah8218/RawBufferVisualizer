@@ -34,10 +34,14 @@ jobs:
       - name: Publish package
         run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
 
+      - name: Publish Visual Studio extension prototype
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1
+
       - name: Create GitHub Release
         run: >
           gh release create $env:GITHUB_REF_NAME
           .\artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc.zip
+          .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip
           --verify-tag
           --generate-notes
           --title "RawBufferVisualizer $env:GITHUB_REF_NAME"

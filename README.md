@@ -40,6 +40,8 @@ No GitHub Release has been published yet. Until the first version tag is created
 4. Run `RawBufferVisualizer.Wpf.exe`.
 5. Click `Open Sample` to verify the viewer immediately.
 
+The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip` for manual Visual Studio extension validation.
+
 After the first tagged release is created, download the same zip from the [Releases page](https://github.com/Noah8218/RawBufferVisualizer/releases).
 
 The default package is self-contained for Windows x64, so it does not require installing a .NET runtime. If Windows SmartScreen appears because the executable is unsigned, choose `More info` and `Run anyway`, or unblock the zip before extracting it.
@@ -162,6 +164,8 @@ git push origin v0.1.0
 ```
 
 The `Release` workflow builds, tests, publishes the Windows x64 zip, and attaches it to the GitHub Release.
+
+The release workflow also attaches `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip`. This is a prototype build output for manual Visual Studio validation, not a Marketplace-ready installer.
 
 ## SDK example
 

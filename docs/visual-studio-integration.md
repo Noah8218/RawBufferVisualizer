@@ -79,13 +79,26 @@ Build the current extension prototype:
 dotnet build .\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj -c Release
 ```
 
+Create the extension prototype zip:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1
+```
+
+The output is:
+
+```text
+artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows\
+artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip
+```
+
 Before manual Visual Studio testing, point the extension at a built viewer:
 
 ```powershell
 $env:RAW_BUFFER_VISUALIZER_VIEWER = "C:\Tools\RawBufferVisualizer\RawBufferVisualizer.Wpf.exe"
 ```
 
-Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload.
+Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, press `F5`, then inspect a `RawBufferSnapshot` variable from DataTip, Watch, Locals, or Autos.
 
 ## Data Contract
 
