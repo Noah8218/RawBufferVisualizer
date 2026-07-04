@@ -10,4 +10,7 @@
     <ProjectReference Include="..\RawBufferVisualizer.OpenGlCanvas\RawBufferVisualizer.OpenGlCanvas.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
+    <Reference Include="System.IO.Compression" />
+  </ItemGroup>
 </Project>

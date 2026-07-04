@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -23,6 +24,7 @@ namespace RawBufferVisualizer.Wpf
         private RawImageDescriptor _descriptor;
         private RenderedImage? _rendered;
         private string? _currentPath;
+        private string? _vrecTempDirectory;
 
         public MainWindow()
         {
@@ -36,6 +38,12 @@ namespace RawBufferVisualizer.Wpf
                 ValidBits = 8,
                 ByteOrder = RawByteOrder.LittleEndian
             };
+        }
+
+        protected override void OnClosed(EventArgs e)
+        {
+            ClearVrecTempDirectory();
+            base.OnClosed(e);
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
@@ -52,7 +60,15 @@ namespace RawBufferVisualizer.Wpf
             try
             {
                 var fullPath = Path.GetFullPath(path);
-                if (fullPath.EndsWith(".rbuf.json", StringComparison.OrdinalIgnoreCase))
+                if (fullPath.EndsWith(".vrec", StringComparison.OrdinalIgnoreCase))
+                {
+                    var snapshot = LoadFirstVrecImage(fullPath);
+                    _buffer = snapshot.Buffer;
+                    _descriptor = snapshot.Descriptor;
+                    _currentPath = fullPath;
+                    ApplyDescriptorToFields();
+                }
+                else if (fullPath.EndsWith(".rbuf.json", StringComparison.OrdinalIgnoreCase))
                 {
                     var snapshot = RawBufferSnapshot.Load(fullPath);
                     _buffer = snapshot.Buffer;
@@ -79,7 +95,7 @@ namespace RawBufferVisualizer.Wpf
         {
             var dialog = new OpenFileDialog
             {
-                Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json|Raw Buffer (*.raw;*.bin)|*.raw;*.bin|All files (*.*)|*.*"
+                Filter = "Vision Recording (*.vrec)|*.vrec|Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json|Raw Buffer (*.raw;*.bin)|*.raw;*.bin|All files (*.*)|*.*"
             };
 
             if (dialog.ShowDialog(this) == true)
@@ -174,6 +190,65 @@ namespace RawBufferVisualizer.Wpf
             }
 
             return name + extension;
+        }
+
+        private RawBufferSnapshot LoadFirstVrecImage(string vrecPath)
+        {
+            ClearVrecTempDirectory();
+            var tempRoot = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerVrec");
+            _vrecTempDirectory = Path.Combine(tempRoot, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(_vrecTempDirectory);
+
+            string? firstDescriptorPath = null;
+            using (var stream = File.OpenRead(vrecPath))
+            using (var archive = new ZipArchive(stream, ZipArchiveMode.Read))
+            {
+                foreach (var entry in archive.Entries.OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase))
+                {
+                    if (string.IsNullOrEmpty(entry.Name) || !entry.FullName.StartsWith("images/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    var extractedPath = ExtractVrecEntry(entry, _vrecTempDirectory);
+                    if (firstDescriptorPath == null && entry.FullName.EndsWith(".rbuf.json", StringComparison.OrdinalIgnoreCase))
+                    {
+                        firstDescriptorPath = extractedPath;
+                    }
+                }
+            }
+
+            if (firstDescriptorPath == null)
+            {
+                throw new InvalidDataException("The VREC package does not contain an image descriptor.");
+            }
+
+            return RawBufferSnapshot.Load(firstDescriptorPath);
+        }
+
+        private static string ExtractVrecEntry(ZipArchiveEntry entry, string destinationRoot)
+        {
+            var relativePath = entry.FullName.Replace('/', Path.DirectorySeparatorChar);
+            var destinationPath = Path.GetFullPath(Path.Combine(destinationRoot, relativePath));
+            var fullRoot = Path.GetFullPath(destinationRoot).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!destinationPath.StartsWith(fullRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidDataException("Invalid VREC entry path: " + entry.FullName);
+            }
+
+            var directory = Path.GetDirectoryName(destinationPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            using (var input = entry.Open())
+            using (var output = File.Create(destinationPath))
+            {
+                input.CopyTo(output);
+            }
+
+            return destinationPath;
         }
 
         private RawImageDescriptor ReadDescriptorFromFields()
@@ -288,6 +363,27 @@ namespace RawBufferVisualizer.Wpf
             _rendered = null;
             OpenGlImageView.ClearImage();
             HistogramCanvas.Children.Clear();
+        }
+
+        private void ClearVrecTempDirectory()
+        {
+            if (string.IsNullOrEmpty(_vrecTempDirectory) || !Directory.Exists(_vrecTempDirectory))
+            {
+                return;
+            }
+
+            try
+            {
+                Directory.Delete(_vrecTempDirectory, true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
+
+            _vrecTempDirectory = null;
         }
 
         private void DrawHistogram()
