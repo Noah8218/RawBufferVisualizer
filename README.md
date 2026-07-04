@@ -30,6 +30,27 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Large-image guard: CPU histogram/PNG cache is skipped above 512 MB, while OpenGL display remains tiled.
 - Windows publish script for release-ready viewer zip packages.
 
+## Download and run
+
+No GitHub Release has been published yet. Until the first version tag is created, use the latest successful CI artifact:
+
+1. Open the latest successful [CI run](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml).
+2. Download `RawBufferVisualizer-net10.0-windows-win-x64-sc.zip` from `Artifacts`.
+3. Extract the zip to a writable folder such as `C:\Tools\RawBufferVisualizer`.
+4. Run `RawBufferVisualizer.Wpf.exe`.
+5. Click `Open Sample` to verify the viewer immediately.
+
+After the first tagged release is created, download the same zip from the [Releases page](https://github.com/Noah8218/RawBufferVisualizer/releases).
+
+The default package is self-contained for Windows x64, so it does not require installing a .NET runtime. If Windows SmartScreen appears because the executable is unsigned, choose `More info` and `Run anyway`, or unblock the zip before extracting it.
+
+To inspect your own data:
+
+- Drag and drop `.rbuf.json` or `.vrec` files into the window.
+- Use `Open` for `.rbuf.json`, `.vrec`, `.raw`, or `.bin`.
+- For raw `.raw` or `.bin` files, fill in width, height, stride, pixel format, valid bits, and byte order, then click `Apply`.
+- Keep `.raw` payload files beside their `.rbuf.json` metadata files.
+
 ## WPF OpenGL image canvas
 
 The viewer uses tiled texture upload instead of one full-frame WPF bitmap. The current shared rule is:
@@ -132,7 +153,7 @@ Create a .NET Framework 4.7.2 package:
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1 -Framework net472
 ```
 
-Samples are copied into the package by default. Use `-SkipSamples` for a smaller package or `-NoZip` when only the publish folder is needed.
+Samples are copied into the package by default. Use `-SkipSamples` for a smaller package or `-NoZip` when only the publish folder is needed. The `net472` package requires .NET Framework 4.7.2 or newer on the target PC.
 
 ## Create a GitHub Release
 
