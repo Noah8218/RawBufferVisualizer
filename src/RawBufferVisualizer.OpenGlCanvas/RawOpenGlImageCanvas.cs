@@ -184,14 +184,27 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             gl.Enable(OpenGL.GL_TEXTURE_2D);
             gl.Color(1.0f, 1.0f, 1.0f, 1.0f);
+            var desiredSampleStep = GetTextureSampleStep();
             for (var i = 0; i < _tiles.Count; i++)
             {
-                if (_tiles[i].TextureId == 0)
+                var tile = _tiles[i];
+                var visible = IsTileVisible(tile);
+                if (!visible || (tile.TextureId != 0 && tile.SampleStep != desiredSampleStep))
                 {
-                    UploadTile(gl, _tiles[i]);
+                    DeleteTexture(gl, tile);
                 }
 
-                DrawTile(gl, _tiles[i]);
+                if (!visible)
+                {
+                    continue;
+                }
+
+                if (tile.TextureId == 0)
+                {
+                    UploadTile(gl, tile, desiredSampleStep);
+                }
+
+                DrawTile(gl, tile);
             }
 
             gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
@@ -292,7 +305,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             return ids[0];
         }
 
-        private void UploadTile(OpenGL gl, TextureTile tile)
+        private void UploadTile(OpenGL gl, TextureTile tile, int sampleStep)
         {
             if (_buffer == null || _descriptor == null || _renderOptions == null)
             {
@@ -300,7 +313,64 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
 
             var renderedTile = RawBufferRenderer.RenderTile(_buffer, _descriptor, tile.X, tile.Y, tile.Width, tile.Height, _renderOptions);
-            tile.TextureId = CreateTexture(gl, renderedTile.Width, renderedTile.Height, renderedTile.Bgra32);
+            var uploadPixels = renderedTile.Bgra32;
+            var uploadWidth = renderedTile.Width;
+            var uploadHeight = renderedTile.Height;
+            if (sampleStep > 1)
+            {
+                uploadPixels = DownsampleBgra(renderedTile.Bgra32, renderedTile.Width, renderedTile.Height, sampleStep, out uploadWidth, out uploadHeight);
+            }
+
+            tile.TextureId = CreateTexture(gl, uploadWidth, uploadHeight, uploadPixels);
+            tile.SampleStep = sampleStep;
+        }
+
+        private int GetTextureSampleStep()
+        {
+            if (ActualWidth <= 0 || ActualHeight <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            {
+                return 1;
+            }
+
+            var horizontalPixelsPerScreenPixel = _viewWidth / ActualWidth;
+            var verticalPixelsPerScreenPixel = _viewHeight / ActualHeight;
+            var imagePixelsPerScreenPixel = Math.Max(horizontalPixelsPerScreenPixel, verticalPixelsPerScreenPixel);
+            var step = 1;
+            while (step < 64 && (step * 2) <= imagePixelsPerScreenPixel)
+            {
+                step *= 2;
+            }
+
+            return step;
+        }
+
+        private bool IsTileVisible(TextureTile tile)
+        {
+            var viewRight = _viewLeft + _viewWidth;
+            var viewBottom = _viewTop + _viewHeight;
+            return tile.Right >= _viewLeft && tile.X <= viewRight && tile.Bottom >= _viewTop && tile.Y <= viewBottom;
+        }
+
+        private static byte[] DownsampleBgra(byte[] source, int width, int height, int sampleStep, out int sampledWidth, out int sampledHeight)
+        {
+            sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
+            sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var target = new byte[sampledWidth * sampledHeight * 4];
+            var targetIndex = 0;
+            for (var y = 0; y < height; y += sampleStep)
+            {
+                var sourceRow = y * width * 4;
+                for (var x = 0; x < width; x += sampleStep)
+                {
+                    var sourceIndex = sourceRow + (x * 4);
+                    target[targetIndex++] = source[sourceIndex];
+                    target[targetIndex++] = source[sourceIndex + 1];
+                    target[targetIndex++] = source[sourceIndex + 2];
+                    target[targetIndex++] = source[sourceIndex + 3];
+                }
+            }
+
+            return target;
         }
 
         private static void ConvertBgraToRgbaInPlace(byte[] bgra)
@@ -344,6 +414,18 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _openGlControl.OpenGL.DeleteTextures(ids.Length, ids);
         }
 
+        private static void DeleteTexture(OpenGL gl, TextureTile tile)
+        {
+            if (tile.TextureId == 0)
+            {
+                return;
+            }
+
+            gl.DeleteTextures(1, new[] { tile.TextureId });
+            tile.TextureId = 0;
+            tile.SampleStep = 0;
+        }
+
         private void RequestRender()
         {
             _openGlControl.InvalidateVisual();
@@ -352,6 +434,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private sealed class TextureTile
         {
             public uint TextureId { get; set; }
+            public int SampleStep { get; set; }
             public int X { get; private set; }
             public int Y { get; private set; }
             public int Width { get; private set; }
