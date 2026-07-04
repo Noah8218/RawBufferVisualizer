@@ -9,6 +9,10 @@
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <None Remove="VisualizerLaunchStatusControl.xaml" />
+    <EmbeddedResource Include="VisualizerLaunchStatusControl.xaml" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
