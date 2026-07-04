@@ -110,6 +110,14 @@ Create a sample buffer:
 dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj
 ```
 
+Run the debugger visualizer debuggee without breakpoints:
+
+```powershell
+dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
+```
+
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables and stops at each case so the visualizer can be tested from Watch, Locals, Autos, or DataTip.
+
 The sample project creates `.rbuf.json` snapshots for every currently supported pixel format:
 
 - `Mono8`, `Mono16`, `Mono10PackedLsb`, `Mono12PackedLsb`, `Binary`
