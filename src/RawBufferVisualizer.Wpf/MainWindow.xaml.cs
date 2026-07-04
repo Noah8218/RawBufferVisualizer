@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Compression;
@@ -105,6 +107,94 @@ namespace RawBufferVisualizer.Wpf
             {
                 OpenPath(dialog.FileName);
             }
+        }
+
+        private void OpenSample_Click(object sender, RoutedEventArgs e)
+        {
+            var sampleDirectory = FindSampleDirectory();
+            var samplePath = sampleDirectory == null ? null : FindDefaultSamplePath(sampleDirectory);
+            if (samplePath == null)
+            {
+                MessageBox.Show(this, "Sample files were not found.", "Open Sample", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            OpenPath(samplePath);
+        }
+
+        private void OpenSampleFolder_Click(object sender, RoutedEventArgs e)
+        {
+            var sampleDirectory = FindSampleDirectory();
+            if (sampleDirectory == null)
+            {
+                MessageBox.Show(this, "Sample files were not found.", "Sample Folder", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = sampleDirectory,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Sample Folder failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private static string? FindSampleDirectory()
+        {
+            var roots = new List<string>();
+            AddSearchRoots(roots, AppContext.BaseDirectory);
+            AddSearchRoots(roots, Environment.CurrentDirectory);
+
+            foreach (var root in roots)
+            {
+                var candidates = new[]
+                {
+                    Path.Combine(root, "samples"),
+                    Path.Combine(root, "artifacts", "samples")
+                };
+
+                foreach (var candidate in candidates)
+                {
+                    if (Directory.Exists(candidate) && Directory.EnumerateFiles(candidate, "*.rbuf.json").Any())
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static void AddSearchRoots(List<string> roots, string startPath)
+        {
+            var directory = new DirectoryInfo(Path.GetFullPath(startPath));
+            for (var depth = 0; directory != null && depth < 8; depth++, directory = directory.Parent)
+            {
+                if (!roots.Contains(directory.FullName, StringComparer.OrdinalIgnoreCase))
+                {
+                    roots.Add(directory.FullName);
+                }
+            }
+        }
+
+        private static string? FindDefaultSamplePath(string sampleDirectory)
+        {
+            var preferred = Path.Combine(sampleDirectory, "rgb24-color.rbuf.json");
+            if (File.Exists(preferred))
+            {
+                return preferred;
+            }
+
+            return Directory
+                .EnumerateFiles(sampleDirectory, "*.rbuf.json")
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
         }
 
         private void SavePng_Click(object sender, RoutedEventArgs e)

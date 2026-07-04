@@ -18,22 +18,20 @@
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="{StaticResource ToolbarBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10">
-            <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
-                    <Button Content="Open" Click="Open_Click"/>
-                    <Button Content="Apply" Click="Apply_Click"/>
-                    <Button Content="Save PNG" Click="SavePng_Click"/>
-                    <Button Content="Save Snapshot" Click="SaveSnapshot_Click"/>
-                </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
-                    <Button Content="Fit" Click="Fit_Click"/>
-                    <Button Content="1:1" Click="ActualSize_Click"/>
-                    <Slider x:Name="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
-                    <TextBlock x:Name="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
-                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource MutedTextBrush}"/>
-                </StackPanel>
-            </DockPanel>
+            <WrapPanel VerticalAlignment="Center">
+                <Button Content="Open" Click="Open_Click"/>
+                <Button Content="Open Sample" Click="OpenSample_Click"/>
+                <Button Content="Sample Folder" Click="OpenSampleFolder_Click"/>
+                <Button Content="Apply" Click="Apply_Click"/>
+                <Button Content="Save PNG" Click="SavePng_Click"/>
+                <Button Content="Save Snapshot" Click="SaveSnapshot_Click"/>
+                <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                <Button Content="Fit" Click="Fit_Click"/>
+                <Button Content="1:1" Click="ActualSize_Click"/>
+                <Slider x:Name="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                <TextBlock x:Name="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
+                <TextBlock x:Name="StatusText" MaxWidth="320" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}"/>
+            </WrapPanel>
         </Border>
 
         <Grid Grid.Row="1">

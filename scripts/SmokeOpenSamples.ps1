@@ -11,8 +11,15 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
 Set-Location $repoRoot
 
-dotnet build .\RawBufferVisualizer.sln | Out-Host
-dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj -f $SampleFramework | Out-Host
+dotnet build .\RawBufferVisualizer.sln --configuration $Configuration | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "Build failed with exit code $LASTEXITCODE."
+}
+
+dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj -f $SampleFramework --configuration $Configuration | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "Sample generation failed with exit code $LASTEXITCODE."
+}
 
 $viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
 if (-not (Test-Path $viewerExe)) {

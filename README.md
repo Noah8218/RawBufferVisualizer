@@ -103,6 +103,8 @@ Open the WPF viewer:
 dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net10.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
 ```
 
+The viewer toolbar also includes `Open Sample` and `Sample Folder` when samples exist beside the packaged exe or under `artifacts\samples`.
+
 For .NET Framework deployments, build the `net472` target:
 
 ```powershell
