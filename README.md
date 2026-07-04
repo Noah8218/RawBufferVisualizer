@@ -2,6 +2,11 @@
 
 Raw Buffer Visualizer is a Windows desktop utility for C# machine-vision developers who need to inspect image buffers before they become `Mat`, `Bitmap`, or another high-level image type.
 
+The long-term product direction is `Vision Replay Debugger`: a lightweight C# recorder and standalone viewer for replaying one complete machine-vision inspection run. Raw Buffer Visualizer is the image engine for that product.
+
+- Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
+- `.vrec` package draft: [docs/vrec-format-v0.md](docs/vrec-format-v0.md)
+
 ## Current MVP
 
 - `net472` and modern .NET compatible core library.
