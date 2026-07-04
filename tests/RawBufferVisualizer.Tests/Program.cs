@@ -31,6 +31,8 @@ namespace RawBufferVisualizer.Tests
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
                 VisualizerTransferRoundTrips();
+                BitmapVisualizerObjectSourceCreatesTransfer();
+                MatVisualizerObjectSourceCreatesTransfer();
                 VisualizerBridgeWritesLaunchSnapshot();
                 ViewerPathResolverFindsConfiguredViewer();
                 BitmapAdapterCreatesSnapshot();
@@ -291,6 +293,37 @@ namespace RawBufferVisualizer.Tests
             var restored = transfer.ToSnapshot();
             Assert(restored.Buffer[3] == 4, "Visualizer transfer buffer roundtrip failed.");
             Assert(restored.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Visualizer transfer descriptor roundtrip failed.");
+        }
+
+        private static void BitmapVisualizerObjectSourceCreatesTransfer()
+        {
+            using (var bitmap = new Bitmap(2, 1, PixelFormat.Format24bppRgb))
+            {
+                bitmap.SetPixel(0, 0, Color.FromArgb(10, 20, 30));
+                bitmap.SetPixel(1, 0, Color.FromArgb(40, 50, 60));
+
+                var transfer = BitmapVisualizerTransfer.CreateTransfer(bitmap, "bitmap0");
+
+                Assert(transfer.DisplayName == "bitmap0", "Bitmap visualizer display name failed.");
+                Assert(transfer.SourceType == typeof(Bitmap).FullName, "Bitmap visualizer source type failed.");
+                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Bitmap visualizer dimensions failed.");
+                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Bitmap visualizer pixel format failed.");
+                Assert(transfer.Buffer.Length >= 6, "Bitmap visualizer buffer length failed.");
+            }
+        }
+
+        private static void MatVisualizerObjectSourceCreatesTransfer()
+        {
+            using (var mat = new Mat(1, 2, MatType.CV_8UC3, new Scalar(3, 2, 1)))
+            {
+                var transfer = OpenCvSharpMatVisualizerTransfer.CreateTransfer(mat, "mat0");
+
+                Assert(transfer.DisplayName == "mat0", "Mat visualizer display name failed.");
+                Assert(transfer.SourceType == typeof(Mat).FullName, "Mat visualizer source type failed.");
+                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Mat visualizer dimensions failed.");
+                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat visualizer pixel format failed.");
+                Assert(transfer.Buffer.Length >= 6, "Mat visualizer buffer length failed.");
+            }
         }
 
         private static void VisualizerBridgeWritesLaunchSnapshot()

@@ -3,15 +3,16 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
-using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
     [VisualStudioContribution]
-    internal sealed class RawBufferSnapshotDebuggerVisualizerProvider : DebuggerVisualizerProvider
+    internal sealed class BitmapDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
-        public RawBufferSnapshotDebuggerVisualizerProvider(
+        private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";
+
+        public BitmapDebuggerVisualizerProvider(
             RawBufferVisualizerExtension extension,
             VisualStudioExtensibility extensibility)
             : base(extension, extensibility)
@@ -19,9 +20,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         }
 
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
-            new("%RawBufferVisualizer.DebuggerVisualizer.DisplayName%", typeof(RawBufferSnapshot))
+            new(new[]
             {
-                VisualizerObjectSourceType = new(typeof(RawBufferSnapshotVisualizerObjectSource))
+                new VisualizerTargetType(DisplayName, "System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a"),
+                new VisualizerTargetType(DisplayName, "System.Drawing.Bitmap, System.Drawing.Common")
+            })
+            {
+                VisualizerObjectSourceType = new(typeof(BitmapVisualizerObjectSource))
             };
 
         public override Task<IRemoteUserControl> CreateVisualizerAsync(

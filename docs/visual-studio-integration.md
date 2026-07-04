@@ -33,7 +33,7 @@ This keeps the Visual Studio extension thin and reuses the viewer already built 
    - Convert through `RawBufferVisualizer.BitmapAdapter.BitmapSnapshot.FromBitmap`.
    - Keep it optional so projects without `System.Drawing` are not forced into that dependency.
 3. OpenCvSharp `Mat`
-   - Convert through `RawBufferVisualizer.OpenCvSharpAdapter.MatSnapshot.FromMat`.
+   - Convert in the Visual Studio object source from the `Mat` width, height, stride, data pointer, depth, and channel count.
    - Keep it optional so projects without OpenCvSharp are not forced into that dependency.
 4. Pointer and camera SDK buffers
    - Support only through a descriptor wrapper or adapter object.
@@ -41,7 +41,7 @@ This keeps the Visual Studio extension thin and reuses the viewer already built 
 
 ## Project Shape
 
-Add these projects when implementation starts:
+The Visual Studio prototype is split into these projects:
 
 ```text
 src\RawBufferVisualizer.VisualStudio\
@@ -63,11 +63,11 @@ src\RawBufferVisualizer.VisualStudio.ObjectSource\
 
 ## Current Prototype Status
 
-- `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot` into `VisualizerSnapshotTransfer`.
-- `RawBufferVisualizer.VisualStudio.ObjectSource` includes the Visual Studio custom object source for `RawBufferSnapshot`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` into `VisualizerSnapshotTransfer`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `Bitmap`, and `Mat`.
 - `RawBufferVisualizer.VisualStudio` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot.
 - `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request.
-- `RawBufferVisualizer.VisualStudio.Extensibility` registers a `RawBufferSnapshot` debugger visualizer provider.
+- `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `Bitmap`, and `Mat`.
 - The standalone viewer path is resolved from `RAW_BUFFER_VISUALIZER_VIEWER` or a side-by-side `RawBufferVisualizer.Wpf.exe`.
 - Manual Visual Studio installation and DataTip/Watch verification are the next steps.
 
@@ -98,7 +98,7 @@ Before manual Visual Studio testing, point the extension at a built viewer:
 $env:RAW_BUFFER_VISUALIZER_VIEWER = "C:\Tools\RawBufferVisualizer\RawBufferVisualizer.Wpf.exe"
 ```
 
-Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, press `F5`, then inspect a `RawBufferSnapshot` variable from DataTip, Watch, Locals, or Autos.
+Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, press `F5`, then inspect `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables from DataTip, Watch, Locals, or Autos.
 
 ## Data Contract
 
@@ -126,18 +126,18 @@ For large images, do not rely on one oversized serialization call. Use the visua
 
 ## Implementation Order
 
-1. Add a small object-source project that can convert `RawBufferSnapshot` to the transfer shape.
-2. Add a VS 2022 visualizer project targeting `RawBufferSnapshot`.
-3. Launch the existing viewer with a temp snapshot file.
-4. Add install/build notes for the extension.
-5. Add `Bitmap` support.
-6. Add OpenCvSharp `Mat` support.
+1. Done: add a small object-source project that can convert `RawBufferSnapshot` to the transfer shape.
+2. Done: add a VS 2022 visualizer project targeting `RawBufferSnapshot`.
+3. Done: launch the existing viewer with a temp snapshot file.
+4. Done: add install/build notes for the extension.
+5. Done: add `Bitmap` support.
+6. Done: add OpenCvSharp `Mat` support.
 7. Add chunked transfer for large buffers.
 8. Add vendor or camera SDK adapters only after the generic descriptor-wrapper path is stable.
 
 ## Validation Checklist
 
-- Visualizer appears for `RawBufferSnapshot` in Watch, Locals, Autos, and DataTip.
+- Visualizer appears for `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` in Watch, Locals, Autos, and DataTip.
 - Viewer opens from the visualizer with a generated temp snapshot.
 - Pixel format, width, height, stride, valid bits, and byte order match the debuggee object.
 - Mono, color, packed mono, float, and Bayer samples still render correctly after the VS path.

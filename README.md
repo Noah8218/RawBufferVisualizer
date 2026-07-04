@@ -23,7 +23,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
-- Visual Studio debugger visualizer prototype for `RawBufferSnapshot` transfer and standalone viewer launch preparation.
+- Visual Studio debugger visualizer prototype for `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` transfer.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF tiled canvas for large-image display.
@@ -40,7 +40,7 @@ No GitHub Release has been published yet. Until the first version tag is created
 4. Run `RawBufferVisualizer.Wpf.exe`.
 5. Click `Open Sample` to verify the viewer immediately.
 
-The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip` for manual Visual Studio extension validation.
+The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip` for manual Visual Studio extension validation against `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables.
 
 After the first tagged release is created, download the same zip from the [Releases page](https://github.com/Noah8218/RawBufferVisualizer/releases).
 
@@ -207,8 +207,7 @@ snapshot.Save("mat.rbuf.json");
 
 The standalone viewer is the first surface. The final target is Visual Studio integration for debugger-time image inspection:
 
-- `RawBufferSnapshot` first
-- `Bitmap` and OpenCvSharp `Mat` adapters next
+- Current prototype targets `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat`.
 - raw pointer buffers only when width, height, stride, pixel format, and ownership metadata are available
 - same viewer behavior for zoom, pixel inspection, histogram, diagnostics, and export
 

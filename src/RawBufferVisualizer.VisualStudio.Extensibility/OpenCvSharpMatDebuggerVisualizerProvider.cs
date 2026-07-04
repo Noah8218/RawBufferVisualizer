@@ -3,15 +3,16 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
-using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
     [VisualStudioContribution]
-    internal sealed class RawBufferSnapshotDebuggerVisualizerProvider : DebuggerVisualizerProvider
+    internal sealed class OpenCvSharpMatDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
-        public RawBufferSnapshotDebuggerVisualizerProvider(
+        private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";
+
+        public OpenCvSharpMatDebuggerVisualizerProvider(
             RawBufferVisualizerExtension extension,
             VisualStudioExtensibility extensibility)
             : base(extension, extensibility)
@@ -19,9 +20,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         }
 
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
-            new("%RawBufferVisualizer.DebuggerVisualizer.DisplayName%", typeof(RawBufferSnapshot))
+            new(new[]
             {
-                VisualizerObjectSourceType = new(typeof(RawBufferSnapshotVisualizerObjectSource))
+                new VisualizerTargetType(DisplayName, "OpenCvSharp.Mat, OpenCvSharp, Version=4.0.0.0, Culture=neutral, PublicKeyToken=6adad1e807fea099"),
+                new VisualizerTargetType(DisplayName, "OpenCvSharp.Mat, OpenCvSharp")
+            })
+            {
+                VisualizerObjectSourceType = new(typeof(OpenCvSharpMatVisualizerObjectSource))
             };
 
         public override Task<IRemoteUserControl> CreateVisualizerAsync(
