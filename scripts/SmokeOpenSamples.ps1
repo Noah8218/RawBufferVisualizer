@@ -124,7 +124,7 @@ $results = New-Object System.Collections.Generic.List[object]
 foreach ($sample in $sampleFiles) {
     $safeName = [IO.Path]::GetFileNameWithoutExtension([IO.Path]::GetFileNameWithoutExtension($sample.Name))
     $capturePath = Join-Path $captureRoot ($safeName + ".png")
-    $process = Start-Process -FilePath $viewerExe -ArgumentList ('"' + $sample.FullName + '"') -PassThru
+    $process = Start-Process -FilePath $viewerExe -ArgumentList @($sample.FullName) -PassThru
     try {
         $deadline = [DateTime]::Now.AddSeconds(30)
         do {

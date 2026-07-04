@@ -181,6 +181,12 @@ Run WPF sample smoke test:
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeOpenSamples.ps1
 ```
 
+Run WPF interaction regression test:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeViewerInteractions.ps1
+```
+
 Create a sample buffer:
 
 ```powershell

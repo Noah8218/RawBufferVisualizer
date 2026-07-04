@@ -19,18 +19,18 @@
 
         <Border Grid.Row="0" Background="{StaticResource ToolbarBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10">
             <WrapPanel VerticalAlignment="Center">
-                <Button Content="Open" Click="Open_Click"/>
-                <Button Content="Open Sample" Click="OpenSample_Click"/>
-                <Button Content="Sample Folder" Click="OpenSampleFolder_Click"/>
-                <Button Content="Apply" Click="Apply_Click"/>
-                <Button Content="Save PNG" Click="SavePng_Click"/>
-                <Button Content="Save Snapshot" Click="SaveSnapshot_Click"/>
+                <Button Content="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click"/>
+                <Button Content="Open Sample" AutomationProperties.AutomationId="OpenSampleButton" Click="OpenSample_Click"/>
+                <Button Content="Sample Folder" AutomationProperties.AutomationId="SampleFolderButton" Click="OpenSampleFolder_Click"/>
+                <Button Content="Apply" AutomationProperties.AutomationId="ApplyButton" Click="Apply_Click"/>
+                <Button Content="Save PNG" AutomationProperties.AutomationId="SavePngButton" Click="SavePng_Click"/>
+                <Button Content="Save Snapshot" AutomationProperties.AutomationId="SaveSnapshotButton" Click="SaveSnapshot_Click"/>
                 <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
-                <Button Content="Fit" Click="Fit_Click"/>
-                <Button Content="1:1" Click="ActualSize_Click"/>
-                <Slider x:Name="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
-                <TextBlock x:Name="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
-                <TextBlock x:Name="StatusText" MaxWidth="320" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}"/>
+                <Button Content="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click"/>
+                <Button Content="1:1" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click"/>
+                <Slider x:Name="ZoomSlider" AutomationProperties.AutomationId="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                <TextBlock x:Name="ZoomText" AutomationProperties.AutomationId="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
+                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="StatusText" MaxWidth="320" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}"/>
             </WrapPanel>
         </Border>
 
@@ -47,32 +47,32 @@
                         <TextBlock Text="Descriptor" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
 
                         <TextBlock Text="Width"/>
-                        <TextBox x:Name="WidthBox" Text="640"/>
+                        <TextBox x:Name="WidthBox" AutomationProperties.AutomationId="WidthBox" Text="640"/>
 
                         <TextBlock Text="Height"/>
-                        <TextBox x:Name="HeightBox" Text="480"/>
+                        <TextBox x:Name="HeightBox" AutomationProperties.AutomationId="HeightBox" Text="480"/>
 
                         <TextBlock Text="Stride"/>
-                        <TextBox x:Name="StrideBox" Text="640"/>
+                        <TextBox x:Name="StrideBox" AutomationProperties.AutomationId="StrideBox" Text="640"/>
 
                         <TextBlock Text="Pixel Format"/>
-                        <ComboBox x:Name="FormatBox"/>
+                        <ComboBox x:Name="FormatBox" AutomationProperties.AutomationId="FormatBox"/>
 
                         <TextBlock Text="Valid Bits"/>
-                        <TextBox x:Name="ValidBitsBox" Text="8"/>
+                        <TextBox x:Name="ValidBitsBox" AutomationProperties.AutomationId="ValidBitsBox" Text="8"/>
 
                         <TextBlock Text="Byte Order"/>
-                        <ComboBox x:Name="ByteOrderBox"/>
+                        <ComboBox x:Name="ByteOrderBox" AutomationProperties.AutomationId="ByteOrderBox"/>
 
                         <Separator Margin="0,8,0,12"/>
                         <TextBlock Text="File" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="FileText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}"/>
+                        <TextBlock x:Name="FileText" AutomationProperties.AutomationId="FileText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}"/>
                     </StackPanel>
                 </ScrollViewer>
             </Border>
 
             <Border Grid.Column="1" Background="#111111">
-                <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView"/>
+                <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="ImageView"/>
             </Border>
 
             <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0" Padding="12">
@@ -86,15 +86,15 @@
 
                     <StackPanel Grid.Row="0">
                         <TextBlock Text="Pixel" FontSize="16" FontWeight="SemiBold"/>
-                        <TextBlock x:Name="PixelText" Margin="0,6,0,14" Foreground="{StaticResource MutedTextBrush}"/>
+                        <TextBlock x:Name="PixelText" AutomationProperties.AutomationId="PixelText" Margin="0,6,0,14" Foreground="{StaticResource MutedTextBrush}"/>
                     </StackPanel>
 
                     <Border Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource InputBackgroundBrush}">
-                        <Canvas x:Name="HistogramCanvas" Margin="8"/>
+                        <Canvas x:Name="HistogramCanvas" AutomationProperties.AutomationId="HistogramCanvas" Margin="8"/>
                     </Border>
 
                     <TextBlock Grid.Row="2" Text="Diagnostics" FontSize="16" FontWeight="SemiBold" Margin="0,16,0,8"/>
-                    <ListBox Grid.Row="3" x:Name="DiagnosticsList"/>
+                    <ListBox Grid.Row="3" x:Name="DiagnosticsList" AutomationProperties.AutomationId="DiagnosticsList"/>
                 </Grid>
             </Border>
         </Grid>
