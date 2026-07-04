@@ -7,6 +7,7 @@ using System.IO.Compression;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.Recorder
 {
@@ -22,6 +23,7 @@ namespace RawBufferVisualizer.Recorder
     {
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly List<VisionStage> _stages = new List<VisionStage>();
+        private readonly List<VisionImage> _images = new List<VisionImage>();
         private string _result = "Unknown";
 
         public string Camera { get; private set; }
@@ -48,6 +50,33 @@ namespace RawBufferVisualizer.Recorder
                 image,
                 timestampMs ?? _clock.Elapsed.TotalMilliseconds));
             return this;
+        }
+
+        public VisionRecording AddImage(string id, string name, byte[] buffer, RawImageDescriptor descriptor, double? timestampMs = null)
+        {
+            if (buffer == null)
+            {
+                throw new ArgumentNullException(nameof(buffer));
+            }
+
+            if (descriptor == null)
+            {
+                throw new ArgumentNullException(nameof(descriptor));
+            }
+
+            var diagnostics = RawBufferDiagnostics.Analyze(buffer, descriptor);
+            if (RawBufferDiagnostics.HasErrors(diagnostics))
+            {
+                throw new InvalidOperationException("Image descriptor is invalid.");
+            }
+
+            var safeId = SanitizeIdPart(RequireText(id, nameof(id)));
+            var descriptorPath = "images/" + safeId + ".rbuf.json";
+            var rawPath = "images/" + safeId + ".raw";
+            EnsureUniqueImagePath(descriptorPath);
+
+            _images.Add(new VisionImage(descriptorPath, rawPath, buffer, descriptor.Clone()));
+            return AddStage(id, name, "image", descriptorPath, timestampMs);
         }
 
         public VisionRecording Result(bool isOk)
@@ -78,6 +107,11 @@ namespace RawBufferVisualizer.Recorder
             using (var stream = File.Create(fullPath))
             using (var archive = new ZipArchive(stream, ZipArchiveMode.Create))
             {
+                for (var i = 0; i < _images.Count; i++)
+                {
+                    WriteImage(archive, _images[i]);
+                }
+
                 var manifestEntry = archive.CreateEntry("manifest.json", CompressionLevel.Optimal);
                 using (var manifestStream = manifestEntry.Open())
                 {
@@ -90,6 +124,22 @@ namespace RawBufferVisualizer.Recorder
         public void Dispose()
         {
             _clock.Stop();
+        }
+
+        private static void WriteImage(ZipArchive archive, VisionImage image)
+        {
+            var rawEntry = archive.CreateEntry(image.RawPath, CompressionLevel.NoCompression);
+            using (var rawStream = rawEntry.Open())
+            {
+                rawStream.Write(image.Buffer, 0, image.Buffer.Length);
+            }
+
+            var descriptorEntry = archive.CreateEntry(image.DescriptorPath, CompressionLevel.Optimal);
+            using (var descriptorStream = descriptorEntry.Open())
+            {
+                var serializer = new DataContractJsonSerializer(typeof(RawBufferImageDto));
+                serializer.WriteObject(descriptorStream, RawBufferImageDto.From(image));
+            }
         }
 
         private VisionRecordingManifestDto ToManifestDto()
@@ -144,6 +194,17 @@ namespace RawBufferVisualizer.Recorder
 
             return value;
         }
+
+        private void EnsureUniqueImagePath(string descriptorPath)
+        {
+            for (var i = 0; i < _images.Count; i++)
+            {
+                if (string.Equals(_images[i].DescriptorPath, descriptorPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException("Image id already exists: " + descriptorPath);
+                }
+            }
+        }
     }
 
     internal sealed class VisionStage
@@ -161,6 +222,22 @@ namespace RawBufferVisualizer.Recorder
             Kind = kind;
             Image = image;
             TimestampMs = timestampMs;
+        }
+    }
+
+    internal sealed class VisionImage
+    {
+        public string DescriptorPath { get; private set; }
+        public string RawPath { get; private set; }
+        public byte[] Buffer { get; private set; }
+        public RawImageDescriptor Descriptor { get; private set; }
+
+        public VisionImage(string descriptorPath, string rawPath, byte[] buffer, RawImageDescriptor descriptor)
+        {
+            DescriptorPath = descriptorPath;
+            RawPath = rawPath;
+            Buffer = buffer;
+            Descriptor = descriptor;
         }
     }
 
@@ -225,6 +302,45 @@ namespace RawBufferVisualizer.Recorder
                 Kind = stage.Kind,
                 Image = stage.Image,
                 TimestampMs = Math.Round(stage.TimestampMs, 3)
+            };
+        }
+    }
+
+    [DataContract]
+    internal sealed class RawBufferImageDto
+    {
+        [DataMember(Name = "rawFile", Order = 0)]
+        public string RawFile { get; set; } = string.Empty;
+
+        [DataMember(Name = "width", Order = 1)]
+        public int Width { get; set; }
+
+        [DataMember(Name = "height", Order = 2)]
+        public int Height { get; set; }
+
+        [DataMember(Name = "stride", Order = 3)]
+        public int Stride { get; set; }
+
+        [DataMember(Name = "pixelFormat", Order = 4)]
+        public string PixelFormat { get; set; } = RawPixelFormat.Mono8.ToString();
+
+        [DataMember(Name = "validBits", Order = 5)]
+        public int ValidBits { get; set; }
+
+        [DataMember(Name = "byteOrder", Order = 6)]
+        public string ByteOrder { get; set; } = RawByteOrder.LittleEndian.ToString();
+
+        public static RawBufferImageDto From(VisionImage image)
+        {
+            return new RawBufferImageDto
+            {
+                RawFile = Path.GetFileName(image.RawPath),
+                Width = image.Descriptor.Width,
+                Height = image.Descriptor.Height,
+                Stride = image.Descriptor.Stride,
+                PixelFormat = image.Descriptor.PixelFormat.ToString(),
+                ValidBits = image.Descriptor.ValidBits,
+                ByteOrder = image.Descriptor.ByteOrder.ToString()
             };
         }
     }

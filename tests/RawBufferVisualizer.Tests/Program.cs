@@ -220,7 +220,16 @@ namespace RawBufferVisualizer.Tests
 
             using (var shot = VisionRecorder.Begin("Cam1", "T001", "Main"))
             {
-                shot.AddStage("01_raw", "Raw", image: "images/01_raw.rbuf.json");
+                var descriptor = new RawImageDescriptor
+                {
+                    Width = 2,
+                    Height = 2,
+                    Stride = 2,
+                    PixelFormat = RawPixelFormat.Mono8,
+                    ValidBits = 8,
+                    ByteOrder = RawByteOrder.LittleEndian
+                };
+                shot.AddImage("01_raw", "Raw", new byte[] { 1, 2, 3, 4 }, descriptor);
                 shot.Result(false);
                 shot.Save(vrecPath);
             }
@@ -240,6 +249,32 @@ namespace RawBufferVisualizer.Tests
                     Assert(json.Contains("\"camera\":\"Cam1\""), "VREC camera missing.");
                     Assert(json.Contains("\"result\":\"NG\""), "VREC result missing.");
                     Assert(json.Contains("\"id\":\"01_raw\""), "VREC stage missing.");
+                    Assert(json.Contains("\"image\":\"images\\/01_raw.rbuf.json\""), "VREC stage image missing.");
+                }
+
+                var descriptorEntry = archive.GetEntry("images/01_raw.rbuf.json");
+                if (descriptorEntry == null)
+                {
+                    throw new InvalidOperationException("VREC image descriptor missing.");
+                }
+
+                using (var reader = new StreamReader(descriptorEntry.Open()))
+                {
+                    var json = reader.ReadToEnd();
+                    Assert(json.Contains("\"rawFile\":\"01_raw.raw\""), "VREC rawFile missing.");
+                    Assert(json.Contains("\"pixelFormat\":\"Mono8\""), "VREC pixel format missing.");
+                }
+
+                var rawEntry = archive.GetEntry("images/01_raw.raw");
+                if (rawEntry == null)
+                {
+                    throw new InvalidOperationException("VREC raw payload missing.");
+                }
+
+                using (var rawStream = rawEntry.Open())
+                {
+                    Assert(rawStream.ReadByte() == 1, "VREC raw first byte failed.");
+                    Assert(rawStream.ReadByte() == 2, "VREC raw second byte failed.");
                 }
             }
 
