@@ -17,6 +17,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private readonly List<TextureTile> _tiles = new List<TextureTile>();
         private RawImageDescriptor? _descriptor;
         private byte[]? _buffer;
+        private RawRenderOptions? _renderOptions;
         private double _viewLeft;
         private double _viewTop;
         private double _viewWidth = 1;
@@ -77,12 +78,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
             ClearImage();
             _buffer = buffer;
             _descriptor = descriptor.Clone();
+            _renderOptions = RawBufferRenderer.CreateFixedScaleOptions(buffer, _descriptor);
 
-            var renderOptions = RawBufferRenderer.CreateFixedScaleOptions(buffer, _descriptor);
             foreach (var tile in RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height))
             {
-                var renderedTile = RawBufferRenderer.RenderTile(buffer, _descriptor, tile.X, tile.Y, tile.Width, tile.Height, renderOptions);
-                _tiles.Add(new TextureTile(tile.X, tile.Y, tile.Width, tile.Height, renderedTile.Bgra32));
+                _tiles.Add(new TextureTile(tile.X, tile.Y, tile.Width, tile.Height));
             }
 
             FitToImage();
@@ -95,6 +95,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _tiles.Clear();
             _buffer = null;
             _descriptor = null;
+            _renderOptions = null;
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
@@ -187,8 +188,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             {
                 if (_tiles[i].TextureId == 0)
                 {
-                    _tiles[i].TextureId = CreateTexture(gl, _tiles[i].Width, _tiles[i].Height, _tiles[i].Bgra32);
-                    _tiles[i].Bgra32 = Array.Empty<byte>();
+                    UploadTile(gl, _tiles[i]);
                 }
 
                 DrawTile(gl, _tiles[i]);
@@ -286,23 +286,31 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_S, OpenGL.GL_CLAMP);
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP);
 
-            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, width, height, 0, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, ToRgba(bgra));
+            ConvertBgraToRgbaInPlace(bgra);
+            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, width, height, 0, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, bgra);
 
             return ids[0];
         }
 
-        private static byte[] ToRgba(byte[] bgra)
+        private void UploadTile(OpenGL gl, TextureTile tile)
         {
-            var rgba = new byte[bgra.Length];
-            for (var i = 0; i < bgra.Length; i += 4)
+            if (_buffer == null || _descriptor == null || _renderOptions == null)
             {
-                rgba[i] = bgra[i + 2];
-                rgba[i + 1] = bgra[i + 1];
-                rgba[i + 2] = bgra[i];
-                rgba[i + 3] = bgra[i + 3];
+                return;
             }
 
-            return rgba;
+            var renderedTile = RawBufferRenderer.RenderTile(_buffer, _descriptor, tile.X, tile.Y, tile.Width, tile.Height, _renderOptions);
+            tile.TextureId = CreateTexture(gl, renderedTile.Width, renderedTile.Height, renderedTile.Bgra32);
+        }
+
+        private static void ConvertBgraToRgbaInPlace(byte[] bgra)
+        {
+            for (var i = 0; i < bgra.Length; i += 4)
+            {
+                var blue = bgra[i];
+                bgra[i] = bgra[i + 2];
+                bgra[i + 2] = blue;
+            }
         }
 
         private static void DrawTile(OpenGL gl, TextureTile tile)
@@ -348,7 +356,6 @@ namespace RawBufferVisualizer.OpenGlCanvas
             public int Y { get; private set; }
             public int Width { get; private set; }
             public int Height { get; private set; }
-            public byte[] Bgra32 { get; set; }
 
             public int Right
             {
@@ -360,13 +367,12 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 get { return Y + Height; }
             }
 
-            public TextureTile(int x, int y, int width, int height, byte[] bgra32)
+            public TextureTile(int x, int y, int width, int height)
             {
                 X = x;
                 Y = y;
                 Width = width;
                 Height = height;
-                Bgra32 = bgra32;
             }
 
             public override string ToString()
