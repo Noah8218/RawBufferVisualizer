@@ -6,7 +6,10 @@
         Height="800"
         MinWidth="920"
         MinHeight="620"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        AllowDrop="True"
+        DragOver="Window_DragOver"
+        Drop="Window_Drop">
     <Grid Background="{StaticResource WindowBackgroundBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -18,6 +21,8 @@
                 <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
                     <Button Content="Open" Click="Open_Click"/>
                     <Button Content="Apply" Click="Apply_Click"/>
+                    <Button Content="Save PNG" Click="SavePng_Click"/>
+                    <Button Content="Save Snapshot" Click="SaveSnapshot_Click"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>

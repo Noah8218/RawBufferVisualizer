@@ -4,6 +4,8 @@ namespace RawBufferVisualizer.Core
     {
         Mono8,
         Mono16,
+        Mono10PackedLsb,
+        Mono12PackedLsb,
         Binary,
         RGB24,
         BGR24,
@@ -56,7 +58,20 @@ namespace RawBufferVisualizer.Core
 
         public int GetMinimumStride()
         {
+            switch (PixelFormat)
+            {
+                case RawPixelFormat.Mono10PackedLsb:
+                    return GetPackedStride(10);
+                case RawPixelFormat.Mono12PackedLsb:
+                    return GetPackedStride(12);
+            }
+
             return Width > 0 ? Width * GetBytesPerPixel() : 0;
+        }
+
+        private int GetPackedStride(int bitsPerPixel)
+        {
+            return Width > 0 ? (int)(((long)Width * bitsPerPixel + 7) / 8) : 0;
         }
 
         public long GetRequiredByteCount()
@@ -135,4 +150,3 @@ namespace RawBufferVisualizer.Core
         }
     }
 }
-

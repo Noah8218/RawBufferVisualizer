@@ -16,6 +16,8 @@ namespace RawBufferVisualizer.Wpf
 {
     public partial class MainWindow : Window
     {
+        private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
+
         private byte[]? _buffer;
         private RawImageDescriptor _descriptor;
         private RenderedImage? _rendered;
@@ -84,6 +86,67 @@ namespace RawBufferVisualizer.Wpf
             }
         }
 
+        private void SavePng_Click(object sender, RoutedEventArgs e)
+        {
+            if (_rendered == null || ImageView.Source == null)
+            {
+                MessageBox.Show(this, "No rendered image to save.", "Save PNG", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            var dialog = new SaveFileDialog
+            {
+                Filter = "PNG Image (*.png)|*.png",
+                FileName = GetDefaultExportName(".png")
+            };
+
+            if (dialog.ShowDialog(this) != true)
+            {
+                return;
+            }
+
+            using (var stream = File.Create(dialog.FileName))
+            {
+                var encoder = new PngBitmapEncoder();
+                encoder.Frames.Add(BitmapFrame.Create((BitmapSource)ImageView.Source));
+                encoder.Save(stream);
+            }
+        }
+
+        private void SaveSnapshot_Click(object sender, RoutedEventArgs e)
+        {
+            if (_buffer == null)
+            {
+                MessageBox.Show(this, "No buffer to save.", "Save Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
+            try
+            {
+                _descriptor = ReadDescriptorFromFields();
+                var dialog = new SaveFileDialog
+                {
+                    Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json",
+                    FileName = GetDefaultExportName(".rbuf.json")
+                };
+
+                if (dialog.ShowDialog(this) != true)
+                {
+                    return;
+                }
+
+                var snapshot = new RawBufferSnapshot(_buffer, _descriptor);
+                snapshot.Save(dialog.FileName);
+                _currentPath = snapshot.MetadataPath;
+                FileText.Text = _currentPath ?? string.Empty;
+                UpdateStatus();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(this, ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private void Apply_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -95,6 +158,20 @@ namespace RawBufferVisualizer.Wpf
             {
                 MessageBox.Show(this, ex.Message, "Apply failed", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        private string GetDefaultExportName(string extension)
+        {
+            var name = string.IsNullOrWhiteSpace(_currentPath)
+                ? "raw-buffer"
+                : Path.GetFileNameWithoutExtension(_currentPath);
+
+            if (name.EndsWith(".rbuf", StringComparison.OrdinalIgnoreCase))
+            {
+                name = name.Substring(0, name.Length - ".rbuf".Length);
+            }
+
+            return name + extension;
         }
 
         private RawImageDescriptor ReadDescriptorFromFields()
@@ -151,27 +228,61 @@ namespace RawBufferVisualizer.Wpf
 
             if (RawBufferDiagnostics.HasErrors(diagnostics))
             {
-                ImageView.Source = null;
-                _rendered = null;
+                ClearPreview();
                 UpdateStatus();
                 return;
             }
 
+            var estimatedPreviewBytes = RawImageTilePlanner.EstimateBgraByteCount(_descriptor);
+            if (estimatedPreviewBytes > MaxCpuPreviewBytes)
+            {
+                ClearPreview();
+                var tileCount = RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height).Count;
+                DiagnosticsList.Items.Add(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Warning: CPU preview skipped because BGRA preview would require {0:N0} bytes. OpenGL tile plan is {1:N0} tiles at up to {2:N0} px.",
+                    estimatedPreviewBytes,
+                    tileCount,
+                    RawImageTilePlanner.DefaultTileSize));
+                FileText.Text = _currentPath ?? string.Empty;
+                StatusText.Text = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0} x {1}, {2}, OpenGL tiles: {3:N0}",
+                    _descriptor.Width,
+                    _descriptor.Height,
+                    _descriptor.PixelFormat,
+                    tileCount);
+                return;
+            }
+
             _rendered = RawBufferRenderer.Render(_buffer, _descriptor);
-            var bitmap = BitmapSource.Create(
-                _rendered.Width,
-                _rendered.Height,
-                96,
-                96,
-                PixelFormats.Bgra32,
-                null,
-                _rendered.Bgra32,
-                _rendered.Stride);
-            bitmap.Freeze();
+            var bitmap = CreateBitmapSource(_rendered);
             ImageView.Source = bitmap;
             FileText.Text = _currentPath ?? string.Empty;
             DrawHistogram();
             UpdateStatus();
+        }
+
+        private static BitmapSource CreateBitmapSource(RenderedImage image)
+        {
+            var bitmap = BitmapSource.Create(
+                image.Width,
+                image.Height,
+                96,
+                96,
+                PixelFormats.Bgra32,
+                null,
+                image.Bgra32,
+                image.Stride);
+            bitmap.Freeze();
+            return bitmap;
+        }
+
+        private void ClearPreview()
+        {
+            _rendered = null;
+            ImageView.Source = null;
+            HistogramCanvas.Children.Clear();
         }
 
         private void DrawHistogram()
@@ -227,6 +338,26 @@ namespace RawBufferVisualizer.Wpf
             var x = (int)(position.X / zoom);
             var y = (int)(position.Y / zoom);
             PixelText.Text = RawPixelInspector.Describe(_buffer, _descriptor, x, y);
+        }
+
+        private void Window_DragOver(object sender, DragEventArgs e)
+        {
+            e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
+            e.Handled = true;
+        }
+
+        private void Window_Drop(object sender, DragEventArgs e)
+        {
+            if (!e.Data.GetDataPresent(DataFormats.FileDrop))
+            {
+                return;
+            }
+
+            var files = (string[])e.Data.GetData(DataFormats.FileDrop);
+            if (files.Length > 0)
+            {
+                OpenPath(files[0]);
+            }
         }
 
         private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)

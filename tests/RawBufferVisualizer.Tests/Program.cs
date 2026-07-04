@@ -17,7 +17,10 @@ namespace RawBufferVisualizer.Tests
             try
             {
                 Mono8RendersToBgra();
+                Mono10PackedLsbRenders();
+                Mono12PackedLsbInspects();
                 Bgr24KeepsChannelOrder();
+                TilePlannerSplitsLargeImage();
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
                 BitmapAdapterCreatesSnapshot();
@@ -63,6 +66,59 @@ namespace RawBufferVisualizer.Tests
 
             var rendered = RawBufferRenderer.Render(new byte[] { 1, 2, 3 }, descriptor);
             Assert(rendered.Bgra32[0] == 1 && rendered.Bgra32[1] == 2 && rendered.Bgra32[2] == 3 && rendered.Bgra32[3] == 255, "BGR24 channel order failed.");
+        }
+
+        private static void TilePlannerSplitsLargeImage()
+        {
+            var tiles = RawImageTilePlanner.CreateTiles(16384, 16384);
+            Assert(tiles.Count == 16, "16K image should split into 16 OpenGL upload tiles.");
+            Assert(tiles[0].X == 0 && tiles[0].Y == 0 && tiles[0].Width == 5000 && tiles[0].Height == 5000, "First tile bounds failed.");
+            Assert(tiles[15].X == 15000 && tiles[15].Y == 15000 && tiles[15].Width == 1384 && tiles[15].Height == 1384, "Last tile bounds failed.");
+
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 16384,
+                Height = 16384,
+                Stride = 16384,
+                PixelFormat = RawPixelFormat.Mono8,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+            Assert(RawImageTilePlanner.EstimateBgraByteCount(descriptor) == 1073741824L, "BGRA memory estimate failed.");
+        }
+
+        private static void Mono10PackedLsbRenders()
+        {
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 4,
+                Height = 1,
+                Stride = 5,
+                PixelFormat = RawPixelFormat.Mono10PackedLsb,
+                ValidBits = 10,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+
+            Assert(descriptor.GetMinimumStride() == 5, "Mono10 packed stride failed.");
+            var rendered = RawBufferRenderer.Render(PackLsb(new[] { 0, 128, 512, 1023 }, 10), descriptor);
+            Assert(rendered.Bgra32[0] == 0, "Mono10 packed black failed.");
+            Assert(rendered.Bgra32[12] == 255, "Mono10 packed white failed.");
+        }
+
+        private static void Mono12PackedLsbInspects()
+        {
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 2,
+                Height = 1,
+                Stride = 3,
+                PixelFormat = RawPixelFormat.Mono12PackedLsb,
+                ValidBits = 12,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+
+            var text = RawPixelInspector.Describe(PackLsb(new[] { 7, 4095 }, 12), descriptor, 1, 0);
+            Assert(text.Contains("Value=4095"), "Mono12 packed inspector failed.");
         }
 
         private static void InvalidStrideIsReported()
@@ -133,6 +189,27 @@ namespace RawBufferVisualizer.Tests
             {
                 throw new InvalidOperationException(message);
             }
+        }
+
+        private static byte[] PackLsb(int[] values, int bitsPerPixel)
+        {
+            var buffer = new byte[((values.Length * bitsPerPixel) + 7) / 8];
+            for (var x = 0; x < values.Length; x++)
+            {
+                var value = values[x];
+                for (var bit = 0; bit < bitsPerPixel; bit++)
+                {
+                    if (((value >> bit) & 1) == 0)
+                    {
+                        continue;
+                    }
+
+                    var bitIndex = (x * bitsPerPixel) + bit;
+                    buffer[bitIndex / 8] |= (byte)(1 << (bitIndex % 8));
+                }
+            }
+
+            return buffer;
         }
     }
 }

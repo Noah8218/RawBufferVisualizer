@@ -14,7 +14,13 @@ namespace RawBufferVisualizer.Core
             }
 
             options = options ?? new RawRenderOptions();
-            var pixels = new byte[descriptor.Width * descriptor.Height * 4];
+            var pixelByteCount = RawImageTilePlanner.EstimateBgraByteCount(descriptor);
+            if (pixelByteCount > int.MaxValue)
+            {
+                throw new InvalidOperationException("Rendered image exceeds a single BGRA buffer. Use tiled rendering for this image.");
+            }
+
+            var pixels = new byte[(int)pixelByteCount];
 
             switch (descriptor.PixelFormat)
             {
@@ -24,6 +30,12 @@ namespace RawBufferVisualizer.Core
                     break;
                 case RawPixelFormat.Mono16:
                     RenderMono16(buffer, descriptor, pixels, options);
+                    break;
+                case RawPixelFormat.Mono10PackedLsb:
+                    RenderPackedMono(buffer, descriptor, pixels, 10, options);
+                    break;
+                case RawPixelFormat.Mono12PackedLsb:
+                    RenderPackedMono(buffer, descriptor, pixels, 12, options);
                     break;
                 case RawPixelFormat.Float32:
                     RenderFloat32(buffer, descriptor, pixels, options);
@@ -56,6 +68,56 @@ namespace RawBufferVisualizer.Core
             {
                 yield return diagnostics[i].ToString();
             }
+        }
+
+        private static void RenderPackedMono(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int bitsPerPixel, RawRenderOptions options)
+        {
+            var levels = GetPackedMonoLevels(buffer, descriptor, bitsPerPixel, options);
+            var black = levels.Item1;
+            var white = levels.Item2 <= black ? black + 1 : levels.Item2;
+
+            for (var y = 0; y < descriptor.Height; y++)
+            {
+                var sourceRow = y * descriptor.Stride;
+                var targetRow = y * descriptor.Width * 4;
+                for (var x = 0; x < descriptor.Width; x++)
+                {
+                    var raw = ReadPackedLsb(buffer, sourceRow, x, bitsPerPixel);
+                    var value = ToByte(raw, black, white);
+                    WriteBgra(pixels, targetRow + (x * 4), value, value, value, 255);
+                }
+            }
+        }
+
+        private static Tuple<double, double> GetPackedMonoLevels(byte[] buffer, RawImageDescriptor descriptor, int bitsPerPixel, RawRenderOptions options)
+        {
+            if (!options.AutoScale)
+            {
+                return Tuple.Create(options.BlackLevel, options.WhiteLevel);
+            }
+
+            var maxValue = (1 << bitsPerPixel) - 1;
+            var min = maxValue;
+            var max = 0;
+            for (var y = 0; y < descriptor.Height; y++)
+            {
+                var sourceRow = y * descriptor.Stride;
+                for (var x = 0; x < descriptor.Width; x++)
+                {
+                    var raw = ReadPackedLsb(buffer, sourceRow, x, bitsPerPixel);
+                    if (raw < min)
+                    {
+                        min = raw;
+                    }
+
+                    if (raw > max)
+                    {
+                        max = raw;
+                    }
+                }
+            }
+
+            return Tuple.Create((double)min, (double)max);
         }
 
         private static void RenderMono8(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, bool binary)
@@ -306,6 +368,21 @@ namespace RawBufferVisualizer.Core
             return BitConverter.ToSingle(bytes, 0);
         }
 
+        internal static int ReadPackedLsb(byte[] buffer, int rowOffset, int x, int bitsPerPixel)
+        {
+            var bitOffset = x * bitsPerPixel;
+            var byteOffset = rowOffset + (bitOffset / 8);
+            var shift = bitOffset % 8;
+            var value = 0;
+            var bytesToRead = (shift + bitsPerPixel + 7) / 8;
+            for (var i = 0; i < bytesToRead; i++)
+            {
+                value |= buffer[byteOffset + i] << (i * 8);
+            }
+
+            return (value >> shift) & ((1 << bitsPerPixel) - 1);
+        }
+
         private static byte ToByte(double raw, double black, double white)
         {
             var normalized = (raw - black) / (white - black);
@@ -331,4 +408,3 @@ namespace RawBufferVisualizer.Core
         }
     }
 }
-

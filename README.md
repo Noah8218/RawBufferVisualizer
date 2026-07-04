@@ -6,12 +6,23 @@ Raw Buffer Visualizer is a Windows desktop utility for C# machine-vision develop
 
 - `net472` and modern .NET compatible core library.
 - Raw descriptor validation for width, height, stride, pixel format, valid bits, and byte order.
-- BGRA rendering for `Mono8`, `Mono16`, `Binary`, `RGB24`, `BGR24`, `BGRA32`, `Float32`, and 8-bit Bayer patterns.
+- BGRA rendering for `Mono8`, `Mono16`, packed `Mono10`/`Mono12` LSB, `Binary`, `RGB24`, `BGR24`, `BGRA32`, `Float32`, and 8-bit Bayer patterns.
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
-- Pixel inspector, histogram, zoom, and diagnostics panel.
+- Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
+- Large-image guard: CPU BGRA preview is skipped above 512 MB, and the viewer reports an OpenGL tile plan instead of allocating the full rendered image.
+
+## Large image direction
+
+The OpenGL viewer path should use tiled texture upload instead of one full-frame bitmap. The current shared rule is:
+
+- default tile size: `5000 x 5000`
+- tile planner: `RawImageTilePlanner.CreateTiles(width, height)`
+- memory estimate: `RawImageTilePlanner.EstimateBgraByteCount(descriptor)`
+
+This mirrors the existing OpenGL image canvas approach in the local reference project while keeping this MVP compatible with `net472` and modern .NET.
 
 ## Snapshot format
 
@@ -110,5 +121,5 @@ Local git is enough for history on this machine. For GitHub sync, create an empt
 
 ```powershell
 git remote add origin https://github.com/<owner>/<repo>.git
-git push -u origin master
+git push -u origin codex/initial-mvp
 ```

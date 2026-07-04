@@ -29,6 +29,10 @@ namespace RawBufferVisualizer.Core
                     return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, buffer[row + x]);
                 case RawPixelFormat.Mono16:
                     return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, RawBufferRenderer.ReadUInt16(buffer, row + (x * 2), descriptor.ByteOrder));
+                case RawPixelFormat.Mono10PackedLsb:
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 10));
+                case RawPixelFormat.Mono12PackedLsb:
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 12));
                 case RawPixelFormat.Float32:
                     return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2:0.###}", x, y, RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder));
                 case RawPixelFormat.RGB24:
@@ -60,4 +64,3 @@ namespace RawBufferVisualizer.Core
         }
     }
 }
-
