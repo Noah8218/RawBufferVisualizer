@@ -132,6 +132,17 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1 -Framewor
 
 Samples are copied into the package by default. Use `-SkipSamples` for a smaller package or `-NoZip` when only the publish folder is needed.
 
+## Create a GitHub Release
+
+GitHub Releases are created automatically from semantic version tags:
+
+```powershell
+git tag -a v0.1.0 -m "v0.1.0"
+git push origin v0.1.0
+```
+
+The `Release` workflow builds, tests, publishes the Windows x64 zip, and attaches it to the GitHub Release.
+
 ## SDK example
 
 ```csharp

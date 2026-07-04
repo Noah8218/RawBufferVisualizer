@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish GitHub Release
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        run: dotnet restore .\RawBufferVisualizer.sln
+
+      - name: Build
+        run: dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
+
+      - name: Self-test
+        run: dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net10.0-windows
+
+      - name: Publish package
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
+
+      - name: Create GitHub Release
+        run: >
+          gh release create $env:GITHUB_REF_NAME
+          .\artifacts\publish\RawBufferVisualizer-net10.0-windows-win-x64-sc.zip
+          --verify-tag
+          --generate-notes
+          --title "RawBufferVisualizer $env:GITHUB_REF_NAME"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
