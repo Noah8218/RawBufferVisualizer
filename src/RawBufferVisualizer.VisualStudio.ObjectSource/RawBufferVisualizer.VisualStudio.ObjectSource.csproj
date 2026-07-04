@@ -6,7 +6,6 @@
     <PackageReference Include="Microsoft.VisualStudio.DebuggerVisualizers" Version="17.6.1032901" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\RawBufferVisualizer.BitmapAdapter\RawBufferVisualizer.BitmapAdapter.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
   </ItemGroup>
 </Project>

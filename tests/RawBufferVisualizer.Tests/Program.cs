@@ -320,18 +320,40 @@ namespace RawBufferVisualizer.Tests
 
         private static void BitmapVisualizerObjectSourceCreatesTransfer()
         {
+            using (var bitmap = new Bitmap(2, 1, PixelFormat.Format8bppIndexed))
+            {
+                var transfer = BitmapVisualizerTransfer.CreateTransfer((object)bitmap, "bitmapMono8");
+
+                Assert(transfer.DisplayName == "bitmapMono8", "Bitmap visualizer Mono8 display name failed.");
+                Assert(transfer.SourceType == typeof(Bitmap).FullName, "Bitmap visualizer Mono8 source type failed.");
+                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Bitmap visualizer Mono8 dimensions failed.");
+                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Bitmap visualizer Mono8 pixel format failed.");
+                Assert(transfer.Buffer.Length >= 2, "Bitmap visualizer Mono8 buffer length failed.");
+            }
+
             using (var bitmap = new Bitmap(2, 1, PixelFormat.Format24bppRgb))
             {
                 bitmap.SetPixel(0, 0, Color.FromArgb(10, 20, 30));
                 bitmap.SetPixel(1, 0, Color.FromArgb(40, 50, 60));
 
-                var transfer = BitmapVisualizerTransfer.CreateTransfer(bitmap, "bitmap0");
+                var transfer = BitmapVisualizerTransfer.CreateTransfer((object)bitmap, "bitmap0");
 
                 Assert(transfer.DisplayName == "bitmap0", "Bitmap visualizer display name failed.");
                 Assert(transfer.SourceType == typeof(Bitmap).FullName, "Bitmap visualizer source type failed.");
                 Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Bitmap visualizer dimensions failed.");
                 Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Bitmap visualizer pixel format failed.");
                 Assert(transfer.Buffer.Length >= 6, "Bitmap visualizer buffer length failed.");
+            }
+
+            using (var bitmap = new Bitmap(2, 1, PixelFormat.Format32bppArgb))
+            {
+                var transfer = BitmapVisualizerTransfer.CreateTransfer((object)bitmap, "bitmapBgra32");
+
+                Assert(transfer.DisplayName == "bitmapBgra32", "Bitmap visualizer BGRA32 display name failed.");
+                Assert(transfer.SourceType == typeof(Bitmap).FullName, "Bitmap visualizer BGRA32 source type failed.");
+                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Bitmap visualizer BGRA32 dimensions failed.");
+                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGRA32, "Bitmap visualizer BGRA32 pixel format failed.");
+                Assert(transfer.Buffer.Length >= 8, "Bitmap visualizer BGRA32 buffer length failed.");
             }
         }
 
