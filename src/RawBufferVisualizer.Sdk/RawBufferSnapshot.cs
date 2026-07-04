@@ -159,14 +159,33 @@ namespace RawBufferVisualizer.Sdk
 
         public static RawBufferSnapshot Load(string metadataPath)
         {
+            var reference = LoadReference(metadataPath);
+            var snapshot = new RawBufferSnapshot(File.ReadAllBytes(reference.RawPath), reference.Descriptor)
+            {
+                MetadataPath = reference.MetadataPath,
+                RawPath = reference.RawPath
+            };
+            return snapshot;
+        }
+
+        public static RawBufferSnapshotReference LoadReference(string metadataPath)
+        {
             if (string.IsNullOrWhiteSpace(metadataPath))
             {
                 throw new ArgumentException("Metadata path is required.", nameof(metadataPath));
             }
 
             var fullMetadataPath = Path.GetFullPath(metadataPath);
-            RawBufferSnapshotDto dto;
-            using (var stream = File.OpenRead(fullMetadataPath))
+            var dto = LoadDto(fullMetadataPath);
+            var rawPath = dto.GetRawPath(fullMetadataPath);
+            return new RawBufferSnapshotReference(fullMetadataPath, rawPath, dto.ToDescriptor(), new FileInfo(rawPath).Length);
+        }
+
+        private static RawBufferSnapshotDto LoadDto(string fullMetadataPath)
+        {
+            var bytes = File.ReadAllBytes(fullMetadataPath);
+            var offset = HasUtf8Bom(bytes) ? 3 : 0;
+            using (var stream = new MemoryStream(bytes, offset, bytes.Length - offset))
             {
                 var serializer = new DataContractJsonSerializer(typeof(RawBufferSnapshotDto));
                 var loaded = serializer.ReadObject(stream);
@@ -175,16 +194,16 @@ namespace RawBufferVisualizer.Sdk
                     throw new InvalidDataException("Snapshot metadata is empty.");
                 }
 
-                dto = (RawBufferSnapshotDto)loaded;
+                return (RawBufferSnapshotDto)loaded;
             }
+        }
 
-            var rawPath = dto.GetRawPath(fullMetadataPath);
-            var snapshot = new RawBufferSnapshot(File.ReadAllBytes(rawPath), dto.ToDescriptor())
-            {
-                MetadataPath = fullMetadataPath,
-                RawPath = rawPath
-            };
-            return snapshot;
+        private static bool HasUtf8Bom(byte[] bytes)
+        {
+            return bytes.Length >= 3
+                && bytes[0] == 0xEF
+                && bytes[1] == 0xBB
+                && bytes[2] == 0xBF;
         }
 
         private static string GetDefaultRawPath(string metadataPath)
@@ -210,6 +229,37 @@ namespace RawBufferVisualizer.Sdk
                 buffer[offset] = (byte)(value & 0xFF);
                 buffer[offset + 1] = (byte)(value >> 8);
             }
+        }
+    }
+
+    public sealed class RawBufferSnapshotReference
+    {
+        public string MetadataPath { get; private set; }
+        public string RawPath { get; private set; }
+        public RawImageDescriptor Descriptor { get; private set; }
+        public long RawByteLength { get; private set; }
+
+        public RawBufferSnapshotReference(string metadataPath, string rawPath, RawImageDescriptor descriptor, long rawByteLength)
+        {
+            if (string.IsNullOrWhiteSpace(metadataPath))
+            {
+                throw new ArgumentException("Metadata path is required.", nameof(metadataPath));
+            }
+
+            if (string.IsNullOrWhiteSpace(rawPath))
+            {
+                throw new ArgumentException("Raw path is required.", nameof(rawPath));
+            }
+
+            if (descriptor == null)
+            {
+                throw new ArgumentNullException(nameof(descriptor));
+            }
+
+            MetadataPath = Path.GetFullPath(metadataPath);
+            RawPath = Path.GetFullPath(rawPath);
+            Descriptor = descriptor.Clone();
+            RawByteLength = rawByteLength;
         }
     }
 

@@ -6,12 +6,23 @@ namespace RawBufferVisualizer.Core
     {
         public static IReadOnlyList<RawDiagnostic> Analyze(byte[] buffer, RawImageDescriptor descriptor)
         {
-            var diagnostics = new List<RawDiagnostic>();
-
             if (buffer == null)
             {
+                var diagnostics = new List<RawDiagnostic>();
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Buffer is null."));
                 return diagnostics;
+            }
+
+            return AnalyzeLength(buffer.Length, descriptor);
+        }
+
+        public static IReadOnlyList<RawDiagnostic> AnalyzeLength(long bufferLength, RawImageDescriptor descriptor)
+        {
+            var diagnostics = new List<RawDiagnostic>();
+
+            if (bufferLength < 0)
+            {
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Buffer length must not be negative."));
             }
 
             if (descriptor == null)
@@ -60,11 +71,11 @@ namespace RawBufferVisualizer.Core
             }
 
             var requiredBytes = descriptor.GetRequiredByteCount();
-            if (requiredBytes > buffer.Length)
+            if (requiredBytes > bufferLength)
             {
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Buffer is smaller than descriptor requires."));
             }
-            else if (requiredBytes > 0 && buffer.Length > requiredBytes)
+            else if (requiredBytes > 0 && bufferLength > requiredBytes)
             {
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Info, "Buffer has trailing bytes after the image."));
             }

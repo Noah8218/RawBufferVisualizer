@@ -17,7 +17,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private readonly OpenGLControl _openGlControl;
         private readonly List<TextureTile> _tiles = new List<TextureTile>();
         private RawImageDescriptor? _descriptor;
-        private byte[]? _buffer;
+        private RawImageSource? _imageSource;
         private RawRenderOptions? _renderOptions;
         private uint _shaderProgram;
         private uint _vertexArray;
@@ -79,26 +79,26 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void LoadRawBuffer(byte[] buffer, RawImageDescriptor descriptor)
         {
-            if (buffer == null)
+            LoadRawImageSource(RawImageSource.FromMemory(buffer, descriptor));
+        }
+
+        public void LoadRawImageSource(RawImageSource imageSource)
+        {
+            if (imageSource == null)
             {
-                throw new ArgumentNullException("buffer");
+                throw new ArgumentNullException("imageSource");
             }
 
-            if (descriptor == null)
-            {
-                throw new ArgumentNullException("descriptor");
-            }
-
-            var diagnostics = RawBufferDiagnostics.Analyze(buffer, descriptor);
+            var diagnostics = imageSource.Analyze();
             if (RawBufferDiagnostics.HasErrors(diagnostics))
             {
                 throw new ArgumentException("Cannot display an invalid raw buffer.");
             }
 
             ClearImage();
-            _buffer = buffer;
-            _descriptor = descriptor.Clone();
-            _renderOptions = RawBufferRenderer.CreateFixedScaleOptions(buffer, _descriptor);
+            _imageSource = imageSource;
+            _descriptor = imageSource.Descriptor;
+            _renderOptions = imageSource.CreateRenderOptions();
 
             foreach (var tile in RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height))
             {
@@ -113,7 +113,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             DeleteTextures();
             _tiles.Clear();
-            _buffer = null;
+            _imageSource = null;
             _descriptor = null;
             _renderOptions = null;
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
@@ -332,19 +332,15 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void UploadTile(OpenGL gl, TextureTile tile, int sampleStep)
         {
-            if (_buffer == null || _descriptor == null || _renderOptions == null)
+            if (_imageSource == null || _descriptor == null || _renderOptions == null)
             {
                 return;
             }
 
-            var renderedTile = RawBufferRenderer.RenderTile(_buffer, _descriptor, tile.X, tile.Y, tile.Width, tile.Height, _renderOptions);
+            var renderedTile = _imageSource.RenderTileSampled(tile.X, tile.Y, tile.Width, tile.Height, sampleStep, _renderOptions);
             var uploadPixels = renderedTile.Bgra32;
             var uploadWidth = renderedTile.Width;
             var uploadHeight = renderedTile.Height;
-            if (sampleStep > 1)
-            {
-                uploadPixels = DownsampleBgra(renderedTile.Bgra32, renderedTile.Width, renderedTile.Height, sampleStep, out uploadWidth, out uploadHeight);
-            }
 
             tile.TextureId = CreateTexture(gl, uploadWidth, uploadHeight, uploadPixels);
             tile.SampleStep = sampleStep;

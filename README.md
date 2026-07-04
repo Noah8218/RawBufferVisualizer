@@ -28,7 +28,8 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF tiled canvas for large-image display.
-- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB; tiled display remains available for buffers that can be loaded.
+- File-backed tiled display for large `.rbuf.json` payloads that should not be loaded into a single managed byte array.
+- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB or for file-backed sources; tiled display remains available.
 - Windows publish script for release-ready viewer zip packages.
 
 ## Supported Inputs And Formats
@@ -83,6 +84,8 @@ OpenCvSharp Mat formats:
 
 Unsupported formats should fail with a clear diagnostics message instead of silently rendering the wrong image.
 
+File-backed large-image display is currently supported for row-addressable formats: `Mono8`, `Mono16`, `Binary`, `RGB24`, `BGR24`, `BGRA32`, `Float32`, and 8-bit Bayer formats. Packed `Mono10PackedLsb` and `Mono12PackedLsb` still use the in-memory path.
+
 ## Download and run
 
 No GitHub Release has been published yet. Until the first version tag is created, use the latest successful CI artifact:
@@ -131,12 +134,16 @@ Current large-image validation:
 | Case | Result |
 | --- | --- |
 | `100000 x 100000` `Mono8` descriptor | Verified by automated tile-planner test |
+| `100000 x 100000` `Mono8` file-backed viewer smoke | Verified with sparse 10 GB `.raw` payload |
 | Source payload estimate | `10,000,000,000` bytes |
 | BGRA preview estimate | `40,000,000,000` bytes |
 | Tile size | `5000 x 5000` |
 | Tile count | `400` |
+| Viewer status | `100000 x 100000, Mono8, 10,000,000,000 bytes, tiles 400` |
 
-Important current limitation: the viewer still loads the raw payload into memory before tiled display. The `100000 x 100000` test verifies descriptor math and tile planning, not full 10 GB file-backed viewing. Full 100K image viewing needs file-backed tile loading before it can be claimed as complete.
+![Raw Buffer Visualizer showing a 100000 x 100000 file-backed Mono8 payload](docs/images/viewer-100k-file-backed.png)
+
+The large-image smoke test uses a sparse raw file so validation can cover 10 GB metadata, file length, tile count, window launch, and visible rendering without writing 10 GB of physical sample data.
 
 ## Snapshot format
 
@@ -185,6 +192,12 @@ Run WPF interaction regression test:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeViewerInteractions.ps1
+```
+
+Run 100K file-backed large-image smoke test:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1
 ```
 
 Create a sample buffer:

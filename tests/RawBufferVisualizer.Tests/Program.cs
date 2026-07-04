@@ -2,6 +2,8 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Text;
 using OpenCvSharp;
 using RawBufferVisualizer.BitmapAdapter;
 using RawBufferVisualizer.Core;
@@ -29,8 +31,12 @@ namespace RawBufferVisualizer.Tests
                 TilePlannerSplitsLargeImage();
                 TilePlannerHandles100kImage();
                 TileRenderMatchesFullRender();
+                FileBackedSourceRendersLikeMemory();
+                FileBackedSourceHandles100kSampledTile();
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
+                SnapshotReferenceLoadsMetadata();
+                SnapshotReferenceLoadsUtf8BomPrettyMetadata();
                 VisualizerTransferRoundTrips();
                 VisualizerChunkedTransferCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
@@ -217,6 +223,93 @@ namespace RawBufferVisualizer.Tests
             Assert(tile.Bgra32[12] == full.Bgra32[((2 * descriptor.Width) + 2) * 4], "Tile render last pixel failed.");
         }
 
+        private static void FileBackedSourceRendersLikeMemory()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var rawPath = Path.Combine(directory, "bgr24-padding.raw");
+                var descriptor = CreateDescriptor(4, 3, 14, RawPixelFormat.BGR24, 8);
+                var buffer = new byte[descriptor.GetRequiredByteCount()];
+                for (var y = 0; y < descriptor.Height; y++)
+                {
+                    var row = y * descriptor.Stride;
+                    for (var x = 0; x < descriptor.Width; x++)
+                    {
+                        var offset = row + (x * 3);
+                        buffer[offset] = (byte)x;
+                        buffer[offset + 1] = (byte)y;
+                        buffer[offset + 2] = (byte)(x + y);
+                    }
+                }
+
+                File.WriteAllBytes(rawPath, buffer);
+
+                using (var memorySource = RawImageSource.FromMemory(buffer, descriptor))
+                using (var fileSource = RawImageSource.FromFile(rawPath, descriptor))
+                {
+                    var memoryTile = memorySource.RenderTile(1, 1, 2, 2, null);
+                    var fileTile = fileSource.RenderTile(1, 1, 2, 2, null);
+                    AssertBytesEqual(memoryTile.Bgra32, fileTile.Bgra32, "File-backed tile render should match memory render.");
+
+                    var memorySampled = memorySource.RenderTileSampled(0, 0, 4, 3, 2, null);
+                    var fileSampled = fileSource.RenderTileSampled(0, 0, 4, 3, 2, null);
+                    AssertBytesEqual(memorySampled.Bgra32, fileSampled.Bgra32, "File-backed sampled render should match memory sampled render.");
+
+                    var pixel = fileSource.DescribePixel(2, 1);
+                    Assert(pixel.Contains("X=2, Y=1") && pixel.Contains("B=2") && pixel.Contains("G=1") && pixel.Contains("R=3"), "File-backed pixel inspector failed.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void FileBackedSourceHandles100kSampledTile()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "huge-mono8.rbuf.json");
+                var descriptor = CreateDescriptor(100000, 100000, 100000, RawPixelFormat.Mono8, 8);
+                var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, descriptor);
+                if (!CreateSparseFile(rawPath, descriptor.GetRequiredByteCount()))
+                {
+                    Console.WriteLine("Skipped 100K file-backed sparse raw test because this filesystem does not support sparse files.");
+                    return;
+                }
+
+                var reference = RawBufferSnapshot.LoadReference(metadataPath);
+                Assert(reference.RawByteLength == 10000000000L, "100K reference raw length failed.");
+
+                using (var source = RawImageSource.FromFile(reference.RawPath, reference.Descriptor))
+                {
+                    var diagnostics = source.Analyze();
+                    Assert(!RawBufferDiagnostics.HasErrors(diagnostics), "100K file-backed source diagnostics failed.");
+
+                    var sampled = source.RenderTileSampled(95000, 95000, 5000, 5000, 64, source.CreateRenderOptions());
+                    Assert(sampled.Width == 79 && sampled.Height == 79, "100K sampled tile dimensions failed.");
+                    Assert(sampled.Bgra32.Length == 79 * 79 * 4, "100K sampled tile byte length failed.");
+
+                    var pixel = source.DescribePixel(99999, 99999);
+                    Assert(pixel.Contains("X=99999, Y=99999") && pixel.Contains("Value=33"), "100K file-backed pixel read failed.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
         private static void Mono10PackedLsbRenders()
         {
             var descriptor = new RawImageDescriptor
@@ -286,6 +379,60 @@ namespace RawBufferVisualizer.Tests
             Assert(loaded.Descriptor.Width == 2 && loaded.Descriptor.Height == 2, "Snapshot descriptor roundtrip failed.");
             Assert(loaded.Buffer.Length == 4 && loaded.Buffer[3] == 4, "Snapshot buffer roundtrip failed.");
             Directory.Delete(directory, true);
+        }
+
+        private static void SnapshotReferenceLoadsMetadata()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var metadataPath = Path.Combine(directory, "reference.rbuf.json");
+            var descriptor = CreateDescriptor(2, 2, 2, RawPixelFormat.Mono8, 8);
+
+            RawBufferSnapshot.Save(metadataPath, new byte[] { 1, 2, 3, 4 }, descriptor);
+            var reference = RawBufferSnapshot.LoadReference(metadataPath);
+            Assert(reference.Descriptor.Width == 2 && reference.Descriptor.Height == 2, "Snapshot reference descriptor failed.");
+            Assert(reference.RawByteLength == 4, "Snapshot reference raw length failed.");
+            Assert(Path.GetFullPath(metadataPath) == reference.MetadataPath, "Snapshot reference metadata path failed.");
+            Assert(File.Exists(reference.RawPath), "Snapshot reference raw path failed.");
+            Directory.Delete(directory, true);
+        }
+
+        private static void SnapshotReferenceLoadsUtf8BomPrettyMetadata()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "pretty.rbuf.json");
+                var rawPath = Path.Combine(directory, "pretty.raw");
+                File.WriteAllBytes(rawPath, new byte[] { 1, 2, 3, 4 });
+
+                var json = "{\r\n" +
+                    "  \"rawFile\": \"pretty.raw\",\r\n" +
+                    "  \"width\": 2,\r\n" +
+                    "  \"height\": 2,\r\n" +
+                    "  \"stride\": 2,\r\n" +
+                    "  \"pixelFormat\": \"Mono8\",\r\n" +
+                    "  \"validBits\": 8,\r\n" +
+                    "  \"byteOrder\": \"LittleEndian\"\r\n" +
+                    "}\r\n";
+                var preamble = Encoding.UTF8.GetPreamble();
+                var content = Encoding.UTF8.GetBytes(json);
+                var bytes = new byte[preamble.Length + content.Length];
+                Buffer.BlockCopy(preamble, 0, bytes, 0, preamble.Length);
+                Buffer.BlockCopy(content, 0, bytes, preamble.Length, content.Length);
+                File.WriteAllBytes(metadataPath, bytes);
+
+                var reference = RawBufferSnapshot.LoadReference(metadataPath);
+                Assert(reference.RawByteLength == 4, "UTF-8 BOM snapshot reference raw length failed.");
+                Assert(reference.Descriptor.Width == 2 && reference.Descriptor.PixelFormat == RawPixelFormat.Mono8, "UTF-8 BOM snapshot reference descriptor failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
         }
 
         private static void BitmapAdapterCreatesSnapshot()
@@ -504,6 +651,62 @@ namespace RawBufferVisualizer.Tests
                 throw new InvalidOperationException(message);
             }
         }
+
+        private static void AssertBytesEqual(byte[] expected, byte[] actual, string message)
+        {
+            Assert(expected.Length == actual.Length, message + " Length mismatch.");
+            for (var i = 0; i < expected.Length; i++)
+            {
+                if (expected[i] != actual[i])
+                {
+                    throw new InvalidOperationException(message + " Byte mismatch at " + i + ".");
+                }
+            }
+        }
+
+        private static bool CreateSparseFile(string path, long length)
+        {
+            using (var stream = new FileStream(path, FileMode.Create, FileAccess.ReadWrite, FileShare.ReadWrite))
+            {
+                if (!TryMarkSparse(stream))
+                {
+                    return false;
+                }
+
+                stream.SetLength(length);
+                stream.Position = 0;
+                stream.WriteByte(17);
+                stream.Position = length - 1;
+                stream.WriteByte(33);
+            }
+
+            return true;
+        }
+
+        private static bool TryMarkSparse(FileStream stream)
+        {
+            int bytesReturned;
+            return DeviceIoControl(
+                stream.SafeFileHandle.DangerousGetHandle(),
+                0x000900C4,
+                IntPtr.Zero,
+                0,
+                IntPtr.Zero,
+                0,
+                out bytesReturned,
+                IntPtr.Zero);
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool DeviceIoControl(
+            IntPtr hDevice,
+            uint dwIoControlCode,
+            IntPtr lpInBuffer,
+            int nInBufferSize,
+            IntPtr lpOutBuffer,
+            int nOutBufferSize,
+            out int lpBytesReturned,
+            IntPtr lpOverlapped);
 
         private static TinySample CreateTinySample(RawPixelFormat format)
         {

@@ -20,8 +20,9 @@ namespace RawBufferVisualizer.Wpf
     public partial class MainWindow : Window
     {
         private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
+        private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
 
-        private byte[]? _buffer;
+        private RawImageSource? _imageSource;
         private RawImageDescriptor _descriptor;
         private RenderedImage? _rendered;
         private string? _currentPath;
@@ -43,6 +44,9 @@ namespace RawBufferVisualizer.Wpf
 
         protected override void OnClosed(EventArgs e)
         {
+            OpenGlImageView.ClearImage();
+            _imageSource?.Dispose();
+            _imageSource = null;
             base.OnClosed(e);
         }
 
@@ -64,17 +68,19 @@ namespace RawBufferVisualizer.Wpf
                 var fullPath = Path.GetFullPath(path);
                 if (fullPath.EndsWith(".rbuf.json", StringComparison.OrdinalIgnoreCase))
                 {
-                    var snapshot = RawBufferSnapshot.Load(fullPath);
-                    _buffer = snapshot.Buffer;
-                    _descriptor = snapshot.Descriptor;
+                    var reference = RawBufferSnapshot.LoadReference(fullPath);
+                    var source = CreateImageSource(reference.RawPath, reference.Descriptor, reference.RawByteLength);
+                    _descriptor = reference.Descriptor;
                     _currentPath = fullPath;
+                    ReplaceImageSource(source);
                     ApplyDescriptorToFields();
                 }
                 else
                 {
-                    _buffer = File.ReadAllBytes(fullPath);
                     _descriptor = ReadDescriptorFromFields();
+                    var source = CreateImageSource(fullPath, _descriptor, new FileInfo(fullPath).Length);
                     _currentPath = fullPath;
+                    ReplaceImageSource(source);
                 }
 
                 RenderCurrentBuffer();
@@ -215,7 +221,7 @@ namespace RawBufferVisualizer.Wpf
 
         private void SaveSnapshot_Click(object sender, RoutedEventArgs e)
         {
-            if (_buffer == null)
+            if (_imageSource == null)
             {
                 MessageBox.Show(this, "No buffer to save.", "Save Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
@@ -235,9 +241,15 @@ namespace RawBufferVisualizer.Wpf
                     return;
                 }
 
-                var snapshot = new RawBufferSnapshot(_buffer, _descriptor);
-                snapshot.Save(dialog.FileName);
-                _currentPath = snapshot.MetadataPath;
+                var diagnostics = RawBufferDiagnostics.AnalyzeLength(_imageSource.Length, _descriptor);
+                if (RawBufferDiagnostics.HasErrors(diagnostics))
+                {
+                    throw new InvalidOperationException("Snapshot descriptor is invalid.");
+                }
+
+                var rawPath = RawBufferSnapshot.SaveMetadata(dialog.FileName, _descriptor);
+                _imageSource.CopyRawTo(rawPath);
+                _currentPath = Path.GetFullPath(dialog.FileName);
                 FileText.Text = _currentPath ?? string.Empty;
                 UpdateStatus();
             }
@@ -252,6 +264,11 @@ namespace RawBufferVisualizer.Wpf
             try
             {
                 _descriptor = ReadDescriptorFromFields();
+                if (_imageSource != null)
+                {
+                    ReplaceImageSource(_imageSource.WithDescriptor(_descriptor));
+                }
+
                 RenderCurrentBuffer();
             }
             catch (Exception ex)
@@ -314,13 +331,13 @@ namespace RawBufferVisualizer.Wpf
         private void RenderCurrentBuffer()
         {
             DiagnosticsList.Items.Clear();
-            if (_buffer == null)
+            if (_imageSource == null)
             {
                 StatusText.Text = "No buffer loaded";
                 return;
             }
 
-            var diagnostics = RawBufferDiagnostics.Analyze(_buffer, _descriptor);
+            var diagnostics = _imageSource.Analyze();
             foreach (var diagnostic in diagnostics)
             {
                 DiagnosticsList.Items.Add(diagnostic.ToString());
@@ -335,7 +352,7 @@ namespace RawBufferVisualizer.Wpf
 
             try
             {
-                OpenGlImageView.LoadRawBuffer(_buffer, _descriptor);
+                OpenGlImageView.LoadRawImageSource(_imageSource);
             }
             catch (Exception ex)
             {
@@ -346,13 +363,15 @@ namespace RawBufferVisualizer.Wpf
             }
 
             var estimatedPreviewBytes = RawImageTilePlanner.EstimateBgraByteCount(_descriptor);
-            if (estimatedPreviewBytes > MaxCpuPreviewBytes)
+            if (_imageSource.IsFileBacked || estimatedPreviewBytes > MaxCpuPreviewBytes)
             {
                 _rendered = null;
                 HistogramCanvas.Children.Clear();
                 DiagnosticsList.Items.Add(string.Format(
                     CultureInfo.InvariantCulture,
-                    "Info: CPU histogram and PNG cache skipped because BGRA preview would require {0:N0} bytes. Display uses {1:N0} tiles.",
+                    _imageSource.IsFileBacked
+                        ? "Info: CPU histogram and PNG cache skipped because the source is file-backed. Display uses {1:N0} tiles."
+                        : "Info: CPU histogram and PNG cache skipped because BGRA preview would require {0:N0} bytes. Display uses {1:N0} tiles.",
                     estimatedPreviewBytes,
                     OpenGlImageView.TileCount));
                 FileText.Text = _currentPath ?? string.Empty;
@@ -360,7 +379,7 @@ namespace RawBufferVisualizer.Wpf
                 return;
             }
 
-            _rendered = RawBufferRenderer.Render(_buffer, _descriptor);
+            _rendered = _imageSource.RenderTile(0, 0, _descriptor.Width, _descriptor.Height, null);
             FileText.Text = _currentPath ?? string.Empty;
             DrawHistogram();
             UpdateStatus();
@@ -431,13 +450,13 @@ namespace RawBufferVisualizer.Wpf
 
         private void OpenGlImageView_PixelHovered(object? sender, RawOpenGlPixelEventArgs e)
         {
-            if (_buffer == null || e.X < 0 || e.Y < 0)
+            if (_imageSource == null || e.X < 0 || e.Y < 0)
             {
                 PixelText.Text = string.Empty;
                 return;
             }
 
-            PixelText.Text = RawPixelInspector.Describe(_buffer, _descriptor, e.X, e.Y);
+            PixelText.Text = _imageSource.DescribePixel(e.X, e.Y);
         }
 
         private void Window_DragOver(object sender, DragEventArgs e)
@@ -522,7 +541,7 @@ namespace RawBufferVisualizer.Wpf
                 return;
             }
 
-            if (_buffer == null)
+            if (_imageSource == null)
             {
                 StatusText.Text = "Ready";
                 return;
@@ -534,8 +553,39 @@ namespace RawBufferVisualizer.Wpf
                 _descriptor.Width,
                 _descriptor.Height,
                 _descriptor.PixelFormat,
-                _buffer.Length,
+                _imageSource.Length,
                 OpenGlImageView.TileCount);
+        }
+
+        private void ReplaceImageSource(RawImageSource? source)
+        {
+            OpenGlImageView.ClearImage();
+            var previous = _imageSource;
+            _imageSource = source;
+            if (!ReferenceEquals(previous, source))
+            {
+                previous?.Dispose();
+            }
+        }
+
+        private static RawImageSource CreateImageSource(string rawPath, RawImageDescriptor descriptor, long rawByteLength)
+        {
+            if (rawByteLength > MaxInMemorySourceBytes)
+            {
+                if (!RawImageSource.CanStreamFormat(descriptor.PixelFormat))
+                {
+                    throw new NotSupportedException("This packed format is too large for in-memory loading and is not supported by file-backed tiled display yet.");
+                }
+
+                return RawImageSource.FromFile(rawPath, descriptor);
+            }
+
+            if (rawByteLength > int.MaxValue)
+            {
+                throw new InvalidOperationException("The raw payload is too large to load into a single byte array.");
+            }
+
+            return RawImageSource.FromMemory(File.ReadAllBytes(rawPath), descriptor);
         }
     }
 }

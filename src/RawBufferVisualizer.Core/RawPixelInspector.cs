@@ -6,6 +6,11 @@ namespace RawBufferVisualizer.Core
     {
         public static string Describe(byte[] buffer, RawImageDescriptor descriptor, int x, int y)
         {
+            return Describe(buffer, descriptor, x, y, x, y);
+        }
+
+        public static string Describe(byte[] buffer, RawImageDescriptor descriptor, int x, int y, int displayX, int displayY)
+        {
             if (buffer == null)
             {
                 return "No buffer";
@@ -26,23 +31,23 @@ namespace RawBufferVisualizer.Core
             {
                 case RawPixelFormat.Mono8:
                 case RawPixelFormat.Binary:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, buffer[row + x]);
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", displayX, displayY, buffer[row + x]);
                 case RawPixelFormat.Mono16:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, RawBufferRenderer.ReadUInt16(buffer, row + (x * 2), descriptor.ByteOrder));
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", displayX, displayY, RawBufferRenderer.ReadUInt16(buffer, row + (x * 2), descriptor.ByteOrder));
                 case RawPixelFormat.Mono10PackedLsb:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 10));
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", displayX, displayY, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 10));
                 case RawPixelFormat.Mono12PackedLsb:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 12));
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", displayX, displayY, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 12));
                 case RawPixelFormat.Float32:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2:0.###}", x, y, RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder));
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2:0.###}", displayX, displayY, RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder));
                 case RawPixelFormat.RGB24:
-                    return DescribeRgb(buffer, row + (x * 3), x, y, true);
+                    return DescribeRgb(buffer, row + (x * 3), displayX, displayY, true);
                 case RawPixelFormat.BGR24:
-                    return DescribeRgb(buffer, row + (x * 3), x, y, false);
+                    return DescribeRgb(buffer, row + (x * 3), displayX, displayY, false);
                 case RawPixelFormat.BGRA32:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, B={2}, G={3}, R={4}, A={5}", x, y, buffer[row + (x * 4)], buffer[row + (x * 4) + 1], buffer[row + (x * 4) + 2], buffer[row + (x * 4) + 3]);
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, B={2}, G={3}, R={4}, A={5}", displayX, displayY, buffer[row + (x * 4)], buffer[row + (x * 4) + 1], buffer[row + (x * 4) + 2], buffer[row + (x * 4) + 3]);
                 default:
-                    return DescribeBayer(buffer, descriptor, x, y);
+                    return DescribeBayer(buffer, descriptor, x, y, displayX, displayY);
             }
         }
 
@@ -56,11 +61,11 @@ namespace RawBufferVisualizer.Core
                 : string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, B={2}, G={3}, R={4}", x, y, c0, c1, c2);
         }
 
-        private static string DescribeBayer(byte[] buffer, RawImageDescriptor descriptor, int x, int y)
+        private static string DescribeBayer(byte[] buffer, RawImageDescriptor descriptor, int x, int y, int displayX, int displayY)
         {
             var color = RawBufferRenderer.GetBayerColor(descriptor.PixelFormat, x, y);
             var colorName = color == 0 ? "R" : color == 1 ? "G" : "B";
-            return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Bayer {2}={3}", x, y, colorName, buffer[(y * descriptor.Stride) + x]);
+            return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Bayer {2}={3}", displayX, displayY, colorName, buffer[(y * descriptor.Stride) + x]);
         }
     }
 }
