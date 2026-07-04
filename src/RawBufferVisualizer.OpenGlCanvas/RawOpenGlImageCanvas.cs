@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -18,6 +19,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private RawImageDescriptor? _descriptor;
         private byte[]? _buffer;
         private RawRenderOptions? _renderOptions;
+        private uint _shaderProgram;
+        private uint _vertexArray;
+        private uint _vertexBuffer;
+        private int _viewUniform;
+        private int _textureUniform;
         private double _viewLeft;
         private double _viewTop;
         private double _viewWidth = 1;
@@ -52,7 +58,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             {
                 DrawFPS = false,
                 FrameRate = 30,
-                OpenGLVersion = SharpGL.Version.OpenGLVersion.OpenGL2_1,
+                OpenGLVersion = SharpGL.Version.OpenGLVersion.OpenGL4_0,
                 RenderContextType = RenderContextType.FBO,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
@@ -180,26 +186,26 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var gl = args.OpenGL;
             gl.ClearColor(0.06f, 0.06f, 0.06f, 1.0f);
             gl.Disable(OpenGL.GL_DEPTH_TEST);
-            gl.Enable(OpenGL.GL_TEXTURE_2D);
+            CreateShaderPipeline(gl);
         }
 
         private void OpenGlDraw(object sender, OpenGLEventArgs args)
         {
             var gl = args.OpenGL;
+            gl.Viewport(0, 0, Math.Max((int)ActualWidth, 1), Math.Max((int)ActualHeight, 1));
             gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
-            gl.MatrixMode(OpenGL.GL_PROJECTION);
-            gl.LoadIdentity();
-            gl.Ortho(_viewLeft, _viewLeft + _viewWidth, _viewTop + _viewHeight, _viewTop, -1, 1);
-            gl.MatrixMode(OpenGL.GL_MODELVIEW);
-            gl.LoadIdentity();
 
-            if (_tiles.Count == 0)
+            if (_tiles.Count == 0 || _shaderProgram == 0)
             {
                 return;
             }
 
-            gl.Enable(OpenGL.GL_TEXTURE_2D);
-            gl.Color(1.0f, 1.0f, 1.0f, 1.0f);
+            gl.UseProgram(_shaderProgram);
+            gl.Uniform4(_viewUniform, (float)_viewLeft, (float)_viewTop, (float)_viewWidth, (float)_viewHeight);
+            gl.ActiveTexture(OpenGL.GL_TEXTURE0);
+            gl.Uniform1(_textureUniform, 0);
+            gl.BindVertexArray(_vertexArray);
+
             var desiredSampleStep = GetTextureSampleStep();
             for (var i = 0; i < _tiles.Count; i++)
             {
@@ -220,11 +226,12 @@ namespace RawBufferVisualizer.OpenGlCanvas
                     UploadTile(gl, tile, desiredSampleStep);
                 }
 
-                DrawTile(gl, tile);
+                DrawTile(gl, tile, _vertexBuffer);
             }
 
+            gl.BindVertexArray(0);
             gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
-            gl.Disable(OpenGL.GL_TEXTURE_2D);
+            gl.UseProgram(0);
             gl.Flush();
         }
 
@@ -314,8 +321,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.PixelStore(OpenGL.GL_UNPACK_ALIGNMENT, 1);
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_MIN_FILTER, OpenGL.GL_NEAREST);
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_MAG_FILTER, OpenGL.GL_NEAREST);
-            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_S, OpenGL.GL_CLAMP);
-            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP);
+            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_S, OpenGL.GL_CLAMP_TO_EDGE);
+            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP_TO_EDGE);
 
             ConvertBgraToRgbaInPlace(bgra);
             gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, width, height, 0, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, bgra);
@@ -401,19 +408,22 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
         }
 
-        private static void DrawTile(OpenGL gl, TextureTile tile)
+        private static void DrawTile(OpenGL gl, TextureTile tile, uint vertexBuffer)
         {
+            var vertices = new[]
+            {
+                (float)tile.X, (float)tile.Y, 0.0f, 0.0f,
+                (float)tile.Right, (float)tile.Y, 1.0f, 0.0f,
+                (float)tile.Right, (float)tile.Bottom, 1.0f, 1.0f,
+                (float)tile.X, (float)tile.Y, 0.0f, 0.0f,
+                (float)tile.Right, (float)tile.Bottom, 1.0f, 1.0f,
+                (float)tile.X, (float)tile.Bottom, 0.0f, 1.0f
+            };
+
             gl.BindTexture(OpenGL.GL_TEXTURE_2D, tile.TextureId);
-            gl.Begin(OpenGL.GL_QUADS);
-            gl.TexCoord(0.0f, 0.0f);
-            gl.Vertex(tile.X, tile.Y);
-            gl.TexCoord(1.0f, 0.0f);
-            gl.Vertex(tile.Right, tile.Y);
-            gl.TexCoord(1.0f, 1.0f);
-            gl.Vertex(tile.Right, tile.Bottom);
-            gl.TexCoord(0.0f, 1.0f);
-            gl.Vertex(tile.X, tile.Bottom);
-            gl.End();
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, vertexBuffer);
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, vertices, OpenGL.GL_STATIC_DRAW);
+            gl.DrawArrays(OpenGL.GL_TRIANGLES, 0, 6);
         }
 
         private void DeleteTextures()
@@ -442,6 +452,104 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.DeleteTextures(1, new[] { tile.TextureId });
             tile.TextureId = 0;
             tile.SampleStep = 0;
+        }
+
+        private void CreateShaderPipeline(OpenGL gl)
+        {
+            if (_shaderProgram != 0)
+            {
+                return;
+            }
+
+            const string vertexShaderSource = @"
+#version 400 core
+layout(location = 0) in vec2 position;
+layout(location = 1) in vec2 textureCoordinate;
+uniform vec4 viewRect;
+out vec2 fragmentTextureCoordinate;
+void main()
+{
+    float x = ((position.x - viewRect.x) / viewRect.z) * 2.0 - 1.0;
+    float y = 1.0 - ((position.y - viewRect.y) / viewRect.w) * 2.0;
+    gl_Position = vec4(x, y, 0.0, 1.0);
+    fragmentTextureCoordinate = textureCoordinate;
+}";
+
+            const string fragmentShaderSource = @"
+#version 400 core
+in vec2 fragmentTextureCoordinate;
+uniform sampler2D imageTexture;
+out vec4 color;
+void main()
+{
+    color = texture(imageTexture, fragmentTextureCoordinate);
+}";
+
+            var vertexShader = CompileShader(gl, OpenGL.GL_VERTEX_SHADER, vertexShaderSource);
+            var fragmentShader = CompileShader(gl, OpenGL.GL_FRAGMENT_SHADER, fragmentShaderSource);
+            var program = gl.CreateProgram();
+            gl.AttachShader(program, vertexShader);
+            gl.AttachShader(program, fragmentShader);
+            gl.LinkProgram(program);
+            var status = new int[1];
+            gl.GetProgram(program, OpenGL.GL_LINK_STATUS, status);
+            if (status[0] == 0)
+            {
+                throw new InvalidOperationException("Shader program link failed: " + GetProgramLog(gl, program));
+            }
+
+            gl.DetachShader(program, vertexShader);
+            gl.DetachShader(program, fragmentShader);
+            gl.DeleteShader(vertexShader);
+            gl.DeleteShader(fragmentShader);
+
+            var vertexArrays = new uint[1];
+            gl.GenVertexArrays(1, vertexArrays);
+            _vertexArray = vertexArrays[0];
+            gl.BindVertexArray(_vertexArray);
+
+            var buffers = new uint[1];
+            gl.GenBuffers(1, buffers);
+            _vertexBuffer = buffers[0];
+            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, _vertexBuffer);
+            gl.EnableVertexAttribArray(0);
+            gl.VertexAttribPointer(0, 2, OpenGL.GL_FLOAT, false, 4 * sizeof(float), IntPtr.Zero);
+            gl.EnableVertexAttribArray(1);
+            gl.VertexAttribPointer(1, 2, OpenGL.GL_FLOAT, false, 4 * sizeof(float), new IntPtr(2 * sizeof(float)));
+            gl.BindVertexArray(0);
+
+            _shaderProgram = program;
+            _viewUniform = gl.GetUniformLocation(_shaderProgram, "viewRect");
+            _textureUniform = gl.GetUniformLocation(_shaderProgram, "imageTexture");
+        }
+
+        private static uint CompileShader(OpenGL gl, uint shaderType, string source)
+        {
+            var shader = gl.CreateShader(shaderType);
+            gl.ShaderSource(shader, source);
+            gl.CompileShader(shader);
+            var status = new int[1];
+            gl.GetShader(shader, OpenGL.GL_COMPILE_STATUS, status);
+            if (status[0] == 0)
+            {
+                throw new InvalidOperationException("Shader compile failed: " + GetShaderLog(gl, shader));
+            }
+
+            return shader;
+        }
+
+        private static string GetShaderLog(OpenGL gl, uint shader)
+        {
+            var builder = new StringBuilder(4096);
+            gl.GetShaderInfoLog(shader, builder.Capacity, IntPtr.Zero, builder);
+            return builder.ToString();
+        }
+
+        private static string GetProgramLog(OpenGL gl, uint program)
+        {
+            var builder = new StringBuilder(4096);
+            gl.GetProgramInfoLog(program, builder.Capacity, IntPtr.Zero, builder);
+            return builder.ToString();
         }
 
         private void RequestRender()

@@ -6,6 +6,8 @@ Raw Buffer Visualizer is a Windows desktop Image Watch utility for C# machine-vi
 
 The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `Mat`, `Bitmap`, `IntPtr`, pixel formats, large-image display, and inspection ergonomics. The final product goal is Visual Studio debugger integration similar to Image Watch.
 
+![Raw Buffer Visualizer showing an RGB24 sample](docs/images/viewer-rgb24-sample.png)
+
 - Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
 - Visual Studio integration plan: [docs/visual-studio-integration.md](docs/visual-studio-integration.md)
 
@@ -19,7 +21,6 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 
 - `net472` and modern .NET compatible core library.
 - Raw descriptor validation for width, height, stride, pixel format, valid bits, and byte order.
-- BGRA rendering for `Mono8`, `Mono16`, packed `Mono10`/`Mono12` LSB, `Binary`, `RGB24`, `BGR24`, `BGRA32`, `Float32`, and 8-bit Bayer patterns.
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
@@ -27,8 +28,60 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF tiled canvas for large-image display.
-- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB, while tiled display remains available.
+- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB; tiled display remains available for buffers that can be loaded.
 - Windows publish script for release-ready viewer zip packages.
+
+## Supported Inputs And Formats
+
+Standalone viewer input:
+
+| Input | Status | Notes |
+| --- | --- | --- |
+| `.rbuf.json` + `.raw` | Supported | Metadata points to the raw payload file beside it. |
+| `.raw` / `.bin` | Supported | Enter width, height, stride, pixel format, valid bits, and byte order, then click `Apply`. |
+| `RawBufferSnapshot` | Supported | SDK snapshot from `byte[]`, `ushort[]`, `float[]`, or `IntPtr`. |
+| `System.Drawing.Bitmap` | Supported through adapter and Visual Studio prototype | See Bitmap table below. |
+| OpenCvSharp `Mat` | Supported through adapter and Visual Studio prototype | See Mat table below. |
+
+Raw pixel formats:
+
+| Format | Bytes / Packing | Valid Bits | Display |
+| --- | ---: | ---: | --- |
+| `Mono8` | 1 byte / pixel | 8 | Grayscale |
+| `Mono16` | 2 bytes / pixel | 1-16 | Grayscale autoscale, little/big endian |
+| `Mono10PackedLsb` | 10-bit LSB packed | 10 | Grayscale autoscale |
+| `Mono12PackedLsb` | 12-bit LSB packed | 12 | Grayscale autoscale |
+| `Binary` | 1 byte / pixel | 1 | 0 = black, non-zero = white |
+| `RGB24` | 3 bytes / pixel | 8 | Color, RGB byte order |
+| `BGR24` | 3 bytes / pixel | 8 | Color, BGR byte order |
+| `BGRA32` | 4 bytes / pixel | 8 | Color with alpha |
+| `Float32` | 4 bytes / pixel | 32 | Grayscale autoscale, little/big endian |
+| `BayerRGGB8` | 1 byte / pixel | 8 | Simple 8-bit Bayer preview |
+| `BayerGRBG8` | 1 byte / pixel | 8 | Simple 8-bit Bayer preview |
+| `BayerGBRG8` | 1 byte / pixel | 8 | Simple 8-bit Bayer preview |
+| `BayerBGGR8` | 1 byte / pixel | 8 | Simple 8-bit Bayer preview |
+
+Bitmap formats:
+
+| `System.Drawing.Imaging.PixelFormat` | Mapped Format |
+| --- | --- |
+| `Format8bppIndexed` | `Mono8` |
+| `Format24bppRgb` | `BGR24` |
+| `Format32bppArgb` | `BGRA32` |
+| `Format32bppPArgb` | `BGRA32` |
+| `Format32bppRgb` | `BGRA32` |
+
+OpenCvSharp Mat formats:
+
+| `MatType` | Mapped Format |
+| --- | --- |
+| `CV_8UC1` | `Mono8` |
+| `CV_8UC3` | `BGR24` |
+| `CV_8UC4` | `BGRA32` |
+| `CV_16UC1` | `Mono16` |
+| `CV_32FC1` | `Float32` |
+
+Unsupported formats should fail with a clear diagnostics message instead of silently rendering the wrong image.
 
 ## Download and run
 
@@ -53,6 +106,18 @@ To inspect your own data:
 - For raw `.raw` or `.bin` files, fill in width, height, stride, pixel format, valid bits, and byte order, then click `Apply`.
 - Keep `.raw` payload files beside their `.rbuf.json` metadata files.
 
+## Viewer Usage
+
+1. Run `RawBufferVisualizer.Wpf.exe`.
+2. Click `Open Sample` for a quick working image.
+3. Use `Open` to load `.rbuf.json`, `.raw`, or `.bin`.
+4. For raw files without metadata, set `Width`, `Height`, `Stride`, `Pixel Format`, `Valid Bits`, and `Byte Order`.
+5. Click `Apply`.
+6. Use mouse wheel, `Fit`, `1:1`, and the zoom slider to inspect the image.
+7. Move the mouse over the image to inspect pixel values.
+8. Use `Save PNG` for visible-preview export when CPU preview cache is enabled.
+9. Use `Save Snapshot` to write `.rbuf.json` + `.raw`.
+
 ## WPF Large Image Canvas
 
 The viewer uses tiled display instead of one full-frame WPF bitmap. The current shared rule is:
@@ -60,6 +125,18 @@ The viewer uses tiled display instead of one full-frame WPF bitmap. The current 
 - default tile size: `5000 x 5000`
 - tile planner: `RawImageTilePlanner.CreateTiles(width, height)`
 - memory estimate: `RawImageTilePlanner.EstimateBgraByteCount(descriptor)`
+
+Current large-image validation:
+
+| Case | Result |
+| --- | --- |
+| `100000 x 100000` `Mono8` descriptor | Verified by automated tile-planner test |
+| Source payload estimate | `10,000,000,000` bytes |
+| BGRA preview estimate | `40,000,000,000` bytes |
+| Tile size | `5000 x 5000` |
+| Tile count | `400` |
+
+Important current limitation: the viewer still loads the raw payload into memory before tiled display. The `100000 x 100000` test verifies descriptor math and tile planning, not full 10 GB file-backed viewing. Full 100K image viewing needs file-backed tile loading before it can be claimed as complete.
 
 ## Snapshot format
 
@@ -107,7 +184,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\SmokeOpenSamples.ps1
 Create a sample buffer:
 
 ```powershell
-dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj
+dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj --framework net9.0
 ```
 
 Run the debugger visualizer debuggee without breakpoints:

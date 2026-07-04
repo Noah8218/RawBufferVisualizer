@@ -27,6 +27,7 @@ namespace RawBufferVisualizer.Tests
                 BayerRggbRendersColor();
                 AllSupportedFormatsRender();
                 TilePlannerSplitsLargeImage();
+                TilePlannerHandles100kImage();
                 TileRenderMatchesFullRender();
                 InvalidStrideIsReported();
                 SnapshotRoundTrips();
@@ -168,6 +169,27 @@ namespace RawBufferVisualizer.Tests
                 ByteOrder = RawByteOrder.LittleEndian
             };
             Assert(RawImageTilePlanner.EstimateBgraByteCount(descriptor) == 1073741824L, "BGRA memory estimate failed.");
+        }
+
+        private static void TilePlannerHandles100kImage()
+        {
+            var tiles = RawImageTilePlanner.CreateTiles(100000, 100000);
+            Assert(tiles.Count == 400, "100K image should split into 400 display tiles.");
+            Assert(tiles[0].X == 0 && tiles[0].Y == 0 && tiles[0].Width == 5000 && tiles[0].Height == 5000, "100K first tile bounds failed.");
+            Assert(tiles[399].X == 95000 && tiles[399].Y == 95000 && tiles[399].Width == 5000 && tiles[399].Height == 5000, "100K last tile bounds failed.");
+
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 100000,
+                Height = 100000,
+                Stride = 100000,
+                PixelFormat = RawPixelFormat.Mono8,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+
+            Assert(descriptor.GetRequiredByteCount() == 10000000000L, "100K Mono8 source byte estimate failed.");
+            Assert(RawImageTilePlanner.EstimateBgraByteCount(descriptor) == 40000000000L, "100K BGRA memory estimate failed.");
         }
 
         private static void TileRenderMatchesFullRender()
