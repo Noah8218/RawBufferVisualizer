@@ -1,11 +1,17 @@
 # Raw Buffer Visualizer
 
-Raw Buffer Visualizer is a Windows desktop utility for C# machine-vision developers who need to inspect image buffers before they become `Mat`, `Bitmap`, or another high-level image type.
+Raw Buffer Visualizer is a Windows desktop Image Watch utility for C# machine-vision developers who need to inspect image buffers before they become `Mat`, `Bitmap`, or another high-level image type.
 
-The long-term product direction is `Vision Replay Debugger`: a lightweight C# recorder and standalone viewer for replaying one complete machine-vision inspection run. Raw Buffer Visualizer is the image engine for that product.
+The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `Mat`, `Bitmap`, `IntPtr`, pixel formats, large-image display, and inspection ergonomics. `Vision Replay Debugger` remains a later product direction, not the first development target.
 
 - Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
 - `.vrec` package draft: [docs/vrec-format-v0.md](docs/vrec-format-v0.md)
+
+## Current roadmap
+
+1. Finish the standalone Windows Image Watch program.
+2. Publish the local repository to GitHub after a remote repository is available.
+3. Add Visual Studio integration after the standalone viewer is stable.
 
 ## Current MVP
 
@@ -74,6 +80,13 @@ Create a sample buffer:
 ```powershell
 dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj
 ```
+
+The sample project creates `.rbuf.json` snapshots for every currently supported pixel format:
+
+- `Mono8`, `Mono16`, `Mono10PackedLsb`, `Mono12PackedLsb`, `Binary`
+- `RGB24`, `BGR24`, `BGRA32`
+- `Float32`
+- `BayerRGGB8`, `BayerGRBG8`, `BayerGBRG8`, `BayerBGGR8`
 
 Open the WPF viewer:
 

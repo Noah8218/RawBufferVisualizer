@@ -21,7 +21,11 @@ namespace RawBufferVisualizer.Tests
                 Mono8RendersToBgra();
                 Mono10PackedLsbRenders();
                 Mono12PackedLsbInspects();
+                Rgb24KeepsChannelOrder();
                 Bgr24KeepsChannelOrder();
+                Bgra32KeepsChannelOrder();
+                BayerRggbRendersColor();
+                AllSupportedFormatsRender();
                 TilePlannerSplitsLargeImage();
                 TileRenderMatchesFullRender();
                 InvalidStrideIsReported();
@@ -70,6 +74,75 @@ namespace RawBufferVisualizer.Tests
 
             var rendered = RawBufferRenderer.Render(new byte[] { 1, 2, 3 }, descriptor);
             Assert(rendered.Bgra32[0] == 1 && rendered.Bgra32[1] == 2 && rendered.Bgra32[2] == 3 && rendered.Bgra32[3] == 255, "BGR24 channel order failed.");
+        }
+
+        private static void Rgb24KeepsChannelOrder()
+        {
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 1,
+                Height = 1,
+                Stride = 3,
+                PixelFormat = RawPixelFormat.RGB24,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+
+            var rendered = RawBufferRenderer.Render(new byte[] { 3, 2, 1 }, descriptor);
+            Assert(rendered.Bgra32[0] == 1 && rendered.Bgra32[1] == 2 && rendered.Bgra32[2] == 3 && rendered.Bgra32[3] == 255, "RGB24 channel order failed.");
+        }
+
+        private static void Bgra32KeepsChannelOrder()
+        {
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 1,
+                Height = 1,
+                Stride = 4,
+                PixelFormat = RawPixelFormat.BGRA32,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+
+            var rendered = RawBufferRenderer.Render(new byte[] { 1, 2, 3, 4 }, descriptor);
+            Assert(rendered.Bgra32[0] == 1 && rendered.Bgra32[1] == 2 && rendered.Bgra32[2] == 3 && rendered.Bgra32[3] == 4, "BGRA32 channel order failed.");
+        }
+
+        private static void BayerRggbRendersColor()
+        {
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 3,
+                Height = 3,
+                Stride = 3,
+                PixelFormat = RawPixelFormat.BayerRGGB8,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+            var buffer = new byte[]
+            {
+                240, 120, 240,
+                120, 40, 120,
+                240, 120, 240
+            };
+
+            var rendered = RawBufferRenderer.Render(buffer, descriptor);
+            var center = ((1 * descriptor.Width) + 1) * 4;
+            Assert(rendered.Bgra32[center] == 40, "Bayer blue channel failed.");
+            Assert(rendered.Bgra32[center + 1] == 120, "Bayer green channel failed.");
+            Assert(rendered.Bgra32[center + 2] == 240, "Bayer red channel failed.");
+            Assert(rendered.Bgra32[center + 3] == 255, "Bayer alpha channel failed.");
+        }
+
+        private static void AllSupportedFormatsRender()
+        {
+            foreach (RawPixelFormat format in Enum.GetValues(typeof(RawPixelFormat)))
+            {
+                var sample = CreateTinySample(format);
+                var rendered = RawBufferRenderer.Render(sample.Buffer, sample.Descriptor);
+                Assert(rendered.Width == sample.Descriptor.Width && rendered.Height == sample.Descriptor.Height, format + " render dimensions failed.");
+                Assert(rendered.Bgra32.Length == sample.Descriptor.Width * sample.Descriptor.Height * 4, format + " render size failed.");
+            }
         }
 
         private static void TilePlannerSplitsLargeImage()
@@ -313,6 +386,75 @@ namespace RawBufferVisualizer.Tests
             if (!condition)
             {
                 throw new InvalidOperationException(message);
+            }
+        }
+
+        private static TinySample CreateTinySample(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono8:
+                    return new TinySample(new byte[] { 0, 255, 128, 64 }, CreateDescriptor(2, 2, 2, format, 8));
+                case RawPixelFormat.Mono16:
+                    return new TinySample(new byte[] { 0, 0, 255, 255, 0, 128, 0, 64 }, CreateDescriptor(2, 2, 4, format, 16));
+                case RawPixelFormat.Mono10PackedLsb:
+                    return new TinySample(PackLsb(new[] { 0, 1023, 512, 256 }, 10), CreateDescriptor(4, 1, 5, format, 10));
+                case RawPixelFormat.Mono12PackedLsb:
+                    return new TinySample(PackLsb(new[] { 0, 4095, 2048, 1024 }, 12), CreateDescriptor(4, 1, 6, format, 12));
+                case RawPixelFormat.Binary:
+                    return new TinySample(new byte[] { 0, 1, 0, 255 }, CreateDescriptor(2, 2, 2, format, 1));
+                case RawPixelFormat.RGB24:
+                    return new TinySample(new byte[] { 255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255 }, CreateDescriptor(2, 2, 6, format, 8));
+                case RawPixelFormat.BGR24:
+                    return new TinySample(new byte[] { 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255 }, CreateDescriptor(2, 2, 6, format, 8));
+                case RawPixelFormat.BGRA32:
+                    return new TinySample(new byte[] { 0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255 }, CreateDescriptor(2, 2, 8, format, 8));
+                case RawPixelFormat.Float32:
+                    return new TinySample(CreateFloatBytes(new[] { 0f, 1f, 2f, 3f }), CreateDescriptor(2, 2, 8, format, 32));
+                case RawPixelFormat.BayerRGGB8:
+                case RawPixelFormat.BayerGRBG8:
+                case RawPixelFormat.BayerGBRG8:
+                case RawPixelFormat.BayerBGGR8:
+                    return new TinySample(new byte[] { 240, 120, 240, 120, 40, 120, 240, 120, 240 }, CreateDescriptor(3, 3, 3, format, 8));
+                default:
+                    throw new NotSupportedException(format.ToString());
+            }
+        }
+
+        private static RawImageDescriptor CreateDescriptor(int width, int height, int stride, RawPixelFormat format, int validBits)
+        {
+            return new RawImageDescriptor
+            {
+                Width = width,
+                Height = height,
+                Stride = stride,
+                PixelFormat = format,
+                ValidBits = validBits,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+        }
+
+        private static byte[] CreateFloatBytes(float[] values)
+        {
+            var buffer = new byte[values.Length * 4];
+            for (var i = 0; i < values.Length; i++)
+            {
+                var bytes = BitConverter.GetBytes(values[i]);
+                Buffer.BlockCopy(bytes, 0, buffer, i * 4, 4);
+            }
+
+            return buffer;
+        }
+
+        private sealed class TinySample
+        {
+            public byte[] Buffer { get; private set; }
+            public RawImageDescriptor Descriptor { get; private set; }
+
+            public TinySample(byte[] buffer, RawImageDescriptor descriptor)
+            {
+                Buffer = buffer;
+                Descriptor = descriptor;
             }
         }
 

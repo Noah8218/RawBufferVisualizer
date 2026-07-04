@@ -27,7 +27,10 @@
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
-                    <Slider x:Name="ZoomSlider" Width="160" Minimum="0.1" Maximum="8" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                    <Button Content="Fit" Click="Fit_Click"/>
+                    <Button Content="1:1" Click="ActualSize_Click"/>
+                    <Slider x:Name="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                    <TextBlock x:Name="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
                     <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource MutedTextBrush}"/>
                 </StackPanel>
             </DockPanel>

@@ -26,10 +26,24 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private Point _lastMouse;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
+        public event EventHandler? ViewChanged;
 
         public int TileCount
         {
             get { return _tiles.Count; }
+        }
+
+        public double ZoomScale
+        {
+            get
+            {
+                if (ActualWidth <= 0 || _viewWidth <= 0)
+                {
+                    return 1;
+                }
+
+                return ActualWidth / _viewWidth;
+            }
         }
 
         public RawOpenGlImageCanvas()
@@ -122,6 +136,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             _viewLeft = (_descriptor.Width - _viewWidth) / 2;
             _viewTop = (_descriptor.Height - _viewHeight) / 2;
+            OnViewChanged();
             RequestRender();
         }
 
@@ -138,6 +153,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _viewHeight = ActualHeight / scale;
             _viewLeft = centerX - (_viewWidth / 2);
             _viewTop = centerY - (_viewHeight / 2);
+            OnViewChanged();
             RequestRender();
         }
 
@@ -250,6 +266,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 _viewLeft -= dx / Math.Max(ActualWidth, 1) * _viewWidth;
                 _viewTop -= dy / Math.Max(ActualHeight, 1) * _viewHeight;
                 _lastMouse = position;
+                OnViewChanged();
                 RequestRender();
             }
 
@@ -273,6 +290,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var relativeY = position.Y / Math.Max(ActualHeight, 1);
             _viewLeft = anchor.X - (relativeX * _viewWidth);
             _viewTop = anchor.Y - (relativeY * _viewHeight);
+            OnViewChanged();
             RequestRender();
         }
 
@@ -429,6 +447,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private void RequestRender()
         {
             _openGlControl.InvalidateVisual();
+        }
+
+        private void OnViewChanged()
+        {
+            ViewChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private sealed class TextureTile

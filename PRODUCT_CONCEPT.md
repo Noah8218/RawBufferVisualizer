@@ -1,6 +1,20 @@
 # Product Concept
 
-## Position
+## Current Priority
+
+The first product is Image Watch / Raw Buffer Inspector.
+
+The immediate goal is to make C# machine-vision images easy to inspect regardless of whether they start as `byte[]`, `IntPtr`, `ushort[]`, `float[]`, `Bitmap`, OpenCvSharp `Mat`, or camera SDK buffers.
+
+Vision Replay Debugger is a later direction. Replay work should not block the Image Watch MVP.
+
+The near-term delivery order is:
+
+1. Complete the standalone Windows Image Watch program.
+2. Publish the project to GitHub when the remote repository is ready.
+3. Add Visual Studio integration after the standalone viewer and SDK are stable.
+
+## Later Position
 
 Raw Buffer Visualizer is the image engine for a larger product:
 

@@ -25,6 +25,7 @@ namespace RawBufferVisualizer.Wpf
         private RenderedImage? _rendered;
         private string? _currentPath;
         private string? _vrecTempDirectory;
+        private bool _syncingZoomSlider;
 
         public MainWindow()
         {
@@ -51,8 +52,10 @@ namespace RawBufferVisualizer.Wpf
             FormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat)).Cast<RawPixelFormat>();
             ByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder)).Cast<RawByteOrder>();
             OpenGlImageView.PixelHovered += OpenGlImageView_PixelHovered;
+            OpenGlImageView.ViewChanged += OpenGlImageView_ViewChanged;
             ApplyDescriptorToFields();
             UpdateStatus();
+            UpdateZoomStatus();
         }
 
         public void OpenPath(string path)
@@ -465,8 +468,52 @@ namespace RawBufferVisualizer.Wpf
                 return;
             }
 
+            if (_syncingZoomSlider)
+            {
+                return;
+            }
+
             OpenGlImageView.SetZoomScale(e.NewValue);
-            UpdateStatus();
+            UpdateZoomStatus();
+        }
+
+        private void Fit_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGlImageView.FitToImage();
+            UpdateZoomStatus();
+        }
+
+        private void ActualSize_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGlImageView.SetZoomScale(1);
+            UpdateZoomStatus();
+        }
+
+        private void OpenGlImageView_ViewChanged(object? sender, EventArgs e)
+        {
+            UpdateZoomStatus();
+        }
+
+        private void UpdateZoomStatus()
+        {
+            if (ZoomText == null || ZoomSlider == null || OpenGlImageView == null)
+            {
+                return;
+            }
+
+            var zoom = OpenGlImageView.ZoomScale;
+            var clampedZoom = Math.Max(ZoomSlider.Minimum, Math.Min(ZoomSlider.Maximum, zoom));
+            _syncingZoomSlider = true;
+            try
+            {
+                ZoomSlider.Value = clampedZoom;
+            }
+            finally
+            {
+                _syncingZoomSlider = false;
+            }
+
+            ZoomText.Text = string.Format(CultureInfo.InvariantCulture, "{0:0.#}%", zoom * 100);
         }
 
         private void UpdateStatus()
