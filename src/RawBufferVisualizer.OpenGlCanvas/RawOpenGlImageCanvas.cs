@@ -86,7 +86,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var diagnostics = RawBufferDiagnostics.Analyze(buffer, descriptor);
             if (RawBufferDiagnostics.HasErrors(diagnostics))
             {
-                throw new ArgumentException("Cannot upload invalid raw buffer to OpenGL.");
+                throw new ArgumentException("Cannot display an invalid raw buffer.");
             }
 
             ClearImage();

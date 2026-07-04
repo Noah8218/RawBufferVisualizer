@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using RawBufferVisualizer.Core;
-using RawBufferVisualizer.Recorder;
 using RawBufferVisualizer.Sdk;
 
 namespace RawBufferVisualizer.Samples
@@ -28,19 +27,6 @@ namespace RawBufferVisualizer.Samples
             SaveSample(outputDirectory, "bayer-gbrg8-color", CreateBayer8Sample(320, 240, RawPixelFormat.BayerGBRG8), CreateDescriptor(320, 240, 320, RawPixelFormat.BayerGBRG8, 8));
             SaveSample(outputDirectory, "bayer-bggr8-color", CreateBayer8Sample(320, 240, RawPixelFormat.BayerBGGR8), CreateDescriptor(320, 240, 320, RawPixelFormat.BayerBGGR8, 8));
 
-            var vrecPath = Path.Combine(outputDirectory, "mono8-gradient.vrec");
-            using (var shot = VisionRecorder.Begin("SampleCam", "T001", "Main"))
-            {
-                shot.AddImage("01_raw", "Raw", mono8.Buffer, mono8.Descriptor);
-                shot.AddParam("Threshold", 120, "01_raw");
-                shot.AddRectangleRoi("01_raw", "SearchROI", 100, 80, 240, 180);
-                shot.AddMeasure("Width", 12.345, "mm", 12.0, 13.0, true, "01_raw");
-                shot.AddEvent("Grab Complete", 1.2);
-                shot.Result(true);
-                shot.Save(vrecPath);
-            }
-
-            Console.WriteLine(vrecPath);
             return 0;
         }
 

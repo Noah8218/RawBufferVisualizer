@@ -53,7 +53,7 @@ public static class RawBufferSmokeNative {
 
 function Minimize-OtherWindows([int]$exceptPid) {
     Get-Process | Where-Object {
-        $_.MainWindowHandle -ne 0 -and $_.Id -ne $exceptPid -and $_.ProcessName -ne "Codex"
+        $_.MainWindowHandle -ne 0 -and $_.Id -ne $exceptPid
     } | ForEach-Object {
         [RawBufferSmokeNative]::ShowWindow($_.MainWindowHandle, 6) | Out-Null
     }

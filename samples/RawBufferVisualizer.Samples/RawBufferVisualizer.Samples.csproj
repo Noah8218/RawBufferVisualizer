@@ -6,6 +6,5 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
-    <ProjectReference Include="..\..\src\VisionRecorder.Sdk\VisionRecorder.Sdk.csproj" />
   </ItemGroup>
 </Project>

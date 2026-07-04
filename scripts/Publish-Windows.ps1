@@ -78,7 +78,8 @@ try {
             Remove-Item -LiteralPath $sampleTarget -Recurse -Force
         }
 
-        Copy-Item -LiteralPath $sampleSource -Destination $sampleTarget -Recurse
+        New-Item -ItemType Directory -Force -Path $sampleTarget | Out-Null
+        Copy-Item -Path (Join-Path $sampleSource '*.rbuf.json'), (Join-Path $sampleSource '*.raw') -Destination $sampleTarget -Force
     }
 } finally {
     Pop-Location

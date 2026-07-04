@@ -18,8 +18,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.Samples
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RawBufferVisualizer.Tests", "tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj", "{89169438-3429-44B1-987D-BA20795E9194}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "VisionRecorder.Sdk", "src\VisionRecorder.Sdk\VisionRecorder.Sdk.csproj", "{D59F0700-BE6D-4982-BAC3-6C82227A7C99}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -58,10 +56,6 @@ Global
 		{89169438-3429-44B1-987D-BA20795E9194}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{89169438-3429-44B1-987D-BA20795E9194}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{89169438-3429-44B1-987D-BA20795E9194}.Release|Any CPU.Build.0 = Release|Any CPU
-		{D59F0700-BE6D-4982-BAC3-6C82227A7C99}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{D59F0700-BE6D-4982-BAC3-6C82227A7C99}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{D59F0700-BE6D-4982-BAC3-6C82227A7C99}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{D59F0700-BE6D-4982-BAC3-6C82227A7C99}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

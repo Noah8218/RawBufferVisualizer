@@ -4,16 +4,15 @@
 
 Raw Buffer Visualizer is a Windows desktop Image Watch utility for C# machine-vision developers who need to inspect image buffers before they become `Mat`, `Bitmap`, or another high-level image type.
 
-The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `Mat`, `Bitmap`, `IntPtr`, pixel formats, large-image display, and inspection ergonomics. `Vision Replay Debugger` remains a later product direction, not the first development target.
+The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `Mat`, `Bitmap`, `IntPtr`, pixel formats, large-image display, and inspection ergonomics. The final product goal is Visual Studio debugger integration similar to Image Watch.
 
 - Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
-- `.vrec` package draft: [docs/vrec-format-v0.md](docs/vrec-format-v0.md)
 
 ## Current roadmap
 
 1. Finish the standalone Windows Image Watch program.
 2. Keep GitHub updated and produce release-ready Windows packages.
-3. Add Visual Studio integration after the standalone viewer is stable.
+3. Add Visual Studio integration so supported image variables can be inspected while debugging.
 
 ## Current MVP
 
@@ -23,11 +22,10 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
-- Vision Recorder SDK v0 for writing `.vrec` packages with `manifest.json` and raw image payloads.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
-- WPF OpenGL canvas for tiled texture display.
-- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB, while OpenGL display remains tiled.
+- WPF tiled canvas for large-image display.
+- Large-image guard: CPU histogram/PNG cache is skipped above 512 MB, while tiled display remains available.
 - Windows publish script for release-ready viewer zip packages.
 
 ## Download and run
@@ -46,21 +44,18 @@ The default package is self-contained for Windows x64, so it does not require in
 
 To inspect your own data:
 
-- Drag and drop `.rbuf.json` or `.vrec` files into the window.
-- Use `Open` for `.rbuf.json`, `.vrec`, `.raw`, or `.bin`.
+- Drag and drop `.rbuf.json`, `.raw`, or `.bin` files into the window.
+- Use `Open` for `.rbuf.json`, `.raw`, or `.bin`.
 - For raw `.raw` or `.bin` files, fill in width, height, stride, pixel format, valid bits, and byte order, then click `Apply`.
 - Keep `.raw` payload files beside their `.rbuf.json` metadata files.
 
-## WPF OpenGL image canvas
+## WPF Large Image Canvas
 
-The viewer uses tiled texture upload instead of one full-frame WPF bitmap. The current shared rule is:
+The viewer uses tiled display instead of one full-frame WPF bitmap. The current shared rule is:
 
 - default tile size: `5000 x 5000`
 - tile planner: `RawImageTilePlanner.CreateTiles(width, height)`
 - memory estimate: `RawImageTilePlanner.EstimateBgraByteCount(descriptor)`
-- WPF canvas project: `RawBufferVisualizer.OpenGlCanvas`
-
-This mirrors the local OpenGL ImageCanvas tiling approach, but the control is implemented as a WPF `UserControl` instead of a WinForms host.
 
 ## Snapshot format
 
@@ -201,6 +196,15 @@ snapshot.Save("mat.rbuf.json");
 ```
 
 `Mat` support stays in a separate project so applications that do not use OpenCvSharp do not inherit that dependency.
+
+## Visual Studio integration target
+
+The standalone viewer is the first surface. The final target is Visual Studio integration for debugger-time image inspection:
+
+- `RawBufferSnapshot` first
+- `Bitmap` and OpenCvSharp `Mat` adapters next
+- raw pointer buffers only when width, height, stride, pixel format, and ownership metadata are available
+- same viewer behavior for zoom, pixel inspection, histogram, diagnostics, and export
 
 ## GitHub setup
 

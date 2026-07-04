@@ -2,108 +2,99 @@
 
 ## Current Priority
 
-The first product is Image Watch / Raw Buffer Inspector.
+Raw Buffer Visualizer is an Image Watch style utility for C# machine-vision developers.
 
-The immediate goal is to make C# machine-vision images easy to inspect regardless of whether they start as `byte[]`, `IntPtr`, `ushort[]`, `float[]`, `Bitmap`, OpenCvSharp `Mat`, or camera SDK buffers.
+The immediate goal is to make image variables easy to inspect regardless of whether they start as `byte[]`, `IntPtr`, `ushort[]`, `float[]`, `Bitmap`, OpenCvSharp `Mat`, or camera SDK buffers.
 
-Vision Replay Debugger is a later direction. Replay work should not block the Image Watch MVP.
-
-The near-term delivery order is:
+The delivery order is:
 
 1. Complete the standalone Windows Image Watch program.
-2. Publish the project to GitHub when the remote repository is ready.
-3. Add Visual Studio integration after the standalone viewer and SDK are stable.
+2. Publish and package the project on GitHub.
+3. Add Visual Studio integration so developers can open supported image variables while debugging.
 
-## Later Position
+## Final Product Direction
 
-Raw Buffer Visualizer is the image engine for a larger product:
+The final target is Visual Studio debugger integration, similar in workflow to Image Watch:
 
-Vision Replay Debugger records one machine-vision inspection run and replays it on a developer PC with the same images, intermediate stages, parameters, ROIs, overlays, measurements, timing, and result metadata.
+- Stop at a breakpoint.
+- Select or invoke an image variable.
+- Inspect pixels, metadata, zoom, histogram, stride, format, and diagnostics.
+- Open raw buffers, `Bitmap`, `Mat`, and adapter-provided camera SDK image objects.
+- Keep the standalone viewer as the same inspection surface used by the Visual Studio integration.
 
 ## Problem
 
-Machine-vision defects are often hard to reproduce because the saved image alone is not enough. The useful context is usually spread across camera buffers, recipe values, ROI edits, PLC/camera timing, intermediate images, and result overlays.
+Machine-vision developers often debug image data before it has a convenient viewer type. The useful details are usually raw memory layout details:
 
-The product should answer these questions first:
+- width and height
+- stride and byte order
+- packed mono formats
+- Bayer layouts
+- valid bit depth
+- channel order
+- buffer lifetime and pointer ownership
 
-- What image entered the inspection?
-- Which processing stages changed it?
-- Which parameters and ROIs were active?
-- Which measurement or decision failed?
-- Was the issue image quality, recipe, timing, calibration, or algorithm logic?
+Standard debugger views do not make these details visible enough, and converting every buffer to an image type just for debugging adds friction.
 
 ## Differentiation
 
-Existing debugger image tools mostly inspect one in-memory image during debugging.
+Existing debugger image tools mostly inspect already-known image objects.
 
-- Microsoft Image Watch focuses on in-memory bitmap/image inspection while stopped in the Visual Studio debugger.
+- Microsoft Image Watch focuses on in-memory image inspection while stopped in the Visual Studio debugger.
 - Visual Studio debugger visualizers can display individual managed objects.
-- HALCON and VisionPro provide full machine-vision environments, but they are heavy platform products.
+- Vendor tools are powerful but tied to their ecosystem.
 
-This product should stay smaller and vendor-neutral: a lightweight C# SDK plus a standalone WPF viewer that can be attached to existing equipment applications.
+This product should stay small and vendor-neutral: a lightweight C# SDK, optional adapters, a standalone viewer, and later a Visual Studio entry point.
 
 ## Product Shape
-
-The first useful product is not a vision algorithm suite. It is a black box and replay viewer for C# machine-vision development.
 
 Main components:
 
 - `RawBufferVisualizer.Core`: descriptors, pixel formats, validation, tile decode, diagnostics.
-- `RawBufferVisualizer.OpenGlCanvas`: WPF/OpenGL large-image canvas with tile and LOD rendering.
-- `VisionRecorder.Sdk`: small API for recording one inspection shot.
-- `VisionReplayViewer`: WPF application for browsing `.vrec` files.
-- Adapter packages: OpenCvSharp Mat, Bitmap, and later vendor-specific objects.
-
-## Recording API Sketch
-
-```csharp
-using (var shot = VisionRecorder.Begin("Cam1", triggerId, recipeName))
-{
-    shot.AddImage("01_Raw", buffer, width, height, stride, VisionPixelFormat.Mono8);
-    shot.AddParam("ExposureUs", exposureUs);
-    shot.AddParam("Threshold", threshold);
-    shot.AddRoi("SearchROI", searchRect);
-    shot.AddImage("02_Binary", binaryMat);
-    shot.AddOverlay("03_Result", contours);
-    shot.AddMeasure("Width", width);
-    shot.Result(isOk);
-}
-```
+- `RawBufferVisualizer.Sdk`: snapshot helpers for buffers and pointers.
+- `RawBufferVisualizer.Wpf`: standalone inspection viewer.
+- Adapter packages: OpenCvSharp `Mat`, `Bitmap`, and later vendor-specific objects.
+- Visual Studio integration: debugger-side entry point that sends supported variables to the viewer.
 
 ## MVP
 
 The MVP should be able to:
 
-1. Record one inspection run to a `.vrec` file.
-2. Store raw images using the existing `.rbuf.json` descriptor model.
-3. Store params, ROIs, overlays, measurements, timing, and final OK/NG.
-4. Open `.vrec` in the viewer.
-5. Browse stage images in order.
-6. Show ROI and overlay on top of each image.
-7. Compare two `.vrec` files side by side.
+1. Open `.rbuf.json` plus `.raw` payload files.
+2. Inspect supported mono, packed mono, color, float, and Bayer formats.
+3. Open snapshots produced from `byte[]`, `IntPtr`, `ushort[]`, `float[]`, `Bitmap`, and `Mat`.
+4. Show pixel values, histogram, diagnostics, zoom, and export options.
+5. Handle large images without requiring one full-frame WPF bitmap.
+6. Package a Windows executable and sample files through GitHub.
+
+## Visual Studio Integration Goals
+
+The Visual Studio integration should start small:
+
+1. Debugger visualizer or extension entry for managed image-like objects.
+2. Support `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` first.
+3. Add raw pointer support only when descriptor metadata can be supplied safely.
+4. Reuse the standalone viewer surface instead of building a second UI.
+5. Keep adapters optional so user projects do not inherit dependencies they do not use.
 
 ## Non-Goals For Now
 
 - Replacing HALCON, VisionPro, or OpenCV.
-- Building a Visual Studio extension first.
-- Supporting every camera SDK directly.
 - Building a recipe editor.
 - Running live camera acquisition.
 - Adding a database server.
+- Managing full inspection-run timelines.
 
 ## Technical Principles
 
-- File first: a `.vrec` should be inspectable and portable without a server.
 - Vendor-neutral core: raw buffer descriptor is the boundary.
 - Adapters are optional: Mat, Bitmap, HALCON, Basler, and Cognex support must not become core dependencies.
-- Large images are tiled: no full-frame `BitmapSource` for large buffers.
-- Metadata is JSON: simple to inspect, diff, and version.
-- Image payloads are separate files inside the package: raw payloads must not be base64 in JSON.
+- Large images use tiled display paths.
+- Metadata is JSON so it is simple to inspect, diff, and version.
+- Raw payloads stay as binary files; they are not base64 in JSON.
 
 ## Source Notes
 
-- Visual Studio Image Watch and debugger visualizers confirm that single-variable image viewing is already a known category.
-- Cognex VisionPro QuickBuild and image database verification confirm demand for image replay/verification workflows.
-- HALCON Variable Inspect confirms vendor tools already cover debugger-side variable inspection.
+- Visual Studio Image Watch and debugger visualizers confirm that image-variable viewing is a known developer workflow.
 - Basler pylon and GenICam PFNC documentation confirm that raw buffer lifetime, pixel format, stride, and packed formats are first-class concerns.
-- libvips and OME-Zarr show the same large-image design pattern: chunked/tiled, multiscale, on-demand access.
+- Large-image viewers commonly use chunked or tiled display patterns to avoid full-frame UI memory pressure.

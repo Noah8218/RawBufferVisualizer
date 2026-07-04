@@ -2,7 +2,7 @@
   <PropertyGroup>
     <TargetFrameworks>net472;net10.0-windows</TargetFrameworks>
     <UseWPF>true</UseWPF>
-    <!-- SharpGL.WPF ships net40 assets. net472 is native; net10-windows is covered by runtime smoke checks. -->
+    <!-- The viewer dependency ships net40 assets. net472 is native; net10-windows is covered by runtime smoke checks. -->
     <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
   <ItemGroup>
