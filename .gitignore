@@ -1,0 +1,10 @@
+bin/
+obj/
+.build/
+.vs/
+.idea/
+*.user
+*.suo
+*.nupkg
+artifacts/
+TestResults/

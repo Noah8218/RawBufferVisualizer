@@ -1,0 +1,107 @@
+<Window x:Class="RawBufferVisualizer.Wpf.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Raw Buffer Visualizer"
+        Width="1280"
+        Height="800"
+        MinWidth="920"
+        MinHeight="620"
+        Loaded="Window_Loaded">
+    <Grid Background="{StaticResource WindowBackgroundBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0" Background="{StaticResource ToolbarBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal">
+                    <Button Content="Open" Click="Open_Click"/>
+                    <Button Content="Apply" Click="Apply_Click"/>
+                </StackPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                    <Slider x:Name="ZoomSlider" Width="160" Minimum="0.1" Maximum="8" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                    <TextBlock x:Name="StatusText" VerticalAlignment="Center" Margin="12,0,0,0" Foreground="{StaticResource MutedTextBrush}"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="280"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="300"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0" Padding="12">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Descriptor" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
+                        <TextBlock Text="Width"/>
+                        <TextBox x:Name="WidthBox" Text="640"/>
+
+                        <TextBlock Text="Height"/>
+                        <TextBox x:Name="HeightBox" Text="480"/>
+
+                        <TextBlock Text="Stride"/>
+                        <TextBox x:Name="StrideBox" Text="640"/>
+
+                        <TextBlock Text="Pixel Format"/>
+                        <ComboBox x:Name="FormatBox"/>
+
+                        <TextBlock Text="Valid Bits"/>
+                        <TextBox x:Name="ValidBitsBox" Text="8"/>
+
+                        <TextBlock Text="Byte Order"/>
+                        <ComboBox x:Name="ByteOrderBox"/>
+
+                        <Separator Margin="0,8,0,12"/>
+                        <TextBlock Text="File" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="FileText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+
+            <Border Grid.Column="1" Background="#111111">
+                <ScrollViewer x:Name="ImageScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <Image x:Name="ImageView"
+                               Stretch="None"
+                               SnapsToDevicePixels="True"
+                               RenderOptions.BitmapScalingMode="NearestNeighbor"
+                               MouseMove="ImageView_MouseMove">
+                            <Image.RenderTransform>
+                                <ScaleTransform x:Name="ImageScale" ScaleX="1" ScaleY="1"/>
+                            </Image.RenderTransform>
+                        </Image>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0" Padding="12">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="150"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="Pixel" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="PixelText" Margin="0,6,0,14" Foreground="{StaticResource MutedTextBrush}"/>
+                    </StackPanel>
+
+                    <Border Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource InputBackgroundBrush}">
+                        <Canvas x:Name="HistogramCanvas" Margin="8"/>
+                    </Border>
+
+                    <TextBlock Grid.Row="2" Text="Diagnostics" FontSize="16" FontWeight="SemiBold" Margin="0,16,0,8"/>
+                    <ListBox Grid.Row="3" x:Name="DiagnosticsList"/>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
