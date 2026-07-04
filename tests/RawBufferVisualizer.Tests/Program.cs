@@ -2,10 +2,12 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.IO.Compression;
 using OpenCvSharp;
 using RawBufferVisualizer.BitmapAdapter;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.OpenCvSharpAdapter;
+using RawBufferVisualizer.Recorder;
 using RawBufferVisualizer.Sdk;
 
 namespace RawBufferVisualizer.Tests
@@ -26,6 +28,7 @@ namespace RawBufferVisualizer.Tests
                 SnapshotRoundTrips();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
+                VisionRecorderWritesManifestPackage();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;
             }
@@ -207,6 +210,40 @@ namespace RawBufferVisualizer.Tests
                 Assert(snapshot.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat pixel format failed.");
                 Assert(snapshot.Buffer.Length >= 6, "Mat buffer length failed.");
             }
+        }
+
+        private static void VisionRecorderWritesManifestPackage()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var vrecPath = Path.Combine(directory, "shot.vrec");
+            Directory.CreateDirectory(directory);
+
+            using (var shot = VisionRecorder.Begin("Cam1", "T001", "Main"))
+            {
+                shot.AddStage("01_raw", "Raw", image: "images/01_raw.rbuf.json");
+                shot.Result(false);
+                shot.Save(vrecPath);
+            }
+
+            using (var archive = new ZipArchive(File.OpenRead(vrecPath), ZipArchiveMode.Read))
+            {
+                var entry = archive.GetEntry("manifest.json");
+                if (entry == null)
+                {
+                    throw new InvalidOperationException("VREC manifest entry missing.");
+                }
+
+                using (var reader = new StreamReader(entry.Open()))
+                {
+                    var json = reader.ReadToEnd();
+                    Assert(json.Contains("\"schema\":\"vrec\""), "VREC schema missing.");
+                    Assert(json.Contains("\"camera\":\"Cam1\""), "VREC camera missing.");
+                    Assert(json.Contains("\"result\":\"NG\""), "VREC result missing.");
+                    Assert(json.Contains("\"id\":\"01_raw\""), "VREC stage missing.");
+                }
+            }
+
+            Directory.Delete(directory, true);
         }
 
         private static void Assert(bool condition, string message)

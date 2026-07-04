@@ -15,6 +15,7 @@ The long-term product direction is `Vision Replay Debugger`: a lightweight C# re
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
+- Vision Recorder SDK v0 for writing `.vrec` packages with `manifest.json`.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF OpenGL canvas for tiled texture display.
