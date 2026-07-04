@@ -24,6 +24,11 @@ namespace RawBufferVisualizer.Recorder
         private readonly Stopwatch _clock = Stopwatch.StartNew();
         private readonly List<VisionStage> _stages = new List<VisionStage>();
         private readonly List<VisionImage> _images = new List<VisionImage>();
+        private readonly List<VisionParameter> _parameters = new List<VisionParameter>();
+        private readonly List<VisionMeasure> _measures = new List<VisionMeasure>();
+        private readonly List<VisionEvent> _events = new List<VisionEvent>();
+        private readonly List<VisionOverlay> _overlays = new List<VisionOverlay>();
+        private readonly List<VisionExceptionRecord> _exceptions = new List<VisionExceptionRecord>();
         private string _result = "Unknown";
 
         public string Camera { get; private set; }
@@ -79,6 +84,85 @@ namespace RawBufferVisualizer.Recorder
             return AddStage(id, name, "image", descriptorPath, timestampMs);
         }
 
+        public VisionRecording AddParam(string name, string value, string? stageId = null)
+        {
+            return AddParamCore(name, value ?? string.Empty, "string", stageId);
+        }
+
+        public VisionRecording AddParam(string name, int value, string? stageId = null)
+        {
+            return AddParamCore(name, value, "int", stageId);
+        }
+
+        public VisionRecording AddParam(string name, double value, string? stageId = null)
+        {
+            RequireFinite(value, nameof(value));
+            return AddParamCore(name, value, "double", stageId);
+        }
+
+        public VisionRecording AddParam(string name, bool value, string? stageId = null)
+        {
+            return AddParamCore(name, value, "bool", stageId);
+        }
+
+        public VisionRecording AddMeasure(string name, double value, string? unit = null, double? lower = null, double? upper = null, bool? isOk = null, string? stageId = null)
+        {
+            RequireFinite(value, nameof(value));
+            if (lower.HasValue)
+            {
+                RequireFinite(lower.Value, nameof(lower));
+            }
+
+            if (upper.HasValue)
+            {
+                RequireFinite(upper.Value, nameof(upper));
+            }
+
+            _measures.Add(new VisionMeasure(RequireText(name, nameof(name)), value, unit, lower, upper, isOk, stageId));
+            return this;
+        }
+
+        public VisionRecording AddEvent(string name, double? timestampMs = null)
+        {
+            var timestamp = timestampMs ?? _clock.Elapsed.TotalMilliseconds;
+            RequireFinite(timestamp, nameof(timestampMs));
+            _events.Add(new VisionEvent(RequireText(name, nameof(name)), timestamp));
+            return this;
+        }
+
+        public VisionRecording AddRectangleRoi(string stageId, string name, double x, double y, double width, double height, string color = "#00D7FF")
+        {
+            RequireFinite(x, nameof(x));
+            RequireFinite(y, nameof(y));
+            RequireFinite(width, nameof(width));
+            RequireFinite(height, nameof(height));
+            if (width < 0 || height < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(width), "ROI width and height must be non-negative.");
+            }
+
+            var points = new List<VisionPoint>
+            {
+                new VisionPoint(x, y),
+                new VisionPoint(x + width, y),
+                new VisionPoint(x + width, y + height),
+                new VisionPoint(x, y + height)
+            };
+            _overlays.Add(new VisionOverlay(RequireText(stageId, nameof(stageId)), RequireText(name, nameof(name)), "rectangle", color, points));
+            return this;
+        }
+
+        public VisionRecording AddException(Exception exception, string? stageId = null)
+        {
+            if (exception == null)
+            {
+                throw new ArgumentNullException(nameof(exception));
+            }
+
+            _exceptions.Add(new VisionExceptionRecord(stageId, exception.GetType().FullName ?? exception.GetType().Name, exception.Message, exception.StackTrace));
+            return this;
+        }
+
         public VisionRecording Result(bool isOk)
         {
             _result = isOk ? "OK" : "NG";
@@ -112,12 +196,47 @@ namespace RawBufferVisualizer.Recorder
                     WriteImage(archive, _images[i]);
                 }
 
+                if (_parameters.Count > 0)
+                {
+                    WriteJsonEntry(archive, "params.json", ToParameterDtos());
+                }
+
+                if (_measures.Count > 0)
+                {
+                    WriteJsonEntry(archive, "measures.json", ToMeasureDtos());
+                }
+
+                if (_events.Count > 0)
+                {
+                    WriteJsonEntry(archive, "events.json", ToEventDtos());
+                }
+
+                if (_overlays.Count > 0)
+                {
+                    WriteJsonEntry(archive, "overlays.json", ToOverlayDtos());
+                }
+
+                if (_exceptions.Count > 0)
+                {
+                    WriteJsonEntry(archive, "exceptions.json", ToExceptionDtos());
+                }
+
                 var manifestEntry = archive.CreateEntry("manifest.json", CompressionLevel.Optimal);
                 using (var manifestStream = manifestEntry.Open())
                 {
                     var serializer = new DataContractJsonSerializer(typeof(VisionRecordingManifestDto));
                     serializer.WriteObject(manifestStream, ToManifestDto());
                 }
+            }
+        }
+
+        private static void WriteJsonEntry<T>(ZipArchive archive, string path, T value)
+        {
+            var entry = archive.CreateEntry(path, CompressionLevel.Optimal);
+            using (var stream = entry.Open())
+            {
+                var serializer = new DataContractJsonSerializer(typeof(T));
+                serializer.WriteObject(stream, value);
             }
         }
 
@@ -163,6 +282,67 @@ namespace RawBufferVisualizer.Recorder
             };
         }
 
+        private List<VisionParameterDto> ToParameterDtos()
+        {
+            var items = new List<VisionParameterDto>();
+            for (var i = 0; i < _parameters.Count; i++)
+            {
+                items.Add(VisionParameterDto.From(_parameters[i]));
+            }
+
+            return items;
+        }
+
+        private List<VisionMeasureDto> ToMeasureDtos()
+        {
+            var items = new List<VisionMeasureDto>();
+            for (var i = 0; i < _measures.Count; i++)
+            {
+                items.Add(VisionMeasureDto.From(_measures[i]));
+            }
+
+            return items;
+        }
+
+        private List<VisionEventDto> ToEventDtos()
+        {
+            var items = new List<VisionEventDto>();
+            for (var i = 0; i < _events.Count; i++)
+            {
+                items.Add(VisionEventDto.From(_events[i]));
+            }
+
+            return items;
+        }
+
+        private List<VisionOverlayDto> ToOverlayDtos()
+        {
+            var items = new List<VisionOverlayDto>();
+            for (var i = 0; i < _overlays.Count; i++)
+            {
+                items.Add(VisionOverlayDto.From(_overlays[i]));
+            }
+
+            return items;
+        }
+
+        private List<VisionExceptionDto> ToExceptionDtos()
+        {
+            var items = new List<VisionExceptionDto>();
+            for (var i = 0; i < _exceptions.Count; i++)
+            {
+                items.Add(VisionExceptionDto.From(_exceptions[i]));
+            }
+
+            return items;
+        }
+
+        private VisionRecording AddParamCore(string name, object value, string type, string? stageId)
+        {
+            _parameters.Add(new VisionParameter(RequireText(name, nameof(name)), value, type, stageId));
+            return this;
+        }
+
         private static string CreateShotId(DateTimeOffset startedUtc, string camera, string triggerId)
         {
             return string.Format(
@@ -195,6 +375,14 @@ namespace RawBufferVisualizer.Recorder
             return value;
         }
 
+        private static void RequireFinite(double value, string name)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value))
+            {
+                throw new ArgumentOutOfRangeException(name, "Value must be finite.");
+            }
+        }
+
         private void EnsureUniqueImagePath(string descriptorPath)
         {
             for (var i = 0; i < _images.Count; i++)
@@ -225,6 +413,102 @@ namespace RawBufferVisualizer.Recorder
         }
     }
 
+    internal sealed class VisionParameter
+    {
+        public string Name { get; private set; }
+        public object Value { get; private set; }
+        public string Type { get; private set; }
+        public string? StageId { get; private set; }
+
+        public VisionParameter(string name, object value, string type, string? stageId)
+        {
+            Name = name;
+            Value = value;
+            Type = type;
+            StageId = stageId;
+        }
+    }
+
+    internal sealed class VisionMeasure
+    {
+        public string Name { get; private set; }
+        public double Value { get; private set; }
+        public string? Unit { get; private set; }
+        public double? Lower { get; private set; }
+        public double? Upper { get; private set; }
+        public bool? IsOk { get; private set; }
+        public string? StageId { get; private set; }
+
+        public VisionMeasure(string name, double value, string? unit, double? lower, double? upper, bool? isOk, string? stageId)
+        {
+            Name = name;
+            Value = value;
+            Unit = unit;
+            Lower = lower;
+            Upper = upper;
+            IsOk = isOk;
+            StageId = stageId;
+        }
+    }
+
+    internal sealed class VisionEvent
+    {
+        public string Name { get; private set; }
+        public double TimestampMs { get; private set; }
+
+        public VisionEvent(string name, double timestampMs)
+        {
+            Name = name;
+            TimestampMs = timestampMs;
+        }
+    }
+
+    internal sealed class VisionOverlay
+    {
+        public string StageId { get; private set; }
+        public string Name { get; private set; }
+        public string Kind { get; private set; }
+        public string Color { get; private set; }
+        public List<VisionPoint> Points { get; private set; }
+
+        public VisionOverlay(string stageId, string name, string kind, string color, List<VisionPoint> points)
+        {
+            StageId = stageId;
+            Name = name;
+            Kind = kind;
+            Color = color;
+            Points = points;
+        }
+    }
+
+    internal sealed class VisionPoint
+    {
+        public double X { get; private set; }
+        public double Y { get; private set; }
+
+        public VisionPoint(double x, double y)
+        {
+            X = x;
+            Y = y;
+        }
+    }
+
+    internal sealed class VisionExceptionRecord
+    {
+        public string? StageId { get; private set; }
+        public string Type { get; private set; }
+        public string Message { get; private set; }
+        public string? StackTrace { get; private set; }
+
+        public VisionExceptionRecord(string? stageId, string type, string message, string? stackTrace)
+        {
+            StageId = stageId;
+            Type = type;
+            Message = message;
+            StackTrace = stackTrace;
+        }
+    }
+
     internal sealed class VisionImage
     {
         public string DescriptorPath { get; private set; }
@@ -238,6 +522,178 @@ namespace RawBufferVisualizer.Recorder
             RawPath = rawPath;
             Buffer = buffer;
             Descriptor = descriptor;
+        }
+    }
+
+    [DataContract]
+    [KnownType(typeof(string))]
+    [KnownType(typeof(int))]
+    [KnownType(typeof(double))]
+    [KnownType(typeof(bool))]
+    internal sealed class VisionParameterDto
+    {
+        [DataMember(Name = "name", Order = 0)]
+        public string Name { get; set; } = string.Empty;
+
+        [DataMember(Name = "value", Order = 1)]
+        public object Value { get; set; } = string.Empty;
+
+        [DataMember(Name = "type", Order = 2)]
+        public string Type { get; set; } = string.Empty;
+
+        [DataMember(Name = "stageId", Order = 3, EmitDefaultValue = false)]
+        public string? StageId { get; set; }
+
+        public static VisionParameterDto From(VisionParameter parameter)
+        {
+            return new VisionParameterDto
+            {
+                Name = parameter.Name,
+                Value = parameter.Value,
+                Type = parameter.Type,
+                StageId = parameter.StageId
+            };
+        }
+    }
+
+    [DataContract]
+    internal sealed class VisionMeasureDto
+    {
+        [DataMember(Name = "name", Order = 0)]
+        public string Name { get; set; } = string.Empty;
+
+        [DataMember(Name = "value", Order = 1)]
+        public double Value { get; set; }
+
+        [DataMember(Name = "unit", Order = 2, EmitDefaultValue = false)]
+        public string? Unit { get; set; }
+
+        [DataMember(Name = "lower", Order = 3, EmitDefaultValue = false)]
+        public double? Lower { get; set; }
+
+        [DataMember(Name = "upper", Order = 4, EmitDefaultValue = false)]
+        public double? Upper { get; set; }
+
+        [DataMember(Name = "result", Order = 5, EmitDefaultValue = false)]
+        public string? Result { get; set; }
+
+        [DataMember(Name = "stageId", Order = 6, EmitDefaultValue = false)]
+        public string? StageId { get; set; }
+
+        public static VisionMeasureDto From(VisionMeasure measure)
+        {
+            return new VisionMeasureDto
+            {
+                Name = measure.Name,
+                Value = Math.Round(measure.Value, 6),
+                Unit = measure.Unit,
+                Lower = measure.Lower.HasValue ? Math.Round(measure.Lower.Value, 6) : (double?)null,
+                Upper = measure.Upper.HasValue ? Math.Round(measure.Upper.Value, 6) : (double?)null,
+                Result = measure.IsOk.HasValue ? (measure.IsOk.Value ? "OK" : "NG") : null,
+                StageId = measure.StageId
+            };
+        }
+    }
+
+    [DataContract]
+    internal sealed class VisionEventDto
+    {
+        [DataMember(Name = "name", Order = 0)]
+        public string Name { get; set; } = string.Empty;
+
+        [DataMember(Name = "timestampMs", Order = 1)]
+        public double TimestampMs { get; set; }
+
+        public static VisionEventDto From(VisionEvent visionEvent)
+        {
+            return new VisionEventDto
+            {
+                Name = visionEvent.Name,
+                TimestampMs = Math.Round(visionEvent.TimestampMs, 3)
+            };
+        }
+    }
+
+    [DataContract]
+    internal sealed class VisionOverlayDto
+    {
+        [DataMember(Name = "stageId", Order = 0)]
+        public string StageId { get; set; } = string.Empty;
+
+        [DataMember(Name = "name", Order = 1)]
+        public string Name { get; set; } = string.Empty;
+
+        [DataMember(Name = "kind", Order = 2)]
+        public string Kind { get; set; } = string.Empty;
+
+        [DataMember(Name = "color", Order = 3)]
+        public string Color { get; set; } = string.Empty;
+
+        [DataMember(Name = "points", Order = 4)]
+        public List<VisionPointDto> Points { get; set; } = new List<VisionPointDto>();
+
+        public static VisionOverlayDto From(VisionOverlay overlay)
+        {
+            var points = new List<VisionPointDto>();
+            for (var i = 0; i < overlay.Points.Count; i++)
+            {
+                points.Add(VisionPointDto.From(overlay.Points[i]));
+            }
+
+            return new VisionOverlayDto
+            {
+                StageId = overlay.StageId,
+                Name = overlay.Name,
+                Kind = overlay.Kind,
+                Color = overlay.Color,
+                Points = points
+            };
+        }
+    }
+
+    [DataContract]
+    internal sealed class VisionPointDto
+    {
+        [DataMember(Name = "x", Order = 0)]
+        public double X { get; set; }
+
+        [DataMember(Name = "y", Order = 1)]
+        public double Y { get; set; }
+
+        public static VisionPointDto From(VisionPoint point)
+        {
+            return new VisionPointDto
+            {
+                X = Math.Round(point.X, 6),
+                Y = Math.Round(point.Y, 6)
+            };
+        }
+    }
+
+    [DataContract]
+    internal sealed class VisionExceptionDto
+    {
+        [DataMember(Name = "stageId", Order = 0, EmitDefaultValue = false)]
+        public string? StageId { get; set; }
+
+        [DataMember(Name = "type", Order = 1)]
+        public string Type { get; set; } = string.Empty;
+
+        [DataMember(Name = "message", Order = 2)]
+        public string Message { get; set; } = string.Empty;
+
+        [DataMember(Name = "stackTrace", Order = 3, EmitDefaultValue = false)]
+        public string? StackTrace { get; set; }
+
+        public static VisionExceptionDto From(VisionExceptionRecord exception)
+        {
+            return new VisionExceptionDto
+            {
+                StageId = exception.StageId,
+                Type = exception.Type,
+                Message = exception.Message,
+                StackTrace = exception.StackTrace
+            };
         }
     }
 
