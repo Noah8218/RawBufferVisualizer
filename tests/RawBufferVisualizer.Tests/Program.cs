@@ -45,6 +45,7 @@ namespace RawBufferVisualizer.Tests
                 MatVisualizerObjectSourceCreatesTransfer();
                 VisualizerBridgeWritesLaunchSnapshot();
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
+                VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
@@ -682,6 +683,46 @@ namespace RawBufferVisualizer.Tests
                 var loaded = RawBufferSnapshot.Load(request.MetadataPath);
                 Assert(loaded.Buffer.Length == 4 && loaded.Buffer[3] == 4, "Chunked bridge buffer failed.");
                 Assert(loaded.Descriptor.Width == 4 && loaded.Descriptor.Height == 1, "Chunked bridge descriptor failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void VisualizerBridgePreparesMultiLaunchSnapshots()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var viewerPath = Path.Combine(directory, "RawBufferVisualizer.Wpf.exe");
+                File.WriteAllBytes(viewerPath, new byte[] { 0 });
+
+                var descriptor = CreateDescriptor(2, 1, 2, RawPixelFormat.Mono8, 8);
+                var first = RawBufferSnapshotObjectSource.CreateTransfer(
+                    RawBufferSnapshot.FromByteArray(new byte[] { 1, 2 }, descriptor),
+                    "left:image");
+                var second = RawBufferSnapshotObjectSource.CreateTransfer(
+                    RawBufferSnapshot.FromByteArray(new byte[] { 3, 4 }, descriptor),
+                    "right:image");
+
+                var request = StandaloneViewerBridge.PrepareLaunch(new[] { first, second }, viewerPath, directory);
+
+                Assert(request.MetadataPaths.Count == 2, "Multi launch metadata count failed.");
+                Assert(request.RawPaths.Count == 2, "Multi launch raw count failed.");
+                Assert(Path.GetFileName(request.MetadataPaths[0]).StartsWith("left_image_0", StringComparison.Ordinal), "First multi launch name failed.");
+                Assert(Path.GetFileName(request.MetadataPaths[1]).StartsWith("right_image_1", StringComparison.Ordinal), "Second multi launch name failed.");
+
+                var firstLoaded = RawBufferSnapshot.Load(request.MetadataPaths[0]);
+                var secondLoaded = RawBufferSnapshot.Load(request.MetadataPaths[1]);
+                Assert(firstLoaded.Buffer[0] == 1 && secondLoaded.Buffer[1] == 4, "Multi launch buffers failed.");
+
+                var arguments = request.CreateStartInfo().Arguments;
+                Assert(arguments.Contains(request.MetadataPaths[0]) && arguments.Contains(request.MetadataPaths[1]), "Multi launch arguments failed.");
             }
             finally
             {

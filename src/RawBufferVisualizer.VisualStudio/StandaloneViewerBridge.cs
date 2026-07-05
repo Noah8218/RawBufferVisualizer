@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using RawBufferVisualizer.Sdk;
@@ -18,22 +19,8 @@ namespace RawBufferVisualizer.VisualStudio
                 throw new ArgumentNullException(nameof(transfer));
             }
 
-            if (string.IsNullOrWhiteSpace(viewerExecutablePath))
-            {
-                throw new ArgumentException("Viewer executable path is required.", nameof(viewerExecutablePath));
-            }
-
-            var fullViewerPath = Path.GetFullPath(viewerExecutablePath);
-            if (!File.Exists(fullViewerPath))
-            {
-                throw new FileNotFoundException("Raw Buffer Visualizer executable was not found.", fullViewerPath);
-            }
-
-            var root = string.IsNullOrWhiteSpace(snapshotRootDirectory)
-                ? Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio")
-                : Path.GetFullPath(snapshotRootDirectory);
-            var snapshotDirectory = Path.Combine(root, Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(snapshotDirectory);
+            var fullViewerPath = ValidateViewerPath(viewerExecutablePath);
+            var snapshotDirectory = CreateSnapshotDirectory(snapshotRootDirectory);
 
             var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(transfer.DisplayName) + ".rbuf.json");
             var snapshot = transfer.ToSnapshot();
@@ -51,6 +38,53 @@ namespace RawBufferVisualizer.VisualStudio
         }
 
         public static VisualizerLaunchRequest PrepareLaunch(
+            IReadOnlyList<VisualizerSnapshotTransfer> transfers,
+            string viewerExecutablePath,
+            string? snapshotRootDirectory = null)
+        {
+            if (transfers == null)
+            {
+                throw new ArgumentNullException(nameof(transfers));
+            }
+
+            if (transfers.Count == 0)
+            {
+                throw new ArgumentException("At least one snapshot transfer is required.", nameof(transfers));
+            }
+
+            var fullViewerPath = ValidateViewerPath(viewerExecutablePath);
+            var snapshotDirectory = CreateSnapshotDirectory(snapshotRootDirectory);
+            var metadataPaths = new string[transfers.Count];
+            var rawPaths = new string[transfers.Count];
+
+            for (var i = 0; i < transfers.Count; i++)
+            {
+                var transfer = transfers[i];
+                if (transfer == null)
+                {
+                    throw new ArgumentException("Snapshot transfer cannot be null.", nameof(transfers));
+                }
+
+                var metadataPath = Path.Combine(snapshotDirectory, GetIndexedSnapshotName(transfer.DisplayName, i) + ".rbuf.json");
+                var snapshot = transfer.ToSnapshot();
+                snapshot.Save(metadataPath);
+                if (snapshot.RawPath == null)
+                {
+                    throw new InvalidOperationException("Snapshot raw file path was not created.");
+                }
+
+                metadataPaths[i] = metadataPath;
+                rawPaths[i] = snapshot.RawPath;
+            }
+
+            return new VisualizerLaunchRequest(
+                fullViewerPath,
+                metadataPaths,
+                rawPaths,
+                Path.GetDirectoryName(fullViewerPath) ?? Directory.GetCurrentDirectory());
+        }
+
+        public static VisualizerLaunchRequest PrepareLaunch(
             VisualizerSnapshotMetadata metadata,
             string viewerExecutablePath,
             string? snapshotRootDirectory = null)
@@ -60,27 +94,13 @@ namespace RawBufferVisualizer.VisualStudio
                 throw new ArgumentNullException(nameof(metadata));
             }
 
-            if (string.IsNullOrWhiteSpace(viewerExecutablePath))
-            {
-                throw new ArgumentException("Viewer executable path is required.", nameof(viewerExecutablePath));
-            }
-
             if (metadata.Descriptor == null)
             {
                 throw new ArgumentException("Snapshot descriptor is required.", nameof(metadata));
             }
 
-            var fullViewerPath = Path.GetFullPath(viewerExecutablePath);
-            if (!File.Exists(fullViewerPath))
-            {
-                throw new FileNotFoundException("Raw Buffer Visualizer executable was not found.", fullViewerPath);
-            }
-
-            var root = string.IsNullOrWhiteSpace(snapshotRootDirectory)
-                ? Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio")
-                : Path.GetFullPath(snapshotRootDirectory);
-            var snapshotDirectory = Path.Combine(root, Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(snapshotDirectory);
+            var fullViewerPath = ValidateViewerPath(viewerExecutablePath);
+            var snapshotDirectory = CreateSnapshotDirectory(snapshotRootDirectory);
 
             var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
             var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
@@ -117,6 +137,37 @@ namespace RawBufferVisualizer.VisualStudio
             }
 
             return name.Length <= 64 ? name : name.Substring(0, 64);
+        }
+
+        private static string GetIndexedSnapshotName(string displayName, int index)
+        {
+            return GetSnapshotName(displayName) + "_" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        private static string ValidateViewerPath(string viewerExecutablePath)
+        {
+            if (string.IsNullOrWhiteSpace(viewerExecutablePath))
+            {
+                throw new ArgumentException("Viewer executable path is required.", nameof(viewerExecutablePath));
+            }
+
+            var fullViewerPath = Path.GetFullPath(viewerExecutablePath);
+            if (!File.Exists(fullViewerPath))
+            {
+                throw new FileNotFoundException("Raw Buffer Visualizer executable was not found.", fullViewerPath);
+            }
+
+            return fullViewerPath;
+        }
+
+        private static string CreateSnapshotDirectory(string? snapshotRootDirectory)
+        {
+            var root = string.IsNullOrWhiteSpace(snapshotRootDirectory)
+                ? Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio")
+                : Path.GetFullPath(snapshotRootDirectory);
+            var snapshotDirectory = Path.Combine(root, Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(snapshotDirectory);
+            return snapshotDirectory;
         }
     }
 }
