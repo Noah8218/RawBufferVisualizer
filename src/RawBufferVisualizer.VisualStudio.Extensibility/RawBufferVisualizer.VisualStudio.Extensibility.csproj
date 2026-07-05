@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net472</TargetFramework>
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
-    <AssemblyVersion>1.0.6.0</AssemblyVersion>
-    <FileVersion>1.0.6.0</FileVersion>
-    <Version>1.0.6</Version>
+    <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
+    <AssemblyVersion>1.0.7.0</AssemblyVersion>
+    <FileVersion>1.0.7.0</FileVersion>
+    <Version>1.0.7</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608" PrivateAssets="all" />
@@ -19,20 +20,44 @@
     <ProjectReference Include="..\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
+    <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.Core\$(Configuration)\netstandard2.0\RawBufferVisualizer.Core.dll" Link="netstandard2.0\RawBufferVisualizer.Core.dll">
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.Core\$(Configuration)\net472\RawBufferVisualizer.Core.dll" Link="RawBufferVisualizer.Core.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.Sdk\$(Configuration)\netstandard2.0\RawBufferVisualizer.Sdk.dll" Link="netstandard2.0\RawBufferVisualizer.Sdk.dll">
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.Sdk\$(Configuration)\net472\RawBufferVisualizer.Sdk.dll" Link="RawBufferVisualizer.Sdk.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio\$(Configuration)\net8.0-windows\RawBufferVisualizer.VisualStudio.dll" Link="net8.0-windows\RawBufferVisualizer.VisualStudio.dll">
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.dll" Link="RawBufferVisualizer.VisualStudio.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll" Link="netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll">
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.ObjectSource.dll" Link="RawBufferVisualizer.VisualStudio.ObjectSource.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.OpenGlCanvas\$(Configuration)\net472\RawBufferVisualizer.OpenGlCanvas.dll" Link="RawBufferVisualizer.OpenGlCanvas.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Vssdk.dll" Link="RawBufferVisualizer.VisualStudio.Vssdk.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.dll" Link="SharpGL.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.SceneGraph.dll" Link="SharpGL.SceneGraph.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.WPF.dll" Link="SharpGL.WPF.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\.build\intermediate\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Vssdk.pkgdef" Link="RawBufferVisualizer.VisualStudio.Vssdk.pkgdef">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <Target Name="BuildVssdkToolWindowForVsix" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj"
+             Targets="Build;GeneratePkgDef"
+             Properties="Configuration=$(Configuration);TargetFramework=net472" />
+  </Target>
 </Project>

@@ -41,7 +41,7 @@ jobs:
         run: >
           gh release create $env:GITHUB_REF_NAME
           .\artifacts\publish\RawBufferVisualizer-net9.0-windows-win-x64-sc.zip
-          .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip
+          .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
           --verify-tag
           --generate-notes
           --title "RawBufferVisualizer $env:GITHUB_REF_NAME"

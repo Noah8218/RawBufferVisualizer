@@ -107,7 +107,7 @@ Recommended local install/update command:
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Reinstall
 ```
 
-This publishes the `net8.0-windows` VSIX, uninstalls the previous local VSIX when `-Reinstall` is passed, and installs the new VSIX. Close Visual Studio before running it, then restart Visual Studio before debugger testing.
+This publishes the single `net472` hybrid VSIX, uninstalls the previous local VSIX when `-Reinstall` is passed, and installs the new VSIX. Close Visual Studio before running it, then restart Visual Studio before debugger testing.
 
 The debugger visualizer providers are registered as `ToolWindow` visualizers. The docked viewer should stay inside Visual Studio and must not block `Continue`, `Step Over`, or moving to the next debuggee breakpoint.
 
@@ -126,9 +126,9 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension
 The output is:
 
 ```text
-artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows\
-artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip
-artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\
+artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
+artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
 The VS debugger visualizer no longer requires `RAW_BUFFER_VISUALIZER_VIEWER`. Close and reopen Visual Studio after installing or updating the VSIX.
@@ -136,8 +136,8 @@ The VS debugger visualizer no longer requires `RAW_BUFFER_VISUALIZER_VIEWER`. Cl
 If `Raw Buffer Visualizer` is not listed under `Extensions > Manage Extensions > Installed`, install the VSIX first:
 
 ```powershell
-dotnet build .\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj -c Debug -f net8.0-windows
-start .\.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Debug\net8.0-windows\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+dotnet build .\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj -c Debug -f net472
+start .\.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Debug\net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
 Close Visual Studio before running the VSIX installer. Select Visual Studio 2022 Community when the installer asks for a target instance.

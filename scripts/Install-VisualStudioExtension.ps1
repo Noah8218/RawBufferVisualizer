@@ -1,6 +1,7 @@
 [CmdletBinding(SupportsShouldProcess = $true)]
 param(
-    [string]$Framework = 'net8.0-windows',
+    [ValidateSet('net472')]
+    [string]$Framework = 'net472',
     [string]$Configuration = 'Debug',
     [string]$ViewerFramework = 'net472',
     [string]$VsixInstallerPath = '',

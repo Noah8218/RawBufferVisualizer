@@ -111,7 +111,7 @@ No GitHub Release has been published yet. Until the first version tag is created
 4. Run `RawBufferVisualizer.Wpf.exe`.
 5. Open a `.rbuf.json` snapshot, or pass one or more `.rbuf.json` files as command-line arguments.
 
-The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip` for manual Visual Studio extension validation against `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables. Extract it and install `RawBufferVisualizer.VisualStudio.Extensibility.vsix` before testing in Visual Studio.
+The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net472.zip` for manual Visual Studio extension validation against `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables. Extract it and install the single `RawBufferVisualizer.VisualStudio.Extensibility.vsix`; it contains both the debugger visualizers and the docked Visual Studio OpenGL ToolWindow.
 
 After the first tagged release is created, download the same zip from the [Releases page](https://github.com/Noah8218/RawBufferVisualizer/releases).
 
@@ -288,7 +288,7 @@ git push origin v0.1.0
 
 The `Release` workflow builds, tests, publishes the Windows x64 zip, and attaches it to the GitHub Release.
 
-The release workflow also attaches `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip`. This is a prototype build output for manual Visual Studio validation, not a Marketplace-ready package.
+The release workflow also attaches `RawBufferVisualizer-VisualStudioExtensibility-net472.zip`. This is a prototype build output for manual Visual Studio validation, not a Marketplace-ready package.
 
 ## SDK example
 

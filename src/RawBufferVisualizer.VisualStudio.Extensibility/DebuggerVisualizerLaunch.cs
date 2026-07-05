@@ -115,7 +115,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Visualizer object source returned an invalid chunk length.");
                 }
 
-                await stream.WriteAsync(chunk.Buffer, cancellationToken);
+                await stream.WriteAsync(chunk.Buffer, 0, chunk.Buffer.Length, cancellationToken);
                 offset += chunk.Buffer.Length;
             }
 
