@@ -33,13 +33,20 @@
                 <StackPanel Orientation="Horizontal">
                     <Button Content="Clear" Command="{Binding ClearCommand}"/>
                     <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="8,0,6,0"/>
+                    <Button Content="-" Command="{Binding ZoomOutCommand}"/>
                     <Button Content="1:1" Command="{Binding ResetZoomCommand}"/>
+                    <Button Content="+" Command="{Binding ZoomInCommand}"/>
                     <Slider Width="160"
                             Minimum="0.1"
-                            Maximum="4"
+                            Maximum="8"
                             Value="{Binding Zoom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                             VerticalAlignment="Center"
                             Margin="4,0,0,0"/>
+                    <TextBlock Text="{Binding ZoomText}"
+                               Width="58"
+                               VerticalAlignment="Center"
+                               TextAlignment="Right"
+                               Foreground="{StaticResource MutedTextBrush}"/>
                 </StackPanel>
             </DockPanel>
         </Border>
@@ -126,11 +133,11 @@
 
             <Border Grid.Column="2" Background="#111111" Padding="8">
                 <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                    <Image Source="{Binding SelectedImage.PreviewPath}" Stretch="None" RenderOptions.BitmapScalingMode="NearestNeighbor">
-                        <Image.LayoutTransform>
-                            <ScaleTransform ScaleX="{Binding Zoom}" ScaleY="{Binding Zoom}"/>
-                        </Image.LayoutTransform>
-                    </Image>
+                    <Image Source="{Binding SelectedImage.PreviewPath}"
+                           Width="{Binding PreviewDisplayWidth}"
+                           Height="{Binding PreviewDisplayHeight}"
+                           Stretch="Fill"
+                           RenderOptions.BitmapScalingMode="NearestNeighbor"/>
                 </ScrollViewer>
             </Border>
 

@@ -6,12 +6,21 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
     {
         public string PreviewPath { get; }
         public string ThumbnailPath { get; }
+        public int PreviewWidth { get; }
+        public int PreviewHeight { get; }
         public IReadOnlyList<string> Diagnostics { get; }
 
-        public DockedVisualizerPreviewFiles(string previewPath, string thumbnailPath, IReadOnlyList<string> diagnostics)
+        public DockedVisualizerPreviewFiles(
+            string previewPath,
+            string thumbnailPath,
+            int previewWidth,
+            int previewHeight,
+            IReadOnlyList<string> diagnostics)
         {
             PreviewPath = previewPath;
             ThumbnailPath = thumbnailPath;
+            PreviewWidth = previewWidth;
+            PreviewHeight = previewHeight;
             Diagnostics = diagnostics;
         }
     }

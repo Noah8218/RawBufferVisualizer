@@ -11,6 +11,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
     [System.Runtime.Serialization.DataContract]
     internal sealed class DockedVisualizerSession : NotifyPropertyChangedObject
     {
+        private const double MinimumZoom = 0.1;
+        private const double MaximumZoom = 8.0;
+
         public static DockedVisualizerSession Shared { get; } = new DockedVisualizerSession();
 
         private DockedVisualizerImageItem? _selectedImage;
@@ -32,6 +35,18 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 Zoom = 1;
                 return Task.CompletedTask;
             });
+
+            ZoomInCommand = new AsyncCommand((parameter, context, cancellationToken) =>
+            {
+                Zoom = Zoom * 1.25;
+                return Task.CompletedTask;
+            });
+
+            ZoomOutCommand = new AsyncCommand((parameter, context, cancellationToken) =>
+            {
+                Zoom = Zoom / 1.25;
+                return Task.CompletedTask;
+            });
         }
 
         [System.Runtime.Serialization.DataMember]
@@ -41,7 +56,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public DockedVisualizerImageItem? SelectedImage
         {
             get { return _selectedImage; }
-            set { SetProperty(ref _selectedImage, value, nameof(SelectedImage)); }
+            set
+            {
+                if (SetProperty(ref _selectedImage, value, nameof(SelectedImage)))
+                {
+                    RaisePreviewViewChanged();
+                }
+            }
         }
 
         [System.Runtime.Serialization.DataMember]
@@ -55,7 +76,14 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public double Zoom
         {
             get { return _zoom; }
-            set { SetProperty(ref _zoom, value <= 0 ? 1 : value, nameof(Zoom)); }
+            set
+            {
+                var clamped = Math.Max(MinimumZoom, Math.Min(MaximumZoom, value <= 0 ? 1 : value));
+                if (SetProperty(ref _zoom, clamped, nameof(Zoom)))
+                {
+                    RaisePreviewViewChanged();
+                }
+            }
         }
 
         [System.Runtime.Serialization.DataMember]
@@ -63,6 +91,30 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
 
         [System.Runtime.Serialization.DataMember]
         public IAsyncCommand ResetZoomCommand { get; }
+
+        [System.Runtime.Serialization.DataMember]
+        public IAsyncCommand ZoomInCommand { get; }
+
+        [System.Runtime.Serialization.DataMember]
+        public IAsyncCommand ZoomOutCommand { get; }
+
+        [System.Runtime.Serialization.DataMember]
+        public double PreviewDisplayWidth
+        {
+            get { return SelectedImage == null ? 0 : Math.Max(1, SelectedImage.PreviewWidth * Zoom); }
+        }
+
+        [System.Runtime.Serialization.DataMember]
+        public double PreviewDisplayHeight
+        {
+            get { return SelectedImage == null ? 0 : Math.Max(1, SelectedImage.PreviewHeight * Zoom); }
+        }
+
+        [System.Runtime.Serialization.DataMember]
+        public string ZoomText
+        {
+            get { return string.Format(CultureInfo.InvariantCulture, "{0:0.#}%", Zoom * 100); }
+        }
 
         public void AddImage(
             VisualizerSnapshotMetadata metadata,
@@ -86,7 +138,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 MetadataPath = metadataPath,
                 RawPath = rawPath,
                 ThumbnailPath = previewFiles.ThumbnailPath,
-                PreviewPath = previewFiles.PreviewPath
+                PreviewPath = previewFiles.PreviewPath,
+                PreviewWidth = previewFiles.PreviewWidth,
+                PreviewHeight = previewFiles.PreviewHeight
             };
 
             item.Dimensions = string.Format(CultureInfo.InvariantCulture, "{0} x {1}", descriptor.Width, descriptor.Height);
@@ -104,6 +158,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public void ReportFailure(string message)
         {
             Status = "Open failed: " + message;
+        }
+
+        private void RaisePreviewViewChanged()
+        {
+            RaiseNotifyPropertyChangedEvent(nameof(PreviewDisplayWidth));
+            RaiseNotifyPropertyChangedEvent(nameof(PreviewDisplayHeight));
+            RaiseNotifyPropertyChangedEvent(nameof(ZoomText));
         }
 
         private static string CreateTitle(string displayName, int index)

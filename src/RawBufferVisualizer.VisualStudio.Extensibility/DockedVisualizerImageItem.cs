@@ -52,6 +52,12 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public string PreviewPath { get; set; } = string.Empty;
 
         [DataMember]
+        public int PreviewWidth { get; set; }
+
+        [DataMember]
+        public int PreviewHeight { get; set; }
+
+        [DataMember]
         public ObservableList<string> Diagnostics { get; } = new ObservableList<string>();
     }
 }
