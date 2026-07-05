@@ -29,6 +29,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool _switchingDocument;
         private bool _applyingLinkedView;
         private RawOpenGlViewState? _linkedViewState;
+        private double _lastZoomStatus = double.NaN;
 
         public RawBufferToolWindowControl()
         {
@@ -361,6 +362,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var zoom = OpenGlImageView.ZoomScale;
+            if (Math.Abs(_lastZoomStatus - zoom) < 0.0001)
+            {
+                return;
+            }
+
+            _lastZoomStatus = zoom;
             _syncingZoomSlider = true;
             try
             {
@@ -372,6 +379,32 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             ZoomText.Text = string.Format(CultureInfo.InvariantCulture, "{0:0.#}%", zoom * 100);
+        }
+
+        private void Root_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            var width = e.NewSize.Width;
+            if (width < 760)
+            {
+                ImagesColumn.Width = new GridLength(230);
+                InspectorColumn.Width = new GridLength(0);
+                InspectorPanel.Visibility = Visibility.Collapsed;
+                StatusText.Width = 120;
+            }
+            else if (width < 980)
+            {
+                ImagesColumn.Width = new GridLength(260);
+                InspectorColumn.Width = new GridLength(0);
+                InspectorPanel.Visibility = Visibility.Collapsed;
+                StatusText.Width = 150;
+            }
+            else
+            {
+                ImagesColumn.Width = new GridLength(280);
+                InspectorColumn.Width = new GridLength(260);
+                InspectorPanel.Visibility = Visibility.Visible;
+                StatusText.Width = 170;
+            }
         }
 
         private void UpdateStatus()

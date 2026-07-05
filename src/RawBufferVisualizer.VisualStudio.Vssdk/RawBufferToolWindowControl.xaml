@@ -4,7 +4,8 @@
              xmlns:gl="clr-namespace:RawBufferVisualizer.OpenGlCanvas;assembly=RawBufferVisualizer.OpenGlCanvas"
              MinWidth="420"
              MinHeight="260"
-             Background="#1E1E1E">
+             Background="#1E1E1E"
+             SizeChanged="Root_SizeChanged">
     <UserControl.Resources>
         <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
         <SolidColorBrush x:Key="InputBrush" Color="#1E1E1E"/>
@@ -23,6 +24,11 @@
             <Setter Property="Background" Value="#1B1B1B"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
+            <Setter Property="VirtualizingStackPanel.IsVirtualizing" Value="True"/>
+        </Style>
+        <Style TargetType="{x:Type ListBoxItem}">
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
     </UserControl.Resources>
 
@@ -34,7 +40,7 @@
 
         <Border Grid.Row="0" Background="#2D2D30" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8">
             <DockPanel LastChildFill="True">
-                <TextBlock x:Name="StatusText" DockPanel.Dock="Right" Width="220" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Right" Width="170" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
                 <WrapPanel VerticalAlignment="Center">
                     <Button Content="Open" Click="Open_Click"/>
                     <Button Content="Clear" Click="Clear_Click"/>
@@ -42,7 +48,7 @@
                     <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,6,0"/>
                     <Button Content="Fit" Click="Fit_Click"/>
                     <Button Content="1:1" Click="ActualSize_Click"/>
-                    <Slider x:Name="ZoomSlider" Width="150" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                    <Slider x:Name="ZoomSlider" Width="110" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                     <TextBlock x:Name="ZoomText" Width="58" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
                 </WrapPanel>
             </DockPanel>
@@ -50,9 +56,9 @@
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="300"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="280"/>
+                <ColumnDefinition x:Name="ImagesColumn" Width="280" MinWidth="220"/>
+                <ColumnDefinition Width="*" MinWidth="220"/>
+                <ColumnDefinition x:Name="InspectorColumn" Width="260" MinWidth="0"/>
             </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
@@ -84,11 +90,13 @@
                     </ListBox>
                 </DockPanel>
 
-                <Border Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10">
-                    <StackPanel>
-                        <TextBlock Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                        <TextBlock x:Name="DescriptorText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
-                    </StackPanel>
+                <Border x:Name="DescriptorPanel" Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10" MaxHeight="150">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock DockPanel.Dock="Top" Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <TextBlock x:Name="DescriptorText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                        </ScrollViewer>
+                    </DockPanel>
                 </Border>
             </Grid>
 
@@ -96,7 +104,7 @@
                 <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView"/>
             </Border>
 
-            <Grid Grid.Column="2" Background="{StaticResource PanelBrush}" Margin="0">
+            <Grid x:Name="InspectorPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" Margin="0">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="140"/>

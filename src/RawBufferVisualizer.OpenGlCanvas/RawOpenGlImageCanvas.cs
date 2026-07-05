@@ -5,6 +5,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using RawBufferVisualizer.Core;
 using SharpGL;
 using SharpGL.SceneGraph;
@@ -29,7 +30,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private double _viewWidth = 1;
         private double _viewHeight = 1;
         private bool _dragging;
+        private bool _renderQueued;
         private Point _lastMouse;
+        private DateTime _lastViewChangedUtc = DateTime.MinValue;
+        private int _lastPixelX = int.MinValue;
+        private int _lastPixelY = int.MinValue;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
         public event EventHandler? ViewChanged;
@@ -194,7 +199,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             base.OnRenderSizeChanged(sizeInfo);
             if (_descriptor != null)
             {
-                FitToImage();
+                ResizeViewKeepingZoom(sizeInfo.PreviousSize, sizeInfo.NewSize);
             }
         }
 
@@ -263,7 +268,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void OpenGlResized(object sender, OpenGLEventArgs args)
         {
-            FitToImage();
+            RequestRender();
         }
 
         private void OpenGlMouseDown(object sender, MouseButtonEventArgs e)
@@ -287,6 +292,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             _dragging = false;
             _openGlControl.ReleaseMouseCapture();
+            RaiseViewChangedNow();
+            RaisePixelHovered(e.GetPosition(_openGlControl), true);
         }
 
         private void OpenGlMouseMove(object sender, MouseEventArgs e)
@@ -299,12 +306,12 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 _viewLeft -= dx / Math.Max(ActualWidth, 1) * _viewWidth;
                 _viewTop -= dy / Math.Max(ActualHeight, 1) * _viewHeight;
                 _lastMouse = position;
-                OnViewChanged();
+                RaiseViewChangedThrottled();
                 RequestRender();
+                return;
             }
 
-            var imagePoint = ScreenToImage(position);
-            PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs((int)Math.Floor(imagePoint.X), (int)Math.Floor(imagePoint.Y)));
+            RaisePixelHovered(position, false);
         }
 
         private void OpenGlMouseWheel(object sender, MouseWheelEventArgs e)
@@ -323,13 +330,39 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var relativeY = position.Y / Math.Max(ActualHeight, 1);
             _viewLeft = anchor.X - (relativeX * _viewWidth);
             _viewTop = anchor.Y - (relativeY * _viewHeight);
-            OnViewChanged();
+            e.Handled = true;
+            RaiseViewChangedNow();
             RequestRender();
         }
 
         private void OpenGlMouseDoubleClick(object sender, MouseButtonEventArgs e)
         {
             FitToImage();
+        }
+
+        private void ResizeViewKeepingZoom(Size previousSize, Size newSize)
+        {
+            if (previousSize.Width <= 1 || previousSize.Height <= 1 || newSize.Width <= 1 || newSize.Height <= 1 || _viewWidth <= 0 || _viewHeight <= 0)
+            {
+                FitToImage();
+                return;
+            }
+
+            var zoom = previousSize.Width / _viewWidth;
+            if (zoom <= 0)
+            {
+                FitToImage();
+                return;
+            }
+
+            var centerX = _viewLeft + (_viewWidth / 2);
+            var centerY = _viewTop + (_viewHeight / 2);
+            _viewWidth = newSize.Width / zoom;
+            _viewHeight = newSize.Height / zoom;
+            _viewLeft = centerX - (_viewWidth / 2);
+            _viewTop = centerY - (_viewHeight / 2);
+            RaiseViewChangedNow();
+            RequestRender();
         }
 
         private Point ScreenToImage(Point screenPoint)
@@ -432,19 +465,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private static void DrawTile(OpenGL gl, TextureTile tile, uint vertexBuffer)
         {
-            var vertices = new[]
-            {
-                (float)tile.X, (float)tile.Y, 0.0f, 0.0f,
-                (float)tile.Right, (float)tile.Y, 1.0f, 0.0f,
-                (float)tile.Right, (float)tile.Bottom, 1.0f, 1.0f,
-                (float)tile.X, (float)tile.Y, 0.0f, 0.0f,
-                (float)tile.Right, (float)tile.Bottom, 1.0f, 1.0f,
-                (float)tile.X, (float)tile.Bottom, 0.0f, 1.0f
-            };
-
             gl.BindTexture(OpenGL.GL_TEXTURE_2D, tile.TextureId);
             gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, vertexBuffer);
-            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, vertices, OpenGL.GL_STATIC_DRAW);
+            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, tile.Vertices, OpenGL.GL_STATIC_DRAW);
             gl.DrawArrays(OpenGL.GL_TRIANGLES, 0, 6);
         }
 
@@ -576,12 +599,57 @@ void main()
 
         private void RequestRender()
         {
-            _openGlControl.InvalidateVisual();
+            if (_renderQueued)
+            {
+                return;
+            }
+
+            _renderQueued = true;
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.Render,
+                new Action(() =>
+                {
+                    _renderQueued = false;
+                    _openGlControl.InvalidateVisual();
+                }));
         }
 
         private void OnViewChanged()
         {
             ViewChanged?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void RaiseViewChangedThrottled()
+        {
+            var now = DateTime.UtcNow;
+            if ((now - _lastViewChangedUtc).TotalMilliseconds < 50)
+            {
+                return;
+            }
+
+            _lastViewChangedUtc = now;
+            OnViewChanged();
+        }
+
+        private void RaiseViewChangedNow()
+        {
+            _lastViewChangedUtc = DateTime.UtcNow;
+            OnViewChanged();
+        }
+
+        private void RaisePixelHovered(Point position, bool force)
+        {
+            var imagePoint = ScreenToImage(position);
+            var x = (int)Math.Floor(imagePoint.X);
+            var y = (int)Math.Floor(imagePoint.Y);
+            if (!force && x == _lastPixelX && y == _lastPixelY)
+            {
+                return;
+            }
+
+            _lastPixelX = x;
+            _lastPixelY = y;
+            PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
         }
 
         private sealed class TextureTile
@@ -592,6 +660,7 @@ void main()
             public int Y { get; private set; }
             public int Width { get; private set; }
             public int Height { get; private set; }
+            public float[] Vertices { get; private set; }
 
             public int Right
             {
@@ -609,6 +678,15 @@ void main()
                 Y = y;
                 Width = width;
                 Height = height;
+                Vertices = new[]
+                {
+                    (float)X, (float)Y, 0.0f, 0.0f,
+                    (float)Right, (float)Y, 1.0f, 0.0f,
+                    (float)Right, (float)Bottom, 1.0f, 1.0f,
+                    (float)X, (float)Y, 0.0f, 0.0f,
+                    (float)Right, (float)Bottom, 1.0f, 1.0f,
+                    (float)X, (float)Bottom, 0.0f, 1.0f
+                };
             }
 
             public override string ToString()
