@@ -743,10 +743,13 @@ try {
     if ($metrics.imageViewActualWidth -le 10 -or $metrics.imageViewActualHeight -le 10) {
         $failures.Add("Image view did not receive a visible layout size: $($metrics.imageViewActualWidth)x$($metrics.imageViewActualHeight)")
     }
-    if ($metrics.toolWindowActualWidth -lt 980 -and -not $metrics.compactInspectorVisible) {
-        $failures.Add("Compact inspector was not visible in narrow docked layout: width=$($metrics.toolWindowActualWidth)")
+    if ($metrics.toolWindowActualWidth -lt 760 -and ($metrics.inspectorVisible -or $metrics.compactInspectorVisible)) {
+        $failures.Add("Inspector should be collapsed by default in narrow docked layout: width=$($metrics.toolWindowActualWidth)")
     }
-    if ($metrics.toolWindowActualWidth -ge 980 -and -not $metrics.inspectorVisible) {
+    if ($metrics.toolWindowActualWidth -ge 760 -and $metrics.toolWindowActualWidth -lt 1040 -and -not $metrics.compactInspectorVisible) {
+        $failures.Add("Compact tab inspector was not visible in medium docked layout: width=$($metrics.toolWindowActualWidth)")
+    }
+    if ($metrics.toolWindowActualWidth -ge 1040 -and -not $metrics.inspectorVisible) {
         $failures.Add("Inspector was not visible in wide docked layout: width=$($metrics.toolWindowActualWidth)")
     }
     if (-not $metrics.pixelGridOverlayVisible) {

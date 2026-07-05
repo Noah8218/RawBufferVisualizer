@@ -67,6 +67,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdatePerformanceText();
             UpdateCompareText();
             UpdateStatus();
+            ApplyResponsiveLayout(ActualWidth);
         }
 
         public void OpenHandoffRequest(string requestPath)
@@ -548,6 +549,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     _activeDocument.ViewState = _linkedViewState;
                 }
             }
+        }
+
+        private void InspectorToggleButton_Changed(object sender, RoutedEventArgs e)
+        {
+            ApplyResponsiveLayout(ActualWidth);
         }
 
         private void OpenGlImageView_ViewChanged(object? sender, EventArgs e)
@@ -1206,29 +1212,52 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void Root_SizeChanged(object sender, SizeChangedEventArgs e)
         {
-            var width = e.NewSize.Width;
+            ApplyResponsiveLayout(e.NewSize.Width);
+        }
+
+        private void ApplyResponsiveLayout(double width)
+        {
+            if (ImagesColumn == null || InspectorColumn == null || InspectorPanel == null || CompactInspectorPanel == null || StatusText == null)
+            {
+                return;
+            }
+
+            if (width <= 0 || double.IsNaN(width))
+            {
+                width = ActualWidth;
+            }
+
             if (width < 760)
             {
-                ImagesColumn.Width = new GridLength(240);
+                ImagesColumn.Width = new GridLength(width < 620 ? 180 : 220);
                 InspectorColumn.Width = new GridLength(0);
+                DescriptorPanel.Visibility = Visibility.Collapsed;
                 InspectorPanel.Visibility = Visibility.Collapsed;
-                CompactInspectorPanel.Visibility = Visibility.Visible;
+                CompactInspectorPanel.Visibility = InspectorToggleButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+                InspectorToggleButton.Visibility = Visibility.Visible;
+                LinkViewsBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
                 StatusText.Width = 95;
             }
-            else if (width < 980)
+            else if (width < 1040)
             {
-                ImagesColumn.Width = new GridLength(300);
+                ImagesColumn.Width = new GridLength(width < 880 ? 260 : 300);
                 InspectorColumn.Width = new GridLength(0);
+                DescriptorPanel.Visibility = width < 880 ? Visibility.Collapsed : Visibility.Visible;
                 InspectorPanel.Visibility = Visibility.Collapsed;
                 CompactInspectorPanel.Visibility = Visibility.Visible;
+                InspectorToggleButton.Visibility = Visibility.Collapsed;
+                LinkViewsBox.Visibility = Visibility.Visible;
                 StatusText.Width = 115;
             }
             else
             {
                 ImagesColumn.Width = new GridLength(320);
                 InspectorColumn.Width = new GridLength(300);
+                DescriptorPanel.Visibility = Visibility.Visible;
                 InspectorPanel.Visibility = Visibility.Visible;
                 CompactInspectorPanel.Visibility = Visibility.Collapsed;
+                InspectorToggleButton.Visibility = Visibility.Collapsed;
+                LinkViewsBox.Visibility = Visibility.Visible;
                 StatusText.Width = 150;
             }
         }
