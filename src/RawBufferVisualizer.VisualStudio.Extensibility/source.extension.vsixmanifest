@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.7.0" Language="en-US" Publisher="Noah8218" />
+    <Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.8.0" Language="en-US" Publisher="Noah8218" />
     <DisplayName>Raw Buffer Visualizer</DisplayName>
     <Description xml:space="preserve">Image Watch debugger visualizer for raw buffer snapshots</Description>
     <Preview>true</Preview>
