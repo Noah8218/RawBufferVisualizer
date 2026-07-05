@@ -20,20 +20,44 @@ The debuggee prints the variable name before each `Debugger.Break()` call.
 
 ## Required Cases
 
-| Step | Variable | Expected Visualizer Result |
+| Step | Watch Expression | Expected Visualizer Result |
 | ---: | --- | --- |
 | 1 | `rawMono8Snapshot` | Opens as `Mono8`, 640 x 484, pixel hover reports grayscale values. |
-| 2 | `rawBgr24Snapshot` | Opens as `BGR24`, color channels are visible. |
-| 3 | `rawMono16Snapshot` | Opens as `Mono16`, autoscaled grayscale preview. |
-| 4 | `rawBufferView` | Opens through unmanaged pointer metadata as `BGR24`. |
-| 5 | `bitmapMono8` | Opens as `System.Drawing.Bitmap` mapped to `Mono8`. |
-| 6 | `bitmapBgr24` | Opens as `System.Drawing.Bitmap` mapped to `BGR24`. |
-| 7 | `bitmapBgra32` | Opens as `System.Drawing.Bitmap` mapped to `BGRA32`. |
-| 8 | `matMono8` | Opens as OpenCvSharp `Mat` mapped to `Mono8`. |
-| 9 | `matBgr24` | Opens as OpenCvSharp `Mat` mapped to `BGR24`. |
-| 10 | `matBgra32` | Opens as OpenCvSharp `Mat` mapped to `BGRA32`. |
-| 11 | `matMono16` | Opens as OpenCvSharp `Mat` mapped to `Mono16`. |
-| 12 | `matFloat32` | Opens as OpenCvSharp `Mat` mapped to `Float32`. |
+| 2 | `rawMono16Snapshot` | Opens as `Mono16`, autoscaled grayscale preview. |
+| 3 | `rawMono10PackedSnapshot` | Opens as `Mono10PackedLsb`. |
+| 4 | `rawMono12PackedSnapshot` | Opens as `Mono12PackedLsb`. |
+| 5 | `rawBinarySnapshot` | Opens as `Binary`. |
+| 6 | `rawRgb24Snapshot` | Opens as `RGB24`, color channels are visible. |
+| 7 | `rawBgr24Snapshot` | Opens as `BGR24`, color channels are visible. |
+| 8 | `rawBgra32Snapshot` | Opens as `BGRA32`. |
+| 9 | `rawFloat32Snapshot` | Opens as `Float32`. |
+| 10 | `rawBayerRggb8Snapshot` | Opens as `BayerRGGB8`. |
+| 11 | `rawBayerGrbg8Snapshot` | Opens as `BayerGRBG8`. |
+| 12 | `rawBayerGbrg8Snapshot` | Opens as `BayerGBRG8`. |
+| 13 | `rawBayerBggr8Snapshot` | Opens as `BayerBGGR8`. |
+| 14 | `rawViewMono8` | Opens through unmanaged pointer metadata as `Mono8`. |
+| 15 | `rawViewBgr24` | Opens through unmanaged pointer metadata as `BGR24`. |
+| 16 | `rawViewMono16` | Opens through unmanaged pointer metadata as `Mono16`. |
+| 17 | `rawViewBgra32` | Opens through unmanaged pointer metadata as `BGRA32`. |
+| 18 | `baslerPylonLikeFrame.View` | Opens through the SDK-style object wrapper as `Mono8`. |
+| 19 | `hikrobotMvsLikeFrame.View` | Opens through the SDK-style object wrapper as `BGR24`. |
+| 20 | `spinnakerLikeFrame.View` | Opens through the SDK-style object wrapper as `BayerRGGB8`. |
+| 21 | `frameGrabberLikeBuffer.View` | Opens through the SDK-style object wrapper as `Mono16`. |
+| 22 | `bitmapMono8` | Opens as `System.Drawing.Bitmap` mapped to `Mono8`. |
+| 23 | `bitmapBgr24` | Opens as `System.Drawing.Bitmap` mapped to `BGR24`. |
+| 24 | `bitmapBgra32` | Opens as `System.Drawing.Bitmap` mapped to `BGRA32`. |
+| 25 | `matMono8` | Opens as OpenCvSharp `Mat` mapped to `Mono8`. |
+| 26 | `matBgr24` | Opens as OpenCvSharp `Mat` mapped to `BGR24`. |
+| 27 | `matBgra32` | Opens as OpenCvSharp `Mat` mapped to `BGRA32`. |
+| 28 | `matMono16` | Opens as OpenCvSharp `Mat` mapped to `Mono16`. |
+| 29 | `matFloat32` | Opens as OpenCvSharp `Mat` mapped to `Float32`. |
+| 30 | `emguMono8` | Opens as Emgu CV `Mat` mapped to `Mono8`. |
+| 31 | `emguBgr24` | Opens as Emgu CV `Mat` mapped to `BGR24`. |
+| 32 | `emguBgra32` | Opens as Emgu CV `Mat` mapped to `BGRA32`. |
+| 33 | `emguMono16` | Opens as Emgu CV `Mat` mapped to `Mono16`. |
+| 34 | `emguFloat32` | Opens as Emgu CV `Mat` mapped to `Float32`. |
+
+For SDK-style objects, the visualizer target is the `RawBufferView` property, so add the exact `.View` expression to Watch when the visualizer icon is not shown directly on the parent object.
 
 ## UI Checks
 

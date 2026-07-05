@@ -5,12 +5,15 @@
     <PlatformTarget>x64</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <OpenCvSharpPackageVersion>4.13.0.20260627</OpenCvSharpPackageVersion>
+    <EmguCvPackageVersion>4.13.0.5924</EmguCvPackageVersion>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System.Drawing" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="OpenCvSharp4.Windows" Version="$(OpenCvSharpPackageVersion)" />
+    <PackageReference Include="Emgu.CV" Version="$(EmguCvPackageVersion)" />
+    <PackageReference Include="Emgu.CV.runtime.windows" Version="$(EmguCvPackageVersion)" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="$(NuGetPackageRoot)opencvsharp4.runtime.win\$(OpenCvSharpPackageVersion)\runtimes\win-x64\native\OpenCvSharpExtern.dll" Link="OpenCvSharpExtern.dll">

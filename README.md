@@ -233,7 +233,7 @@ Run the debugger visualizer debuggee without breakpoints:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, and OpenCvSharp `Mat` variables and stops at each case so the visualizer can be tested from Watch, Locals, Autos, or DataTip. Follow [docs/visual-studio-debug-test-scenarios.md](docs/visual-studio-debug-test-scenarios.md) for the full checklist.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates supported-format `RawBufferSnapshot`, `RawBufferView`, SDK-style `.View`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables and stops at each case so the visualizer can be tested from Watch, Locals, Autos, or DataTip. Follow [docs/visual-studio-debug-test-scenarios.md](docs/visual-studio-debug-test-scenarios.md) for the full checklist.
 
 The sample project creates `.rbuf.json` snapshots for every currently supported pixel format:
 
