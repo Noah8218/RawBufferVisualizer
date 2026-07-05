@@ -160,6 +160,18 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             Status = "Open failed: " + message;
         }
 
+        public void ReportForwarded(VisualizerSnapshotMetadata metadata)
+        {
+            var descriptor = metadata.Descriptor;
+            Status = string.Format(
+                CultureInfo.InvariantCulture,
+                "Sent to Visual Studio OpenGL ToolWindow: {0} x {1}, {2}, {3:N0} bytes.",
+                descriptor.Width,
+                descriptor.Height,
+                descriptor.PixelFormat,
+                metadata.BufferLength);
+        }
+
         private void RaisePreviewViewChanged()
         {
             RaiseNotifyPropertyChangedEvent(nameof(PreviewDisplayWidth));

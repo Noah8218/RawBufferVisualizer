@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
 using RawBufferVisualizer.Sdk;
+using RawBufferVisualizer.VisualStudio;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
@@ -31,8 +32,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
                 await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, rawPath, cancellationToken);
 
-                var previewFiles = DockedVisualizerPreviewRenderer.CreatePreviewFiles(rawPath, metadata.Descriptor, snapshotDirectory);
-                DockedVisualizerSession.Shared.AddImage(metadata, metadataPath, rawPath, previewFiles);
+                VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath);
+                DockedVisualizerSession.Shared.ReportForwarded(metadata);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {

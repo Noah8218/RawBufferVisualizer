@@ -49,6 +49,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
                 VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
+                VisualizerHandoffInboxRoundTripsMetadataPath();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
@@ -814,6 +815,30 @@ namespace RawBufferVisualizer.Tests
             finally
             {
                 Environment.SetEnvironmentVariable(ViewerPathResolver.ViewerPathEnvironmentVariable, original);
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void VisualizerHandoffInboxRoundTripsMetadataPath()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "camera.rbuf.json");
+                File.WriteAllText(metadataPath, "{}");
+
+                var requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath);
+                var restored = VisualizerHandoffInbox.ReadSnapshotRequest(requestPath);
+
+                Assert(File.Exists(requestPath), "Handoff request file was not created.");
+                Assert(restored == Path.GetFullPath(metadataPath), "Handoff metadata path roundtrip failed.");
+            }
+            finally
+            {
                 if (Directory.Exists(directory))
                 {
                     Directory.Delete(directory, true);

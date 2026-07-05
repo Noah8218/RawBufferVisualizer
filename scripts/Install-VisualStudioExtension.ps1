@@ -12,6 +12,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $extensionId = 'RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f'
+$toolWindowExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
 $vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
@@ -47,7 +48,8 @@ function Invoke-VsixInstaller {
     param(
         [string]$InstallerPath,
         [string[]]$Arguments,
-        [string]$Action
+        [string]$Action,
+        [switch]$AllowFailure
     )
 
     if (-not $PSCmdlet.ShouldProcess($Action, "$InstallerPath $($Arguments -join ' ')")) {
@@ -56,6 +58,11 @@ function Invoke-VsixInstaller {
 
     $process = Start-Process -FilePath $InstallerPath -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
     if ($process.ExitCode -ne 0) {
+        if ($AllowFailure) {
+            Write-Warning "$Action failed with exit code $($process.ExitCode). Continuing."
+            return
+        }
+
         throw "$Action failed with exit code $($process.ExitCode). Close Visual Studio and retry."
     }
 }
@@ -63,7 +70,7 @@ function Invoke-VsixInstaller {
 Push-Location $repoRoot
 try {
     if (-not $NoBuild) {
-        & powershell -ExecutionPolicy Bypass -File $publishScript -Framework $Framework -Configuration $Configuration -NoZip
+        & powershell -ExecutionPolicy Bypass -File $publishScript -Framework $Framework -Configuration $Configuration -ViewerFramework $ViewerFramework -NoZip
         if ($LASTEXITCODE -ne 0) {
             throw "Visual Studio extension publish failed with exit code $LASTEXITCODE"
         }
@@ -81,7 +88,8 @@ $installer = Find-VsixInstaller -ExplicitPath $VsixInstallerPath
 Write-Host "VSIXInstaller: $installer"
 
 if ($Reinstall) {
-    Invoke-VsixInstaller -InstallerPath $installer -Arguments @('/quiet', "/uninstall:$extensionId") -Action 'Uninstall Raw Buffer Visualizer VSIX'
+    Invoke-VsixInstaller -InstallerPath $installer -Arguments @('/quiet', "/uninstall:$extensionId") -Action 'Uninstall Raw Buffer Visualizer VSIX' -AllowFailure
+    Invoke-VsixInstaller -InstallerPath $installer -Arguments @('/quiet', "/uninstall:$toolWindowExtensionId") -Action 'Uninstall legacy split OpenGL ToolWindow VSIX' -AllowFailure
 }
 
 Invoke-VsixInstaller -InstallerPath $installer -Arguments @('/quiet', $vsixPath) -Action 'Install Raw Buffer Visualizer VSIX'

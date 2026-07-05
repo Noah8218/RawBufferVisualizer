@@ -3,164 +3,27 @@
     <DataTemplate.Resources>
         <SolidColorBrush x:Key="WindowBackgroundBrush" Color="#1E1E1E"/>
         <SolidColorBrush x:Key="PanelBackgroundBrush" Color="#252526"/>
-        <SolidColorBrush x:Key="InputBackgroundBrush" Color="#1B1B1C"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>
         <SolidColorBrush x:Key="TextBrush" Color="#F1F1F1"/>
         <SolidColorBrush x:Key="MutedTextBrush" Color="#9CDCFE"/>
         <Style TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         </Style>
-        <Style TargetType="Button">
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="Padding" Value="8,4"/>
-        </Style>
     </DataTemplate.Resources>
 
-    <Grid Background="{StaticResource WindowBackgroundBrush}" MinWidth="760" MinHeight="520">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
-
-        <Border Grid.Row="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10">
-            <DockPanel LastChildFill="True">
-                <TextBlock DockPanel.Dock="Right"
-                           Text="{Binding Status}"
-                           Width="360"
-                           TextAlignment="Right"
-                           TextTrimming="CharacterEllipsis"
-                           Foreground="{StaticResource MutedTextBrush}"/>
-                <StackPanel Orientation="Horizontal">
-                    <Button Content="Clear" Command="{Binding ClearCommand}"/>
-                    <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="8,0,6,0"/>
-                    <Button Content="-" Command="{Binding ZoomOutCommand}"/>
-                    <Button Content="1:1" Command="{Binding ResetZoomCommand}"/>
-                    <Button Content="+" Command="{Binding ZoomInCommand}"/>
-                    <Slider Width="160"
-                            Minimum="0.1"
-                            Maximum="8"
-                            Value="{Binding Zoom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                            VerticalAlignment="Center"
-                            Margin="4,0,0,0"/>
-                    <TextBlock Text="{Binding ZoomText}"
-                               Width="58"
-                               VerticalAlignment="Center"
-                               TextAlignment="Right"
-                               Foreground="{StaticResource MutedTextBrush}"/>
-                </StackPanel>
-            </DockPanel>
+    <Grid Background="{StaticResource WindowBackgroundBrush}" MinWidth="420" MinHeight="130">
+        <Border Background="{StaticResource PanelBackgroundBrush}"
+                BorderBrush="{StaticResource BorderBrush}"
+                BorderThickness="1"
+                Padding="14"
+                Margin="10">
+            <StackPanel>
+                <TextBlock Text="Raw Buffer Visualizer" FontSize="16" FontWeight="SemiBold"/>
+                <TextBlock Text="{Binding Status}"
+                           Margin="0,8,0,0"
+                           Foreground="{StaticResource MutedTextBrush}"
+                           TextWrapping="Wrap"/>
+            </StackPanel>
         </Border>
-
-        <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="280"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="5"/>
-                <ColumnDefinition Width="300"/>
-            </Grid.ColumnDefinitions>
-
-            <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0" Padding="10">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <TextBlock Grid.Row="0" Text="Images" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding Images}"
-                             SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
-                             Background="{StaticResource InputBackgroundBrush}"
-                             BorderBrush="{StaticResource BorderBrush}"
-                             Foreground="{StaticResource TextBrush}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <Grid Height="60" Margin="2">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="74"/>
-                                        <ColumnDefinition Width="*"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="66" Height="48" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
-                                        <Image Source="{Binding ThumbnailPath}" Stretch="Uniform"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="8,0,0,0">
-                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Summary}" Foreground="{StaticResource MutedTextBrush}" FontSize="11" TextTrimming="CharacterEllipsis"/>
-                                    </StackPanel>
-                                </Grid>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-
-                    <TextBlock Grid.Row="2" Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,12,0,8"/>
-                    <Grid Grid.Row="3">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="90"/>
-                            <ColumnDefinition Width="*"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Width"/>
-                        <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding SelectedImage.Width}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Height"/>
-                        <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding SelectedImage.Height}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Stride"/>
-                        <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding SelectedImage.Stride}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Format"/>
-                        <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding SelectedImage.PixelFormat}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Valid Bits"/>
-                        <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding SelectedImage.ValidBits}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Byte Order"/>
-                        <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding SelectedImage.ByteOrder}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                        <TextBlock Grid.Row="6" Grid.Column="0" Text="Bytes"/>
-                        <TextBlock Grid.Row="6" Grid.Column="1" Text="{Binding SelectedImage.BufferLength}" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
-                    </Grid>
-                </Grid>
-            </Border>
-
-            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
-
-            <Border Grid.Column="2" Background="#111111" Padding="8">
-                <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-                    <Image Source="{Binding SelectedImage.PreviewPath}"
-                           Width="{Binding PreviewDisplayWidth}"
-                           Height="{Binding PreviewDisplayHeight}"
-                           Stretch="Fill"
-                           RenderOptions.BitmapScalingMode="NearestNeighbor"/>
-                </ScrollViewer>
-            </Border>
-
-            <GridSplitter Grid.Column="3" Width="5" HorizontalAlignment="Stretch" Background="{StaticResource BorderBrush}"/>
-
-            <Border Grid.Column="4" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0" Padding="10">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <TextBlock Grid.Row="0" Text="{Binding SelectedImage.Title}" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="1" Text="{Binding SelectedImage.SourceType}" Foreground="{StaticResource MutedTextBrush}" Margin="0,6,0,10" TextWrapping="Wrap"/>
-                    <TextBlock Grid.Row="2" Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <ListBox Grid.Row="3"
-                             ItemsSource="{Binding SelectedImage.Diagnostics}"
-                             Background="{StaticResource InputBackgroundBrush}"
-                             BorderBrush="{StaticResource BorderBrush}"
-                             Foreground="{StaticResource TextBrush}"/>
-                </Grid>
-            </Border>
-        </Grid>
     </Grid>
 </DataTemplate>
