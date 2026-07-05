@@ -11,7 +11,10 @@
     <IncludeDebugSymbolsInLocalVSIXDeployment>false</IncludeDebugSymbolsInLocalVSIXDeployment>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <UseCodebase>true</UseCodebase>
-    <VisualStudioPublicAssemblies>$(ProgramFiles)\Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
+    <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and '$(VSINSTALLDIR)' != ''">$(VSINSTALLDIR)Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
+    <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\')">$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
+    <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Professional\Common7\IDE\PublicAssemblies\')">$(ProgramFiles)\Microsoft Visual Studio\2022\Professional\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
+    <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies\')">$(ProgramFiles)\Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
     <OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
     <CreatePkgDefAssemblyToProcess>$(OutputPath)$(TargetFramework)\$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
@@ -69,4 +72,9 @@
   </ItemGroup>
 
   <Import Project="$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.14.2120\tools\vssdk\Microsoft.VsSDK.targets" Condition="Exists('$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.14.2120\tools\vssdk\Microsoft.VsSDK.targets')" />
+
+  <Target Name="ValidateVisualStudioPublicAssemblies" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(VisualStudioPublicAssemblies)' == '' or !Exists('$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Shell.15.0.dll')"
+           Text="Visual Studio PublicAssemblies were not found. Install Visual Studio 2022 with extension development workload, or set VisualStudioPublicAssemblies to the PublicAssemblies directory." />
+  </Target>
 </Project>
