@@ -116,6 +116,14 @@ namespace RawBufferVisualizer.Core
             }
         }
 
+        protected static void WriteBgra(byte[] pixels, int offset, byte b, byte g, byte r, byte a)
+        {
+            pixels[offset] = b;
+            pixels[offset + 1] = g;
+            pixels[offset + 2] = r;
+            pixels[offset + 3] = a;
+        }
+
         private static RenderedImage Downsample(RenderedImage source, int sampleStep)
         {
             var sampledWidth = Math.Max(1, (source.Width + sampleStep - 1) / sampleStep);
@@ -169,6 +177,34 @@ namespace RawBufferVisualizer.Core
             return RawBufferRenderer.RenderTile(_buffer, SourceDescriptor, x, y, width, height, options);
         }
 
+        public override RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
+        {
+            if (sampleStep <= 1)
+            {
+                return RenderTile(x, y, width, height, options);
+            }
+
+            EnsureTileBounds(SourceDescriptor, x, y, width, height);
+            options = options ?? CreateRenderOptions();
+
+            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
+            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
+
+            for (var sampledY = 0; sampledY < sampledHeight; sampledY++)
+            {
+                var sourceY = y + (sampledY * sampleStep);
+                var targetRow = sampledY * sampledWidth * 4;
+                for (var sampledX = 0; sampledX < sampledWidth; sampledX++)
+                {
+                    var sourceX = x + (sampledX * sampleStep);
+                    WriteSampledPixel(sourceX, sourceY, pixels, targetRow + (sampledX * 4), options);
+                }
+            }
+
+            return new RenderedImage(sampledWidth, sampledHeight, pixels);
+        }
+
         public override string DescribePixel(int x, int y)
         {
             return RawPixelInspector.Describe(_buffer, SourceDescriptor, x, y);
@@ -183,6 +219,83 @@ namespace RawBufferVisualizer.Core
         {
             EnsureParentDirectory(rawPath);
             File.WriteAllBytes(rawPath, _buffer);
+        }
+
+        private void WriteSampledPixel(int x, int y, byte[] pixels, int targetOffset, RawRenderOptions options)
+        {
+            var row = y * SourceDescriptor.Stride;
+            switch (SourceDescriptor.PixelFormat)
+            {
+                case RawPixelFormat.Mono8:
+                    WriteBgra(pixels, targetOffset, _buffer[row + x], _buffer[row + x], _buffer[row + x], 255);
+                    break;
+                case RawPixelFormat.Binary:
+                    var binary = _buffer[row + x] == 0 ? (byte)0 : (byte)255;
+                    WriteBgra(pixels, targetOffset, binary, binary, binary, 255);
+                    break;
+                case RawPixelFormat.Mono16:
+                    var mono16 = RawBufferRenderer.ReadUInt16(_buffer, row + (x * 2), SourceDescriptor.ByteOrder);
+                    var mono16Value = ScaleToByte(mono16, options);
+                    WriteBgra(pixels, targetOffset, mono16Value, mono16Value, mono16Value, 255);
+                    break;
+                case RawPixelFormat.Mono10PackedLsb:
+                    var mono10 = RawBufferRenderer.ReadPackedLsb(_buffer, row, x, 10);
+                    var mono10Value = ScaleToByte(mono10, options);
+                    WriteBgra(pixels, targetOffset, mono10Value, mono10Value, mono10Value, 255);
+                    break;
+                case RawPixelFormat.Mono12PackedLsb:
+                    var mono12 = RawBufferRenderer.ReadPackedLsb(_buffer, row, x, 12);
+                    var mono12Value = ScaleToByte(mono12, options);
+                    WriteBgra(pixels, targetOffset, mono12Value, mono12Value, mono12Value, 255);
+                    break;
+                case RawPixelFormat.Float32:
+                    var floatValue = RawBufferRenderer.ReadSingle(_buffer, row + (x * 4), SourceDescriptor.ByteOrder);
+                    var floatByte = double.IsNaN(floatValue) || double.IsInfinity(floatValue) ? (byte)0 : ScaleToByte(floatValue, options);
+                    WriteBgra(pixels, targetOffset, floatByte, floatByte, floatByte, 255);
+                    break;
+                case RawPixelFormat.RGB24:
+                    var rgbOffset = row + (x * 3);
+                    WriteBgra(pixels, targetOffset, _buffer[rgbOffset + 2], _buffer[rgbOffset + 1], _buffer[rgbOffset], 255);
+                    break;
+                case RawPixelFormat.BGR24:
+                    var bgrOffset = row + (x * 3);
+                    WriteBgra(pixels, targetOffset, _buffer[bgrOffset], _buffer[bgrOffset + 1], _buffer[bgrOffset + 2], 255);
+                    break;
+                case RawPixelFormat.BGRA32:
+                    var bgraOffset = row + (x * 4);
+                    WriteBgra(pixels, targetOffset, _buffer[bgraOffset], _buffer[bgraOffset + 1], _buffer[bgraOffset + 2], _buffer[bgraOffset + 3]);
+                    break;
+                case RawPixelFormat.BayerRGGB8:
+                case RawPixelFormat.BayerGRBG8:
+                case RawPixelFormat.BayerGBRG8:
+                case RawPixelFormat.BayerBGGR8:
+                    WriteBayerSample(_buffer[row + x], pixels, targetOffset, x, y);
+                    break;
+                default:
+                    throw new NotSupportedException("Unsupported pixel format: " + SourceDescriptor.PixelFormat);
+            }
+        }
+
+        private void WriteBayerSample(byte value, byte[] pixels, int targetOffset, int x, int y)
+        {
+            var color = RawBufferRenderer.GetBayerColor(SourceDescriptor.PixelFormat, x, y);
+            var b = (byte)0;
+            var g = (byte)0;
+            var r = (byte)0;
+            if (color == 0)
+            {
+                r = value;
+            }
+            else if (color == 1)
+            {
+                g = value;
+            }
+            else
+            {
+                b = value;
+            }
+
+            WriteBgra(pixels, targetOffset, b, g, r, 255);
         }
     }
 
@@ -671,12 +784,5 @@ namespace RawBufferVisualizer.Core
             return (1 << bits) - 1;
         }
 
-        private static void WriteBgra(byte[] pixels, int offset, byte b, byte g, byte r, byte a)
-        {
-            pixels[offset] = b;
-            pixels[offset + 1] = g;
-            pixels[offset + 2] = r;
-            pixels[offset + 3] = a;
-        }
     }
 }

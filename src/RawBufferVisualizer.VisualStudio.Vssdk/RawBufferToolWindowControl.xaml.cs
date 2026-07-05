@@ -21,6 +21,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     {
         private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
         private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
+        private const int HistogramMaxSampleDimension = 1024;
 
         private readonly ObservableCollection<ImageDocument> _documents = new ObservableCollection<ImageDocument>();
         private ImageDocument? _activeDocument;
@@ -191,8 +192,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            var rendered = document.Source.RenderTile(0, 0, document.Descriptor.Width, document.Descriptor.Height, null);
+            var sampleStep = GetHistogramSampleStep(document.Descriptor);
+            var rendered = document.Source.RenderTileSampled(0, 0, document.Descriptor.Width, document.Descriptor.Height, sampleStep, document.Source.CreateRenderOptions());
+            if (sampleStep > 1)
+            {
+                DiagnosticsList.Items.Add(string.Format(CultureInfo.InvariantCulture, "Info: histogram sampled every {0:N0} pixels for responsiveness.", sampleStep));
+            }
+
             DrawHistogram(rendered);
+        }
+
+        private static int GetHistogramSampleStep(RawImageDescriptor descriptor)
+        {
+            var maxDimension = Math.Max(descriptor.Width, descriptor.Height);
+            return Math.Max(1, (int)Math.Ceiling(maxDimension / (double)HistogramMaxSampleDimension));
         }
 
         private void DrawHistogram(RenderedImage rendered)

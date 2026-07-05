@@ -32,6 +32,7 @@ namespace RawBufferVisualizer.Tests
                 TilePlannerHandles100kImage();
                 TileRenderMatchesFullRender();
                 FileBackedSourceRendersLikeMemory();
+                SampledMemorySourceMatchesFileBackedSourceForAllFormats();
                 FileBackedPackedSourceRendersLikeMemory();
                 FileBackedSourceHandles100kSampledTile();
                 FileBackedPackedSourceHandles100kSampledTile();
@@ -265,6 +266,51 @@ namespace RawBufferVisualizer.Tests
 
                     var pixel = fileSource.DescribePixel(2, 1);
                     Assert(pixel.Contains("X=2, Y=1") && pixel.Contains("B=2") && pixel.Contains("G=1") && pixel.Contains("R=3"), "File-backed pixel inspector failed.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void SampledMemorySourceMatchesFileBackedSourceForAllFormats()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                foreach (RawPixelFormat format in Enum.GetValues(typeof(RawPixelFormat)))
+                {
+                    var sample = CreateTinySample(format);
+                    var rawPath = Path.Combine(directory, format + ".raw");
+                    File.WriteAllBytes(rawPath, sample.Buffer);
+
+                    using (var memorySource = RawImageSource.FromMemory(sample.Buffer, sample.Descriptor))
+                    using (var fileSource = RawImageSource.FromFile(rawPath, sample.Descriptor))
+                    {
+                        var options = memorySource.CreateRenderOptions();
+                        var memorySampled = memorySource.RenderTileSampled(
+                            0,
+                            0,
+                            sample.Descriptor.Width,
+                            sample.Descriptor.Height,
+                            2,
+                            options);
+                        var fileSampled = fileSource.RenderTileSampled(
+                            0,
+                            0,
+                            sample.Descriptor.Width,
+                            sample.Descriptor.Height,
+                            2,
+                            options);
+
+                        Assert(memorySampled.Width == fileSampled.Width && memorySampled.Height == fileSampled.Height, format + " sampled dimensions failed.");
+                        AssertBytesEqual(memorySampled.Bgra32, fileSampled.Bgra32, format + " sampled memory render should match file-backed render.");
+                    }
                 }
             }
             finally
