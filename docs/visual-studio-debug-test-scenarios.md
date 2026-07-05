@@ -61,34 +61,28 @@ For SDK-style objects, the visualizer target is the `RawBufferView` property, so
 
 ## UI Checks
 
-- The Visual Studio visualizer status panel shows a clear success message, source type, dimensions, pixel format, byte count, and metadata path.
-- The status panel behaves as a non-modal tool window. `Continue` and `Step Over` must still move to the next breakpoint while the standalone viewer stays open.
-- The standalone viewer opens with the selected image in the left `Images` list and the top tab strip.
+- The Visual Studio docked visualizer shows the image list, source type, dimensions, pixel format, byte count, diagnostics, and generated metadata path.
+- The visualizer is docked inside Visual Studio. `Continue` and `Step Over` must still move to the next breakpoint while the docked viewer stays open.
+- Repeated inspections append rows to the same docked `Images` list instead of opening separate standalone windows.
 - `Images` rows show thumbnails and can be clicked comfortably.
 - The descriptor fields are read-only display text.
-- Mouse wheel zoom, `Fit`, `1:1`, zoom slider, pixel hover, histogram, diagnostics, `Export PNG`, and `Export Snapshot` still work.
-- `Link Views` keeps same-size images aligned when switching between tabs.
+- The sampled preview, `1:1`, zoom slider, descriptor, and diagnostics work in the docked Visual Studio view.
 
 ## Failure Checks
 
 1. Close Visual Studio.
-2. Temporarily clear the viewer path:
+2. Reinstall the VSIX:
 
 ```powershell
-setx RAW_BUFFER_VISUALIZER_VIEWER ""
+powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Reinstall
 ```
 
 3. Reopen Visual Studio and inspect a supported variable.
-4. Expected: the visualizer status panel reports that the viewer path must be set.
-5. Restore the viewer path by rerunning:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -NoBuild
-```
+4. Expected: the docked visualizer opens without requiring `RAW_BUFFER_VISUALIZER_VIEWER`.
 
 ## Evidence To Capture
 
-- One screenshot of the Visual Studio status panel after a successful launch.
-- One screenshot of the standalone viewer with at least two images in the `Images` list.
+- One screenshot of the Visual Studio docked visualizer after a successful launch.
+- One screenshot of the same docked visualizer with at least two images in the `Images` list.
 - One screenshot showing pixel hover text and zoom percentage.
 - One note for any unsupported SDK type, including the exact .NET type full name and SDK version.

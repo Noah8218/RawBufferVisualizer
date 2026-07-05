@@ -57,10 +57,9 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     'Manual validation prerequisites:',
     '- Visual Studio 2022 17.9 or newer',
     '- Visual Studio extension development workload',
-    '- RawBufferVisualizer.Wpf.exe available on disk',
     '',
-    'Set RAW_BUFFER_VISUALIZER_VIEWER to the full RawBufferVisualizer.Wpf.exe path before testing.',
-    'Then debug the extension project from Visual Studio and inspect a RawBufferSnapshot variable from DataTip, Watch, Locals, or Autos.'
+    'The debugger visualizer opens inside a Visual Studio docked tool window and accumulates inspected images in one session.',
+    'Debug the sample project from Visual Studio and inspect RawBufferSnapshot, RawBufferView, Bitmap, OpenCvSharp Mat, or Emgu CV Mat variables from DataTip, Watch, Locals, or Autos.'
 )
 
 if (-not $NoZip) {

@@ -27,7 +27,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
-- Visual Studio debugger visualizer prototype for chunked `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` transfer.
+- Visual Studio debugger visualizer prototype for docked inspection of chunked `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` transfer.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF tiled canvas for large-image display.
@@ -233,7 +233,7 @@ Run the debugger visualizer debuggee without breakpoints:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates supported-format `RawBufferSnapshot`, `RawBufferView`, SDK-style `.View`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables and stops at each case so the visualizer can be tested from Watch, Locals, Autos, or DataTip. Follow [docs/visual-studio-debug-test-scenarios.md](docs/visual-studio-debug-test-scenarios.md) for the full checklist.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates supported-format `RawBufferSnapshot`, `RawBufferView`, SDK-style `.View`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables and stops at each case so the docked visualizer can be tested from Watch, Locals, Autos, or DataTip. Follow [docs/visual-studio-debug-test-scenarios.md](docs/visual-studio-debug-test-scenarios.md) for the full checklist.
 
 The sample project creates `.rbuf.json` snapshots for every currently supported pixel format:
 
@@ -348,11 +348,12 @@ Inspect `view` directly from Visual Studio after the VSIX is installed. For SDK-
 
 ## Visual Studio integration target
 
-The standalone viewer is the first surface. The final target is Visual Studio integration for debugger-time image inspection:
+The standalone viewer remains available for full app testing, and the current debugger-time target is a Visual Studio docked image inspector:
 
 - Current prototype targets `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - raw pointer buffers through `RawBufferView` when width, height, stride, pixel format, byte order, and lifetime metadata are available
-- same viewer behavior for zoom, pixel inspection, histogram, diagnostics, and export
+- repeated debugger inspections append to one docked `Images` session
+- sampled preview, zoom, descriptor, and diagnostics inside Visual Studio; full tiled OpenGL interaction remains in the standalone viewer
 
 The first implementation plan is documented in [docs/visual-studio-integration.md](docs/visual-studio-integration.md).
 

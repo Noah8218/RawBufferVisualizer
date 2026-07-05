@@ -1,22 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
-    <AssemblyVersion>1.0.3.0</AssemblyVersion>
-    <FileVersion>1.0.3.0</FileVersion>
-    <Version>1.0.3</Version>
+    <AssemblyVersion>1.0.4.0</AssemblyVersion>
+    <FileVersion>1.0.4.0</FileVersion>
+    <Version>1.0.4</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40608" PrivateAssets="all" />
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40608" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <None Remove="VisualizerLaunchStatusControl.xaml" />
-    <EmbeddedResource Include="VisualizerLaunchStatusControl.xaml" />
+    <None Remove="DockedVisualizerControl.xaml" />
+    <EmbeddedResource Include="DockedVisualizerControl.xaml" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
-    <ProjectReference Include="..\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
   </ItemGroup>
   <ItemGroup>

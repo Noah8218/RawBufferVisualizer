@@ -1,9 +1,11 @@
 using System;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
+using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
@@ -14,7 +16,6 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             VisualizerTarget visualizerTarget,
             CancellationToken cancellationToken)
         {
-            var status = new VisualizerLaunchStatus();
             try
             {
                 var metadata = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerSnapshotMetadata>(
@@ -25,15 +26,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Visualizer object source returned no data.");
                 }
 
-                var viewerPath = ViewerPathResolver.ResolveViewerExecutablePath();
-                var request = StandaloneViewerBridge.PrepareLaunch(metadata, viewerPath);
-                await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, request.RawPath, cancellationToken);
-                StandaloneViewerBridge.Launch(request);
+                var snapshotDirectory = CreateSnapshotDirectory();
+                var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
+                var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
+                await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, rawPath, cancellationToken);
 
-                status.Title = "Raw Buffer Visualizer opened";
-                status.Message = CreateSuccessMessage(metadata);
-                status.Details = "Use the standalone viewer window for zoom, pixel values, histogram, diagnostics, and export.";
-                status.MetadataPath = request.MetadataPath;
+                var previewFiles = DockedVisualizerPreviewRenderer.CreatePreviewFiles(rawPath, metadata.Descriptor, snapshotDirectory);
+                DockedVisualizerSession.Shared.AddImage(metadata, metadataPath, rawPath, previewFiles);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -41,28 +40,28 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
-                status.Title = "Raw Buffer Visualizer failed to open";
-                status.Message = ex.Message;
-                status.Details = "Build the viewer and set RAW_BUFFER_VISUALIZER_VIEWER to RawBufferVisualizer.Wpf.exe, then restart Visual Studio.";
+                DockedVisualizerSession.Shared.ReportFailure(ex.Message);
             }
 
-            return new VisualizerLaunchStatusControl(status);
+            return new DockedVisualizerControl();
         }
 
-        private static string CreateSuccessMessage(VisualizerSnapshotMetadata metadata)
+        private static string GetSnapshotName(string displayName)
         {
-            var descriptor = metadata.Descriptor;
-            var displayName = string.IsNullOrWhiteSpace(metadata.DisplayName) ? "selected variable" : metadata.DisplayName;
-            var sourceType = string.IsNullOrWhiteSpace(metadata.SourceType) ? "unknown type" : metadata.SourceType;
-            return string.Format(
-                System.Globalization.CultureInfo.InvariantCulture,
-                "{0} ({1}) -> {2} x {3}, {4}, {5:N0} bytes.",
-                displayName,
-                sourceType,
-                descriptor.Width,
-                descriptor.Height,
-                descriptor.PixelFormat,
-                metadata.BufferLength);
+            var name = string.IsNullOrWhiteSpace(displayName) ? "snapshot" : displayName.Trim();
+            foreach (var invalid in Path.GetInvalidFileNameChars())
+            {
+                name = name.Replace(invalid, '_');
+            }
+
+            return string.Format(CultureInfo.InvariantCulture, "{0}_{1}", name.Length <= 64 ? name : name.Substring(0, 64), DateTime.UtcNow.Ticks);
+        }
+
+        private static string CreateSnapshotDirectory()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio", Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(directory);
+            return directory;
         }
 
         private static async Task WriteRawChunksAsync(

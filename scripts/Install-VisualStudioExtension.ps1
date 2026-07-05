@@ -13,9 +13,7 @@ $ErrorActionPreference = 'Stop'
 
 $extensionId = 'RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$viewerProject = Join-Path $repoRoot 'src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj'
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
-$viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
 $vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
 
 function Find-VsixInstaller {
@@ -65,11 +63,6 @@ function Invoke-VsixInstaller {
 Push-Location $repoRoot
 try {
     if (-not $NoBuild) {
-        & dotnet build $viewerProject --configuration $Configuration --framework $ViewerFramework
-        if ($LASTEXITCODE -ne 0) {
-            throw "Viewer build failed with exit code $LASTEXITCODE"
-        }
-
         & powershell -ExecutionPolicy Bypass -File $publishScript -Framework $Framework -Configuration $Configuration -NoZip
         if ($LASTEXITCODE -ne 0) {
             throw "Visual Studio extension publish failed with exit code $LASTEXITCODE"
@@ -80,18 +73,8 @@ finally {
     Pop-Location
 }
 
-if (-not (Test-Path -LiteralPath $viewerExe)) {
-    throw "Viewer exe was not found: $viewerExe"
-}
-
 if (-not (Test-Path -LiteralPath $vsixPath)) {
     throw "VSIX was not found: $vsixPath"
-}
-
-if (-not $NoViewerEnv) {
-    [Environment]::SetEnvironmentVariable('RAW_BUFFER_VISUALIZER_VIEWER', $viewerExe, 'User')
-    $env:RAW_BUFFER_VISUALIZER_VIEWER = $viewerExe
-    Write-Host "RAW_BUFFER_VISUALIZER_VIEWER=$viewerExe"
 }
 
 $installer = Find-VsixInstaller -ExplicitPath $VsixInstallerPath

@@ -20,9 +20,9 @@ The first Visual Studio prototype should support this flow:
 2. The developer opens the Raw Buffer Visualizer entry from DataTip, Watch, Locals, or Autos.
 3. The visualizer receives a supported image-like object from the debuggee process.
 4. The visualizer writes a temporary `.rbuf.json` plus `.raw` snapshot.
-5. The existing standalone viewer opens that snapshot.
+5. The Visual Studio docked visualizer adds the image to the shared `Images` session and shows a sampled preview.
 
-This keeps the Visual Studio extension thin and reuses the viewer already built for zoom, pixel inspection, histogram, diagnostics, and export.
+This keeps the Visual Studio path inside the IDE. The standalone viewer remains available as a separate executable for full tiled OpenGL workflows.
 
 ## Type Priority
 
@@ -52,14 +52,12 @@ The Visual Studio prototype is split into these projects:
 ```text
 src\RawBufferVisualizer.VisualStudio\
 src\RawBufferVisualizer.VisualStudio.ObjectSource\
+src\RawBufferVisualizer.VisualStudio.Extensibility\
 ```
 
 `RawBufferVisualizer.VisualStudio`:
 
-- VS 2022 debugger visualizer entry point.
-- Targets the modern Visual Studio extension model.
-- Resolves the packaged standalone viewer path.
-- Launches the viewer with the temporary snapshot path.
+- Shared Visual Studio helper types that are not tied to a specific object source.
 
 `RawBufferVisualizer.VisualStudio.ObjectSource`:
 
@@ -67,33 +65,39 @@ src\RawBufferVisualizer.VisualStudio.ObjectSource\
 - Prefer `netstandard2.0` where practical so .NET Framework and modern .NET debuggee apps can use the same object source.
 - Converts supported objects into a serializable snapshot transfer shape.
 
+`RawBufferVisualizer.VisualStudio.Extensibility`:
+
+- VS 2022 debugger visualizer entry point.
+- Targets the modern Visual Studio extension model.
+- Receives chunked debugger data and writes temporary snapshot files.
+- Hosts the docked Visual Studio Remote UI image list and sampled preview.
+
 ## Current Prototype Status
 
 - `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
-- `RawBufferVisualizer.VisualStudio` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot.
-- `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request. The request can carry multiple metadata paths so the standalone viewer opens them as separate images/tabs.
+- `RawBufferVisualizer.VisualStudio.Extensibility` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot and generates sampled PNG previews for Visual Studio Remote UI.
 - `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
-- The Visual Studio launch status panel now reports success/failure, source type, dimensions, pixel format, byte length, and the generated metadata path.
-- The standalone viewer path is resolved from `RAW_BUFFER_VISUALIZER_VIEWER` or a side-by-side `RawBufferVisualizer.Wpf.exe`.
+- The Visual Studio debugger visualizer is hosted as a docked tool window and appends inspected images into one shared `Images` session.
 - Manual Visual Studio installation and DataTip/Watch verification are documented in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
 
 ## Viewer Session Strategy
 
-The current session handoff is process-per-launch:
+The current Visual Studio session handoff is in-process Remote UI:
 
 - The extension writes one `.rbuf.json` plus `.raw` pair per inspected image.
-- The extension launches the standalone viewer with one or more metadata paths as command-line arguments.
-- The viewer opens those paths into the `Images` list and tabs.
+- The extension creates sampled PNG thumbnail/preview files next to the snapshot.
+- The debugger visualizer returns a Visual Studio docked Remote UI control bound to a shared image session.
+- Repeated inspections add rows to the same `Images` list instead of opening a standalone viewer process per image.
 
-This is intentionally simpler than IPC. Reusing an already-running viewer through named pipes, local RPC, or a localhost endpoint should be added only when there is evidence that repeated process startup is hurting the debugger workflow.
+Remote UI cannot host the existing custom OpenGL canvas directly. Full tiled OpenGL interaction remains in the standalone WPF viewer until an in-process VSSDK tool window is added.
 
-Trigger criteria for process reuse:
+Trigger criteria for a VSSDK in-process tool window:
 
-- repeated visualizer opens feel slow in real Visual Studio debugging sessions
-- users need to append new debug images into an already-arranged compare session
-- large shared context should survive between inspections
+- Visual Studio docked preview must support full tiled OpenGL instead of sampled PNG previews
+- debugger-time pixel hover needs to be calculated from mouse position inside the VS tool window
+- export commands need direct access to the selected docked image
 
 ## Prototype Build
 
@@ -103,9 +107,9 @@ Recommended local install/update command:
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Reinstall
 ```
 
-This builds the `net472` viewer, publishes the `net8.0-windows` VSIX, sets the user-level `RAW_BUFFER_VISUALIZER_VIEWER` environment variable, uninstalls the previous local VSIX when `-Reinstall` is passed, and installs the new VSIX. Close Visual Studio before running it, then restart Visual Studio before debugger testing.
+This publishes the `net8.0-windows` VSIX, uninstalls the previous local VSIX when `-Reinstall` is passed, and installs the new VSIX. Close Visual Studio before running it, then restart Visual Studio before debugger testing.
 
-The debugger visualizer providers are registered as `ToolWindow` visualizers. The Visual Studio status surface may remain visible after launching the standalone viewer, but it must not block `Continue`, `Step Over`, or moving to the next debuggee breakpoint.
+The debugger visualizer providers are registered as `ToolWindow` visualizers. The docked viewer should stay inside Visual Studio and must not block `Continue`, `Step Over`, or moving to the next debuggee breakpoint.
 
 Build the current extension prototype:
 
@@ -127,14 +131,7 @@ artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.z
 artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
-Before manual Visual Studio testing, point the extension at a built viewer:
-
-```powershell
-dotnet build .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -c Debug -f net472
-setx RAW_BUFFER_VISUALIZER_VIEWER "C:\Git\RawBufferVisualizer\.build\bin\RawBufferVisualizer.Wpf\Debug\net472\RawBufferVisualizer.Wpf.exe"
-```
-
-Close and reopen Visual Studio after `setx`; existing Visual Studio processes do not inherit the new user environment variable.
+The VS debugger visualizer no longer requires `RAW_BUFFER_VISUALIZER_VIEWER`. Close and reopen Visual Studio after installing or updating the VSIX.
 
 If `Raw Buffer Visualizer` is not listed under `Extensions > Manage Extensions > Installed`, install the VSIX first:
 
@@ -198,11 +195,11 @@ This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currentl
 ## Validation Checklist
 
 - Visualizer appears for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` in Watch, Locals, Autos, and DataTip.
-- Viewer opens from the visualizer with a generated temp snapshot.
+- Viewer opens docked inside Visual Studio with a generated temp snapshot.
 - Pixel format, width, height, stride, valid bits, and byte order match the debuggee object.
 - Mono, color, packed mono, float, and Bayer samples still render correctly after the VS path.
 - Large images are transferred through metadata plus repeated chunk requests instead of one full-buffer response.
-- Missing viewer executable shows a clear actionable error.
+- Repeated visualizer opens append images to the same `Images` list.
 - Unsupported target types fail with a clear message, not a silent no-op.
 
 ## References Checked
