@@ -41,8 +41,10 @@ namespace RawBufferVisualizer.Tests
                 SnapshotReferenceLoadsUtf8BomPrettyMetadata();
                 VisualizerTransferRoundTrips();
                 VisualizerChunkedTransferCreatesChunks();
+                RawBufferViewCreatesDescriptorAndChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
                 MatVisualizerObjectSourceCreatesTransfer();
+                EmguCvMatVisualizerObjectSourceCreatesTransfer();
                 VisualizerBridgeWritesLaunchSnapshot();
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
                 VisualizerBridgePreparesMultiLaunchSnapshots();
@@ -571,6 +573,48 @@ namespace RawBufferVisualizer.Tests
             Assert(!chunk.IsLastChunk, "Chunk last flag failed.");
         }
 
+        private static void RawBufferViewCreatesDescriptorAndChunks()
+        {
+            var buffer = new byte[] { 1, 2, 3, 4, 5, 6 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var view = new RawBufferView
+                {
+                    Buffer = handle.AddrOfPinnedObject(),
+                    BufferLength = buffer.Length,
+                    Width = 2,
+                    Height = 1,
+                    Stride = 6,
+                    PixelFormat = RawPixelFormat.BGR24,
+                    Channels = 3,
+                    BitDepth = 8,
+                    Name = "camera0"
+                };
+
+                var metadata = RawBufferViewVisualizerTransfer.CreateMetadata(view);
+                Assert(metadata.DisplayName == "camera0", "RawBufferView display name failed.");
+                Assert(metadata.BufferLength == 6, "RawBufferView buffer length failed.");
+                Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "RawBufferView pixel format failed.");
+
+                var chunk = RawBufferViewVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 2,
+                        Count = 3
+                    });
+                Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 3 && chunk.Buffer[2] == 5, "RawBufferView chunk failed.");
+
+                var snapshot = view.ToSnapshot();
+                Assert(snapshot.Buffer[5] == 6, "RawBufferView snapshot copy failed.");
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
         private static void BitmapVisualizerObjectSourceCreatesTransfer()
         {
             using (var bitmap = new Bitmap(2, 1, PixelFormat.Format8bppIndexed))
@@ -621,6 +665,26 @@ namespace RawBufferVisualizer.Tests
                 Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Mat visualizer dimensions failed.");
                 Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat visualizer pixel format failed.");
                 Assert(transfer.Buffer.Length >= 6, "Mat visualizer buffer length failed.");
+            }
+        }
+
+        private static void EmguCvMatVisualizerObjectSourceCreatesTransfer()
+        {
+            using (var mat = new Emgu.CV.Mat(
+                1,
+                2,
+                Emgu.CV.DepthType.Cv8U,
+                3,
+                new byte[] { 3, 2, 1, 6, 5, 4 },
+                6))
+            {
+                var transfer = EmguCvMatVisualizerTransfer.CreateTransfer(mat, "emgu0");
+
+                Assert(transfer.DisplayName == "emgu0", "Emgu Mat visualizer display name failed.");
+                Assert(transfer.SourceType == "Emgu.CV.Mat", "Emgu Mat visualizer source type failed.");
+                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Emgu Mat visualizer dimensions failed.");
+                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu Mat visualizer pixel format failed.");
+                Assert(transfer.Buffer.Length == 6 && transfer.Buffer[0] == 3 && transfer.Buffer[5] == 4, "Emgu Mat visualizer buffer failed.");
             }
         }
 
@@ -940,6 +1004,55 @@ namespace RawBufferVisualizer.Tests
             }
 
             return buffer;
+        }
+    }
+}
+
+namespace Emgu.CV
+{
+    public enum DepthType
+    {
+        Cv8U = 0,
+        Cv16U = 2,
+        Cv32F = 5
+    }
+
+    public sealed class Mat : IDisposable
+    {
+        private readonly byte[] _buffer;
+        private readonly GCHandle _handle;
+
+        public bool IsEmpty { get; private set; }
+        public int Dims { get; private set; }
+        public DepthType Depth { get; private set; }
+        public int NumberOfChannels { get; private set; }
+        public int Step { get; private set; }
+        public int Rows { get; private set; }
+        public int Cols { get; private set; }
+
+        public IntPtr DataPointer
+        {
+            get { return _handle.AddrOfPinnedObject(); }
+        }
+
+        public Mat(int rows, int cols, DepthType depth, int numberOfChannels, byte[] buffer, int step)
+        {
+            Rows = rows;
+            Cols = cols;
+            Depth = depth;
+            NumberOfChannels = numberOfChannels;
+            Step = step;
+            Dims = 2;
+            _buffer = buffer;
+            _handle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
+        }
+
+        public void Dispose()
+        {
+            if (_handle.IsAllocated)
+            {
+                _handle.Free();
+            }
         }
     }
 }

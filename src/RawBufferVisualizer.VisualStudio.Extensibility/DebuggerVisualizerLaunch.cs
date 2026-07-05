@@ -30,7 +30,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, request.RawPath, cancellationToken);
                 StandaloneViewerBridge.Launch(request);
 
-                status.Message = "Raw Buffer Visualizer opened.";
+                status.Title = "Raw Buffer Visualizer opened";
+                status.Message = CreateSuccessMessage(metadata);
+                status.Details = "Use the standalone viewer window for zoom, pixel values, histogram, diagnostics, and export.";
                 status.MetadataPath = request.MetadataPath;
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -39,10 +41,28 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
+                status.Title = "Raw Buffer Visualizer failed to open";
                 status.Message = ex.Message;
+                status.Details = "Build the viewer and set RAW_BUFFER_VISUALIZER_VIEWER to RawBufferVisualizer.Wpf.exe, then restart Visual Studio.";
             }
 
             return new VisualizerLaunchStatusControl(status);
+        }
+
+        private static string CreateSuccessMessage(VisualizerSnapshotMetadata metadata)
+        {
+            var descriptor = metadata.Descriptor;
+            var displayName = string.IsNullOrWhiteSpace(metadata.DisplayName) ? "selected variable" : metadata.DisplayName;
+            var sourceType = string.IsNullOrWhiteSpace(metadata.SourceType) ? "unknown type" : metadata.SourceType;
+            return string.Format(
+                System.Globalization.CultureInfo.InvariantCulture,
+                "{0} ({1}) -> {2} x {3}, {4}, {5:N0} bytes.",
+                displayName,
+                sourceType,
+                descriptor.Width,
+                descriptor.Height,
+                descriptor.PixelFormat,
+                metadata.BufferLength);
         }
 
         private static async Task WriteRawChunksAsync(

@@ -10,7 +10,9 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 
 - Product concept: [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md)
 - Visual Studio integration plan: [docs/visual-studio-integration.md](docs/visual-studio-integration.md)
+- Visual Studio debug test scenarios: [docs/visual-studio-debug-test-scenarios.md](docs/visual-studio-debug-test-scenarios.md)
 - Image Watch UX analysis: [docs/image-watch-ux-analysis.md](docs/image-watch-ux-analysis.md)
+- SDK adapter roadmap: [docs/sdk-adapter-roadmap.md](docs/sdk-adapter-roadmap.md)
 
 ## Current roadmap
 
@@ -25,7 +27,7 @@ The current priority is Image Watch / Raw Buffer Inspector work: raw buffers, `M
 - Snapshot SDK for `byte[]`, `ushort[]`, `float[]`, and `IntPtr`.
 - Bitmap adapter for `System.Drawing.Bitmap` snapshots.
 - OpenCvSharp adapter for `Mat` snapshots.
-- Visual Studio debugger visualizer prototype for chunked `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` transfer.
+- Visual Studio debugger visualizer prototype for chunked `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` transfer.
 - WPF viewer for `.rbuf.json` metadata plus `.raw` payload files.
 - Drag/drop open, PNG export, snapshot export, pixel inspector, histogram, zoom, and diagnostics panel.
 - WPF tiled canvas for large-image display.
@@ -40,10 +42,12 @@ Standalone viewer input:
 | Input | Status | Notes |
 | --- | --- | --- |
 | `.rbuf.json` + `.raw` | Supported | Metadata points to the raw payload file beside it. |
-| `.raw` / `.bin` | Supported | Enter width, height, stride, pixel format, valid bits, and byte order, then click `Apply`. |
+| `.raw` / `.bin` only | Limited | Wrap it in `.rbuf.json` metadata first. Direct descriptor editing is intentionally not part of the VS-first viewer flow. |
 | `RawBufferSnapshot` | Supported | SDK snapshot from `byte[]`, `ushort[]`, `float[]`, or `IntPtr`. |
+| `RawBufferView` | Supported | SDK wrapper for `IntPtr Buffer`, width, height, stride, pixel format, channels, bit depth, and byte order. |
 | `System.Drawing.Bitmap` | Supported through adapter and Visual Studio prototype | See Bitmap table below. |
 | OpenCvSharp `Mat` | Supported through adapter and Visual Studio prototype | See Mat table below. |
+| Emgu CV `Mat` | Supported through Visual Studio prototype | Extracted by reflection; no direct Emgu dependency is required by the extension. |
 
 Raw pixel formats:
 
@@ -83,6 +87,16 @@ OpenCvSharp Mat formats:
 | `CV_16UC1` | `Mono16` |
 | `CV_32FC1` | `Float32` |
 
+Emgu CV Mat formats:
+
+| `DepthType` / Channels | Mapped Format |
+| --- | --- |
+| `Cv8U` / 1 | `Mono8` |
+| `Cv8U` / 3 | `BGR24` |
+| `Cv8U` / 4 | `BGRA32` |
+| `Cv16U` / 1 | `Mono16` |
+| `Cv32F` / 1 | `Float32` |
+
 Unsupported formats should fail with a clear diagnostics message instead of silently rendering the wrong image.
 
 File-backed large-image display is currently supported for all raw formats listed above. For very large packed `Mono10PackedLsb` and `Mono12PackedLsb` payloads, display uses the native 10-bit or 12-bit range instead of scanning the full file for autoscale levels.
@@ -95,9 +109,9 @@ No GitHub Release has been published yet. Until the first version tag is created
 2. Download `RawBufferVisualizer-net9.0-windows-win-x64-sc.zip` from `Artifacts`.
 3. Extract the zip to a writable folder such as `C:\Tools\RawBufferVisualizer`.
 4. Run `RawBufferVisualizer.Wpf.exe`.
-5. Click `Open Sample` to verify the viewer immediately.
+5. Open a `.rbuf.json` snapshot, or pass one or more `.rbuf.json` files as command-line arguments.
 
-The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip` for manual Visual Studio extension validation against `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables. Extract it and install `RawBufferVisualizer.VisualStudio.Extensibility.vsix` before testing in Visual Studio.
+The CI run also publishes `RawBufferVisualizer-VisualStudioExtensibility-net8.0-windows.zip` for manual Visual Studio extension validation against `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables. Extract it and install `RawBufferVisualizer.VisualStudio.Extensibility.vsix` before testing in Visual Studio.
 
 After the first tagged release is created, download the same zip from the [Releases page](https://github.com/Noah8218/RawBufferVisualizer/releases).
 
@@ -105,22 +119,21 @@ The default package is self-contained for Windows x64, so it does not require in
 
 To inspect your own data:
 
-- Drag and drop `.rbuf.json`, `.raw`, or `.bin` files into the window.
-- Use `Open` for `.rbuf.json`, `.raw`, or `.bin`.
-- For raw `.raw` or `.bin` files, fill in width, height, stride, pixel format, valid bits, and byte order, then click `Apply`.
+- Drag and drop one or more `.rbuf.json` files into the window.
+- Use `Open` for a `.rbuf.json` snapshot.
+- For raw `.raw` or `.bin` payloads, create a matching `.rbuf.json` through the SDK or `Export Snapshot`.
 - Keep `.raw` payload files beside their `.rbuf.json` metadata files.
 
 ## Viewer Usage
 
 1. Run `RawBufferVisualizer.Wpf.exe`.
-2. Click `Open Sample` for a quick working image.
-3. Use `Open` to load `.rbuf.json`, `.raw`, or `.bin`.
-4. For raw files without metadata, set `Width`, `Height`, `Stride`, `Pixel Format`, `Valid Bits`, and `Byte Order`.
-5. Click `Apply`.
-6. Use mouse wheel, `Fit`, `1:1`, and the zoom slider to inspect the image.
-7. Move the mouse over the image to inspect pixel values.
-8. Use `Save PNG` for visible-preview export when CPU preview cache is enabled.
-9. Use `Save Snapshot` to write `.rbuf.json` + `.raw`.
+2. Use `Open`, drag/drop, or command-line arguments to load `.rbuf.json` snapshots.
+3. Select images from the left `Images` list or top tabs.
+4. Use mouse wheel, `Fit`, `1:1`, and the zoom slider to inspect the image.
+5. Move the mouse over the image to inspect pixel values.
+6. Use `Link Views` when comparing same-size images across tabs.
+7. Use `Export PNG` for visible-preview export when CPU preview cache is enabled.
+8. Use `Export Snapshot` to write `.rbuf.json` + `.raw`.
 
 ## WPF Large Image Canvas
 
@@ -220,7 +233,7 @@ Run the debugger visualizer debuggee without breakpoints:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables and stops at each case so the visualizer can be tested from Watch, Locals, Autos, or DataTip.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run it under the debugger without `--no-break`. It creates `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, and OpenCvSharp `Mat` variables and stops at each case so the visualizer can be tested from Watch, Locals, Autos, or DataTip. Follow [docs/visual-studio-debug-test-scenarios.md](docs/visual-studio-debug-test-scenarios.md) for the full checklist.
 
 The sample project creates `.rbuf.json` snapshots for every currently supported pixel format:
 
@@ -234,8 +247,6 @@ Open the WPF viewer:
 ```powershell
 dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net9.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
 ```
-
-The viewer toolbar also includes `Open Sample` and `Sample Folder` when samples exist beside the packaged exe or under `artifacts\samples`.
 
 For .NET Framework deployments, build the `net472` target:
 
@@ -315,12 +326,32 @@ snapshot.Save("mat.rbuf.json");
 
 `Mat` support stays in a separate project so applications that do not use OpenCvSharp do not inherit that dependency.
 
+Industrial camera or frame-grabber pointer wrapper:
+
+```csharp
+var view = new RawBufferView
+{
+    Buffer = imagePointer,
+    BufferLength = stride * height,
+    Width = width,
+    Height = height,
+    Stride = stride,
+    PixelFormat = RawPixelFormat.BGR24,
+    Channels = 3,
+    BitDepth = 8,
+    ByteOrder = RawByteOrder.LittleEndian,
+    Name = "camera0"
+};
+```
+
+Inspect `view` directly from Visual Studio after the VSIX is installed. For SDK-specific mappings, see [docs/sdk-adapter-roadmap.md](docs/sdk-adapter-roadmap.md).
+
 ## Visual Studio integration target
 
 The standalone viewer is the first surface. The final target is Visual Studio integration for debugger-time image inspection:
 
-- Current prototype targets `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat`.
-- raw pointer buffers only when width, height, stride, pixel format, and ownership metadata are available
+- Current prototype targets `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- raw pointer buffers through `RawBufferView` when width, height, stride, pixel format, byte order, and lifetime metadata are available
 - same viewer behavior for zoom, pixel inspection, histogram, diagnostics, and export
 
 The first implementation plan is documented in [docs/visual-studio-integration.md](docs/visual-studio-integration.md).

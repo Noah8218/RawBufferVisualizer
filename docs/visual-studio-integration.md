@@ -29,13 +29,19 @@ This keeps the Visual Studio extension thin and reuses the viewer already built 
 1. `RawBufferSnapshot`
    - It is our own type and already carries both bytes and `RawImageDescriptor`.
    - It should be the first debugger visualizer target.
-2. `System.Drawing.Bitmap`
+2. `RawBufferView`
+   - It is the SDK wrapper for the common industrial-camera shape: `IntPtr Buffer`, width, height, stride, pixel format, channels, bit depth, and byte order.
+   - It lets camera or frame-grabber code expose unmanaged buffers without forcing an immediate full managed copy.
+3. `System.Drawing.Bitmap`
    - Convert through `RawBufferVisualizer.BitmapAdapter.BitmapSnapshot.FromBitmap`.
    - Keep it optional so projects without `System.Drawing` are not forced into that dependency.
-3. OpenCvSharp `Mat`
+4. OpenCvSharp `Mat`
    - Convert in the Visual Studio object source from the `Mat` width, height, stride, data pointer, depth, and channel count.
    - Keep it optional so projects without OpenCvSharp are not forced into that dependency.
-4. Pointer and camera SDK buffers
+5. Emgu CV `Mat`
+   - Convert by reflection from `Emgu.CV.Mat` properties: `Rows`, `Cols`, `Step`, `Depth`, `NumberOfChannels`, `DataPointer`, and `Dims`.
+   - Keep it optional so projects without Emgu do not inherit that dependency.
+6. Pointer and camera SDK buffers
    - Support only through a descriptor wrapper or adapter object.
    - A raw pointer alone is not enough because width, height, stride, pixel format, byte order, and ownership are required.
 
@@ -63,16 +69,41 @@ src\RawBufferVisualizer.VisualStudio.ObjectSource\
 
 ## Current Prototype Status
 
-- `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `System.Drawing.Bitmap`, and OpenCvSharp `Mat` into `VisualizerSnapshotTransfer`.
-- `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `Bitmap`, and `Mat`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
 - `RawBufferVisualizer.VisualStudio` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot.
-- `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request.
-- `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `Bitmap`, and `Mat`.
+- `RawBufferVisualizer.VisualStudio` prepares a standalone viewer launch request. The request can carry multiple metadata paths so the standalone viewer opens them as separate images/tabs.
+- `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- The Visual Studio launch status panel now reports success/failure, source type, dimensions, pixel format, byte length, and the generated metadata path.
 - The standalone viewer path is resolved from `RAW_BUFFER_VISUALIZER_VIEWER` or a side-by-side `RawBufferVisualizer.Wpf.exe`.
-- Manual Visual Studio installation and DataTip/Watch verification are the next steps.
+- Manual Visual Studio installation and DataTip/Watch verification are documented in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
+
+## Viewer Session Strategy
+
+The current session handoff is process-per-launch:
+
+- The extension writes one `.rbuf.json` plus `.raw` pair per inspected image.
+- The extension launches the standalone viewer with one or more metadata paths as command-line arguments.
+- The viewer opens those paths into the `Images` list and tabs.
+
+This is intentionally simpler than IPC. Reusing an already-running viewer through named pipes, local RPC, or a localhost endpoint should be added only when there is evidence that repeated process startup is hurting the debugger workflow.
+
+Trigger criteria for process reuse:
+
+- repeated visualizer opens feel slow in real Visual Studio debugging sessions
+- users need to append new debug images into an already-arranged compare session
+- large shared context should survive between inspections
 
 ## Prototype Build
+
+Recommended local install/update command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Reinstall
+```
+
+This builds the `net472` viewer, publishes the `net8.0-windows` VSIX, sets the user-level `RAW_BUFFER_VISUALIZER_VIEWER` environment variable, uninstalls the previous local VSIX when `-Reinstall` is passed, and installs the new VSIX. Close Visual Studio before running it, then restart Visual Studio before debugger testing.
 
 Build the current extension prototype:
 
@@ -112,7 +143,7 @@ start .\.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Debug\net8.0-w
 
 Close Visual Studio before running the VSIX installer. Select Visual Studio 2022 Community when the installer asks for a target instance.
 
-Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, select the `RawBufferVisualizer.VisualStudio.Extensibility` debug profile, press `F5`, then inspect `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` variables from DataTip, Watch, Locals, or Autos.
+Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, select the `RawBufferVisualizer.VisualStudio.Extensibility` debug profile, press `F5`, then inspect `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables from DataTip, Watch, Locals, or Autos.
 
 If Visual Studio shows `A project with an Output Type of Class Library cannot be started directly`, the extension debug profile is not selected. Use the Start button dropdown and choose `RawBufferVisualizer.VisualStudio.Extensibility`, or open the project's Debug properties and verify:
 
@@ -158,11 +189,13 @@ This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currentl
 5. Done: add `Bitmap` support.
 6. Done: add OpenCvSharp `Mat` support.
 7. Done: add chunked transfer for large buffers.
-8. Add vendor or camera SDK adapters only after the generic descriptor-wrapper path is stable.
+8. Done: add `RawBufferView` support for generic unmanaged camera/frame-grabber buffers.
+9. Done: add Emgu CV `Mat` support through reflection.
+10. Add vendor or camera SDK adapters only after the generic descriptor-wrapper path is stable.
 
 ## Validation Checklist
 
-- Visualizer appears for `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` in Watch, Locals, Autos, and DataTip.
+- Visualizer appears for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` in Watch, Locals, Autos, and DataTip.
 - Viewer opens from the visualizer with a generated temp snapshot.
 - Pixel format, width, height, stride, valid bits, and byte order match the debuggee object.
 - Mono, color, packed mono, float, and Bayer samples still render correctly after the VS path.

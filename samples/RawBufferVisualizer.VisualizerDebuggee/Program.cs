@@ -38,41 +38,66 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             Console.WriteLine("3. Inspect rawMono16Snapshot as RawBufferSnapshot.");
             if (shouldBreak) Debugger.Break();
 
+            var industrialBuffer = CreateBgr24Buffer(Width, Height, Width * 3);
+            var industrialHandle = GCHandle.Alloc(industrialBuffer, GCHandleType.Pinned);
+            try
+            {
+                var rawBufferView = new RawBufferView
+                {
+                    Buffer = industrialHandle.AddrOfPinnedObject(),
+                    BufferLength = industrialBuffer.Length,
+                    Width = Width,
+                    Height = Height,
+                    Stride = Width * 3,
+                    PixelFormat = RawPixelFormat.BGR24,
+                    Channels = 3,
+                    BitDepth = 8,
+                    Name = "industrial-buffer-view"
+                };
+                Console.WriteLine("4. Inspect rawBufferView as RawBufferView.");
+                if (shouldBreak) Debugger.Break();
+                GC.KeepAlive(rawBufferView);
+            }
+            finally
+            {
+                industrialHandle.Free();
+            }
+
             var bitmapMono8 = CreateMono8Bitmap(Width, Height);
-            Console.WriteLine("4. Inspect bitmapMono8 as System.Drawing.Bitmap.");
+            Console.WriteLine("5. Inspect bitmapMono8 as System.Drawing.Bitmap.");
             if (shouldBreak) Debugger.Break();
 
             var bitmapBgr24 = CreateBgr24Bitmap(Width, Height);
-            Console.WriteLine("5. Inspect bitmapBgr24 as System.Drawing.Bitmap.");
+            Console.WriteLine("6. Inspect bitmapBgr24 as System.Drawing.Bitmap.");
             if (shouldBreak) Debugger.Break();
 
             var bitmapBgra32 = CreateBgra32Bitmap(Width, Height);
-            Console.WriteLine("6. Inspect bitmapBgra32 as System.Drawing.Bitmap.");
+            Console.WriteLine("7. Inspect bitmapBgra32 as System.Drawing.Bitmap.");
             if (shouldBreak) Debugger.Break();
 
             using (var matMono8 = CreateMatMono8(Width, Height))
             {
-                Console.WriteLine("7. Inspect matMono8 as OpenCvSharp.Mat.");
+                Console.WriteLine("8. Inspect matMono8 as OpenCvSharp.Mat.");
                 if (shouldBreak) Debugger.Break();
 
                 using (var matBgr24 = CreateMatBgr24(Width, Height))
                 {
-                    Console.WriteLine("8. Inspect matBgr24 as OpenCvSharp.Mat.");
+                    Console.WriteLine("9. Inspect matBgr24 as OpenCvSharp.Mat.");
                     if (shouldBreak) Debugger.Break();
 
                     using (var matBgra32 = CreateMatBgra32(Width, Height))
                     {
-                        Console.WriteLine("9. Inspect matBgra32 as OpenCvSharp.Mat.");
+                        Console.WriteLine("10. Inspect matBgra32 as OpenCvSharp.Mat.");
                         if (shouldBreak) Debugger.Break();
 
                         using (var matMono16 = CreateMatMono16(Width, Height))
                         {
-                            Console.WriteLine("10. Inspect matMono16 as OpenCvSharp.Mat.");
+                            Console.WriteLine("11. Inspect matMono16 as OpenCvSharp.Mat.");
                             if (shouldBreak) Debugger.Break();
 
                             using (var matFloat32 = CreateMatFloat32(Width, Height))
                             {
-                                Console.WriteLine("11. Inspect matFloat32 as OpenCvSharp.Mat.");
+                                Console.WriteLine("12. Inspect matFloat32 as OpenCvSharp.Mat.");
                                 if (shouldBreak) Debugger.Break();
 
                                 GC.KeepAlive(matFloat32);

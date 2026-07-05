@@ -208,7 +208,7 @@ namespace RawBufferVisualizer.Wpf
         {
             if (_rendered == null)
             {
-                MessageBox.Show(this, "PNG export is available only when the CPU preview cache is enabled.", "Save PNG", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, "PNG export is available only when the CPU preview cache is enabled.", "Export PNG", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -235,7 +235,7 @@ namespace RawBufferVisualizer.Wpf
         {
             if (_imageSource == null)
             {
-                MessageBox.Show(this, "No buffer to save.", "Save Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show(this, "No buffer to save.", "Export Snapshot", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
@@ -269,7 +269,7 @@ namespace RawBufferVisualizer.Wpf
             }
             catch (Exception ex)
             {
-                MessageBox.Show(this, ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show(this, ex.Message, "Export Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
