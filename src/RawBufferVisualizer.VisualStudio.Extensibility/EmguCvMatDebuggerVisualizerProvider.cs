@@ -27,6 +27,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.Platform.NetStandard")
             })
             {
+                Style = VisualizerStyle.ToolWindow,
                 VisualizerObjectSourceType = new(typeof(EmguCvMatVisualizerObjectSource))
             };
 

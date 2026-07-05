@@ -62,6 +62,7 @@ For SDK-style objects, the visualizer target is the `RawBufferView` property, so
 ## UI Checks
 
 - The Visual Studio visualizer status panel shows a clear success message, source type, dimensions, pixel format, byte count, and metadata path.
+- The status panel behaves as a non-modal tool window. `Continue` and `Step Over` must still move to the next breakpoint while the standalone viewer stays open.
 - The standalone viewer opens with the selected image in the left `Images` list and the top tab strip.
 - `Images` rows show thumbnails and can be clicked comfortably.
 - The descriptor fields are read-only display text.

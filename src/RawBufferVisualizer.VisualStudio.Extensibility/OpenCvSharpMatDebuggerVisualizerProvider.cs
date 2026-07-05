@@ -26,6 +26,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 new VisualizerTargetType(DisplayName, "OpenCvSharp.Mat, OpenCvSharp")
             })
             {
+                Style = VisualizerStyle.ToolWindow,
                 VisualizerObjectSourceType = new(typeof(OpenCvSharpMatVisualizerObjectSource))
             };
 

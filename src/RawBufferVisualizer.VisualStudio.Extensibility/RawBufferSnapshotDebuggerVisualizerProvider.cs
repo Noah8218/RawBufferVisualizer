@@ -21,6 +21,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new("%RawBufferVisualizer.DebuggerVisualizer.DisplayName%", typeof(RawBufferSnapshot))
             {
+                Style = VisualizerStyle.ToolWindow,
                 VisualizerObjectSourceType = new(typeof(RawBufferSnapshotVisualizerObjectSource))
             };
 

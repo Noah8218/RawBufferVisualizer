@@ -26,6 +26,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 new VisualizerTargetType(DisplayName, "System.Drawing.Bitmap, System.Drawing.Common")
             })
             {
+                Style = VisualizerStyle.ToolWindow,
                 VisualizerObjectSourceType = new(typeof(BitmapVisualizerObjectSource))
             };
 

@@ -105,6 +105,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 
 This builds the `net472` viewer, publishes the `net8.0-windows` VSIX, sets the user-level `RAW_BUFFER_VISUALIZER_VIEWER` environment variable, uninstalls the previous local VSIX when `-Reinstall` is passed, and installs the new VSIX. Close Visual Studio before running it, then restart Visual Studio before debugger testing.
 
+The debugger visualizer providers are registered as `ToolWindow` visualizers. The Visual Studio status surface may remain visible after launching the standalone viewer, but it must not block `Continue`, `Step Over`, or moving to the next debuggee breakpoint.
+
 Build the current extension prototype:
 
 ```powershell
