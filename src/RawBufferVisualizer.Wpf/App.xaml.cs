@@ -12,9 +12,9 @@ namespace RawBufferVisualizer.Wpf
             MainWindow = window;
             window.Show();
 
-            if (e.Args.Length > 0)
+            foreach (var path in e.Args)
             {
-                window.OpenPath(e.Args[0]);
+                window.OpenPath(path);
             }
         }
     }

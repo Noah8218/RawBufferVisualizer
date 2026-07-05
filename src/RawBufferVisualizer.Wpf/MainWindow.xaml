@@ -18,20 +18,20 @@
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0" Background="{StaticResource ToolbarBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="10">
-            <WrapPanel VerticalAlignment="Center">
-                <Button Content="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click"/>
-                <Button Content="Open Sample" AutomationProperties.AutomationId="OpenSampleButton" Click="OpenSample_Click"/>
-                <Button Content="Sample Folder" AutomationProperties.AutomationId="SampleFolderButton" Click="OpenSampleFolder_Click"/>
-                <Button Content="Apply" AutomationProperties.AutomationId="ApplyButton" Click="Apply_Click"/>
-                <Button Content="Save PNG" AutomationProperties.AutomationId="SavePngButton" Click="SavePng_Click"/>
-                <Button Content="Save Snapshot" AutomationProperties.AutomationId="SaveSnapshotButton" Click="SaveSnapshot_Click"/>
-                <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
-                <Button Content="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click"/>
-                <Button Content="1:1" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click"/>
-                <Slider x:Name="ZoomSlider" AutomationProperties.AutomationId="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
-                <TextBlock x:Name="ZoomText" AutomationProperties.AutomationId="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
-                <TextBlock x:Name="StatusText" AutomationProperties.AutomationId="StatusText" MaxWidth="320" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}"/>
-            </WrapPanel>
+            <DockPanel LastChildFill="True">
+                <TextBlock x:Name="StatusText" DockPanel.Dock="Right" AutomationProperties.AutomationId="StatusText" Width="320" VerticalAlignment="Center" Margin="12,0,0,0" TextAlignment="Right" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}"/>
+                <WrapPanel VerticalAlignment="Center">
+                    <Button Content="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click"/>
+                    <Button Content="Export PNG" AutomationProperties.AutomationId="SavePngButton" Click="SavePng_Click"/>
+                    <Button Content="Export Snapshot" AutomationProperties.AutomationId="SaveSnapshotButton" Click="SaveSnapshot_Click"/>
+                    <CheckBox x:Name="LinkViewsBox" AutomationProperties.AutomationId="LinkViewsBox" Content="Link Views" VerticalAlignment="Center" Margin="8,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
+                    <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,8,0"/>
+                    <Button Content="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click"/>
+                    <Button Content="1:1" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click"/>
+                    <Slider x:Name="ZoomSlider" AutomationProperties.AutomationId="ZoomSlider" Width="160" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                    <TextBlock x:Name="ZoomText" AutomationProperties.AutomationId="ZoomText" Width="56" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
+                </WrapPanel>
+            </DockPanel>
         </Border>
 
         <Grid Grid.Row="1">
@@ -44,25 +44,58 @@
             <Border Grid.Column="0" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,1,0" Padding="12">
                 <ScrollViewer VerticalScrollBarVisibility="Auto">
                     <StackPanel>
-                        <TextBlock Text="Descriptor" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,12"/>
+                        <TextBlock Text="Images" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                        <ListBox x:Name="ImageList" AutomationProperties.AutomationId="ImageList" Height="220" SelectionChanged="ImageList_SelectionChanged">
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <Grid Height="60">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="74"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="66" Height="48" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
+                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                        </Border>
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" Foreground="{StaticResource MutedTextBrush}" FontSize="11"/>
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                        <Separator Margin="0,12,0,12"/>
+                        <TextBlock Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,8"/>
 
                         <TextBlock Text="Width"/>
-                        <TextBox x:Name="WidthBox" AutomationProperties.AutomationId="WidthBox" Text="640"/>
+                        <Border Background="{StaticResource InputBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,2,0,8">
+                            <TextBlock x:Name="WidthBox" AutomationProperties.AutomationId="WidthBox" Text="640" Margin="4,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        </Border>
 
                         <TextBlock Text="Height"/>
-                        <TextBox x:Name="HeightBox" AutomationProperties.AutomationId="HeightBox" Text="480"/>
+                        <Border Background="{StaticResource InputBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,2,0,8">
+                            <TextBlock x:Name="HeightBox" AutomationProperties.AutomationId="HeightBox" Text="480" Margin="4,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        </Border>
 
                         <TextBlock Text="Stride"/>
-                        <TextBox x:Name="StrideBox" AutomationProperties.AutomationId="StrideBox" Text="640"/>
+                        <Border Background="{StaticResource InputBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,2,0,8">
+                            <TextBlock x:Name="StrideBox" AutomationProperties.AutomationId="StrideBox" Text="640" Margin="4,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        </Border>
 
                         <TextBlock Text="Pixel Format"/>
-                        <ComboBox x:Name="FormatBox" AutomationProperties.AutomationId="FormatBox"/>
+                        <Border Background="{StaticResource InputBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,2,0,8">
+                            <TextBlock x:Name="FormatBox" AutomationProperties.AutomationId="FormatBox" Text="Mono8" Margin="4,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        </Border>
 
                         <TextBlock Text="Valid Bits"/>
-                        <TextBox x:Name="ValidBitsBox" AutomationProperties.AutomationId="ValidBitsBox" Text="8"/>
+                        <Border Background="{StaticResource InputBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,2,0,8">
+                            <TextBlock x:Name="ValidBitsBox" AutomationProperties.AutomationId="ValidBitsBox" Text="8" Margin="4,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        </Border>
 
                         <TextBlock Text="Byte Order"/>
-                        <ComboBox x:Name="ByteOrderBox" AutomationProperties.AutomationId="ByteOrderBox"/>
+                        <Border Background="{StaticResource InputBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Margin="0,2,0,8">
+                            <TextBlock x:Name="ByteOrderBox" AutomationProperties.AutomationId="ByteOrderBox" Text="LittleEndian" Margin="4,2" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
+                        </Border>
 
                         <Separator Margin="0,8,0,12"/>
                         <TextBlock Text="File" FontWeight="SemiBold"/>
@@ -72,7 +105,14 @@
             </Border>
 
             <Border Grid.Column="1" Background="#111111">
-                <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="ImageView"/>
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <TabControl Grid.Row="0" x:Name="DocumentTabs" AutomationProperties.AutomationId="DocumentTabs" Height="34" DisplayMemberPath="Title" SelectionChanged="DocumentTabs_SelectionChanged"/>
+                    <gl:RawOpenGlImageCanvas Grid.Row="1" x:Name="OpenGlImageView" AutomationProperties.AutomationId="ImageView"/>
+                </Grid>
             </Border>
 
             <Border Grid.Column="2" Background="{StaticResource PanelBackgroundBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0" Padding="12">

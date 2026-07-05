@@ -179,6 +179,26 @@ function Set-SliderValue([System.Windows.Automation.AutomationElement]$root, [st
     $pattern.SetValue($value)
 }
 
+function Get-DescendantsByControlType([System.Windows.Automation.AutomationElement]$root, [string]$automationId, [System.Windows.Automation.ControlType]$controlType) {
+    $element = Find-Element $root $automationId
+    $condition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        $controlType)
+    $element.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Select-Item([System.Windows.Automation.AutomationElement]$element) {
+    $pattern = $element.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+    $pattern.Select()
+}
+
+function Toggle-CheckBox([System.Windows.Automation.AutomationElement]$root, [string]$automationId) {
+    $element = Find-Element $root $automationId
+    $pattern = $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+    $pattern.Toggle()
+    $pattern.Current.ToggleState
+}
+
 function Get-ImageRect([System.Windows.Automation.AutomationElement]$root, [IntPtr]$hwnd) {
     $image = Find-Element $root "ImageView" $false
     if ($image -ne $null) {
@@ -221,7 +241,7 @@ function Add-Result([System.Collections.Generic.List[object]]$results, [string]$
 }
 
 $results = New-Object System.Collections.Generic.List[object]
-$process = Start-Process -FilePath $viewerExe -ArgumentList @($samplePath) -PassThru
+$process = Start-Process -FilePath $viewerExe -ArgumentList @($samplePath, $samplePath) -PassThru
 try {
     $deadline = [DateTime]::Now.AddSeconds(30)
     do {
@@ -243,6 +263,17 @@ try {
         $status -match "640 x 480, Mono8"
     } | Out-Null
     Add-Result $results "open sample" (Get-ElementName (Get-Root $hwnd) "StatusText")
+
+    Find-Element (Get-Root $hwnd) "DocumentTabs" | Out-Null
+    Find-Element (Get-Root $hwnd) "ImageList" | Out-Null
+    Find-Element (Get-Root $hwnd) "LinkViewsBox" | Out-Null
+    $initialTabs = Get-DescendantsByControlType (Get-Root $hwnd) "DocumentTabs" ([System.Windows.Automation.ControlType]::TabItem)
+    $initialListItems = Get-DescendantsByControlType (Get-Root $hwnd) "ImageList" ([System.Windows.Automation.ControlType]::ListItem)
+    if ($initialTabs.Count -lt 2 -or $initialListItems.Count -lt 2) {
+        throw "Session UI did not show both startup images."
+    }
+
+    Add-Result $results "session UI initial image" "tabs=$($initialTabs.Count); list=$($initialListItems.Count)"
 
     $capturePath = Join-Path $captureRoot "interaction-open.png"
     Capture-Window $hwnd $capturePath
@@ -305,6 +336,23 @@ try {
     Wait-Until "save snapshot metadata" { Test-Path -LiteralPath $snapshotPath } 10 | Out-Null
     Wait-Until "save snapshot raw" { Test-Path -LiteralPath $rawPath } 10 | Out-Null
     Add-Result $results "save snapshot" "$snapshotPath; $rawPath"
+
+    $tabsAfterSecondOpen = Get-DescendantsByControlType (Get-Root $hwnd) "DocumentTabs" ([System.Windows.Automation.ControlType]::TabItem)
+    Add-Result $results "startup second image tab" "tabs=$($tabsAfterSecondOpen.Count)"
+
+    Select-Item $tabsAfterSecondOpen.Item(0)
+    Wait-Until "switch back to first tab" {
+        (Get-ElementName (Get-Root $hwnd) "StatusText") -match "640 x 480, Mono8"
+    } | Out-Null
+    Add-Result $results "switch first tab" (Get-ElementName (Get-Root $hwnd) "StatusText")
+
+    $toggleState = Toggle-CheckBox (Get-Root $hwnd) "LinkViewsBox"
+    Wait-Until "link views toggle" {
+        $element = Find-Element (Get-Root $hwnd) "LinkViewsBox"
+        $pattern = $element.GetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern)
+        $pattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On
+    } | Out-Null
+    Add-Result $results "link views toggle" $toggleState.ToString()
 }
 finally {
     if ($process -and -not $process.HasExited) {

@@ -1,6 +1,5 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+using System.Collections.ObjectModel;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -22,11 +21,17 @@ namespace RawBufferVisualizer.Wpf
         private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
         private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
 
+        private readonly ObservableCollection<ImageDocument> _documents = new ObservableCollection<ImageDocument>();
         private RawImageSource? _imageSource;
         private RawImageDescriptor _descriptor;
         private RenderedImage? _rendered;
         private string? _currentPath;
+        private ImageDocument? _activeDocument;
         private bool _syncingZoomSlider;
+        private bool _syncingDocumentSelection;
+        private bool _switchingDocument;
+        private bool _applyingLinkedView;
+        private RawOpenGlViewState? _linkedViewState;
 
         public MainWindow()
         {
@@ -45,15 +50,21 @@ namespace RawBufferVisualizer.Wpf
         protected override void OnClosed(EventArgs e)
         {
             OpenGlImageView.ClearImage();
-            _imageSource?.Dispose();
+            foreach (var document in _documents)
+            {
+                document.Dispose();
+            }
+
+            _documents.Clear();
             _imageSource = null;
+            _activeDocument = null;
             base.OnClosed(e);
         }
 
         private void Window_Loaded(object sender, RoutedEventArgs e)
         {
-            FormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat)).Cast<RawPixelFormat>();
-            ByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder)).Cast<RawByteOrder>();
+            ImageList.ItemsSource = _documents;
+            DocumentTabs.ItemsSource = _documents;
             OpenGlImageView.PixelHovered += OpenGlImageView_PixelHovered;
             OpenGlImageView.ViewChanged += OpenGlImageView_ViewChanged;
             ApplyDescriptorToFields();
@@ -66,24 +77,22 @@ namespace RawBufferVisualizer.Wpf
             try
             {
                 var fullPath = Path.GetFullPath(path);
+                ImageDocument document;
                 if (fullPath.EndsWith(".rbuf.json", StringComparison.OrdinalIgnoreCase))
                 {
                     var reference = RawBufferSnapshot.LoadReference(fullPath);
                     var source = CreateImageSource(reference.RawPath, reference.Descriptor, reference.RawByteLength);
-                    _descriptor = reference.Descriptor;
-                    _currentPath = fullPath;
-                    ReplaceImageSource(source);
-                    ApplyDescriptorToFields();
+                    document = new ImageDocument(fullPath, source, reference.Descriptor);
                 }
                 else
                 {
-                    _descriptor = ReadDescriptorFromFields();
-                    var source = CreateImageSource(fullPath, _descriptor, new FileInfo(fullPath).Length);
-                    _currentPath = fullPath;
-                    ReplaceImageSource(source);
+                    var descriptor = ReadDescriptorFromFields();
+                    var source = CreateImageSource(fullPath, descriptor, new FileInfo(fullPath).Length);
+                    document = new ImageDocument(fullPath, source, descriptor);
                 }
 
-                RenderCurrentBuffer();
+                _documents.Add(document);
+                ActivateDocument(document);
             }
             catch (Exception ex)
             {
@@ -95,7 +104,7 @@ namespace RawBufferVisualizer.Wpf
         {
             var dialog = new OpenFileDialog
             {
-                Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json|Raw Buffer (*.raw;*.bin)|*.raw;*.bin|All files (*.*)|*.*"
+                Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json|All files (*.*)|*.*"
             };
 
             if (dialog.ShowDialog(this) == true)
@@ -104,92 +113,95 @@ namespace RawBufferVisualizer.Wpf
             }
         }
 
-        private void OpenSample_Click(object sender, RoutedEventArgs e)
+        private void ActivateDocument(ImageDocument document)
         {
-            var sampleDirectory = FindSampleDirectory();
-            var samplePath = sampleDirectory == null ? null : FindDefaultSamplePath(sampleDirectory);
-            if (samplePath == null)
+            if (document == null || ReferenceEquals(_activeDocument, document))
             {
-                MessageBox.Show(this, "Sample files were not found.", "Open Sample", MessageBoxButton.OK, MessageBoxImage.Information);
                 return;
             }
 
-            OpenPath(samplePath);
-        }
+            SaveActiveDocumentView();
+            _activeDocument = document;
+            _imageSource = document.Source;
+            _descriptor = document.Descriptor.Clone();
+            _rendered = document.Rendered;
+            _currentPath = document.DisplayPath;
 
-        private void OpenSampleFolder_Click(object sender, RoutedEventArgs e)
-        {
-            var sampleDirectory = FindSampleDirectory();
-            if (sampleDirectory == null)
-            {
-                MessageBox.Show(this, "Sample files were not found.", "Sample Folder", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
+            _syncingDocumentSelection = true;
             try
             {
-                Process.Start(new ProcessStartInfo
-                {
-                    FileName = sampleDirectory,
-                    UseShellExecute = true
-                });
+                ImageList.SelectedItem = document;
+                DocumentTabs.SelectedItem = document;
             }
-            catch (Exception ex)
+            finally
             {
-                MessageBox.Show(this, ex.Message, "Sample Folder failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                _syncingDocumentSelection = false;
+            }
+
+            ApplyDescriptorToFields();
+            FileText.Text = _currentPath ?? string.Empty;
+            _switchingDocument = true;
+            try
+            {
+                RenderCurrentBuffer();
+            }
+            finally
+            {
+                _switchingDocument = false;
             }
         }
 
-        private static string? FindSampleDirectory()
+        private void SaveActiveDocumentView()
         {
-            var roots = new List<string>();
-            AddSearchRoots(roots, AppContext.BaseDirectory);
-            AddSearchRoots(roots, Environment.CurrentDirectory);
-
-            foreach (var root in roots)
+            if (_activeDocument == null)
             {
-                var candidates = new[]
-                {
-                    Path.Combine(root, "samples"),
-                    Path.Combine(root, "artifacts", "samples")
-                };
-
-                foreach (var candidate in candidates)
-                {
-                    if (Directory.Exists(candidate) && Directory.EnumerateFiles(candidate, "*.rbuf.json").Any())
-                    {
-                        return candidate;
-                    }
-                }
+                return;
             }
 
-            return null;
-        }
-
-        private static void AddSearchRoots(List<string> roots, string startPath)
-        {
-            var directory = new DirectoryInfo(Path.GetFullPath(startPath));
-            for (var depth = 0; directory != null && depth < 8; depth++, directory = directory.Parent)
+            var viewState = OpenGlImageView.GetViewState();
+            if (viewState != null)
             {
-                if (!roots.Contains(directory.FullName, StringComparer.OrdinalIgnoreCase))
-                {
-                    roots.Add(directory.FullName);
-                }
+                _activeDocument.ViewState = viewState;
             }
         }
 
-        private static string? FindDefaultSamplePath(string sampleDirectory)
+        private RawOpenGlViewState? GetViewStateForRender()
         {
-            var preferred = Path.Combine(sampleDirectory, "rgb24-color.rbuf.json");
-            if (File.Exists(preferred))
+            if (_activeDocument == null)
             {
-                return preferred;
+                return null;
             }
 
-            return Directory
-                .EnumerateFiles(sampleDirectory, "*.rbuf.json")
-                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
-                .FirstOrDefault();
+            if (LinkViewsBox.IsChecked == true && _linkedViewState != null && _linkedViewState.Matches(_descriptor.Width, _descriptor.Height))
+            {
+                return _linkedViewState;
+            }
+
+            return _activeDocument.ViewState;
+        }
+
+        private void ApplyRestoredView(RawOpenGlViewState? viewState)
+        {
+            if (viewState == null)
+            {
+                return;
+            }
+
+            _applyingLinkedView = true;
+            try
+            {
+                OpenGlImageView.TryApplyViewState(viewState);
+            }
+            finally
+            {
+                _applyingLinkedView = false;
+            }
+        }
+
+        private void RefreshDocumentSelectors()
+        {
+            ImageList.Items.Refresh();
+            DocumentTabs.Items.Refresh();
         }
 
         private void SavePng_Click(object sender, RoutedEventArgs e)
@@ -229,7 +241,7 @@ namespace RawBufferVisualizer.Wpf
 
             try
             {
-                _descriptor = ReadDescriptorFromFields();
+                _descriptor = _activeDocument == null ? _descriptor : _activeDocument.Descriptor.Clone();
                 var dialog = new SaveFileDialog
                 {
                     Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json",
@@ -250,30 +262,14 @@ namespace RawBufferVisualizer.Wpf
                 var rawPath = RawBufferSnapshot.SaveMetadata(dialog.FileName, _descriptor);
                 _imageSource.CopyRawTo(rawPath);
                 _currentPath = Path.GetFullPath(dialog.FileName);
+                _activeDocument?.SetPath(_currentPath);
                 FileText.Text = _currentPath ?? string.Empty;
+                RefreshDocumentSelectors();
                 UpdateStatus();
             }
             catch (Exception ex)
             {
                 MessageBox.Show(this, ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-        }
-
-        private void Apply_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                _descriptor = ReadDescriptorFromFields();
-                if (_imageSource != null)
-                {
-                    ReplaceImageSource(_imageSource.WithDescriptor(_descriptor));
-                }
-
-                RenderCurrentBuffer();
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show(this, ex.Message, "Apply failed", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
 
@@ -293,29 +289,7 @@ namespace RawBufferVisualizer.Wpf
 
         private RawImageDescriptor ReadDescriptorFromFields()
         {
-            var format = FormatBox.SelectedItem is RawPixelFormat selectedFormat ? selectedFormat : RawPixelFormat.Mono8;
-            var byteOrder = ByteOrderBox.SelectedItem is RawByteOrder selectedByteOrder ? selectedByteOrder : RawByteOrder.LittleEndian;
-
-            return new RawImageDescriptor
-            {
-                Width = ParseInt(WidthBox.Text, "Width"),
-                Height = ParseInt(HeightBox.Text, "Height"),
-                Stride = ParseInt(StrideBox.Text, "Stride"),
-                PixelFormat = format,
-                ValidBits = ParseInt(ValidBitsBox.Text, "Valid Bits"),
-                ByteOrder = byteOrder
-            };
-        }
-
-        private static int ParseInt(string value, string name)
-        {
-            int result;
-            if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out result))
-            {
-                throw new InvalidOperationException(name + " must be an integer.");
-            }
-
-            return result;
+            return _descriptor.Clone();
         }
 
         private void ApplyDescriptorToFields()
@@ -324,8 +298,8 @@ namespace RawBufferVisualizer.Wpf
             HeightBox.Text = _descriptor.Height.ToString(CultureInfo.InvariantCulture);
             StrideBox.Text = _descriptor.Stride.ToString(CultureInfo.InvariantCulture);
             ValidBitsBox.Text = _descriptor.ValidBits.ToString(CultureInfo.InvariantCulture);
-            FormatBox.SelectedItem = _descriptor.PixelFormat;
-            ByteOrderBox.SelectedItem = _descriptor.ByteOrder;
+            FormatBox.Text = _descriptor.PixelFormat.ToString();
+            ByteOrderBox.Text = _descriptor.ByteOrder.ToString();
         }
 
         private void RenderCurrentBuffer()
@@ -333,7 +307,7 @@ namespace RawBufferVisualizer.Wpf
             DiagnosticsList.Items.Clear();
             if (_imageSource == null)
             {
-                StatusText.Text = "No buffer loaded";
+                StatusText.Text = "Ready";
                 return;
             }
 
@@ -352,7 +326,9 @@ namespace RawBufferVisualizer.Wpf
 
             try
             {
+                var viewState = GetViewStateForRender();
                 OpenGlImageView.LoadRawImageSource(_imageSource);
+                ApplyRestoredView(viewState);
             }
             catch (Exception ex)
             {
@@ -366,6 +342,11 @@ namespace RawBufferVisualizer.Wpf
             if (_imageSource.IsFileBacked || estimatedPreviewBytes > MaxCpuPreviewBytes)
             {
                 _rendered = null;
+                if (_activeDocument != null)
+                {
+                    _activeDocument.Rendered = null;
+                }
+
                 HistogramCanvas.Children.Clear();
                 DiagnosticsList.Items.Add(string.Format(
                     CultureInfo.InvariantCulture,
@@ -380,6 +361,11 @@ namespace RawBufferVisualizer.Wpf
             }
 
             _rendered = _imageSource.RenderTile(0, 0, _descriptor.Width, _descriptor.Height, null);
+            if (_activeDocument != null)
+            {
+                _activeDocument.Rendered = _rendered;
+            }
+
             FileText.Text = _currentPath ?? string.Empty;
             DrawHistogram();
             UpdateStatus();
@@ -400,9 +386,38 @@ namespace RawBufferVisualizer.Wpf
             return bitmap;
         }
 
+        private static BitmapSource? CreateThumbnailSource(RawImageSource source, RawImageDescriptor descriptor)
+        {
+            try
+            {
+                var diagnostics = source.Analyze();
+                if (RawBufferDiagnostics.HasErrors(diagnostics))
+                {
+                    return null;
+                }
+
+                const int targetWidth = 96;
+                const int targetHeight = 72;
+                var stepX = Math.Max(1, (int)Math.Ceiling(descriptor.Width / (double)targetWidth));
+                var stepY = Math.Max(1, (int)Math.Ceiling(descriptor.Height / (double)targetHeight));
+                var sampleStep = Math.Max(stepX, stepY);
+                var rendered = source.RenderTileSampled(0, 0, descriptor.Width, descriptor.Height, sampleStep, source.CreateRenderOptions());
+                return CreateBitmapSource(rendered);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private void ClearPreview()
         {
             _rendered = null;
+            if (_activeDocument != null)
+            {
+                _activeDocument.Rendered = null;
+            }
+
             OpenGlImageView.ClearImage();
             HistogramCanvas.Children.Clear();
         }
@@ -473,9 +488,9 @@ namespace RawBufferVisualizer.Wpf
             }
 
             var files = (string[])e.Data.GetData(DataFormats.FileDrop);
-            if (files.Length > 0)
+            foreach (var file in files)
             {
-                OpenPath(files[0]);
+                OpenPath(file);
             }
         }
 
@@ -510,6 +525,62 @@ namespace RawBufferVisualizer.Wpf
         private void OpenGlImageView_ViewChanged(object? sender, EventArgs e)
         {
             UpdateZoomStatus();
+            if (_switchingDocument || _applyingLinkedView || _activeDocument == null)
+            {
+                return;
+            }
+
+            var viewState = OpenGlImageView.GetViewState();
+            if (viewState == null)
+            {
+                return;
+            }
+
+            _activeDocument.ViewState = viewState;
+            if (LinkViewsBox.IsChecked == true)
+            {
+                _linkedViewState = viewState;
+            }
+        }
+
+        private void ImageList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_syncingDocumentSelection)
+            {
+                return;
+            }
+
+            var document = ImageList.SelectedItem as ImageDocument;
+            if (document != null)
+            {
+                ActivateDocument(document);
+            }
+        }
+
+        private void DocumentTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_syncingDocumentSelection)
+            {
+                return;
+            }
+
+            var document = DocumentTabs.SelectedItem as ImageDocument;
+            if (document != null)
+            {
+                ActivateDocument(document);
+            }
+        }
+
+        private void LinkViewsBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (LinkViewsBox.IsChecked == true)
+            {
+                _linkedViewState = OpenGlImageView.GetViewState();
+                if (_activeDocument != null && _linkedViewState != null)
+                {
+                    _activeDocument.ViewState = _linkedViewState;
+                }
+            }
         }
 
         private void UpdateZoomStatus()
@@ -555,16 +626,9 @@ namespace RawBufferVisualizer.Wpf
                 _descriptor.PixelFormat,
                 _imageSource.Length,
                 OpenGlImageView.TileCount);
-        }
-
-        private void ReplaceImageSource(RawImageSource? source)
-        {
-            OpenGlImageView.ClearImage();
-            var previous = _imageSource;
-            _imageSource = source;
-            if (!ReferenceEquals(previous, source))
+            if (_activeDocument != null)
             {
-                previous?.Dispose();
+                _activeDocument.Status = StatusText.Text;
             }
         }
 
@@ -586,6 +650,64 @@ namespace RawBufferVisualizer.Wpf
             }
 
             return RawImageSource.FromMemory(File.ReadAllBytes(rawPath), descriptor);
+        }
+
+        private sealed class ImageDocument : IDisposable
+        {
+            public string DisplayPath { get; private set; }
+            public string Title { get; private set; }
+            public RawImageSource Source { get; set; }
+            public RawImageDescriptor Descriptor { get; set; }
+            public RenderedImage? Rendered { get; set; }
+            public RawOpenGlViewState? ViewState { get; set; }
+            public BitmapSource? Thumbnail { get; private set; }
+            public string Status { get; set; }
+
+            public string Summary
+            {
+                get
+                {
+                    return string.Format(
+                        CultureInfo.InvariantCulture,
+                        "{0} x {1}  {2}",
+                        Descriptor.Width,
+                        Descriptor.Height,
+                        Descriptor.PixelFormat);
+                }
+            }
+
+            public ImageDocument(string displayPath, RawImageSource source, RawImageDescriptor descriptor)
+            {
+                DisplayPath = Path.GetFullPath(displayPath);
+                Title = CreateTitle(DisplayPath);
+                Source = source ?? throw new ArgumentNullException("source");
+                Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
+                Thumbnail = CreateThumbnailSource(Source, Descriptor);
+                Status = string.Empty;
+            }
+
+            public void SetPath(string displayPath)
+            {
+                DisplayPath = Path.GetFullPath(displayPath);
+                Title = CreateTitle(DisplayPath);
+            }
+
+            public void Dispose()
+            {
+                Source.Dispose();
+            }
+
+            private static string CreateTitle(string displayPath)
+            {
+                var fileName = Path.GetFileName(displayPath);
+                const string metadataSuffix = ".rbuf.json";
+                if (fileName.EndsWith(metadataSuffix, StringComparison.OrdinalIgnoreCase))
+                {
+                    return fileName.Substring(0, fileName.Length - metadataSuffix.Length);
+                }
+
+                return fileName;
+            }
         }
     }
 }

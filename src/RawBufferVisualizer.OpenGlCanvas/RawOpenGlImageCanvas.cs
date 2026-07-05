@@ -52,6 +52,16 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
         }
 
+        public RawOpenGlViewState? GetViewState()
+        {
+            if (_descriptor == null)
+            {
+                return null;
+            }
+
+            return new RawOpenGlViewState(_descriptor.Width, _descriptor.Height, _viewLeft, _viewTop, _viewWidth, _viewHeight);
+        }
+
         public RawOpenGlImageCanvas()
         {
             _openGlControl = new OpenGLControl
@@ -161,6 +171,22 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _viewTop = centerY - (_viewHeight / 2);
             OnViewChanged();
             RequestRender();
+        }
+
+        public bool TryApplyViewState(RawOpenGlViewState? state)
+        {
+            if (_descriptor == null || state == null || !state.Matches(_descriptor.Width, _descriptor.Height))
+            {
+                return false;
+            }
+
+            _viewLeft = state.Left;
+            _viewTop = state.Top;
+            _viewWidth = state.Width;
+            _viewHeight = state.Height;
+            OnViewChanged();
+            RequestRender();
+            return true;
         }
 
         protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)

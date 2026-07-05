@@ -13,4 +13,29 @@ namespace RawBufferVisualizer.OpenGlCanvas
             Y = y;
         }
     }
+
+    public sealed class RawOpenGlViewState
+    {
+        public int ImageWidth { get; private set; }
+        public int ImageHeight { get; private set; }
+        public double Left { get; private set; }
+        public double Top { get; private set; }
+        public double Width { get; private set; }
+        public double Height { get; private set; }
+
+        public RawOpenGlViewState(int imageWidth, int imageHeight, double left, double top, double width, double height)
+        {
+            ImageWidth = imageWidth;
+            ImageHeight = imageHeight;
+            Left = left;
+            Top = top;
+            Width = width;
+            Height = height;
+        }
+
+        public bool Matches(int imageWidth, int imageHeight)
+        {
+            return ImageWidth == imageWidth && ImageHeight == imageHeight && Width > 0 && Height > 0;
+        }
+    }
 }
