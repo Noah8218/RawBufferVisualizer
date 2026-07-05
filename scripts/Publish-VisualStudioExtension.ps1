@@ -68,7 +68,7 @@ finally {
 }
 
 Assert-FileExists -Path (Join-Path $buildOutput '.vsextension\extension.json') -Message 'Visual Studio extension metadata was not created'
-Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio OpenGL ToolWindow pkgdef was not created'
+Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
 Assert-FileExists -Path $vsixPath -Message 'Visual Studio extension VSIX was not created'
 
 $manifestPath = Join-Path $buildOutput 'extension.vsixmanifest'
@@ -88,7 +88,7 @@ $requiredEntries = @(
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
     'RawBufferVisualizer.OpenGlCanvas.dll',
     'SharpGL.dll',
-    'SharpGL.WPF.dll'
+    'SharpGL.WinForms.dll'
 )
 
 foreach ($entryName in $requiredEntries) {
@@ -108,7 +108,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     '',
     'The VSIX contains both parts required for normal operation:',
     '- Visual Studio debugger visualizers for RawBufferSnapshot, RawBufferView, Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables',
-    '- In-process Visual Studio OpenGL ToolWindow used as the docked image viewer',
+    '- In-process Visual Studio ToolWindow used as the docked image viewer',
     '',
     'Manual validation prerequisites:',
     '- Visual Studio 2022 17.14 or newer',

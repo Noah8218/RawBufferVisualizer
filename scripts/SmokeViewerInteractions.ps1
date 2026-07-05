@@ -53,6 +53,7 @@ public static class RawBufferInteractionNative {
     [DllImport("user32.dll")] public static extern void mouse_event(uint dwFlags, uint dx, uint dy, int dwData, UIntPtr dwExtraInfo);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    public const uint MOUSEEVENTF_MOVE = 0x0001;
     public const uint MOUSEEVENTF_WHEEL = 0x0800;
 }
 '@
@@ -217,7 +218,11 @@ function Move-MouseToImage([System.Windows.Automation.AutomationElement]$root, [
     $bounds = Get-ImageRect $root $hwnd
     $x = [int]($bounds.Left + ($bounds.Width * $xRatio))
     $y = [int]($bounds.Top + ($bounds.Height * $yRatio))
+    [RawBufferInteractionNative]::SetCursorPos([int]($bounds.Left - 20), [int]($bounds.Top - 20)) | Out-Null
+    Start-Sleep -Milliseconds 100
     [RawBufferInteractionNative]::SetCursorPos($x, $y) | Out-Null
+    [RawBufferInteractionNative]::mouse_event([RawBufferInteractionNative]::MOUSEEVENTF_MOVE, 1, 1, 0, [UIntPtr]::Zero)
+    [RawBufferInteractionNative]::mouse_event([RawBufferInteractionNative]::MOUSEEVENTF_MOVE, 0, 0, 0, [UIntPtr]::Zero)
 }
 
 function Set-DialogPathAndAccept([string]$path) {
@@ -286,7 +291,7 @@ try {
     Move-MouseToImage (Get-Root $hwnd) $hwnd 0.5 0.5
     Wait-Until "pixel read" {
         $pixel = Get-ElementName (Get-Root $hwnd) "PixelText"
-        $pixel -match "X=\d+, Y=\d+, Value=\d+"
+        $pixel -match "X=\d+, Y=\d+.*(GV|Value)="
     } | Out-Null
     Add-Result $results "pixel read / GV" (Get-ElementName (Get-Root $hwnd) "PixelText")
 

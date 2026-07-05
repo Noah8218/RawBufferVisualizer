@@ -2,11 +2,12 @@
   <PropertyGroup>
     <TargetFrameworks>net472;net9.0-windows</TargetFrameworks>
     <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
     <!-- The viewer dependency ships net40 assets. net472 is native; net10-windows is covered by runtime smoke checks. -->
     <NoWarn>$(NoWarn);NU1701</NoWarn>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
-    <PackageReference Include="SharpGL.WPF" Version="2.4.0" />
+    <PackageReference Include="SharpGL.WinForms" Version="2.4.0" />
   </ItemGroup>
 </Project>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CommandTable xmlns="http://schemas.microsoft.com/VisualStudio/2005-10-18/CommandTable"
+              xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <Extern href="stdidcmd.h" />
+  <Extern href="vsshlids.h" />
+
+  <Commands package="RawBufferVisualizerPackage">
+    <Groups>
+      <Group guid="RawBufferVisualizerCommandSet" id="RawBufferVisualizerGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_MENU_VIEW" />
+      </Group>
+    </Groups>
+
+    <Buttons>
+      <Button guid="RawBufferVisualizerCommandSet" id="ShowToolWindowCommand" priority="0x0100" type="Button">
+        <Parent guid="RawBufferVisualizerCommandSet" id="RawBufferVisualizerGroup" />
+        <Strings>
+          <ButtonText>Raw Buffer Visualizer</ButtonText>
+        </Strings>
+      </Button>
+    </Buttons>
+  </Commands>
+
+  <Symbols>
+    <GuidSymbol name="RawBufferVisualizerPackage" value="{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}" />
+    <GuidSymbol name="RawBufferVisualizerCommandSet" value="{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}">
+      <IDSymbol name="RawBufferVisualizerGroup" value="0x1020" />
+      <IDSymbol name="ShowToolWindowCommand" value="0x0100" />
+    </GuidSymbol>
+  </Symbols>
+</CommandTable>

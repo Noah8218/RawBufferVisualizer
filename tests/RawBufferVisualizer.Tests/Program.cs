@@ -30,13 +30,19 @@ namespace RawBufferVisualizer.Tests
                 AllSupportedFormatsRender();
                 TilePlannerSplitsLargeImage();
                 TilePlannerHandles100kImage();
+                TilePlannerHandles200kImage();
                 TileRenderMatchesFullRender();
                 FileBackedSourceRendersLikeMemory();
                 SampledMemorySourceMatchesFileBackedSourceForAllFormats();
                 FileBackedPackedSourceRendersLikeMemory();
                 FileBackedSourceHandles100kSampledTile();
+                FileBackedSourceHandles200kSampledTile();
                 FileBackedPackedSourceHandles100kSampledTile();
+                DifferenceSourceRendersAbsDiff();
+                SplitSourceRendersLeftAndRight();
                 InvalidStrideIsReported();
+                DiagnosticsReportPaddingAndExpectedBytes();
+                PixelInspectorReportsRawBytes();
                 SnapshotRoundTrips();
                 SnapshotReferenceLoadsMetadata();
                 SnapshotReferenceLoadsUtf8BomPrettyMetadata();
@@ -203,6 +209,27 @@ namespace RawBufferVisualizer.Tests
 
             Assert(descriptor.GetRequiredByteCount() == 10000000000L, "100K Mono8 source byte estimate failed.");
             Assert(RawImageTilePlanner.EstimateBgraByteCount(descriptor) == 40000000000L, "100K BGRA memory estimate failed.");
+        }
+
+        private static void TilePlannerHandles200kImage()
+        {
+            var tiles = RawImageTilePlanner.CreateTiles(200000, 200000);
+            Assert(tiles.Count == 1600, "200K image should split into 1600 display tiles.");
+            Assert(tiles[0].X == 0 && tiles[0].Y == 0 && tiles[0].Width == 5000 && tiles[0].Height == 5000, "200K first tile bounds failed.");
+            Assert(tiles[1599].X == 195000 && tiles[1599].Y == 195000 && tiles[1599].Width == 5000 && tiles[1599].Height == 5000, "200K last tile bounds failed.");
+
+            var descriptor = new RawImageDescriptor
+            {
+                Width = 200000,
+                Height = 200000,
+                Stride = 200000,
+                PixelFormat = RawPixelFormat.Mono8,
+                ValidBits = 8,
+                ByteOrder = RawByteOrder.LittleEndian
+            };
+
+            Assert(descriptor.GetRequiredByteCount() == 40000000000L, "200K Mono8 source byte estimate failed.");
+            Assert(RawImageTilePlanner.EstimateBgraByteCount(descriptor) == 160000000000L, "200K BGRA memory estimate failed.");
         }
 
         private static void TileRenderMatchesFullRender()
@@ -443,6 +470,46 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void FileBackedSourceHandles200kSampledTile()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "huge-200k-mono8.rbuf.json");
+                var descriptor = CreateDescriptor(200000, 200000, 200000, RawPixelFormat.Mono8, 8);
+                var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, descriptor);
+                if (!CreateSparseFile(rawPath, descriptor.GetRequiredByteCount()))
+                {
+                    Console.WriteLine("Skipped 200K file-backed sparse raw test because this filesystem does not support sparse files.");
+                    return;
+                }
+
+                var reference = RawBufferSnapshot.LoadReference(metadataPath);
+                Assert(reference.RawByteLength == 40000000000L, "200K reference raw length failed.");
+
+                using (var source = RawImageSource.FromFile(reference.RawPath, reference.Descriptor))
+                {
+                    var diagnostics = source.Analyze();
+                    Assert(!RawBufferDiagnostics.HasErrors(diagnostics), "200K file-backed source diagnostics failed.");
+
+                    var sampled = source.RenderTileSampled(195000, 195000, 5000, 5000, 64, source.CreateRenderOptions());
+                    Assert(sampled.Width == 79 && sampled.Height == 79, "200K sampled tile dimensions failed.");
+                    Assert(sampled.Bgra32.Length == 79 * 79 * 4, "200K sampled tile byte length failed.");
+
+                    var pixel = source.DescribePixel(199999, 199999);
+                    Assert(pixel.Contains("X=199999, Y=199999") && pixel.Contains("Value=33"), "200K file-backed pixel read failed.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
         private static void Mono10PackedLsbRenders()
         {
             var descriptor = new RawImageDescriptor
@@ -477,6 +544,36 @@ namespace RawBufferVisualizer.Tests
             Assert(text.Contains("Value=4095"), "Mono12 packed inspector failed.");
         }
 
+        private static void DifferenceSourceRendersAbsDiff()
+        {
+            var descriptor = CreateDescriptor(2, 1, 2, RawPixelFormat.Mono8, 8);
+            using (var a = RawImageSource.FromMemory(new byte[] { 10, 100 }, descriptor))
+            using (var b = RawImageSource.FromMemory(new byte[] { 40, 90 }, descriptor))
+            using (var diff = new RawImageDifferenceSource(a, b))
+            {
+                var rendered = diff.RenderTile(0, 0, 2, 1, null);
+                Assert(rendered.Bgra32[0] == 30 && rendered.Bgra32[1] == 30 && rendered.Bgra32[2] == 30, "Diff first pixel failed.");
+                Assert(rendered.Bgra32[4] == 10 && rendered.Bgra32[5] == 10 && rendered.Bgra32[6] == 10, "Diff second pixel failed.");
+                Assert(diff.DescribePixel(0, 0).Contains("A=[") && diff.DescribePixel(0, 0).Contains("B=["), "Diff pixel describe failed.");
+            }
+        }
+
+        private static void SplitSourceRendersLeftAndRight()
+        {
+            var descriptor = CreateDescriptor(4, 1, 4, RawPixelFormat.Mono8, 8);
+            using (var a = RawImageSource.FromMemory(new byte[] { 10, 20, 30, 40 }, descriptor))
+            using (var b = RawImageSource.FromMemory(new byte[] { 100, 110, 120, 130 }, descriptor))
+            using (var split = new RawImageSplitSource(a, b))
+            {
+                var rendered = split.RenderTile(0, 0, 4, 1, null);
+                Assert(rendered.Bgra32[0] == 10, "Split first A pixel failed.");
+                Assert(rendered.Bgra32[4] == 20, "Split second A pixel failed.");
+                Assert(rendered.Bgra32[8] == 120, "Split first B pixel failed.");
+                Assert(rendered.Bgra32[12] == 130, "Split second B pixel failed.");
+                Assert(split.DescribePixel(0, 0).Contains("A=[") && split.DescribePixel(3, 0).Contains("B=["), "Split pixel describe failed.");
+            }
+        }
+
         private static void InvalidStrideIsReported()
         {
             var descriptor = new RawImageDescriptor
@@ -491,6 +588,24 @@ namespace RawBufferVisualizer.Tests
 
             var diagnostics = RawBufferDiagnostics.Analyze(new byte[] { 1, 2 }, descriptor);
             Assert(RawBufferDiagnostics.HasErrors(diagnostics), "Invalid stride should be an error.");
+        }
+
+        private static void DiagnosticsReportPaddingAndExpectedBytes()
+        {
+            var descriptor = CreateDescriptor(3, 2, 12, RawPixelFormat.BGR24, 8);
+            var diagnostics = RawBufferDiagnostics.Analyze(new byte[24], descriptor);
+            var text = string.Join("\n", diagnostics);
+            Assert(text.Contains("padding 3 bytes/row"), "Padding diagnostic failed.");
+            Assert(text.Contains("Expected image byte range: 21 bytes"), "Expected byte diagnostic failed.");
+            Assert(text.Contains("trailing bytes"), "Trailing byte diagnostic failed.");
+        }
+
+        private static void PixelInspectorReportsRawBytes()
+        {
+            var descriptor = CreateDescriptor(1, 1, 3, RawPixelFormat.BGR24, 8);
+            var text = RawPixelInspector.Describe(new byte[] { 3, 2, 1 }, descriptor, 0, 0);
+            Assert(text.Contains("B=3") && text.Contains("G=2") && text.Contains("R=1"), "Pixel channel diagnostic failed.");
+            Assert(text.Contains("Raw=03 02 01"), "Pixel raw byte diagnostic failed.");
         }
 
         private static void SnapshotRoundTrips()
@@ -879,9 +994,16 @@ namespace RawBufferVisualizer.Tests
 
                 var requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath);
                 var restored = VisualizerHandoffInbox.ReadSnapshotRequest(requestPath);
+                var request = VisualizerHandoffInbox.ReadSnapshotRequestInfo(requestPath);
+
+                var typedRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath, "bitmapBgr24", "System.Drawing.Bitmap");
+                var typedRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(typedRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
                 Assert(restored == Path.GetFullPath(metadataPath), "Handoff metadata path roundtrip failed.");
+                Assert(request.MetadataPath == Path.GetFullPath(metadataPath), "Handoff request info metadata path failed.");
+                Assert(typedRequest.DisplayName == "bitmapBgr24", "Handoff display name roundtrip failed.");
+                Assert(typedRequest.SourceType == "System.Drawing.Bitmap", "Handoff source type roundtrip failed.");
             }
             finally
             {

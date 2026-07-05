@@ -1,10 +1,14 @@
 param(
     [string]$Configuration = "Debug",
+    [string]$Framework = "net472",
     [string]$ViewerFramework = "net472",
+    [int]$Width = 100000,
+    [int]$Height = 100000,
     [ValidateSet("Mono8", "Mono10PackedLsb", "Mono12PackedLsb")]
     [string]$PixelFormat = "Mono8",
     [string]$OutputDir = "artifacts\ui\large-file-backed",
-    [string]$CaptureFileName = ""
+    [string]$CaptureFileName = "",
+    [switch]$NoBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -13,9 +17,11 @@ $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
 Set-Location $repoRoot
 
-dotnet build .\RawBufferVisualizer.sln --configuration $Configuration | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    throw "Build failed with exit code $LASTEXITCODE."
+if (-not $NoBuild) {
+    dotnet build .\RawBufferVisualizer.sln --configuration $Configuration | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "Build failed with exit code $LASTEXITCODE."
+    }
 }
 
 $outputRoot = Join-Path $repoRoot $OutputDir
@@ -23,32 +29,32 @@ New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 $sampleRoot = Join-Path $repoRoot "artifacts\large-file-backed"
 New-Item -ItemType Directory -Force -Path $sampleRoot | Out-Null
-$sampleName = "huge-$($PixelFormat.ToLowerInvariant())"
+$sampleName = "huge-$($Width)x$($Height)-$($PixelFormat.ToLowerInvariant())"
 $metadataPath = Join-Path $sampleRoot "$sampleName.rbuf.json"
 $rawPath = Join-Path $sampleRoot "$sampleName.raw"
 if ([string]::IsNullOrWhiteSpace($CaptureFileName)) {
-    $CaptureFileName = "viewer-100k-$($PixelFormat.ToLowerInvariant())-file-backed.png"
+    $CaptureFileName = "viewer-$($Width)x$($Height)-$($PixelFormat.ToLowerInvariant())-file-backed.png"
 }
 
 switch ($PixelFormat) {
     "Mono10PackedLsb" {
         $validBits = 10
-        $stride = [int][Math]::Ceiling((100000 * 10) / 8.0)
+        $stride = [int][Math]::Ceiling(($Width * 10) / 8.0)
     }
     "Mono12PackedLsb" {
         $validBits = 12
-        $stride = [int][Math]::Ceiling((100000 * 12) / 8.0)
+        $stride = [int][Math]::Ceiling(($Width * 12) / 8.0)
     }
     default {
         $validBits = 8
-        $stride = 100000
+        $stride = $Width
     }
 }
 
 $metadata = [ordered]@{
     rawFile = "$sampleName.raw"
-    width = 100000
-    height = 100000
+    width = $Width
+    height = $Height
     stride = $stride
     pixelFormat = $PixelFormat
     validBits = $validBits
@@ -95,17 +101,17 @@ function New-PatternRow([string]$pixelFormat, [int]$width, [int]$stride) {
     switch ($pixelFormat) {
         "Mono10PackedLsb" {
             for ($x = 0; $x -lt $width; $x++) {
-                Set-PackedValue $row $x 10 (64 + (($x / 512) % 960))
+                Set-PackedValue $row $x 10 (64 + (([int][Math]::Floor($x / 512.0)) % 960))
             }
         }
         "Mono12PackedLsb" {
             for ($x = 0; $x -lt $width; $x++) {
-                Set-PackedValue $row $x 12 (256 + (($x / 512) % 3840))
+                Set-PackedValue $row $x 12 (256 + (([int][Math]::Floor($x / 512.0)) % 3840))
             }
         }
         default {
             for ($x = 0; $x -lt $width; $x++) {
-                $row[$x] = [byte](32 + (($x / 512) % 224))
+                $row[$x] = [byte](32 + (([int][Math]::Floor($x / 512.0)) % 224))
             }
         }
     }
@@ -235,7 +241,7 @@ function Get-ElementName([System.Windows.Automation.AutomationElement]$root, [st
     $element.Current.Name
 }
 
-New-SparsePatternRaw $rawPath 100000 100000 $stride $PixelFormat
+New-SparsePatternRaw $rawPath $Width $Height $stride $PixelFormat
 
 $viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
 if (-not (Test-Path $viewerExe)) {
@@ -255,9 +261,11 @@ try {
     [RawBufferLargeFileBackedNative]::BringWindowToTop($hwnd) | Out-Null
     [RawBufferLargeFileBackedNative]::SetForegroundWindow($hwnd) | Out-Null
 
-    Wait-Until "100K status" {
+    $expectedTiles = [int]([Math]::Ceiling($Width / 1024.0) * [Math]::Ceiling($Height / 1024.0))
+    Wait-Until "$($Width)x$($Height) status" {
         $status = Get-ElementName (Get-Root $hwnd) "StatusText"
-        $status -match "100000 x 100000, $PixelFormat" -and $status -match "tiles 400"
+        $normalizedStatus = $status -replace ",", ""
+        $normalizedStatus -match "$Width x $Height $PixelFormat" -and $normalizedStatus -match "tiles $expectedTiles"
     } | Out-Null
 
     $capturePath = Join-Path $outputRoot $CaptureFileName

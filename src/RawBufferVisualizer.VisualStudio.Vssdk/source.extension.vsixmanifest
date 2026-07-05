@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="RawBufferVisualizer.VisualStudio.Vssdk" Version="1.0.0" Language="en-US" Publisher="Noah8218" />
-    <DisplayName>Raw Buffer Visualizer OpenGL ToolWindow</DisplayName>
-    <Description xml:space="preserve">Docked OpenGL viewer for Raw Buffer Visualizer debugger snapshots.</Description>
+    <Identity Id="RawBufferVisualizer.VisualStudio.Vssdk" Version="1.0.0" Language="en-US" Publisher="Noah Choi" />
+    <DisplayName>Raw Buffer Visualizer Tool Window</DisplayName>
+    <Description xml:space="preserve">Docked image inspector for Raw Buffer Visualizer debugger snapshots.</Description>
   </Metadata>
   <Installation>
     <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0,18.0)">

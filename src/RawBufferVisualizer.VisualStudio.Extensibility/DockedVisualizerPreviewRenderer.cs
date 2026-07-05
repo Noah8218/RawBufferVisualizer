@@ -32,7 +32,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 SaveSampledPng(source, descriptor, thumbnailPath, 96);
                 diagnostics.Add(string.Format(
                     CultureInfo.InvariantCulture,
-                    "Info: VS docked preview is sampled PNG. Full tiled OpenGL viewing remains in the standalone viewer path."));
+                    "Info: VS docked preview is sampled PNG. Full tiled viewing remains available in the standalone viewer path."));
                 return new DockedVisualizerPreviewFiles(previewPath, thumbnailPath, previewSize.Width, previewSize.Height, diagnostics);
             }
         }

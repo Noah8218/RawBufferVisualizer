@@ -6,6 +6,10 @@
     <Deterministic>true</Deterministic>
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build\intermediate\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
     <BaseOutputPath>$(MSBuildThisFileDirectory).build\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <Authors>Noah Choi</Authors>
+    <Company>Noah Choi</Company>
+    <Copyright>Copyright (c) 2026 Noah Choi</Copyright>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" Version="1.0.3" PrivateAssets="all" />

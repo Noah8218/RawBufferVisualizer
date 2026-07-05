@@ -66,7 +66,11 @@ For SDK-style objects, the visualizer target is the `RawBufferView` property, so
 - Repeated inspections append rows to the same docked `Images` list instead of opening separate standalone windows.
 - `Images` rows show thumbnails and can be clicked comfortably.
 - The descriptor fields are read-only display text.
-- The sampled preview, `1:1`, zoom slider, descriptor, and diagnostics work in the docked Visual Studio view.
+- Mouse wheel zoom, drag pan, `Fit`, `1:1`, descriptor, and diagnostics work in the docked Visual Studio view.
+- Pixel hover shows coordinate, decoded value, raw bytes, 5x5 neighborhood, and line profile.
+- `Interpret` can change format, stride, valid bits, and byte order without editing source code.
+- `Compare` can set A/B, use linked pan/zoom, create a diff view, and blink between A and B.
+- A failed open or malformed descriptor remains visible in `Images` as an error row and shows the reason in diagnostics.
 
 ## Failure Checks
 
@@ -85,4 +89,5 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 - One screenshot of the Visual Studio docked visualizer after a successful launch.
 - One screenshot of the same docked visualizer with at least two images in the `Images` list.
 - One screenshot showing pixel hover text and zoom percentage.
+- One screenshot showing the Inspector with diagnostics or Try interpretation.
 - One note for any unsupported SDK type, including the exact .NET type full name and SDK version.

@@ -397,7 +397,11 @@ namespace RawBufferVisualizer.Core
             {
                 var bitsPerPixel = GetPackedBitsPerPixel(SourceDescriptor.PixelFormat);
                 var value = ReadPackedPixel(x, y, bitsPerPixel);
-                return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}", x, y, value);
+                using (var stream = OpenRawReadStream())
+                {
+                    var row = ReadPackedRowWindow(stream, y, x, 1, bitsPerPixel, out _);
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, GV={2}, Value={2}, Raw={3}", x, y, value, FormatBytes(row));
+                }
             }
 
             RawImageDescriptor pixelDescriptor;
@@ -408,7 +412,7 @@ namespace RawBufferVisualizer.Core
             {
                 var color = RawBufferRenderer.GetBayerColor(SourceDescriptor.PixelFormat, x, y);
                 var colorName = color == 0 ? "R" : color == 1 ? "G" : "B";
-                return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Bayer {2}={3}", x, y, colorName, buffer[0]);
+                return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Bayer {2}={3}, Raw={4:X2}", x, y, colorName, buffer[0], buffer[0]);
             }
 
             return RawPixelInspector.Describe(buffer, pixelDescriptor, localX, localY, x, y);
@@ -766,6 +770,17 @@ namespace RawBufferVisualizer.Core
                 || format == RawPixelFormat.BayerGRBG8
                 || format == RawPixelFormat.BayerGBRG8
                 || format == RawPixelFormat.BayerBGGR8;
+        }
+
+        private static string FormatBytes(byte[] buffer)
+        {
+            var parts = new string[buffer.Length];
+            for (var i = 0; i < buffer.Length; i++)
+            {
+                parts[i] = buffer[i].ToString("X2", CultureInfo.InvariantCulture);
+            }
+
+            return string.Join(" ", parts);
         }
 
         private static RawRenderOptions CreateFixedRangeOptions(double whiteLevel)

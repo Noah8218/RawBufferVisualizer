@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace RawBufferVisualizer.Core
 {
@@ -52,7 +53,20 @@ namespace RawBufferVisualizer.Core
             }
             else if (minimumStride > 0 && descriptor.Stride > minimumStride)
             {
-                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Info, "Stride includes row padding."));
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Info,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Stride includes row padding: stride {0:N0}, minimum {1:N0}, padding {2:N0} bytes/row.",
+                        descriptor.Stride,
+                        minimumStride,
+                        descriptor.Stride - minimumStride)));
+            }
+            else if (minimumStride > 0 && descriptor.Stride == minimumStride)
+            {
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Info,
+                    string.Format(CultureInfo.InvariantCulture, "Stride matches pixel format minimum: {0:N0} bytes/row.", minimumStride)));
             }
 
             if (descriptor.PixelFormat == RawPixelFormat.Mono16 && (descriptor.ValidBits < 1 || descriptor.ValidBits > 16))
@@ -71,14 +85,45 @@ namespace RawBufferVisualizer.Core
             }
 
             var requiredBytes = descriptor.GetRequiredByteCount();
+            if (requiredBytes > 0)
+            {
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Info,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Expected image byte range: {0:N0} bytes; buffer length: {1:N0} bytes.",
+                        requiredBytes,
+                        bufferLength)));
+            }
+
             if (requiredBytes > bufferLength)
             {
-                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Buffer is smaller than descriptor requires."));
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Error,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Buffer is smaller than descriptor requires by {0:N0} bytes.",
+                        requiredBytes - bufferLength)));
             }
             else if (requiredBytes > 0 && bufferLength > requiredBytes)
             {
-                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Info, "Buffer has trailing bytes after the image."));
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Info,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Buffer has {0:N0} trailing bytes after the image.",
+                        bufferLength - requiredBytes)));
             }
+
+            diagnostics.Add(new RawDiagnostic(
+                RawDiagnosticSeverity.Info,
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Interpretation: {0}, {1} valid bits, {2}, {3} channel(s).",
+                    descriptor.PixelFormat,
+                    descriptor.ValidBits,
+                    descriptor.ByteOrder,
+                    GetChannelCount(descriptor.PixelFormat))));
 
             return diagnostics;
         }
@@ -94,6 +139,20 @@ namespace RawBufferVisualizer.Core
             }
 
             return false;
+        }
+
+        private static int GetChannelCount(RawPixelFormat pixelFormat)
+        {
+            switch (pixelFormat)
+            {
+                case RawPixelFormat.RGB24:
+                case RawPixelFormat.BGR24:
+                    return 3;
+                case RawPixelFormat.BGRA32:
+                    return 4;
+                default:
+                    return 1;
+            }
         }
     }
 }

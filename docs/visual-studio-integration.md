@@ -14,15 +14,15 @@ Reasoning:
 
 ## First Supported Workflow
 
-The first Visual Studio prototype should support this flow:
+The first Visual Studio workflow supports this flow:
 
 1. The developer stops at a breakpoint.
 2. The developer opens the Raw Buffer Visualizer entry from DataTip, Watch, Locals, or Autos.
 3. The visualizer receives a supported image-like object from the debuggee process.
 4. The visualizer writes a temporary `.rbuf.json` plus `.raw` snapshot.
-5. The Visual Studio docked visualizer adds the image to the shared `Images` session and shows a sampled preview.
+5. The Visual Studio docked visualizer adds the image to the shared `Images` session and renders it in the docked viewer.
 
-This keeps the Visual Studio path inside the IDE. The standalone viewer remains available as a separate executable for full tiled OpenGL workflows.
+This keeps the normal debugging path inside the IDE. The standalone viewer remains available as a separate executable for opening saved `.rbuf.json` snapshots.
 
 ## Type Priority
 
@@ -47,7 +47,7 @@ This keeps the Visual Studio path inside the IDE. The standalone viewer remains 
 
 ## Project Shape
 
-The Visual Studio prototype is split into these projects:
+The Visual Studio integration is split into these projects:
 
 ```text
 src\RawBufferVisualizer.VisualStudio\
@@ -70,34 +70,36 @@ src\RawBufferVisualizer.VisualStudio.Extensibility\
 - VS 2022 debugger visualizer entry point.
 - Targets the modern Visual Studio extension model.
 - Receives chunked debugger data and writes temporary snapshot files.
-- Hosts the docked Visual Studio Remote UI image list and sampled preview.
+- Hands debugger snapshots to the docked Visual Studio image inspector.
 
 ## Current Prototype Status
 
 - `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
-- `RawBufferVisualizer.VisualStudio.Extensibility` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot and generates sampled PNG previews for Visual Studio Remote UI.
+- `RawBufferVisualizer.VisualStudio.Extensibility` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot and hands it to the docked viewer.
 - `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - The Visual Studio debugger visualizer is hosted as a docked tool window and appends inspected images into one shared `Images` session.
 - Manual Visual Studio installation and DataTip/Watch verification are documented in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
 
 ## Viewer Session Strategy
 
-The current Visual Studio session handoff is in-process Remote UI:
+The current Visual Studio session handoff is:
 
 - The extension writes one `.rbuf.json` plus `.raw` pair per inspected image.
-- The extension creates sampled PNG thumbnail/preview files next to the snapshot.
-- The debugger visualizer returns a Visual Studio docked Remote UI control bound to a shared image session.
-- Repeated inspections add rows to the same `Images` list instead of opening a standalone viewer process per image.
+- The debugger visualizer sends the snapshot path to the docked Visual Studio image inspector.
+- Repeated inspections add rows to the same `Images` list instead of opening a separate window per image.
+- The list item keeps the variable/title, thumbnail, dimensions, pixel format, stride, and source type.
+- Failed opens remain visible in the list as error rows with the reason.
 
-Remote UI cannot host the existing custom OpenGL canvas directly. Full tiled OpenGL interaction remains in the standalone WPF viewer until an in-process VSSDK tool window is added.
+The docked viewer owns mouse wheel zoom, drag pan, descriptor display, diagnostics, Try interpretation, pixel inspection, and A/B comparison.
 
-Trigger criteria for a VSSDK in-process tool window:
+VSSDK tool window acceptance criteria:
 
-- Visual Studio docked preview must support full tiled OpenGL instead of sampled PNG previews
-- debugger-time pixel hover needs to be calculated from mouse position inside the VS tool window
-- export commands need direct access to the selected docked image
+- Visual Studio docked preview stays inside the IDE and does not block stepping.
+- Debugger-time pixel hover is calculated from mouse position inside the VS tool window.
+- Image list remains the primary navigation surface.
+- Viewer operations stay responsive under mouse wheel zoom and drag pan.
 
 ## Prototype Build
 
@@ -111,13 +113,13 @@ This publishes the single `net472` hybrid VSIX, uninstalls the previous local VS
 
 The debugger visualizer providers are registered as `ToolWindow` visualizers. The docked viewer should stay inside Visual Studio and must not block `Continue`, `Step Over`, or moving to the next debuggee breakpoint.
 
-Build the current extension prototype:
+Build the current extension:
 
 ```powershell
 dotnet build .\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj -c Release
 ```
 
-Create the extension prototype zip:
+Create the extension zip:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1

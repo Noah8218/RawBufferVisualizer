@@ -1,42 +1,57 @@
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
+using System.Windows.Forms.Integration;
 using System.Windows.Threading;
 using RawBufferVisualizer.Core;
 using SharpGL;
-using SharpGL.SceneGraph;
-using SharpGL.WPF;
+using Drawing = System.Drawing;
+using Imaging = System.Drawing.Imaging;
+using Forms = System.Windows.Forms;
 
 namespace RawBufferVisualizer.OpenGlCanvas
 {
     public sealed class RawOpenGlImageCanvas : UserControl
     {
+        private const int DisplayTileSize = 1024;
+        private const int MaxCachedTextures = 96;
+        private const double PixelOverlayMinZoom = 8.0;
+        private const double PixelGridOverlayMinCellSize = 32.0;
+        private const int MaxPixelGridOverlayCells = 600;
+
+        private readonly WindowsFormsHost _host;
+        private readonly Forms.Panel _panel;
         private readonly OpenGLControl _openGlControl;
+        private readonly Forms.Label _pixelOverlayLabel;
         private readonly List<TextureTile> _tiles = new List<TextureTile>();
+        private readonly RawOpenGlRenderStats _renderStats = new RawOpenGlRenderStats();
         private RawImageDescriptor? _descriptor;
         private RawImageSource? _imageSource;
         private RawRenderOptions? _renderOptions;
-        private uint _shaderProgram;
-        private uint _vertexArray;
-        private uint _vertexBuffer;
-        private int _viewUniform;
-        private int _textureUniform;
         private double _viewLeft;
         private double _viewTop;
         private double _viewWidth = 1;
         private double _viewHeight = 1;
         private bool _dragging;
+        private bool _openGlInitialized;
         private bool _renderQueued;
         private Point _lastMouse;
         private DateTime _lastViewChangedUtc = DateTime.MinValue;
         private int _lastPixelX = int.MinValue;
         private int _lastPixelY = int.MinValue;
+        private long _frameSerial;
+        private string _pixelOverlayText = string.Empty;
+        private Point? _pinnedMarker;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
+        public event EventHandler<RawOpenGlPixelEventArgs>? PixelPinned;
         public event EventHandler? ViewChanged;
 
         public int TileCount
@@ -48,12 +63,60 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             get
             {
-                if (ActualWidth <= 0 || _viewWidth <= 0)
+                if (ViewportWidth <= 0 || _viewWidth <= 0)
                 {
                     return 1;
                 }
 
-                return ActualWidth / _viewWidth;
+                return ViewportWidth / _viewWidth;
+            }
+        }
+
+        public string PixelOverlayText
+        {
+            get { return _pixelOverlayText; }
+        }
+
+        public bool PixelOverlayVisible
+        {
+            get { return _pixelOverlayLabel.Visible; }
+        }
+
+        public bool PixelGridOverlayVisible
+        {
+            get { return ShouldDrawPixelGridOverlay(); }
+        }
+
+        public string PinnedMarkerText
+        {
+            get
+            {
+                if (!_pinnedMarker.HasValue)
+                {
+                    return string.Empty;
+                }
+
+                return string.Format(
+                    CultureInfo.InvariantCulture,
+                    "X {0}  Y {1}",
+                    (int)_pinnedMarker.Value.X,
+                    (int)_pinnedMarker.Value.Y);
+            }
+        }
+
+        private double ViewportWidth
+        {
+            get
+            {
+                return _openGlControl.ClientSize.Width > 0 ? _openGlControl.ClientSize.Width : ActualWidth;
+            }
+        }
+
+        private double ViewportHeight
+        {
+            get
+            {
+                return _openGlControl.ClientSize.Height > 0 ? _openGlControl.ClientSize.Height : ActualHeight;
             }
         }
 
@@ -67,21 +130,145 @@ namespace RawBufferVisualizer.OpenGlCanvas
             return new RawOpenGlViewState(_descriptor.Width, _descriptor.Height, _viewLeft, _viewTop, _viewWidth, _viewHeight);
         }
 
+        public RawOpenGlRenderStats GetRenderStatsSnapshot()
+        {
+            return _renderStats.Clone();
+        }
+
+        public void ResetRenderStats()
+        {
+            _renderStats.FrameCount = 0;
+            _renderStats.TextureUploadCount = 0;
+            _renderStats.TotalFrameMilliseconds = 0;
+            _renderStats.MaxFrameMilliseconds = 0;
+            _renderStats.TotalTextureUploadMilliseconds = 0;
+            _renderStats.MaxTextureUploadMilliseconds = 0;
+            _renderStats.WheelInputCount = 0;
+            _renderStats.DragInputCount = 0;
+            _renderStats.TotalWheelInputMilliseconds = 0;
+            _renderStats.MaxWheelInputMilliseconds = 0;
+            _renderStats.TotalDragInputMilliseconds = 0;
+            _renderStats.MaxDragInputMilliseconds = 0;
+        }
+
+        public void SaveFramebufferPng(string path)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                Dispatcher.Invoke(() => SaveFramebufferPng(path));
+                return;
+            }
+
+            if (_openGlControl.IsDisposed || !_openGlControl.IsHandleCreated)
+            {
+                throw new InvalidOperationException("OpenGL control is not ready.");
+            }
+
+            var width = _openGlControl.ClientSize.Width;
+            var height = _openGlControl.ClientSize.Height;
+            if (width <= 0 || height <= 0)
+            {
+                throw new InvalidOperationException("OpenGL framebuffer has no visible size.");
+            }
+
+            _openGlControl.Invalidate();
+            _openGlControl.Update();
+
+            var rgba = new byte[width * height * 4];
+            var gl = _openGlControl.OpenGL;
+            gl.ReadPixels(0, 0, width, height, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, rgba);
+
+            var directory = System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(path));
+            if (!string.IsNullOrEmpty(directory))
+            {
+                System.IO.Directory.CreateDirectory(directory);
+            }
+
+            using (var bitmap = new Drawing.Bitmap(width, height, Imaging.PixelFormat.Format32bppArgb))
+            {
+                var data = bitmap.LockBits(
+                    new Drawing.Rectangle(0, 0, width, height),
+                    Imaging.ImageLockMode.WriteOnly,
+                    Imaging.PixelFormat.Format32bppArgb);
+                try
+                {
+                    var output = new byte[data.Stride * height];
+                    for (var y = 0; y < height; y++)
+                    {
+                        var sourceY = height - y - 1;
+                        var sourceRow = sourceY * width * 4;
+                        var destinationRow = y * data.Stride;
+                        for (var x = 0; x < width; x++)
+                        {
+                            var source = sourceRow + (x * 4);
+                            var destination = destinationRow + (x * 4);
+                            output[destination] = rgba[source + 2];
+                            output[destination + 1] = rgba[source + 1];
+                            output[destination + 2] = rgba[source];
+                            output[destination + 3] = rgba[source + 3];
+                        }
+                    }
+
+                    Marshal.Copy(output, 0, data.Scan0, output.Length);
+                }
+                finally
+                {
+                    bitmap.UnlockBits(data);
+                }
+
+                bitmap.Save(path, Imaging.ImageFormat.Png);
+            }
+        }
+
         public RawOpenGlImageCanvas()
         {
-            _openGlControl = new OpenGLControl
+            _host = new WindowsFormsHost
             {
-                DrawFPS = false,
-                FrameRate = 30,
-                OpenGLVersion = SharpGL.Version.OpenGLVersion.OpenGL4_0,
-                RenderContextType = RenderContextType.FBO,
                 HorizontalAlignment = HorizontalAlignment.Stretch,
                 VerticalAlignment = VerticalAlignment.Stretch
             };
 
-            Content = _openGlControl;
+            _panel = new Forms.Panel
+            {
+                Dock = Forms.DockStyle.Fill,
+                BackColor = Drawing.Color.Black
+            };
+
+            _openGlControl = new OpenGLControl
+            {
+                DrawFPS = false,
+                OpenGLVersion = SharpGL.Version.OpenGLVersion.OpenGL4_0,
+                RenderContextType = RenderContextType.DIBSection,
+                RenderTrigger = RenderTrigger.Manual,
+                FrameRate = 0,
+                Dock = Forms.DockStyle.Fill,
+                BackColor = System.Drawing.Color.Black
+            };
+
+            _pixelOverlayLabel = new Forms.Label
+            {
+                AutoSize = false,
+                BackColor = Drawing.Color.FromArgb(32, 32, 32),
+                ForeColor = Drawing.Color.White,
+                Font = new Drawing.Font("Consolas", 8.25f, Drawing.FontStyle.Regular, Drawing.GraphicsUnit.Point),
+                Location = new Drawing.Point(8, 8),
+                Padding = new Forms.Padding(6),
+                Size = new Drawing.Size(280, 112),
+                TextAlign = Drawing.ContentAlignment.TopLeft,
+                UseMnemonic = false,
+                Visible = false
+            };
+
+            _panel.Controls.Add(_openGlControl);
+            _panel.Controls.Add(_pixelOverlayLabel);
+            _pixelOverlayLabel.BringToFront();
+
+            _host.Child = _panel;
+            Content = _host;
             Background = System.Windows.Media.Brushes.Black;
 
+            Loaded += OpenGlControlLoaded;
+            Unloaded += OpenGlControlUnloaded;
             _openGlControl.OpenGLInitialized += OpenGlInitialized;
             _openGlControl.OpenGLDraw += OpenGlDraw;
             _openGlControl.Resized += OpenGlResized;
@@ -90,6 +277,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _openGlControl.MouseUp += OpenGlMouseUp;
             _openGlControl.MouseWheel += OpenGlMouseWheel;
             _openGlControl.MouseDoubleClick += OpenGlMouseDoubleClick;
+            _openGlControl.MouseEnter += OpenGlMouseEnter;
+            _openGlControl.MouseLeave += OpenGlMouseLeave;
         }
 
         public void LoadRawBuffer(byte[] buffer, RawImageDescriptor descriptor)
@@ -115,7 +304,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _descriptor = imageSource.Descriptor;
             _renderOptions = imageSource.CreateRenderOptions();
 
-            foreach (var tile in RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height))
+            foreach (var tile in RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height, DisplayTileSize))
             {
                 _tiles.Add(new TextureTile(tile.X, tile.Y, tile.Width, tile.Height));
             }
@@ -131,18 +320,97 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _imageSource = null;
             _descriptor = null;
             _renderOptions = null;
+            _pinnedMarker = null;
+            HidePixelOverlay();
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
 
-        public void FitToImage()
+        public void SetRenderLevels(double blackLevel, double whiteLevel)
         {
-            if (_descriptor == null || ActualWidth <= 0 || ActualHeight <= 0)
+            if (_descriptor == null || _imageSource == null)
             {
                 return;
             }
 
-            var controlAspect = ActualWidth / Math.Max(ActualHeight, 1);
+            _renderOptions = new RawRenderOptions
+            {
+                AutoScale = false,
+                BlackLevel = blackLevel,
+                WhiteLevel = whiteLevel <= blackLevel ? blackLevel + 1 : whiteLevel
+            };
+            InvalidateTextureCache();
+            RequestRender();
+        }
+
+        public void ResetRenderLevels()
+        {
+            if (_descriptor == null || _imageSource == null)
+            {
+                return;
+            }
+
+            _renderOptions = _imageSource.CreateRenderOptions();
+            InvalidateTextureCache();
+            RequestRender();
+        }
+
+        public RawRenderOptions? GetRenderOptionsSnapshot()
+        {
+            if (_renderOptions == null)
+            {
+                return null;
+            }
+
+            return new RawRenderOptions
+            {
+                AutoScale = _renderOptions.AutoScale,
+                BlackLevel = _renderOptions.BlackLevel,
+                WhiteLevel = _renderOptions.WhiteLevel
+            };
+        }
+
+        public bool PinMarkerAtImagePixel(int x, int y)
+        {
+            if (_descriptor == null || x < 0 || y < 0 || x >= _descriptor.Width || y >= _descriptor.Height)
+            {
+                return false;
+            }
+
+            _pinnedMarker = new Point(x, y);
+            PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+            RequestRender();
+            return true;
+        }
+
+        public void ClearPinnedMarker()
+        {
+            _pinnedMarker = null;
+            PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            RequestRender();
+        }
+
+        public string ProbePixelOverlayAtScreenPoint(Point position)
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+                return Dispatcher.Invoke(() => ProbePixelOverlayAtScreenPoint(position));
+            }
+
+            UpdatePixelOverlay(position, true);
+            return _pixelOverlayText;
+        }
+
+        public void FitToImage()
+        {
+            var width = ViewportWidth;
+            var height = ViewportHeight;
+            if (_descriptor == null || width <= 0 || height <= 0)
+            {
+                return;
+            }
+
+            var controlAspect = width / Math.Max(height, 1);
             var imageAspect = _descriptor.Width / (double)Math.Max(_descriptor.Height, 1);
             if (controlAspect > imageAspect)
             {
@@ -163,18 +431,66 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void SetZoomScale(double scale)
         {
-            if (_descriptor == null || ActualWidth <= 0 || ActualHeight <= 0 || scale <= 0)
+            var width = ViewportWidth;
+            var height = ViewportHeight;
+            if (_descriptor == null || width <= 0 || height <= 0 || scale <= 0)
             {
                 return;
             }
 
             var centerX = _viewLeft + (_viewWidth / 2);
             var centerY = _viewTop + (_viewHeight / 2);
-            _viewWidth = ActualWidth / scale;
-            _viewHeight = ActualHeight / scale;
+            _viewWidth = width / scale;
+            _viewHeight = height / scale;
             _viewLeft = centerX - (_viewWidth / 2);
             _viewTop = centerY - (_viewHeight / 2);
             OnViewChanged();
+            RequestRender();
+        }
+
+        public void PanByImagePixels(double deltaX, double deltaY)
+        {
+            if (_descriptor == null)
+            {
+                return;
+            }
+
+            _viewLeft += deltaX;
+            _viewTop += deltaY;
+            RaiseViewChangedThrottled();
+            RequestRender();
+        }
+
+        public void PanByScreenPixels(double deltaX, double deltaY)
+        {
+            if (_descriptor == null)
+            {
+                return;
+            }
+
+            _viewLeft -= deltaX / Math.Max(ViewportWidth, 1) * _viewWidth;
+            _viewTop -= deltaY / Math.Max(ViewportHeight, 1) * _viewHeight;
+            RaiseViewChangedThrottled();
+            RequestRender();
+        }
+
+        public void ZoomAtScreenPoint(Point position, int wheelDelta)
+        {
+            if (_descriptor == null || wheelDelta == 0)
+            {
+                return;
+            }
+
+            var anchor = ScreenToImage(position);
+            var notches = wheelDelta / 120.0;
+            var factor = Math.Pow(0.8, notches);
+            _viewWidth *= factor;
+            _viewHeight *= factor;
+            var relativeX = position.X / Math.Max(ViewportWidth, 1);
+            var relativeY = position.Y / Math.Max(ViewportHeight, 1);
+            _viewLeft = anchor.X - (relativeX * _viewWidth);
+            _viewTop = anchor.Y - (relativeY * _viewHeight);
+            RaiseViewChangedThrottled();
             RequestRender();
         }
 
@@ -212,132 +528,176 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
         }
 
-        private void OpenGlInitialized(object sender, OpenGLEventArgs args)
+        private void OpenGlInitialized(object? sender, EventArgs args)
         {
-            var gl = args.OpenGL;
+            var gl = _openGlControl.OpenGL;
             gl.ClearColor(0.06f, 0.06f, 0.06f, 1.0f);
             gl.Disable(OpenGL.GL_DEPTH_TEST);
-            CreateShaderPipeline(gl);
         }
 
-        private void OpenGlDraw(object sender, OpenGLEventArgs args)
+        private void OpenGlDraw(object? sender, RenderEventArgs args)
         {
-            var gl = args.OpenGL;
-            gl.Viewport(0, 0, Math.Max((int)ActualWidth, 1), Math.Max((int)ActualHeight, 1));
-            gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
-
-            if (_tiles.Count == 0 || _shaderProgram == 0)
+            var frameWatch = Stopwatch.StartNew();
+            var gl = _openGlControl.OpenGL;
+            try
             {
-                return;
+                gl.Viewport(0, 0, Math.Max(_openGlControl.ClientSize.Width, 1), Math.Max(_openGlControl.ClientSize.Height, 1));
+                gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
+
+                if (_tiles.Count == 0)
+                {
+                    return;
+                }
+
+                _frameSerial++;
+                ConfigureFixedPipelineView(gl);
+
+                var desiredSampleStep = GetTextureSampleStep();
+                for (var i = 0; i < _tiles.Count; i++)
+                {
+                    var tile = _tiles[i];
+                    var visible = IsTileVisible(tile);
+                    if (!visible)
+                    {
+                        continue;
+                    }
+
+                    if (!tile.TryUseTexture(desiredSampleStep))
+                    {
+                        UploadTile(gl, tile, desiredSampleStep);
+                    }
+
+                    tile.LastUsedFrame = _frameSerial;
+                    DrawTile(gl, tile);
+                }
+
+                DrawPixelGridOverlay(gl);
+                DrawPinnedMarker(gl);
+                TrimTextureCache(gl);
+                gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
+                gl.Disable(OpenGL.GL_TEXTURE_2D);
+                gl.Flush();
             }
-
-            gl.UseProgram(_shaderProgram);
-            gl.Uniform4(_viewUniform, (float)_viewLeft, (float)_viewTop, (float)_viewWidth, (float)_viewHeight);
-            gl.ActiveTexture(OpenGL.GL_TEXTURE0);
-            gl.Uniform1(_textureUniform, 0);
-            gl.BindVertexArray(_vertexArray);
-
-            var desiredSampleStep = GetTextureSampleStep();
-            for (var i = 0; i < _tiles.Count; i++)
+            finally
             {
-                var tile = _tiles[i];
-                var visible = IsTileVisible(tile);
-                if (!visible || (tile.TextureId != 0 && tile.SampleStep != desiredSampleStep))
-                {
-                    DeleteTexture(gl, tile);
-                }
-
-                if (!visible)
-                {
-                    continue;
-                }
-
-                if (tile.TextureId == 0)
-                {
-                    UploadTile(gl, tile, desiredSampleStep);
-                }
-
-                DrawTile(gl, tile, _vertexBuffer);
+                frameWatch.Stop();
+                RecordFrame(frameWatch.Elapsed.TotalMilliseconds);
             }
-
-            gl.BindVertexArray(0);
-            gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
-            gl.UseProgram(0);
-            gl.Flush();
         }
 
-        private void OpenGlResized(object sender, OpenGLEventArgs args)
+        private void OpenGlResized(object? sender, EventArgs args)
         {
             RequestRender();
         }
 
-        private void OpenGlMouseDown(object sender, MouseButtonEventArgs e)
+        private void OpenGlControlLoaded(object? sender, RoutedEventArgs e)
         {
-            if (e.ChangedButton != MouseButton.Left)
+            if (!_openGlInitialized)
+            {
+                ((ISupportInitialize)_openGlControl).EndInit();
+                _openGlInitialized = true;
+            }
+
+            RequestRender();
+        }
+
+        private void OpenGlControlUnloaded(object? sender, RoutedEventArgs e)
+        {
+            _renderQueued = false;
+        }
+
+        private void OpenGlMouseDown(object? sender, Forms.MouseEventArgs e)
+        {
+            if (e.Button == Forms.MouseButtons.Right)
+            {
+                PinMarkerAtScreenPoint(ToPoint(e));
+                return;
+            }
+
+            if (e.Button != Forms.MouseButtons.Left)
             {
                 return;
             }
 
             _dragging = true;
-            _lastMouse = e.GetPosition(_openGlControl);
-            _openGlControl.CaptureMouse();
+            _lastMouse = ToPoint(e);
+            HidePixelOverlay();
+            _openGlControl.Focus();
+            _openGlControl.Capture = true;
         }
 
-        private void OpenGlMouseUp(object sender, MouseButtonEventArgs e)
+        private void OpenGlMouseUp(object? sender, Forms.MouseEventArgs e)
         {
-            if (e.ChangedButton != MouseButton.Left)
+            if (e.Button != Forms.MouseButtons.Left)
             {
                 return;
             }
 
             _dragging = false;
-            _openGlControl.ReleaseMouseCapture();
+            _openGlControl.Capture = false;
             RaiseViewChangedNow();
-            RaisePixelHovered(e.GetPosition(_openGlControl), true);
+            RaisePixelHovered(ToPoint(e), true);
         }
 
-        private void OpenGlMouseMove(object sender, MouseEventArgs e)
+        private void OpenGlMouseMove(object? sender, Forms.MouseEventArgs e)
         {
-            var position = e.GetPosition(_openGlControl);
+            var position = ToPoint(e);
             if (_dragging)
             {
-                var dx = position.X - _lastMouse.X;
-                var dy = position.Y - _lastMouse.Y;
-                _viewLeft -= dx / Math.Max(ActualWidth, 1) * _viewWidth;
-                _viewTop -= dy / Math.Max(ActualHeight, 1) * _viewHeight;
-                _lastMouse = position;
-                RaiseViewChangedThrottled();
-                RequestRender();
+                var inputWatch = Stopwatch.StartNew();
+                try
+                {
+                    var dx = position.X - _lastMouse.X;
+                    var dy = position.Y - _lastMouse.Y;
+                    _lastMouse = position;
+                    PanByScreenPixels(dx, dy);
+                }
+                finally
+                {
+                    inputWatch.Stop();
+                    RecordDragInput(inputWatch.Elapsed.TotalMilliseconds);
+                }
+
                 return;
             }
 
             RaisePixelHovered(position, false);
         }
 
-        private void OpenGlMouseWheel(object sender, MouseWheelEventArgs e)
+        private void OpenGlMouseWheel(object? sender, Forms.MouseEventArgs e)
         {
             if (_descriptor == null)
             {
                 return;
             }
 
-            var position = e.GetPosition(_openGlControl);
-            var anchor = ScreenToImage(position);
-            var factor = e.Delta > 0 ? 0.8 : 1.25;
-            _viewWidth *= factor;
-            _viewHeight *= factor;
-            var relativeX = position.X / Math.Max(ActualWidth, 1);
-            var relativeY = position.Y / Math.Max(ActualHeight, 1);
-            _viewLeft = anchor.X - (relativeX * _viewWidth);
-            _viewTop = anchor.Y - (relativeY * _viewHeight);
-            e.Handled = true;
-            RaiseViewChangedNow();
-            RequestRender();
+            var inputWatch = Stopwatch.StartNew();
+            try
+            {
+                var position = ToPoint(e);
+                ZoomAtScreenPoint(position, e.Delta);
+                UpdatePixelOverlay(position, true);
+            }
+            finally
+            {
+                inputWatch.Stop();
+                RecordWheelInput(inputWatch.Elapsed.TotalMilliseconds);
+            }
         }
 
-        private void OpenGlMouseDoubleClick(object sender, MouseButtonEventArgs e)
+        private void OpenGlMouseDoubleClick(object? sender, Forms.MouseEventArgs e)
         {
             FitToImage();
+        }
+
+        private void OpenGlMouseEnter(object? sender, EventArgs e)
+        {
+            _openGlControl.Focus();
+        }
+
+        private void OpenGlMouseLeave(object? sender, EventArgs e)
+        {
+            HidePixelOverlay();
         }
 
         private void ResizeViewKeepingZoom(Size previousSize, Size newSize)
@@ -367,26 +727,43 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private Point ScreenToImage(Point screenPoint)
         {
-            var x = _viewLeft + (screenPoint.X / Math.Max(ActualWidth, 1) * _viewWidth);
-            var y = _viewTop + (screenPoint.Y / Math.Max(ActualHeight, 1) * _viewHeight);
+            var x = _viewLeft + (screenPoint.X / Math.Max(ViewportWidth, 1) * _viewWidth);
+            var y = _viewTop + (screenPoint.Y / Math.Max(ViewportHeight, 1) * _viewHeight);
             return new Point(x, y);
         }
 
-        private static uint CreateTexture(OpenGL gl, int width, int height, byte[] bgra)
+        private static TextureUpload CreateTexture(OpenGL gl, int width, int height, byte[] bgra)
         {
+            var textureWidth = NextPowerOfTwo(width);
+            var textureHeight = NextPowerOfTwo(height);
+            var rgba = new byte[textureWidth * textureHeight * 4];
+            for (var y = 0; y < height; y++)
+            {
+                var sourceOffset = y * width * 4;
+                var destinationOffset = y * textureWidth * 4;
+                for (var x = 0; x < width; x++)
+                {
+                    var sourceIndex = sourceOffset + (x * 4);
+                    var destinationIndex = destinationOffset + (x * 4);
+                    rgba[destinationIndex] = bgra[sourceIndex + 2];
+                    rgba[destinationIndex + 1] = bgra[sourceIndex + 1];
+                    rgba[destinationIndex + 2] = bgra[sourceIndex];
+                    rgba[destinationIndex + 3] = bgra[sourceIndex + 3];
+                }
+            }
+
             var ids = new uint[1];
             gl.GenTextures(1, ids);
             gl.BindTexture(OpenGL.GL_TEXTURE_2D, ids[0]);
             gl.PixelStore(OpenGL.GL_UNPACK_ALIGNMENT, 1);
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_MIN_FILTER, OpenGL.GL_NEAREST);
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_MAG_FILTER, OpenGL.GL_NEAREST);
-            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_S, OpenGL.GL_CLAMP_TO_EDGE);
-            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP_TO_EDGE);
+            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_S, OpenGL.GL_CLAMP);
+            gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP);
 
-            ConvertBgraToRgbaInPlace(bgra);
-            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, width, height, 0, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, bgra);
+            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, textureWidth, textureHeight, 0, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, rgba);
 
-            return ids[0];
+            return new TextureUpload(ids[0], width / (float)textureWidth, height / (float)textureHeight);
         }
 
         private void UploadTile(OpenGL gl, TextureTile tile, int sampleStep)
@@ -396,24 +773,34 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return;
             }
 
-            var renderedTile = _imageSource.RenderTileSampled(tile.X, tile.Y, tile.Width, tile.Height, sampleStep, _renderOptions);
-            var uploadPixels = renderedTile.Bgra32;
-            var uploadWidth = renderedTile.Width;
-            var uploadHeight = renderedTile.Height;
+            var uploadWatch = Stopwatch.StartNew();
+            try
+            {
+                var renderedTile = _imageSource.RenderTileSampled(tile.X, tile.Y, tile.Width, tile.Height, sampleStep, _renderOptions);
+                var uploadPixels = renderedTile.Bgra32;
+                var uploadWidth = renderedTile.Width;
+                var uploadHeight = renderedTile.Height;
 
-            tile.TextureId = CreateTexture(gl, uploadWidth, uploadHeight, uploadPixels);
-            tile.SampleStep = sampleStep;
+                tile.SetTexture(sampleStep, CreateTexture(gl, uploadWidth, uploadHeight, uploadPixels));
+            }
+            finally
+            {
+                uploadWatch.Stop();
+                RecordTextureUpload(uploadWatch.Elapsed.TotalMilliseconds);
+            }
         }
 
         private int GetTextureSampleStep()
         {
-            if (ActualWidth <= 0 || ActualHeight <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            var width = ViewportWidth;
+            var height = ViewportHeight;
+            if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
             {
                 return 1;
             }
 
-            var horizontalPixelsPerScreenPixel = _viewWidth / ActualWidth;
-            var verticalPixelsPerScreenPixel = _viewHeight / ActualHeight;
+            var horizontalPixelsPerScreenPixel = _viewWidth / width;
+            var verticalPixelsPerScreenPixel = _viewHeight / height;
             var imagePixelsPerScreenPixel = Math.Max(horizontalPixelsPerScreenPixel, verticalPixelsPerScreenPixel);
             var step = 1;
             while (step < 64 && (step * 2) <= imagePixelsPerScreenPixel)
@@ -431,44 +818,31 @@ namespace RawBufferVisualizer.OpenGlCanvas
             return tile.Right >= _viewLeft && tile.X <= viewRight && tile.Bottom >= _viewTop && tile.Y <= viewBottom;
         }
 
-        private static byte[] DownsampleBgra(byte[] source, int width, int height, int sampleStep, out int sampledWidth, out int sampledHeight)
+        private void ConfigureFixedPipelineView(OpenGL gl)
         {
-            sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
-            sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
-            var target = new byte[sampledWidth * sampledHeight * 4];
-            var targetIndex = 0;
-            for (var y = 0; y < height; y += sampleStep)
-            {
-                var sourceRow = y * width * 4;
-                for (var x = 0; x < width; x += sampleStep)
-                {
-                    var sourceIndex = sourceRow + (x * 4);
-                    target[targetIndex++] = source[sourceIndex];
-                    target[targetIndex++] = source[sourceIndex + 1];
-                    target[targetIndex++] = source[sourceIndex + 2];
-                    target[targetIndex++] = source[sourceIndex + 3];
-                }
-            }
-
-            return target;
+            gl.ClearColor(0.06f, 0.06f, 0.06f, 1.0f);
+            gl.Disable(OpenGL.GL_DEPTH_TEST);
+            gl.Enable(OpenGL.GL_TEXTURE_2D);
+            gl.Color(1.0f, 1.0f, 1.0f, 1.0f);
+            gl.TexEnv(OpenGL.GL_TEXTURE_ENV, OpenGL.GL_TEXTURE_ENV_MODE, OpenGL.GL_REPLACE);
+            gl.MatrixMode(OpenGL.GL_PROJECTION);
+            gl.LoadIdentity();
+            gl.Ortho(_viewLeft, _viewLeft + _viewWidth, _viewTop + _viewHeight, _viewTop, -1.0, 1.0);
+            gl.MatrixMode(OpenGL.GL_MODELVIEW);
+            gl.LoadIdentity();
         }
 
-        private static void ConvertBgraToRgbaInPlace(byte[] bgra)
+        private static void DrawTile(OpenGL gl, TextureTile tile)
         {
-            for (var i = 0; i < bgra.Length; i += 4)
+            gl.BindTexture(OpenGL.GL_TEXTURE_2D, tile.ActiveTextureId);
+            gl.Begin(OpenGL.GL_TRIANGLES);
+            for (var i = 0; i < tile.Vertices.Length; i += 4)
             {
-                var blue = bgra[i];
-                bgra[i] = bgra[i + 2];
-                bgra[i + 2] = blue;
+                gl.TexCoord(tile.Vertices[i + 2] * tile.ActiveTextureU, tile.Vertices[i + 3] * tile.ActiveTextureV);
+                gl.Vertex(tile.Vertices[i], tile.Vertices[i + 1]);
             }
-        }
 
-        private static void DrawTile(OpenGL gl, TextureTile tile, uint vertexBuffer)
-        {
-            gl.BindTexture(OpenGL.GL_TEXTURE_2D, tile.TextureId);
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, vertexBuffer);
-            gl.BufferData(OpenGL.GL_ARRAY_BUFFER, tile.Vertices, OpenGL.GL_STATIC_DRAW);
-            gl.DrawArrays(OpenGL.GL_TRIANGLES, 0, 6);
+            gl.End();
         }
 
         private void DeleteTextures()
@@ -478,123 +852,71 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return;
             }
 
-            var ids = new uint[_tiles.Count];
+            var ids = new List<uint>();
             for (var i = 0; i < _tiles.Count; i++)
             {
-                ids[i] = _tiles[i].TextureId;
+                ids.AddRange(_tiles[i].TextureIds);
             }
 
-            _openGlControl.OpenGL.DeleteTextures(ids.Length, ids);
+            if (ids.Count > 0)
+            {
+                _openGlControl.OpenGL.DeleteTextures(ids.Count, ids.ToArray());
+            }
         }
 
-        private static void DeleteTexture(OpenGL gl, TextureTile tile)
+        private void InvalidateTextureCache()
         {
-            if (tile.TextureId == 0)
+            if (_tiles.Count == 0 || _openGlControl.OpenGL == null)
             {
                 return;
             }
 
-            gl.DeleteTextures(1, new[] { tile.TextureId });
-            tile.TextureId = 0;
-            tile.SampleStep = 0;
+            var gl = _openGlControl.OpenGL;
+            for (var i = 0; i < _tiles.Count; i++)
+            {
+                DeleteTextures(gl, _tiles[i]);
+            }
         }
 
-        private void CreateShaderPipeline(OpenGL gl)
+        private static void DeleteTextures(OpenGL gl, TextureTile tile)
         {
-            if (_shaderProgram != 0)
+            var textureIds = tile.TextureIds;
+            if (textureIds.Count == 0)
             {
                 return;
             }
 
-            const string vertexShaderSource = @"
-#version 400 core
-layout(location = 0) in vec2 position;
-layout(location = 1) in vec2 textureCoordinate;
-uniform vec4 viewRect;
-out vec2 fragmentTextureCoordinate;
-void main()
-{
-    float x = ((position.x - viewRect.x) / viewRect.z) * 2.0 - 1.0;
-    float y = 1.0 - ((position.y - viewRect.y) / viewRect.w) * 2.0;
-    gl_Position = vec4(x, y, 0.0, 1.0);
-    fragmentTextureCoordinate = textureCoordinate;
-}";
+            gl.DeleteTextures(textureIds.Count, textureIds.ToArray());
+            tile.ClearTextures();
+        }
 
-            const string fragmentShaderSource = @"
-#version 400 core
-in vec2 fragmentTextureCoordinate;
-uniform sampler2D imageTexture;
-out vec4 color;
-void main()
-{
-    color = texture(imageTexture, fragmentTextureCoordinate);
-}";
-
-            var vertexShader = CompileShader(gl, OpenGL.GL_VERTEX_SHADER, vertexShaderSource);
-            var fragmentShader = CompileShader(gl, OpenGL.GL_FRAGMENT_SHADER, fragmentShaderSource);
-            var program = gl.CreateProgram();
-            gl.AttachShader(program, vertexShader);
-            gl.AttachShader(program, fragmentShader);
-            gl.LinkProgram(program);
-            var status = new int[1];
-            gl.GetProgram(program, OpenGL.GL_LINK_STATUS, status);
-            if (status[0] == 0)
+        private void TrimTextureCache(OpenGL gl)
+        {
+            var textureCount = 0;
+            for (var i = 0; i < _tiles.Count; i++)
             {
-                throw new InvalidOperationException("Shader program link failed: " + GetProgramLog(gl, program));
+                textureCount += _tiles[i].TextureCount;
             }
 
-            gl.DetachShader(program, vertexShader);
-            gl.DetachShader(program, fragmentShader);
-            gl.DeleteShader(vertexShader);
-            gl.DeleteShader(fragmentShader);
-
-            var vertexArrays = new uint[1];
-            gl.GenVertexArrays(1, vertexArrays);
-            _vertexArray = vertexArrays[0];
-            gl.BindVertexArray(_vertexArray);
-
-            var buffers = new uint[1];
-            gl.GenBuffers(1, buffers);
-            _vertexBuffer = buffers[0];
-            gl.BindBuffer(OpenGL.GL_ARRAY_BUFFER, _vertexBuffer);
-            gl.EnableVertexAttribArray(0);
-            gl.VertexAttribPointer(0, 2, OpenGL.GL_FLOAT, false, 4 * sizeof(float), IntPtr.Zero);
-            gl.EnableVertexAttribArray(1);
-            gl.VertexAttribPointer(1, 2, OpenGL.GL_FLOAT, false, 4 * sizeof(float), new IntPtr(2 * sizeof(float)));
-            gl.BindVertexArray(0);
-
-            _shaderProgram = program;
-            _viewUniform = gl.GetUniformLocation(_shaderProgram, "viewRect");
-            _textureUniform = gl.GetUniformLocation(_shaderProgram, "imageTexture");
-        }
-
-        private static uint CompileShader(OpenGL gl, uint shaderType, string source)
-        {
-            var shader = gl.CreateShader(shaderType);
-            gl.ShaderSource(shader, source);
-            gl.CompileShader(shader);
-            var status = new int[1];
-            gl.GetShader(shader, OpenGL.GL_COMPILE_STATUS, status);
-            if (status[0] == 0)
+            if (textureCount <= MaxCachedTextures)
             {
-                throw new InvalidOperationException("Shader compile failed: " + GetShaderLog(gl, shader));
+                return;
             }
 
-            return shader;
-        }
+            foreach (var tile in _tiles
+                .Where(tile => tile.TextureCount > 0 && tile.LastUsedFrame < _frameSerial)
+                .OrderBy(tile => tile.LastUsedFrame)
+                .ThenBy(tile => tile.TextureCount))
+            {
+                if (textureCount <= MaxCachedTextures)
+                {
+                    return;
+                }
 
-        private static string GetShaderLog(OpenGL gl, uint shader)
-        {
-            var builder = new StringBuilder(4096);
-            gl.GetShaderInfoLog(shader, builder.Capacity, IntPtr.Zero, builder);
-            return builder.ToString();
-        }
-
-        private static string GetProgramLog(OpenGL gl, uint program)
-        {
-            var builder = new StringBuilder(4096);
-            gl.GetProgramInfoLog(program, builder.Capacity, IntPtr.Zero, builder);
-            return builder.ToString();
+                var removed = tile.TextureCount;
+                DeleteTextures(gl, tile);
+                textureCount -= removed;
+            }
         }
 
         private void RequestRender()
@@ -605,13 +927,29 @@ void main()
             }
 
             _renderQueued = true;
-            Dispatcher.BeginInvoke(
-                DispatcherPriority.Render,
-                new Action(() =>
-                {
-                    _renderQueued = false;
-                    _openGlControl.InvalidateVisual();
-                }));
+            Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(RenderQueuedFrame));
+        }
+
+        private void RenderQueuedFrame()
+        {
+            if (!_renderQueued)
+            {
+                return;
+            }
+
+            _renderQueued = false;
+            if (_openGlControl.IsDisposed || !_openGlControl.IsHandleCreated)
+            {
+                return;
+            }
+
+            _openGlControl.Invalidate();
+            _openGlControl.Update();
+        }
+
+        private static Point ToPoint(Forms.MouseEventArgs e)
+        {
+            return new Point(e.X, e.Y);
         }
 
         private void OnViewChanged()
@@ -649,18 +987,347 @@ void main()
 
             _lastPixelX = x;
             _lastPixelY = y;
+            UpdatePixelOverlay(position, force);
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+        }
+
+        private void PinMarkerAtScreenPoint(Point position)
+        {
+            var imagePoint = ScreenToImage(position);
+            var x = (int)Math.Floor(imagePoint.X);
+            var y = (int)Math.Floor(imagePoint.Y);
+            PinMarkerAtImagePixel(x, y);
+        }
+
+        private void UpdatePixelOverlay(Point position, bool force)
+        {
+            if (_descriptor == null || _imageSource == null || ZoomScale < PixelOverlayMinZoom)
+            {
+                HidePixelOverlay();
+                return;
+            }
+
+            if (ShouldDrawPixelGridOverlay())
+            {
+                HidePixelOverlay();
+                return;
+            }
+
+            var imagePoint = ScreenToImage(position);
+            var x = (int)Math.Floor(imagePoint.X);
+            var y = (int)Math.Floor(imagePoint.Y);
+            if (x < 0 || y < 0 || x >= _descriptor.Width || y >= _descriptor.Height)
+            {
+                HidePixelOverlay();
+                return;
+            }
+
+            var text = BuildPixelOverlayText(x, y);
+            if (!force && string.Equals(_pixelOverlayText, text, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _pixelOverlayText = text;
+            _pixelOverlayLabel.Text = text;
+            _pixelOverlayLabel.Visible = true;
+            _pixelOverlayLabel.BringToFront();
+        }
+
+        private void HidePixelOverlay()
+        {
+            _pixelOverlayText = string.Empty;
+            if (_pixelOverlayLabel.Visible)
+            {
+                _pixelOverlayLabel.Visible = false;
+            }
+        }
+
+        private string BuildPixelOverlayText(int centerX, int centerY)
+        {
+            var builder = new StringBuilder();
+            builder.Append("X=").Append(centerX.ToString(CultureInfo.InvariantCulture));
+            builder.Append(", Y=").AppendLine(centerY.ToString(CultureInfo.InvariantCulture));
+            builder.AppendLine(CompactPixelValue(_imageSource!.DescribePixel(centerX, centerY)));
+
+            for (var y = centerY - 1; y <= centerY + 1; y++)
+            {
+                for (var x = centerX - 1; x <= centerX + 1; x++)
+                {
+                    if (x < 0 || y < 0 || x >= _descriptor!.Width || y >= _descriptor.Height)
+                    {
+                        builder.Append("     ");
+                        continue;
+                    }
+
+                    builder.Append(CompactPixelValue(_imageSource.DescribePixel(x, y)).PadLeft(5));
+                }
+
+                builder.AppendLine();
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private bool ShouldDrawPixelGridOverlay()
+        {
+            if (_descriptor == null || _imageSource == null || _viewWidth <= 0 || _viewHeight <= 0)
+            {
+                return false;
+            }
+
+            var cellWidth = ViewportWidth / _viewWidth;
+            var cellHeight = ViewportHeight / _viewHeight;
+            return Math.Min(cellWidth, cellHeight) >= PixelGridOverlayMinCellSize;
+        }
+
+        private void DrawPixelGridOverlay(OpenGL gl)
+        {
+            if (!ShouldDrawPixelGridOverlay() || _descriptor == null || _imageSource == null)
+            {
+                return;
+            }
+
+            var startX = Math.Max(0, (int)Math.Floor(_viewLeft));
+            var startY = Math.Max(0, (int)Math.Floor(_viewTop));
+            var endX = Math.Min(_descriptor.Width - 1, (int)Math.Ceiling(_viewLeft + _viewWidth));
+            var endY = Math.Min(_descriptor.Height - 1, (int)Math.Ceiling(_viewTop + _viewHeight));
+            var cellCount = (endX - startX + 1) * (endY - startY + 1);
+            if (cellCount <= 0 || cellCount > MaxPixelGridOverlayCells)
+            {
+                return;
+            }
+
+            gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
+            gl.Disable(OpenGL.GL_TEXTURE_2D);
+            gl.Enable(OpenGL.GL_BLEND);
+            gl.BlendFunc(OpenGL.GL_SRC_ALPHA, OpenGL.GL_ONE_MINUS_SRC_ALPHA);
+            gl.LineWidth(1.0f);
+            gl.Color(1.0f, 1.0f, 1.0f, 0.42f);
+            gl.Begin(OpenGL.GL_LINES);
+            for (var x = startX; x <= endX + 1; x++)
+            {
+                gl.Vertex(x, startY);
+                gl.Vertex(x, endY + 1);
+            }
+
+            for (var y = startY; y <= endY + 1; y++)
+            {
+                gl.Vertex(startX, y);
+                gl.Vertex(endX + 1, y);
+            }
+
+            gl.End();
+            gl.Disable(OpenGL.GL_BLEND);
+
+            var viewportHeight = (int)Math.Max(1, ViewportHeight);
+            for (var y = startY; y <= endY; y++)
+            {
+                for (var x = startX; x <= endX; x++)
+                {
+                    DrawPixelValueText(gl, x, y, viewportHeight);
+                }
+            }
+        }
+
+        private void DrawPixelValueText(OpenGL gl, int x, int y, int viewportHeight)
+        {
+            var left = (x - _viewLeft) / _viewWidth * ViewportWidth;
+            var top = (y - _viewTop) / _viewHeight * ViewportHeight;
+            var lines = GetPixelGridOverlayLines(x, y);
+            var lineHeight = 11;
+            var textX = (int)Math.Round(left + 4);
+            var textY = viewportHeight - (int)Math.Round(top) - 14;
+            for (var i = 0; i < lines.Length; i++)
+            {
+                gl.DrawText(textX, textY - (i * lineHeight), 0.05f, 0.05f, 0.05f, "Consolas", 8.0f, lines[i]);
+            }
+        }
+
+        private void DrawPinnedMarker(OpenGL gl)
+        {
+            if (!_pinnedMarker.HasValue || _descriptor == null)
+            {
+                return;
+            }
+
+            var x = _pinnedMarker.Value.X + 0.5;
+            var y = _pinnedMarker.Value.Y + 0.5;
+            if (x < _viewLeft || y < _viewTop || x > _viewLeft + _viewWidth || y > _viewTop + _viewHeight)
+            {
+                return;
+            }
+
+            var radius = Math.Max(_viewWidth / Math.Max(ViewportWidth, 1), _viewHeight / Math.Max(ViewportHeight, 1)) * 10.0;
+            radius = Math.Max(radius, 1.0);
+
+            gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
+            gl.Disable(OpenGL.GL_TEXTURE_2D);
+            gl.LineWidth(2.0f);
+            gl.Color(0.0f, 0.65f, 1.0f, 1.0f);
+            gl.Begin(OpenGL.GL_LINES);
+            gl.Vertex(x - radius, y);
+            gl.Vertex(x + radius, y);
+            gl.Vertex(x, y - radius);
+            gl.Vertex(x, y + radius);
+            gl.End();
+        }
+
+        private string[] GetPixelGridOverlayLines(int x, int y)
+        {
+            var description = _imageSource!.DescribePixel(x, y);
+            string? r;
+            string? g;
+            string? b;
+            switch (_descriptor!.PixelFormat)
+            {
+                case RawPixelFormat.RGB24:
+                    r = ReadToken(description, "R=");
+                    g = ReadToken(description, "G=");
+                    b = ReadToken(description, "B=");
+                    return r != null && g != null && b != null ? new[] { r, g, b } : new[] { CompactPixelValue(description) };
+                case RawPixelFormat.BGR24:
+                case RawPixelFormat.BGRA32:
+                    b = ReadToken(description, "B=");
+                    g = ReadToken(description, "G=");
+                    r = ReadToken(description, "R=");
+                    return b != null && g != null && r != null ? new[] { b, g, r } : new[] { CompactPixelValue(description) };
+                default:
+                    return new[] { CompactPixelValue(description) };
+            }
+        }
+
+        private static string CompactPixelValue(string description)
+        {
+            if (string.IsNullOrWhiteSpace(description))
+            {
+                return "-";
+            }
+
+            foreach (var key in new[] { "GV=", "Value=", "R=", "Bayer R=", "Bayer G=", "Bayer B=" })
+            {
+                var index = description.IndexOf(key, StringComparison.Ordinal);
+                if (index < 0)
+                {
+                    continue;
+                }
+
+                var start = index + key.Length;
+                var end = description.IndexOf(',', start);
+                var value = end < 0 ? description.Substring(start) : description.Substring(start, end - start);
+                return value.Trim();
+            }
+
+            return description.Length <= 16 ? description : description.Substring(0, 16);
+        }
+
+        private static string? ReadToken(string text, string key)
+        {
+            var index = text.IndexOf(key, StringComparison.Ordinal);
+            if (index < 0)
+            {
+                return null;
+            }
+
+            var start = index + key.Length;
+            var end = start;
+            while (end < text.Length && text[end] != ',' && !char.IsWhiteSpace(text[end]))
+            {
+                end++;
+            }
+
+            return text.Substring(start, end - start).Trim();
+        }
+
+        private void RecordFrame(double milliseconds)
+        {
+            _renderStats.FrameCount++;
+            _renderStats.TotalFrameMilliseconds += milliseconds;
+            if (milliseconds > _renderStats.MaxFrameMilliseconds)
+            {
+                _renderStats.MaxFrameMilliseconds = milliseconds;
+            }
+        }
+
+        private void RecordTextureUpload(double milliseconds)
+        {
+            _renderStats.TextureUploadCount++;
+            _renderStats.TotalTextureUploadMilliseconds += milliseconds;
+            if (milliseconds > _renderStats.MaxTextureUploadMilliseconds)
+            {
+                _renderStats.MaxTextureUploadMilliseconds = milliseconds;
+            }
+        }
+
+        private void RecordWheelInput(double milliseconds)
+        {
+            _renderStats.WheelInputCount++;
+            _renderStats.TotalWheelInputMilliseconds += milliseconds;
+            if (milliseconds > _renderStats.MaxWheelInputMilliseconds)
+            {
+                _renderStats.MaxWheelInputMilliseconds = milliseconds;
+            }
+        }
+
+        private void RecordDragInput(double milliseconds)
+        {
+            _renderStats.DragInputCount++;
+            _renderStats.TotalDragInputMilliseconds += milliseconds;
+            if (milliseconds > _renderStats.MaxDragInputMilliseconds)
+            {
+                _renderStats.MaxDragInputMilliseconds = milliseconds;
+            }
+        }
+
+        private static int NextPowerOfTwo(int value)
+        {
+            var power = 1;
+            while (power < value)
+            {
+                power *= 2;
+            }
+
+            return power;
+        }
+
+        private sealed class TextureUpload
+        {
+            public TextureUpload(uint id, float u, float v)
+            {
+                Id = id;
+                U = u;
+                V = v;
+            }
+
+            public uint Id { get; private set; }
+            public float U { get; private set; }
+            public float V { get; private set; }
         }
 
         private sealed class TextureTile
         {
-            public uint TextureId { get; set; }
-            public int SampleStep { get; set; }
+            private readonly Dictionary<int, TextureUpload> _texturesBySampleStep = new Dictionary<int, TextureUpload>();
+
+            public uint ActiveTextureId { get; private set; }
+            public float ActiveTextureU { get; private set; }
+            public float ActiveTextureV { get; private set; }
             public int X { get; private set; }
             public int Y { get; private set; }
             public int Width { get; private set; }
             public int Height { get; private set; }
             public float[] Vertices { get; private set; }
+
+            public ICollection<uint> TextureIds
+            {
+                get { return _texturesBySampleStep.Values.Select(texture => texture.Id).ToList(); }
+            }
+
+            public int TextureCount
+            {
+                get { return _texturesBySampleStep.Count; }
+            }
+
+            public long LastUsedFrame { get; set; }
 
             public int Right
             {
@@ -689,9 +1356,42 @@ void main()
                 };
             }
 
+            public bool TryUseTexture(int sampleStep)
+            {
+                TextureUpload? texture;
+                if (!_texturesBySampleStep.TryGetValue(sampleStep, out texture))
+                {
+                    ActiveTextureId = 0;
+                    ActiveTextureU = 1.0f;
+                    ActiveTextureV = 1.0f;
+                    return false;
+                }
+
+                ActiveTextureId = texture.Id;
+                ActiveTextureU = texture.U;
+                ActiveTextureV = texture.V;
+                return true;
+            }
+
+            public void SetTexture(int sampleStep, TextureUpload texture)
+            {
+                _texturesBySampleStep[sampleStep] = texture;
+                ActiveTextureId = texture.Id;
+                ActiveTextureU = texture.U;
+                ActiveTextureV = texture.V;
+            }
+
+            public void ClearTextures()
+            {
+                _texturesBySampleStep.Clear();
+                ActiveTextureId = 0;
+                ActiveTextureU = 1.0f;
+                ActiveTextureV = 1.0f;
+            }
+
             public override string ToString()
             {
-                return string.Format(CultureInfo.InvariantCulture, "{0}: {1},{2} {3}x{4}", TextureId, X, Y, Width, Height);
+                return string.Format(CultureInfo.InvariantCulture, "{0}: {1},{2} {3}x{4}", ActiveTextureId, X, Y, Width, Height);
             }
         }
     }

@@ -10,15 +10,55 @@
         <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
         <SolidColorBrush x:Key="InputBrush" Color="#1E1E1E"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
+        <SolidColorBrush x:Key="CommandBrush" Color="#333337"/>
+        <SolidColorBrush x:Key="CommandHoverBrush" Color="#3E3E42"/>
+        <SolidColorBrush x:Key="CommandPressedBrush" Color="#094771"/>
         <SolidColorBrush x:Key="TextBrush" Color="#F1F1F1"/>
         <SolidColorBrush x:Key="MutedTextBrush" Color="#9CDCFE"/>
+        <SolidColorBrush x:Key="StatusBarBrush" Color="#252526"/>
+        <SolidColorBrush x:Key="StatusAccentBrush" Color="#007ACC"/>
+        <SolidColorBrush x:Key="StatusTextBrush" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="ChannelChipBrush" Color="#303033"/>
         <Style TargetType="{x:Type TextBlock}">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         </Style>
         <Style TargetType="{x:Type Button}">
             <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="Padding" Value="8,3"/>
-            <Setter Property="MinWidth" Value="42"/>
+            <Setter Property="Padding" Value="10,3"/>
+            <Setter Property="MinWidth" Value="44"/>
+            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Background" Value="{StaticResource CommandBrush}"/>
+            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type Button}">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandHoverBrush}"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#5A5A5A"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandPressedBrush}"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#1C97EA"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="{x:Type ListBox}">
             <Setter Property="Background" Value="#1B1B1B"/>
@@ -36,30 +76,38 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8">
+        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
             <DockPanel LastChildFill="True">
-                <TextBlock x:Name="StatusText" DockPanel.Dock="Right" Width="170" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
+                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Zoom" Margin="0,0,6,0" Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                    <TextBlock x:Name="ZoomText" Width="58" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
+                </StackPanel>
                 <WrapPanel VerticalAlignment="Center">
                     <Button Content="Open" Click="Open_Click"/>
                     <Button Content="Clear" Click="Clear_Click"/>
-                    <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
-                    <TextBlock Text="Zoom" VerticalAlignment="Center" Margin="12,0,6,0"/>
                     <Button Content="Fit" Click="Fit_Click"/>
                     <Button Content="1:1" Click="ActualSize_Click"/>
-                    <Slider x:Name="ZoomSlider" Width="110" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
-                    <TextBlock x:Name="ZoomText" Width="58" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
+                    <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
+                    <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                 </WrapPanel>
             </DockPanel>
         </Border>
 
         <Grid Grid.Row="1">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition x:Name="ImagesColumn" Width="280" MinWidth="220"/>
-                <ColumnDefinition Width="*" MinWidth="220"/>
-                <ColumnDefinition x:Name="InspectorColumn" Width="260" MinWidth="0"/>
-            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <Grid x:Name="MainContentGrid" Grid.Row="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition x:Name="ImagesColumn" Width="320" MinWidth="240"/>
+                    <ColumnDefinition Width="*" MinWidth="180"/>
+                    <ColumnDefinition x:Name="InspectorColumn" Width="300" MinWidth="0"/>
+                </Grid.ColumnDefinitions>
 
             <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
                 <Grid.RowDefinitions>
@@ -90,7 +138,7 @@
                     </ListBox>
                 </DockPanel>
 
-                <Border x:Name="DescriptorPanel" Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10" MaxHeight="150">
+                <Border x:Name="DescriptorPanel" Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10" MaxHeight="120">
                     <DockPanel LastChildFill="True">
                         <TextBlock DockPanel.Dock="Top" Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -101,29 +149,210 @@
             </Grid>
 
             <Border Grid.Column="1" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
-                <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView"/>
+                <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
             </Border>
 
-            <Grid x:Name="InspectorPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" Margin="0">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="140"/>
-                    <RowDefinition Height="Auto"/>
-                    <RowDefinition Height="*"/>
-                </Grid.RowDefinitions>
-
-                <StackPanel Grid.Row="0" Margin="10">
+            <ScrollViewer x:Name="InspectorPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="10">
                     <TextBlock Text="Pixel" FontSize="16" FontWeight="SemiBold"/>
                     <TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                    <TextBlock Text="5x5" Margin="0,10,0,4" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="PixelNeighborhoodText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock Text="ROI 5x5" Margin="0,10,0,4" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="RoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock Text="Marker" Margin="0,10,0,4" FontWeight="SemiBold"/>
+                    <WrapPanel>
+                        <Button Content="Pin" Click="PinMarker_Click"/>
+                        <Button Content="Clear" Click="ClearMarker_Click"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="MarkerText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                    <TextBlock Text="Line" Margin="0,10,0,4" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="LineProfileText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+
+                    <TextBlock Text="Histogram" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
+                    <Border Height="110" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource InputBrush}">
+                        <Canvas x:Name="HistogramCanvas" Margin="8"/>
+                    </Border>
+
+                    <TextBlock Text="Levels" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Black" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="0" Grid.Column="1" x:Name="BlackLevelTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="White" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="WhiteLevelTextBox" Margin="0,0,0,6"/>
+                        <WrapPanel Grid.Row="2" Grid.Column="1">
+                            <Button Content="Apply" Click="ApplyLevels_Click"/>
+                            <Button Content="Auto" Click="AutoLevels_Click"/>
+                        </WrapPanel>
+                    </Grid>
+
+                    <TextBlock Text="Interpret" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Format" Margin="0,0,8,6"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretStrideTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Bits" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Endian" Margin="0,0,8,6"/>
+                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="InterpretByteOrderBox" Margin="0,0,0,6"/>
+                        <Button Grid.Row="4" Grid.Column="1" Content="Apply" HorizontalAlignment="Left" Click="ApplyInterpretation_Click"/>
+                    </Grid>
+
+                    <TextBlock Text="Compare" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
+                    <WrapPanel>
+                        <Button Content="Set A" Click="SetCompareA_Click"/>
+                        <Button Content="Set B" Click="SetCompareB_Click"/>
+                        <Button Content="Split" Click="ShowSplit_Click"/>
+                        <Button Content="Diff" Click="ShowDiff_Click"/>
+                        <Button x:Name="BlinkButton" Content="Blink" Click="Blink_Click"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="CompareText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+
+                    <TextBlock Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                    <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                    <ListBox x:Name="DiagnosticsList" Height="110"/>
                 </StackPanel>
-
-                <Border Grid.Row="1" Margin="10,0,10,0" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource InputBrush}">
-                    <Canvas x:Name="HistogramCanvas" Margin="8"/>
-                </Border>
-
-                <TextBlock Grid.Row="2" Text="Diagnostics" FontSize="16" FontWeight="SemiBold" Margin="10,12,10,8"/>
-                <ListBox Grid.Row="3" x:Name="DiagnosticsList" Margin="10,0,10,10"/>
+            </ScrollViewer>
             </Grid>
+
+            <Border x:Name="CompactInspectorPanel"
+                    Grid.Row="1"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrush}"
+                    BorderThickness="0,1,0,0"
+                    Padding="8"
+                    MaxHeight="156"
+                    Visibility="Collapsed">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="1.2*"/>
+                            <ColumnDefinition Width="1.1*"/>
+                            <ColumnDefinition Width="1.1*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,10,0">
+                            <TextBlock Text="Pixel" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="CompactPixelText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="34"/>
+                            <TextBlock Text="5x5" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                            <TextBlock x:Name="CompactPixelNeighborhoodText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="10" MaxHeight="54"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="1" Margin="0,0,10,0">
+                            <TextBlock Text="ROI 5x5" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <TextBlock x:Name="CompactRoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+                            <TextBlock Text="Marker" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                            <WrapPanel>
+                                <Button Content="Pin" Click="PinMarker_Click"/>
+                                <Button Content="Clear" Click="ClearMarker_Click"/>
+                            </WrapPanel>
+                            <TextBlock x:Name="CompactMarkerText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="38"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Levels" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="48"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Black" Margin="0,0,6,4"/>
+                                <TextBox Grid.Row="0" Grid.Column="1" x:Name="CompactBlackLevelTextBox" Margin="0,0,0,4"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Text="White" Margin="0,0,6,4"/>
+                                <TextBox Grid.Row="1" Grid.Column="1" x:Name="CompactWhiteLevelTextBox" Margin="0,0,0,4"/>
+                                <WrapPanel Grid.Row="2" Grid.Column="1">
+                                    <Button Content="Apply" Click="ApplyCompactLevels_Click"/>
+                                    <Button Content="Auto" Click="AutoLevels_Click"/>
+                                </WrapPanel>
+                            </Grid>
+                            <TextBlock Text="Diagnostics" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                            <TextBlock x:Name="CompactPerformanceText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="10" MaxHeight="38"/>
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
         </Grid>
+
+        <Border Grid.Row="2" Height="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
+            <DockPanel LastChildFill="True">
+                <TextBlock x:Name="StatusText"
+                           DockPanel.Dock="Right"
+                           Width="220"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           TextAlignment="Right"
+                           Foreground="{StaticResource StatusTextBrush}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MinWidth="76"/>
+                    <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>
+
+                    <Border x:Name="PixelValueChip" Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="PixelSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#1E1E1E" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border>
+
+                    <StackPanel x:Name="PixelChannelsPanel" Orientation="Horizontal" Visibility="Collapsed">
+                        <Border Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelRSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#550000" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                                <TextBlock x:Name="PixelRText" Text="R -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelGSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#005500" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                                <TextBlock x:Name="PixelGText" Text="G -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelBSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#000055" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                                <TextBlock x:Name="PixelBText" Text="B -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="PixelAChip" Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelASwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#555555" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                                <TextBlock x:Name="PixelAText" Text="A -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+
+                    <TextBlock x:Name="PixelColorText" Text="RGB -" Visibility="Collapsed"/>
+                    <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>
+                    <TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MaxWidth="170" TextTrimming="CharacterEllipsis"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
     </Grid>
 </UserControl>

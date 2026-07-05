@@ -165,7 +165,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             var descriptor = metadata.Descriptor;
             Status = string.Format(
                 CultureInfo.InvariantCulture,
-                "Sent to Visual Studio OpenGL ToolWindow: {0} x {1}, {2}, {3:N0} bytes.",
+                "Sent to Raw Buffer Visualizer: {0} x {1}, {2}, {3:N0} bytes.",
                 descriptor.Width,
                 descriptor.Height,
                 descriptor.PixelFormat,

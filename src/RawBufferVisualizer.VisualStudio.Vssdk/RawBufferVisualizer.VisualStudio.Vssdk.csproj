@@ -24,6 +24,13 @@
   </ItemGroup>
 
   <ItemGroup>
+    <VSCTCompile Include="RawBufferVisualizerCommands.vsct">
+      <ResourceName>Menus.ctmenu</ResourceName>
+    </VSCTCompile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Design" />
     <Reference Include="envdte">
       <HintPath>$(VisualStudioPublicAssemblies)envdte.dll</HintPath>
       <Private>false</Private>
