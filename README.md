@@ -51,6 +51,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionR
 
 This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder and removes old startup autoload registrations.
 
+If the popup appears only when inspecting an image, check `%TEMP%\RawBufferVisualizer\VisualStudio\package.log` and Visual Studio's `ActivityLog.xml`. Version `1.0.25.0` builds the docked VSSDK package against Visual Studio 2022 17.9-compatible references; older `1.0.24.0` builds could require `Microsoft.VisualStudio.Threading 17.14.0.0` and fail on PCs that had not updated Visual Studio to 17.14.
+
 To uninstall, use `Extensions > Manage Extensions > Installed` in Visual Studio, or uninstall the VSIX by extension id:
 
 ```powershell

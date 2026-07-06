@@ -70,6 +70,21 @@ function Assert-DebuggerVisualizerTargetTypes {
     }
 }
 
+function Assert-VssdkReferenceCompatibility {
+    param([string]$AssemblyPath)
+
+    $maxThreadingVersion = [Version]'17.9.0.0'
+    $references = [Reflection.Assembly]::ReflectionOnlyLoadFrom($AssemblyPath).GetReferencedAssemblies()
+    $threading = $references | Where-Object { $_.Name -eq 'Microsoft.VisualStudio.Threading' } | Select-Object -First 1
+    if ($null -eq $threading) {
+        throw "VSSDK package does not reference Microsoft.VisualStudio.Threading: $AssemblyPath"
+    }
+
+    if ($threading.Version -gt $maxThreadingVersion) {
+        throw "VSSDK package references Microsoft.VisualStudio.Threading $($threading.Version), but Marketplace support starts at Visual Studio 2022 17.9. Build against 17.9-compatible VSSDK references."
+    }
+}
+
 if ($ViewerFramework -ne 'net472') {
     throw 'The Visual Studio ToolWindow is packaged into the single net472 hybrid VSIX. Use -ViewerFramework net472 or omit it.'
 }
@@ -99,6 +114,8 @@ $extensionJsonPath = Join-Path $buildOutput '.vsextension\extension.json'
 Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension metadata was not created'
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
+Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
+Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')
 Assert-FileExists -Path $vsixPath -Message 'Visual Studio extension VSIX was not created'
 
 $manifestPath = Join-Path $buildOutput 'extension.vsixmanifest'

@@ -44,8 +44,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             WriteAutomationLog("InitializeAsync start");
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-            StartInboxWatcher();
-            await RegisterCommandsAsync(cancellationToken);
+
+            try
+            {
+                StartInboxWatcher();
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("StartInboxWatcher error " + ex);
+            }
+
+            try
+            {
+                await RegisterCommandsAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("RegisterCommands error " + ex);
+            }
+
+            ScanInbox();
             WriteAutomationLog("InitializeAsync end");
         }
 
@@ -176,14 +194,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private static void WriteAutomationLog(string message)
         {
             var metricsPath = Environment.GetEnvironmentVariable("RAWBUFFERVISUALIZER_DOCKED_PERF_JSON");
-            if (string.IsNullOrWhiteSpace(metricsPath))
-            {
-                return;
-            }
-
             try
             {
-                var logPath = Path.ChangeExtension(metricsPath, ".package.log");
+                var logPath = string.IsNullOrWhiteSpace(metricsPath)
+                    ? Path.Combine(VisualStudioTempStore.RootDirectory, "package.log")
+                    : Path.ChangeExtension(metricsPath, ".package.log");
+                var logDirectory = Path.GetDirectoryName(logPath);
+                if (!string.IsNullOrWhiteSpace(logDirectory))
+                {
+                    Directory.CreateDirectory(logDirectory);
+                }
+
+                if (File.Exists(logPath) && new FileInfo(logPath).Length > 1024 * 1024)
+                {
+                    File.Delete(logPath);
+                }
+
                 File.AppendAllText(
                     logPath,
                     DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " " + message + Environment.NewLine);

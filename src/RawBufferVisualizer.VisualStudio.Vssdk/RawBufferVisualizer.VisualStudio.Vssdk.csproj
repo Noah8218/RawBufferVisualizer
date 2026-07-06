@@ -15,6 +15,7 @@
     <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\')">$(ProgramFiles)\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
     <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Professional\Common7\IDE\PublicAssemblies\')">$(ProgramFiles)\Microsoft Visual Studio\2022\Professional\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
     <VisualStudioPublicAssemblies Condition="'$(VisualStudioPublicAssemblies)' == '' and Exists('$(ProgramFiles)\Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies\')">$(ProgramFiles)\Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies\</VisualStudioPublicAssemblies>
+    <VssdkToolsPath>$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.9.3168\tools\vssdk\</VssdkToolsPath>
     <OutputPath>$(BaseOutputPath)$(Configuration)\</OutputPath>
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
     <CreatePkgDefAssemblyToProcess>$(OutputPath)$(TargetFramework)\$(AssemblyName).dll</CreatePkgDefAssemblyToProcess>
@@ -23,7 +24,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.14.2120" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VSSDK.BuildTools" Version="17.9.3168" PrivateAssets="all" />
   </ItemGroup>
 
   <ItemGroup>
@@ -47,11 +48,11 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.15.0">
-      <HintPath>$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Shell.15.0.dll</HintPath>
+      <HintPath>$(VssdkToolsPath)Microsoft.VisualStudio.Shell.15.0.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.Framework">
-      <HintPath>$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Shell.Framework.dll</HintPath>
+      <HintPath>$(VssdkToolsPath)Microsoft.VisualStudio.Shell.Framework.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.Interop">
@@ -59,7 +60,7 @@
       <Private>false</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Threading">
-      <HintPath>$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Threading.17.x\Microsoft.VisualStudio.Threading.dll</HintPath>
+      <HintPath>$(VssdkToolsPath)Microsoft.VisualStudio.Threading.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
@@ -71,7 +72,7 @@
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
   </ItemGroup>
 
-  <Import Project="$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.14.2120\tools\vssdk\Microsoft.VsSDK.targets" Condition="Exists('$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.14.2120\tools\vssdk\Microsoft.VsSDK.targets')" />
+  <Import Project="$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.9.3168\tools\vssdk\Microsoft.VsSDK.targets" Condition="Exists('$(NuGetPackageRoot)microsoft.vssdk.buildtools\17.9.3168\tools\vssdk\Microsoft.VsSDK.targets')" />
 
   <Target Name="ValidateVisualStudioPublicAssemblies" BeforeTargets="ResolveReferences">
     <Error Condition="'$(VisualStudioPublicAssemblies)' == '' or !Exists('$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Shell.15.0.dll')"
