@@ -73,8 +73,8 @@ Run before uploading:
 ```powershell
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --no-build
-powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 100000 -Height 100000 -Configuration Release -Framework net472 -NoBuild
-powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 200000 -Height 200000 -Configuration Release -Framework net472 -NoBuild
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 100000 -Height 100000 -Configuration Release -Framework net472 -Dense -NoBuild
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 200000 -Height 200000 -Configuration Release -Framework net472 -Dense -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -PixelFormat Mono16 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat BGR24 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat Float32 -Width 320 -Height 240
@@ -122,7 +122,7 @@ Raw Buffer Visualizer preview
 - Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
 - Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, ROI 5x5, marker, levels, and A/B comparison.
 - Adds visible PNG export and raw snapshot export from the docked viewer.
-- Includes large file-backed image validation up to 200000 x 200000 sparse raw payloads.
+- Includes large file-backed image validation up to 200000 x 200000 dense raw payloads.
 
 Known limits:
 - Vendor SDK-specific adapters are not shipped yet. Use RawBufferView for common camera and frame-grabber buffer shapes.
@@ -147,4 +147,4 @@ artifacts\ui\docked-layout-widths\layout-widths.json
 - Narrow Visual Studio docking hides Save, image list, viewer, status strip, or Inspector access.
 - Debugger inspections open multiple independent viewer windows instead of one docked image list.
 - Install/update/uninstall/reinstall has not been checked.
-- The README or listing does not include the MIT license requirement.
+- The README or listing does not include the MIT license and third-party notice requirement.

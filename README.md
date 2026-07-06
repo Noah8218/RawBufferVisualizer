@@ -212,12 +212,19 @@ The viewer avoids allocating one full-frame bitmap for large raw payloads. It us
 
 | Case | Current result |
 | --- | --- |
-| `100000 x 100000` `Mono8` file-backed smoke | Passed with sparse 10 GB payload. |
-| `200000 x 200000` `Mono8` file-backed smoke | Passed with sparse 40 GB payload. |
+| `100000 x 100000` `Mono8` file-backed smoke | Passed with dense 10 GB payload and non-sparse file check. |
+| `200000 x 200000` `Mono8` file-backed smoke | Passed with dense 40 GB payload and non-sparse file check. |
 | 100k packed `Mono10PackedLsb` and `Mono12PackedLsb` | Passed as file-backed smoke captures. |
 | Core tests | Cover descriptor planning, file-backed tile reads, diff rendering, diagnostics, and raw-byte pixel inspection. |
 
-To generate portable `100000 x 100000` and `200000 x 200000` sparse sample files on another PC, see [large image samples](docs/large-image-samples.md).
+To generate portable `100000 x 100000` and `200000 x 200000` sample files on another PC, see [large image samples](docs/large-image-samples.md).
+
+For OpenCV/Emgu smoke tests with images above OpenCV's default pixel safety limit, set `OPENCV_IO_MAX_IMAGE_PIXELS` before loading the file:
+
+```powershell
+$env:OPENCV_IO_MAX_IMAGE_PIXELS = "4000000000"
+dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj --configuration Release -- --emgu-tiff-smoke "C:\path\large.tif"
+```
 
 ![100000 x 100000 file-backed Mono8 payload](docs/images/viewer-100k-file-backed.png)
 
@@ -291,3 +298,5 @@ See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the relea
 Copyright (c) 2026 Noah Choi.
 
 This project is licensed under the MIT License. You may use, modify, and redistribute the source code, but the copyright and license notice must remain included. See [LICENSE](LICENSE).
+
+External libraries keep their own licenses. Review [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before publishing a VSIX, release package, or redistributed binary.

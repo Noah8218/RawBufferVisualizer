@@ -4,9 +4,9 @@
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
     <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
-    <AssemblyVersion>1.0.17.0</AssemblyVersion>
-    <FileVersion>1.0.17.0</FileVersion>
-    <Version>1.0.17</Version>
+    <AssemblyVersion>1.0.18.0</AssemblyVersion>
+    <FileVersion>1.0.18.0</FileVersion>
+    <Version>1.0.18</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" PrivateAssets="all" />
@@ -18,6 +18,12 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Resources\Icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\LICENSE" Link="LICENSE.txt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

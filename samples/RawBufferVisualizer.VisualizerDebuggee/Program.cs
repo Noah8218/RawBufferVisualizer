@@ -3,10 +3,12 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Runtime.InteropServices;
 using OpenCvSharp;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.Sdk;
+using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualizerDebuggee
 {
@@ -17,6 +19,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
         private static int Main(string[] args)
         {
+            if (TryGetArgument(args, "--emgu-tiff-smoke", out var tiffPath))
+            {
+                return RunEmguTiffSmoke(tiffPath);
+            }
+
             var shouldBreak = Array.IndexOf(args, "--no-break") < 0;
             var caseNumber = 1;
             var pinnedViews = new List<PinnedRawBufferView>();
@@ -287,6 +294,61 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 {
                     pinnedView.Dispose();
                 }
+            }
+        }
+
+        private static bool TryGetArgument(string[] args, string name, out string value)
+        {
+            var index = Array.IndexOf(args, name);
+            if (index >= 0 && index + 1 < args.Length)
+            {
+                value = args[index + 1];
+                return true;
+            }
+
+            value = string.Empty;
+            return false;
+        }
+
+        private static int RunEmguTiffSmoke(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                Console.Error.WriteLine("TIFF file was not found: " + path);
+                return 2;
+            }
+
+            try
+            {
+                using (var mat = new Emgu.CV.Mat(path, Emgu.CV.CvEnum.ImreadModes.Unchanged))
+                {
+                    var view = EmguCvMatVisualizerTransfer.CreateView(mat, Path.GetFileName(path));
+                    var metadata = EmguCvMatVisualizerTransfer.CreateMetadata(view);
+                    var chunk = EmguCvMatVisualizerTransfer.CreateChunk(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Offset = 0,
+                            Count = Math.Min(4096, VisualizerChunkedTransfer.DefaultChunkSize)
+                        });
+
+                    Console.WriteLine("Emgu TIFF smoke passed.");
+                    Console.WriteLine(
+                        metadata.Descriptor.Width.ToString() + " x " +
+                        metadata.Descriptor.Height.ToString() + ", " +
+                        metadata.Descriptor.PixelFormat.ToString() + ", stride " +
+                        metadata.Descriptor.Stride.ToString() + ", bytes " +
+                        metadata.BufferLength.ToString() + ", first chunk " +
+                        chunk.Buffer.Length.ToString());
+                    return 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("Emgu TIFF smoke failed.");
+                Console.Error.WriteLine("Type: " + ex.GetType().FullName);
+                Console.Error.WriteLine("Message: " + ex.Message);
+                return 1;
             }
         }
 

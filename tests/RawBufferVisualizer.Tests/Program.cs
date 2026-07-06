@@ -51,8 +51,8 @@ namespace RawBufferVisualizer.Tests
                 RawBufferViewCreatesDescriptorAndChunks();
                 ImagePtrVisualizerObjectSourceCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
-                MatVisualizerObjectSourceCreatesTransfer();
-                EmguCvMatVisualizerObjectSourceCreatesTransfer();
+                MatVisualizerObjectSourceCreatesChunks();
+                EmguCvMatVisualizerObjectSourceCreatesChunks();
                 VisualizerBridgeWritesLaunchSnapshot();
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
                 VisualizerBridgePreparesMultiLaunchSnapshots();
@@ -879,21 +879,30 @@ namespace RawBufferVisualizer.Tests
             return (T)(property.GetValue(target) ?? throw new InvalidOperationException(propertyName + " returned null."));
         }
 
-        private static void MatVisualizerObjectSourceCreatesTransfer()
+        private static void MatVisualizerObjectSourceCreatesChunks()
         {
             using (var mat = new Mat(1, 2, MatType.CV_8UC3, new Scalar(3, 2, 1)))
             {
-                var transfer = OpenCvSharpMatVisualizerTransfer.CreateTransfer(mat, "mat0");
+                var view = OpenCvSharpMatVisualizerTransfer.CreateView(mat, "mat0");
+                var metadata = OpenCvSharpMatVisualizerTransfer.CreateMetadata(view);
+                var chunk = OpenCvSharpMatVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 1,
+                        Count = 4
+                    });
 
-                Assert(transfer.DisplayName == "mat0", "Mat visualizer display name failed.");
-                Assert(transfer.SourceType == typeof(Mat).FullName, "Mat visualizer source type failed.");
-                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Mat visualizer dimensions failed.");
-                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat visualizer pixel format failed.");
-                Assert(transfer.Buffer.Length >= 6, "Mat visualizer buffer length failed.");
+                Assert(metadata.DisplayName == "mat0", "Mat visualizer display name failed.");
+                Assert(metadata.SourceType == typeof(Mat).FullName, "Mat visualizer source type failed.");
+                Assert(metadata.Descriptor.Width == 2 && metadata.Descriptor.Height == 1, "Mat visualizer dimensions failed.");
+                Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat visualizer pixel format failed.");
+                Assert(metadata.BufferLength >= 6, "Mat visualizer buffer length failed.");
+                Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2, "Mat visualizer chunk failed.");
             }
         }
 
-        private static void EmguCvMatVisualizerObjectSourceCreatesTransfer()
+        private static void EmguCvMatVisualizerObjectSourceCreatesChunks()
         {
             using (var mat = new Emgu.CV.Mat(
                 1,
@@ -903,13 +912,22 @@ namespace RawBufferVisualizer.Tests
                 new byte[] { 3, 2, 1, 6, 5, 4 },
                 6))
             {
-                var transfer = EmguCvMatVisualizerTransfer.CreateTransfer(mat, "emgu0");
+                var view = EmguCvMatVisualizerTransfer.CreateView(mat, "emgu0");
+                var metadata = EmguCvMatVisualizerTransfer.CreateMetadata(view);
+                var chunk = EmguCvMatVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 2,
+                        Count = 3
+                    });
 
-                Assert(transfer.DisplayName == "emgu0", "Emgu Mat visualizer display name failed.");
-                Assert(transfer.SourceType == "Emgu.CV.Mat", "Emgu Mat visualizer source type failed.");
-                Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Emgu Mat visualizer dimensions failed.");
-                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu Mat visualizer pixel format failed.");
-                Assert(transfer.Buffer.Length == 6 && transfer.Buffer[0] == 3 && transfer.Buffer[5] == 4, "Emgu Mat visualizer buffer failed.");
+                Assert(metadata.DisplayName == "emgu0", "Emgu Mat visualizer display name failed.");
+                Assert(metadata.SourceType == "Emgu.CV.Mat", "Emgu Mat visualizer source type failed.");
+                Assert(metadata.Descriptor.Width == 2 && metadata.Descriptor.Height == 1, "Emgu Mat visualizer dimensions failed.");
+                Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu Mat visualizer pixel format failed.");
+                Assert(metadata.BufferLength == 6, "Emgu Mat visualizer buffer length failed.");
+                Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 1 && chunk.Buffer[2] == 5, "Emgu Mat visualizer chunk failed.");
             }
         }
 

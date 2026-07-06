@@ -5,18 +5,17 @@ using System.Reflection;
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
-using RawBufferVisualizer.Sdk;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class OpenCvSharpMatVisualizerObjectSource : VisualizerObjectSource
     {
         private object? _cachedMat;
-        private VisualizerSnapshotTransfer? _cachedTransfer;
+        private OpenCvSharpMatView? _cachedView;
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateMetadata(GetTransfer(target)));
+            SerializeAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreateMetadata(GetView(target)));
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
@@ -27,26 +26,35 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new InvalidDataException("Chunk request is required.");
             }
 
-            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(GetTransfer(target), request));
+            SerializeAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
-        private VisualizerSnapshotTransfer GetTransfer(object target)
+        private OpenCvSharpMatView GetView(object target)
         {
             if (!ReferenceEquals(target, _cachedMat))
             {
                 _cachedMat = target;
-                _cachedTransfer = OpenCvSharpMatVisualizerTransfer.CreateTransfer(target);
+                _cachedView = OpenCvSharpMatVisualizerTransfer.CreateView(target);
             }
 
-            return _cachedTransfer ?? throw new InvalidOperationException("Mat transfer was not created.");
+            return _cachedView ?? throw new InvalidOperationException("Mat view was not created.");
         }
+    }
+
+    public sealed class OpenCvSharpMatView
+    {
+        public IntPtr Buffer { get; set; }
+        public long BufferLength { get; set; }
+        public RawImageDescriptor Descriptor { get; set; } = new RawImageDescriptor();
+        public string SourceType { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
     }
 
     public static class OpenCvSharpMatVisualizerTransfer
     {
         private const string MatFullName = "OpenCvSharp.Mat";
 
-        public static VisualizerSnapshotTransfer CreateTransfer(object mat, string? displayName = null)
+        public static OpenCvSharpMatView CreateView(object mat, string? displayName = null)
         {
             if (mat == null)
             {
@@ -69,7 +77,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             var matType = Invoke<object>(mat, "Type");
-            var stride = checked((int)Invoke<long>(mat, "Step"));
+            var stride = ToPositiveInt(Invoke<long>(mat, "Step"), "Step");
             var height = Get<int>(mat, "Height");
             var descriptor = new RawImageDescriptor
             {
@@ -87,14 +95,72 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentException("Mat data pointer is empty.", nameof(mat));
             }
 
-            var byteCount = checked(stride * height);
-            var buffer = new byte[byteCount];
-            Marshal.Copy(data, buffer, 0, byteCount);
+            return new OpenCvSharpMatView
+            {
+                Buffer = data,
+                BufferLength = checked((long)stride * height),
+                Descriptor = descriptor,
+                SourceType = MatFullName,
+                DisplayName = displayName ?? string.Empty
+            };
+        }
 
-            return RawBufferSnapshotObjectSource.CreateTransfer(
-                RawBufferSnapshot.FromByteArray(buffer, descriptor),
-                MatFullName,
-                displayName);
+        public static VisualizerSnapshotMetadata CreateMetadata(OpenCvSharpMatView view)
+        {
+            if (view == null)
+            {
+                throw new ArgumentNullException(nameof(view));
+            }
+
+            return VisualizerChunkedTransfer.CreateMetadata(
+                view.Descriptor,
+                view.BufferLength,
+                view.SourceType,
+                view.DisplayName);
+        }
+
+        public static VisualizerSnapshotChunk CreateChunk(OpenCvSharpMatView view, VisualizerSnapshotChunkRequest request)
+        {
+            if (view == null)
+            {
+                throw new ArgumentNullException(nameof(view));
+            }
+
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (view.Buffer == IntPtr.Zero)
+            {
+                throw new InvalidOperationException("Mat data pointer is empty.");
+            }
+
+            if (request.Offset < 0 || request.Offset > view.BufferLength)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request.Offset));
+            }
+
+            if (request.Count <= 0 || request.Count > VisualizerChunkedTransfer.DefaultChunkSize)
+            {
+                throw new ArgumentOutOfRangeException(nameof(request.Count));
+            }
+
+            var remaining = view.BufferLength - request.Offset;
+            var length = (int)Math.Min(request.Count, remaining);
+            var buffer = new byte[length];
+            if (length > 0)
+            {
+                Marshal.Copy(Add(view.Buffer, request.Offset), buffer, 0, length);
+            }
+
+            return new VisualizerSnapshotChunk
+            {
+                Offset = request.Offset,
+                Buffer = buffer,
+                TotalLength = view.BufferLength,
+                IsLastChunk = request.Offset + length >= view.BufferLength
+            };
         }
 
         private static RawPixelFormat ToRawPixelFormat(object matType)
@@ -177,6 +243,21 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             return (T)value;
+        }
+
+        private static int ToPositiveInt(long value, string name)
+        {
+            if (value <= 0 || value > int.MaxValue)
+            {
+                throw new ArgumentOutOfRangeException(name);
+            }
+
+            return (int)value;
+        }
+
+        private static IntPtr Add(IntPtr pointer, long offset)
+        {
+            return new IntPtr(checked(pointer.ToInt64() + offset));
         }
     }
 }
