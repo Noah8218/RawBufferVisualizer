@@ -17,6 +17,7 @@ $ErrorActionPreference = 'Stop'
 
 $extensionId = 'RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f'
 $toolWindowExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
+$minimumVisualStudioVersion = [Version]'17.9.0'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
 $vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
@@ -64,31 +65,46 @@ function Find-VsixInstaller {
     throw 'VSIXInstaller.exe was not found. Pass -VsixInstallerPath explicitly.'
 }
 
-function Find-VisualStudioInstanceId {
-    if (-not [string]::IsNullOrWhiteSpace($VisualStudioInstanceId)) {
-        return $VisualStudioInstanceId
-    }
-
+function Get-VisualStudioInstances {
     $candidates = @(
         (Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'),
         (Join-Path $env:ProgramFiles 'Microsoft Visual Studio\Installer\vswhere.exe')
     )
     $vswhere = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
     if (-not $vswhere) {
-        return ''
+        return @()
     }
 
     $json = & $vswhere -all -format json
     if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
-        return ''
+        return @()
     }
 
-    $instances = $json | ConvertFrom-Json
-    $instance = $instances |
+    @($json | ConvertFrom-Json)
+}
+
+function Find-VisualStudioInstanceId {
+    if (-not [string]::IsNullOrWhiteSpace($VisualStudioInstanceId)) {
+        return $VisualStudioInstanceId
+    }
+
+    $instances = Get-VisualStudioInstances
+    $compatibleInstance = $instances |
+        Where-Object {
+            $_.installationVersion -like '17.*' -and
+            $_.isLaunchable -eq $true -and
+            ([Version]$_.installationVersion) -ge $minimumVisualStudioVersion
+        } |
+        Select-Object -First 1
+    if ($compatibleInstance) {
+        return $compatibleInstance.instanceId
+    }
+
+    $unsupportedInstance = $instances |
         Where-Object { $_.installationVersion -like '17.*' -and $_.isLaunchable -eq $true } |
         Select-Object -First 1
-    if ($instance) {
-        return $instance.instanceId
+    if ($unsupportedInstance) {
+        throw "Raw Buffer Visualizer requires Visual Studio 2022 $minimumVisualStudioVersion or newer. Installed Visual Studio version is $($unsupportedInstance.installationVersion). Update Visual Studio, then rerun this script."
     }
 
     ''

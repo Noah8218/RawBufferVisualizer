@@ -111,7 +111,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     '- In-process Visual Studio ToolWindow used as the docked image viewer',
     '',
     'Manual validation prerequisites:',
-    '- Visual Studio 2022 17.14 or newer',
+    '- Visual Studio 2022 17.9 or newer',
     '- Visual Studio extension development workload',
     '',
     'Close Visual Studio before installing, then restart Visual Studio before debugger testing.'

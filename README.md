@@ -212,7 +212,7 @@ The viewer avoids allocating one full-frame bitmap for large raw payloads. It us
 
 Build prerequisites:
 
-- Visual Studio 2022 with .NET desktop development.
+- Visual Studio 2022 17.9 or newer with .NET desktop development.
 - .NET 8 SDK or newer. The solution does not require the .NET 9 SDK.
 
 From a fresh clone, build the solution once before inspecting the generated VSIX payload:
