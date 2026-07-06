@@ -43,6 +43,14 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 
 Restart Visual Studio after installation or update.
 
+If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the VSSDK tool-window registration:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
+```
+
+This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder.
+
 To uninstall, use `Extensions > Manage Extensions > Installed` in Visual Studio, or uninstall the VSIX by extension id:
 
 ```powershell
