@@ -155,12 +155,14 @@ function Register-VssdkToolWindow {
     $packageGuid = '{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}'
     $windowGuid = '{a329e331-089a-4186-8fd7-57a241fd1917}'
     $solutionExplorerGuid = '{3ae79031-e1bc-11d0-8f78-00a0c9110057}'
-    $shellInitializedGuid = '{e80ef1cb-6d64-4609-8faa-feacfd3bc89f}'
-    $noSolutionGuid = '{adfc4e64-0397-11d1-9f4e-00a0c911004f}'
-    $solutionExistsGuid = '{f1536ef8-92ec-443c-9ed7-fdadf150da82}'
-    $debuggingGuid = '{adfc4e61-0397-11d1-9f4e-00a0c911004f}'
-    $solutionFullyLoadedGuid = '{10534154-102d-46e2-aba8-a6bfa25ba0be}'
-    $solutionReadyGuid = '{d0e4deec-1b53-4cda-8559-d454583ad23b}'
+    $autoLoadContextGuids = @(
+        '{e80ef1cb-6d64-4609-8faa-feacfd3bc89f}',
+        '{adfc4e64-0397-11d1-9f4e-00a0c911004f}',
+        '{f1536ef8-92ec-443c-9ed7-fdadf150da82}',
+        '{adfc4e61-0397-11d1-9f4e-00a0c911004f}',
+        '{10534154-102d-46e2-aba8-a6bfa25ba0be}',
+        '{d0e4deec-1b53-4cda-8559-d454583ad23b}'
+    )
 
     $packageKey = Join-Path $configRoot "Packages\$packageGuid"
     New-Item -Path $packageKey -Force | Out-Null
@@ -170,10 +172,11 @@ function Register-VssdkToolWindow {
     New-ItemProperty -Path $packageKey -Name 'CodeBase' -Value $packageDll -PropertyType String -Force | Out-Null
     New-ItemProperty -Path $packageKey -Name 'AllowsBackgroundLoad' -Value 1 -PropertyType DWord -Force | Out-Null
 
-    foreach ($contextGuid in @($shellInitializedGuid, $noSolutionGuid, $solutionExistsGuid, $debuggingGuid, $solutionFullyLoadedGuid, $solutionReadyGuid)) {
+    foreach ($contextGuid in $autoLoadContextGuids) {
         $autoLoadKey = Join-Path $configRoot "AutoLoadPackages\$contextGuid"
-        New-Item -Path $autoLoadKey -Force | Out-Null
-        New-ItemProperty -Path $autoLoadKey -Name $packageGuid -Value 2 -PropertyType DWord -Force | Out-Null
+        if (Test-Path -LiteralPath $autoLoadKey) {
+            Remove-ItemProperty -Path $autoLoadKey -Name $packageGuid -ErrorAction SilentlyContinue
+        }
     }
 
     $bindingKey = Join-Path $configRoot "BindingPaths\$packageGuid"
