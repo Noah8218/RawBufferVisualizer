@@ -824,17 +824,23 @@ namespace RawBufferVisualizer.Tests
             try
             {
                 var image = new PointerFrameLike(handle.AddrOfPinnedObject(), buffer.Length, 2, 1, 6, 3);
-                var view = PointerFrameVisualizerTransfer.CreateView(image);
+                var transferType = Type.GetType(
+                    "RawBufferVisualizer.VisualStudio.ObjectSource.PointerFrameVisualizerTransfer, RawBufferVisualizer.VisualStudio.ObjectSource",
+                    true) ?? throw new InvalidOperationException("PointerFrame visualizer transfer type was not found.");
+                var view = InvokeStatic(transferType, "CreateView", image);
+                var descriptor = GetProperty<RawImageDescriptor>(view, "Descriptor");
 
-                Assert(view.BufferLength == 6, "PointerFrame buffer length failed.");
-                Assert(view.Descriptor.Width == 2 && view.Descriptor.Height == 1, "PointerFrame dimensions failed.");
-                Assert(view.Descriptor.Stride == 6, "PointerFrame stride failed.");
-                Assert(view.Descriptor.PixelFormat == RawPixelFormat.BGR24, "PointerFrame Bpp=3 should map to BGR24.");
+                Assert(GetProperty<long>(view, "BufferLength") == 6, "PointerFrame buffer length failed.");
+                Assert(descriptor.Width == 2 && descriptor.Height == 1, "PointerFrame dimensions failed.");
+                Assert(descriptor.Stride == 6, "PointerFrame stride failed.");
+                Assert(descriptor.PixelFormat == RawPixelFormat.BGR24, "PointerFrame Bpp=3 should map to BGR24.");
 
-                var metadata = PointerFrameVisualizerTransfer.CreateMetadata(view);
+                var metadata = (VisualizerSnapshotMetadata)InvokeStatic(transferType, "CreateMetadata", view);
                 Assert(metadata.SourceType == typeof(PointerFrameLike).FullName, "PointerFrame metadata source type failed.");
 
-                var chunk = PointerFrameVisualizerTransfer.CreateChunk(
+                var chunk = (VisualizerSnapshotChunk)InvokeStatic(
+                    transferType,
+                    "CreateChunk",
                     view,
                     new VisualizerSnapshotChunkRequest
                     {
@@ -848,6 +854,28 @@ namespace RawBufferVisualizer.Tests
             {
                 handle.Free();
             }
+        }
+
+        private static object InvokeStatic(Type type, string methodName, params object[] arguments)
+        {
+            var method = type.GetMethod(methodName);
+            if (method == null)
+            {
+                throw new MissingMethodException(type.FullName, methodName);
+            }
+
+            return method.Invoke(null, arguments) ?? throw new InvalidOperationException(methodName + " returned null.");
+        }
+
+        private static T GetProperty<T>(object target, string propertyName)
+        {
+            var property = target.GetType().GetProperty(propertyName);
+            if (property == null)
+            {
+                throw new MissingMemberException(target.GetType().FullName, propertyName);
+            }
+
+            return (T)(property.GetValue(target) ?? throw new InvalidOperationException(propertyName + " returned null."));
         }
 
         private static void MatVisualizerObjectSourceCreatesTransfer()
