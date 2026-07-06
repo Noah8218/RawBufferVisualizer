@@ -59,6 +59,13 @@ docs\images\viewer-200k-file-backed.png
 
 The first Marketplace screenshot should show the docked Visual Studio workflow, not the standalone viewer.
 
+Screenshot gate:
+
+- Open every README and Marketplace screenshot before commit.
+- Reject screenshots that include unrelated applications, browser tabs, private desktop content, stale UI, or a feature state that does not match the listing text.
+- Prefer cropped ToolWindow-focused screenshots for the Visual Studio workflow.
+- Store review evidence under `artifacts\ui\...` when screenshots are replaced.
+
 ## Required Validation
 
 Run before uploading:
@@ -104,6 +111,7 @@ Manual smoke checklist:
 - Uninstall from Manage Extensions.
 - Restart Visual Studio and confirm the visualizer is gone.
 - Reinstall and repeat one debugger inspection.
+- For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
 
 ## Release Notes Template
 
@@ -112,7 +120,7 @@ Raw Buffer Visualizer preview
 
 - Adds a docked Visual Studio image inspector for debugger visualizer sessions.
 - Supports RawBufferSnapshot, RawBufferView, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
-- Adds thumbnails, image list accumulation, descriptor diagnostics, pixel status, raw bytes, ROI 5x5, marker, levels, and A/B comparison.
+- Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, ROI 5x5, marker, levels, and A/B comparison.
 - Adds visible PNG export and raw snapshot export from the docked viewer.
 - Includes large file-backed image validation up to 200000 x 200000 sparse raw payloads.
 

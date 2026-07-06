@@ -43,6 +43,12 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 
 Restart Visual Studio after installation or update.
 
+To uninstall, use `Extensions > Manage Extensions > Installed` in Visual Studio, or uninstall the VSIX by extension id:
+
+```powershell
+VSIXInstaller.exe /quiet /uninstall:RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f
+```
+
 ### Standalone viewer
 
 Build the WPF viewer or download the Windows package from GitHub Releases once a release is published.
@@ -67,6 +73,12 @@ The standalone viewer opens `.rbuf.json` snapshot files and is useful for saved 
 9. Use `Save` to export the current visible view as PNG. Right-click an image row to save the raw snapshot.
 
 The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
+
+The docked layout adapts to the available width:
+
+- Narrow: image list, viewer, Save, status strip, and an `Inspector` toggle.
+- Medium: image list, viewer, and bottom tab Inspector.
+- Wide: image list, viewer, Descriptor, and full right-side Inspector.
 
 ![Failed opens remain visible as error rows](docs/images/viewer-vs-docked-error.png)
 
@@ -207,7 +219,14 @@ dotnet build .\RawBufferVisualizer.sln -c Release
 Run core tests:
 
 ```powershell
-dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj -c Release
+dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net9.0-windows
+```
+
+Run Visual Studio docked smoke checks:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild
 ```
 
 Create sample snapshots:
@@ -223,6 +242,8 @@ dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferV
 ```
 
 For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables so each visualizer path can be checked from Watch, Locals, Autos, or DataTip.
+
+README and Marketplace screenshots must be reviewed before commit. Do not publish screenshots that include unrelated applications, private desktop content, stale UI, or a feature state that does not match the text.
 
 ## Marketplace Readiness
 
