@@ -41,7 +41,7 @@ Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine
 
 Inspect raw buffers, RawBufferView pointer-backed images, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
 
-Use the docked viewer to pan, zoom, save the visible view as PNG, save raw snapshots, read pixel coordinates, GV/RGB channel values, source bytes, ROI 5x5 statistics, pinned marker values, high-zoom pixel grid overlays, render levels, Try interpretation, and A/B comparison.
+Use the docked viewer to pan, zoom, save the visible view as PNG, save raw snapshots, read pixel coordinates, GV/RGB channel values, source bytes, hover 5x5 statistics, selected/pinned marker values, high-zoom pixel grid overlays, display range controls, Try interpretation, and A/B comparison.
 ```
 
 ## Required Screenshots
@@ -88,7 +88,7 @@ The docked smoke must validate:
 - Error rows remain visible.
 - Narrow docked layout keeps the Inspector collapsed by default and preserves image list, viewer, Save, and status strip access.
 - Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
-- Save visible PNG, raw snapshot export path, pixel status, raw bytes, ROI 5x5, pinned marker, levels, pan, zoom, drag, and wheel interaction.
+- Save visible PNG, raw snapshot export path, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, display range, pan, zoom, drag, and wheel interaction.
 - Non-blank framebuffer capture.
 
 ## Install, Update, Uninstall, Reinstall
@@ -120,7 +120,7 @@ Raw Buffer Visualizer preview
 
 - Adds a docked Visual Studio image inspector for debugger visualizer sessions.
 - Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
-- Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, ROI 5x5, marker, levels, and A/B comparison.
+- Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, display range, and A/B comparison.
 - Adds visible PNG export and raw snapshot export from the docked viewer.
 - Includes large file-backed image validation up to 200000 x 200000 dense raw payloads.
 

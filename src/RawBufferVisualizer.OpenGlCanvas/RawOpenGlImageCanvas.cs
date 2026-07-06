@@ -23,8 +23,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private const int DisplayTileSize = 1024;
         private const int MaxCachedTextures = 96;
         private const double PixelOverlayMinZoom = 8.0;
-        private const double PixelGridOverlayMinCellSize = 32.0;
+        private const double PixelGridOverlayMinCellSize = 42.0;
         private const int MaxPixelGridOverlayCells = 600;
+        private const double ClickSelectMaxDistance = 3.0;
 
         private readonly WindowsFormsHost _host;
         private readonly Forms.Panel _panel;
@@ -43,15 +44,21 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private bool _openGlInitialized;
         private bool _renderQueued;
         private Point _lastMouse;
+        private Point _mouseDownPoint;
+        private bool _leftMouseMoved;
         private DateTime _lastViewChangedUtc = DateTime.MinValue;
         private int _lastPixelX = int.MinValue;
         private int _lastPixelY = int.MinValue;
         private long _frameSerial;
         private string _pixelOverlayText = string.Empty;
         private Point? _pinnedMarker;
+        private Point? _selectedPixel;
+        private Point? _hoverPixel;
+        private bool _selectionOverlayEnabled = true;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelPinned;
+        public event EventHandler<RawOpenGlPixelEventArgs>? PixelSelected;
         public event EventHandler? ViewChanged;
 
         public int TileCount
@@ -87,6 +94,21 @@ namespace RawBufferVisualizer.OpenGlCanvas
             get { return ShouldDrawPixelGridOverlay(); }
         }
 
+        public bool SelectionOverlayEnabled
+        {
+            get { return _selectionOverlayEnabled; }
+            set
+            {
+                if (_selectionOverlayEnabled == value)
+                {
+                    return;
+                }
+
+                _selectionOverlayEnabled = value;
+                RequestRender();
+            }
+        }
+
         public string PinnedMarkerText
         {
             get
@@ -101,6 +123,23 @@ namespace RawBufferVisualizer.OpenGlCanvas
                     "X {0}  Y {1}",
                     (int)_pinnedMarker.Value.X,
                     (int)_pinnedMarker.Value.Y);
+            }
+        }
+
+        public string SelectedPixelText
+        {
+            get
+            {
+                if (!_selectedPixel.HasValue)
+                {
+                    return string.Empty;
+                }
+
+                return string.Format(
+                    CultureInfo.InvariantCulture,
+                    "X {0}  Y {1}",
+                    (int)_selectedPixel.Value.X,
+                    (int)_selectedPixel.Value.Y);
             }
         }
 
@@ -321,8 +360,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _descriptor = null;
             _renderOptions = null;
             _pinnedMarker = null;
+            _selectedPixel = null;
+            _hoverPixel = null;
             HidePixelOverlay();
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
 
@@ -381,6 +423,40 @@ namespace RawBufferVisualizer.OpenGlCanvas
             PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
             RequestRender();
             return true;
+        }
+
+        public bool SelectPixelAtImagePixel(int x, int y)
+        {
+            if (_descriptor == null || x < 0 || y < 0 || x >= _descriptor.Width || y >= _descriptor.Height)
+            {
+                return false;
+            }
+
+            _selectedPixel = new Point(x, y);
+            PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+            RequestRender();
+            return true;
+        }
+
+        public bool TryGetSelectedPixel(out int x, out int y)
+        {
+            if (!_selectedPixel.HasValue)
+            {
+                x = -1;
+                y = -1;
+                return false;
+            }
+
+            x = (int)_selectedPixel.Value.X;
+            y = (int)_selectedPixel.Value.Y;
+            return true;
+        }
+
+        public void ClearSelectedPixel()
+        {
+            _selectedPixel = null;
+            PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            RequestRender();
         }
 
         public void ClearPinnedMarker()
@@ -572,6 +648,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 }
 
                 DrawPixelGridOverlay(gl);
+                DrawSelectionOverlay(gl);
                 DrawPinnedMarker(gl);
                 TrimTextureCache(gl);
                 gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
@@ -621,6 +698,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             _dragging = true;
             _lastMouse = ToPoint(e);
+            _mouseDownPoint = _lastMouse;
+            _leftMouseMoved = false;
             HidePixelOverlay();
             _openGlControl.Focus();
             _openGlControl.Capture = true;
@@ -633,10 +712,17 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return;
             }
 
+            var position = ToPoint(e);
+            var wasClick = !_leftMouseMoved;
             _dragging = false;
             _openGlControl.Capture = false;
             RaiseViewChangedNow();
-            RaisePixelHovered(ToPoint(e), true);
+            if (wasClick)
+            {
+                SelectPixelAtScreenPoint(position);
+            }
+
+            RaisePixelHovered(position, true);
         }
 
         private void OpenGlMouseMove(object? sender, Forms.MouseEventArgs e)
@@ -647,6 +733,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 var inputWatch = Stopwatch.StartNew();
                 try
                 {
+                    if (!_leftMouseMoved
+                        && Math.Abs(position.X - _mouseDownPoint.X) <= ClickSelectMaxDistance
+                        && Math.Abs(position.Y - _mouseDownPoint.Y) <= ClickSelectMaxDistance)
+                    {
+                        return;
+                    }
+
+                    _leftMouseMoved = true;
                     var dx = position.X - _lastMouse.X;
                     var dy = position.Y - _lastMouse.Y;
                     _lastMouse = position;
@@ -697,7 +791,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void OpenGlMouseLeave(object? sender, EventArgs e)
         {
+            _hoverPixel = null;
             HidePixelOverlay();
+            RequestRender();
         }
 
         private void ResizeViewKeepingZoom(Size previousSize, Size newSize)
@@ -987,6 +1083,15 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             _lastPixelX = x;
             _lastPixelY = y;
+            if (_descriptor != null && x >= 0 && y >= 0 && x < _descriptor.Width && y < _descriptor.Height)
+            {
+                _hoverPixel = new Point(x, y);
+            }
+            else
+            {
+                _hoverPixel = null;
+            }
+
             UpdatePixelOverlay(position, force);
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
         }
@@ -997,6 +1102,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var x = (int)Math.Floor(imagePoint.X);
             var y = (int)Math.Floor(imagePoint.Y);
             PinMarkerAtImagePixel(x, y);
+        }
+
+        private void SelectPixelAtScreenPoint(Point position)
+        {
+            var imagePoint = ScreenToImage(position);
+            var x = (int)Math.Floor(imagePoint.X);
+            var y = (int)Math.Floor(imagePoint.Y);
+            SelectPixelAtImagePixel(x, y);
         }
 
         private void UpdatePixelOverlay(Point position, bool force)
@@ -1134,14 +1247,74 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             var left = (x - _viewLeft) / _viewWidth * ViewportWidth;
             var top = (y - _viewTop) / _viewHeight * ViewportHeight;
+            var cellWidth = ViewportWidth / _viewWidth;
+            var cellHeight = ViewportHeight / _viewHeight;
+            var fontSize = Math.Min(16.0f, Math.Max(10.0f, (float)(Math.Min(cellWidth, cellHeight) * 0.26)));
             var lines = GetPixelGridOverlayLines(x, y);
-            var lineHeight = 11;
-            var textX = (int)Math.Round(left + 4);
-            var textY = viewportHeight - (int)Math.Round(top) - 14;
+            var lineHeight = (int)Math.Ceiling(fontSize + 3);
+            var textX = (int)Math.Round(left + Math.Max(4.0, cellWidth * 0.08));
+            var textY = viewportHeight - (int)Math.Round(top) - (int)Math.Round(Math.Max(14.0, cellHeight * 0.16));
             for (var i = 0; i < lines.Length; i++)
             {
-                gl.DrawText(textX, textY - (i * lineHeight), 0.05f, 0.05f, 0.05f, "Consolas", 8.0f, lines[i]);
+                var yOffset = textY - (i * lineHeight);
+                gl.DrawText(textX + 1, yOffset - 1, 0.0f, 0.0f, 0.0f, "Consolas", fontSize, lines[i]);
+                gl.DrawText(textX, yOffset, 1.0f, 1.0f, 1.0f, "Consolas", fontSize, lines[i]);
             }
+        }
+
+        private void DrawSelectionOverlay(OpenGL gl)
+        {
+            if (!_selectionOverlayEnabled || _descriptor == null)
+            {
+                return;
+            }
+
+            var pixel = _selectedPixel ?? _hoverPixel;
+            if (!pixel.HasValue)
+            {
+                return;
+            }
+
+            var x = (int)pixel.Value.X;
+            var y = (int)pixel.Value.Y;
+            if (x < 0 || y < 0 || x >= _descriptor.Width || y >= _descriptor.Height)
+            {
+                return;
+            }
+
+            var regionLeft = Math.Max(0, x - 2);
+            var regionTop = Math.Max(0, y - 2);
+            var regionRight = Math.Min(_descriptor.Width, x + 3);
+            var regionBottom = Math.Min(_descriptor.Height, y + 3);
+            if (regionRight < _viewLeft || regionBottom < _viewTop || regionLeft > _viewLeft + _viewWidth || regionTop > _viewTop + _viewHeight)
+            {
+                return;
+            }
+
+            gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
+            gl.Disable(OpenGL.GL_TEXTURE_2D);
+            gl.Enable(OpenGL.GL_BLEND);
+            gl.BlendFunc(OpenGL.GL_SRC_ALPHA, OpenGL.GL_ONE_MINUS_SRC_ALPHA);
+
+            gl.LineWidth(2.0f);
+            gl.Color(1.0f, 0.86f, 0.18f, 0.92f);
+            DrawRectangle(gl, regionLeft, regionTop, regionRight, regionBottom);
+
+            gl.LineWidth(2.0f);
+            gl.Color(0.0f, 0.72f, 1.0f, 1.0f);
+            DrawRectangle(gl, x, y, x + 1, y + 1);
+
+            gl.Disable(OpenGL.GL_BLEND);
+        }
+
+        private static void DrawRectangle(OpenGL gl, double left, double top, double right, double bottom)
+        {
+            gl.Begin(OpenGL.GL_LINE_LOOP);
+            gl.Vertex(left, top);
+            gl.Vertex(right, top);
+            gl.Vertex(right, bottom);
+            gl.Vertex(left, bottom);
+            gl.End();
         }
 
         private void DrawPinnedMarker(OpenGL gl)

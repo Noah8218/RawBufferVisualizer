@@ -799,16 +799,22 @@ try {
         $failures.Add("Pixel status raw byte label is still unclear: $($metrics.pixelStatusRaw)")
     }
     if ([string]::IsNullOrWhiteSpace([string]$metrics.roiStats) -or ([string]$metrics.roiStats).IndexOf("mean=", [System.StringComparison]::Ordinal) -lt 0) {
-        $failures.Add("ROI statistics were not captured: $($metrics.roiStats)")
+        $failures.Add("Hover 5x5 statistics were not captured: $($metrics.roiStats)")
     }
     if ([string]::IsNullOrWhiteSpace([string]$metrics.markerText) -or ([string]$metrics.markerText).IndexOf("X ", [System.StringComparison]::Ordinal) -lt 0) {
         $failures.Add("Pinned marker text was not captured: $($metrics.markerText)")
+    }
+    if (-not $metrics.selectionOverlayEnabled) {
+        $failures.Add("Selection overlay option was not enabled during the docked probe")
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$metrics.selectedPixel) -or ([string]$metrics.selectedPixel).IndexOf("X ", [System.StringComparison]::Ordinal) -lt 0) {
+        $failures.Add("Selected pixel was not kept by the image canvas: $($metrics.selectedPixel)")
     }
     if ([string]::IsNullOrWhiteSpace([string]$metrics.pinnedMarker) -or ([string]$metrics.pinnedMarker).IndexOf("X ", [System.StringComparison]::Ordinal) -lt 0) {
         $failures.Add("Pinned marker was not kept by the image canvas: $($metrics.pinnedMarker)")
     }
     if ([string]::IsNullOrWhiteSpace([string]$metrics.blackLevel) -or [string]::IsNullOrWhiteSpace([string]$metrics.whiteLevel)) {
-        $failures.Add("Render levels were not exposed: black=$($metrics.blackLevel), white=$($metrics.whiteLevel)")
+        $failures.Add("Display range was not exposed: black=$($metrics.blackLevel), white=$($metrics.whiteLevel)")
     }
     if (($metrics.zoom.frameCount + $metrics.pan.frameCount) -le 0) {
         $failures.Add("No viewer frames were recorded in the docked ToolWindow")

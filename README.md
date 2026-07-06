@@ -22,7 +22,7 @@ The viewer is built around the workflow machine-vision developers use every day:
 - Pixel status strip with X/Y, GV or RGB channel values, color swatches, and source bytes.
 - High-zoom pixel grid overlay for reading values directly on the image.
 - Save the current visible view as PNG, or save a raw `.rbuf.json` snapshot from the image list context menu.
-- 5x5 neighborhood, ROI 5x5 statistics, pinned marker, line profile, histogram, diagnostics, and render levels.
+- Hover 5x5 values/statistics, selectable pixel marker overlay, pinned marker, line profile, histogram, diagnostics, and display range controls.
 - Try interpretation controls for changing pixel format, stride, valid bits, and byte order while debugging.
 - A/B comparison MVP: set A/B, link pan/zoom, split view, diff view, and blink compare.
 - File-backed tiled display for very large raw payloads.
