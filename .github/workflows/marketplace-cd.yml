@@ -1,0 +1,170 @@
+name: Marketplace CD
+
+on:
+  workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the generated VSIX to Visual Studio Marketplace
+        required: true
+        type: boolean
+        default: false
+      publisher:
+        description: Marketplace publisher ID. Leave empty to use repository variable VS_MARKETPLACE_PUBLISHER.
+        required: false
+        type: string
+      internal_name:
+        description: Marketplace extension internal name
+        required: true
+        type: string
+        default: RawBufferVisualizer
+      categories:
+        description: Comma-separated VsixPublisher categories
+        required: true
+        type: string
+        default: other
+      expected_version:
+        description: Optional VSIX version guard, for example 1.0.22.0
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Build, test, and validate Marketplace payload
+    runs-on: windows-2022
+
+    outputs:
+      vsix_version: ${{ steps.inspect.outputs.vsix_version }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: dotnet restore .\RawBufferVisualizer.sln
+
+      - name: Build
+        run: dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
+
+      - name: Self-test
+        run: dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
+
+      - name: Publish Visual Studio extension package
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoZip
+
+      - name: Inspect VSIX version
+        id: inspect
+        run: |
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $vsixPath = 'artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+          $zip = [System.IO.Compression.ZipFile]::OpenRead($vsixPath)
+          try {
+            $entry = $zip.GetEntry('extension.vsixmanifest')
+            if ($null -eq $entry) { throw 'extension.vsixmanifest was not found in the VSIX.' }
+            $stream = $entry.Open()
+            try {
+              $reader = [System.IO.StreamReader]::new($stream)
+              try { [xml]$manifest = $reader.ReadToEnd() }
+              finally { $reader.Dispose() }
+            }
+            finally {
+              $stream.Dispose()
+            }
+          }
+          finally {
+            $zip.Dispose()
+          }
+
+          $version = [string]$manifest.PackageManifest.Metadata.Identity.Version
+          $expected = '${{ inputs.expected_version }}'.Trim().TrimStart('v')
+          if ($expected -and $version -ne $expected) {
+            throw "VSIX version $version does not match expected version $expected."
+          }
+
+          "vsix_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "VSIX version: $version"
+
+      - name: Validate Marketplace publish manifest
+        run: |
+          $publisher = '${{ inputs.publisher }}'.Trim()
+          if ([string]::IsNullOrWhiteSpace($publisher)) {
+            $publisher = '${{ vars.VS_MARKETPLACE_PUBLISHER }}'.Trim()
+          }
+          if ([string]::IsNullOrWhiteSpace($publisher)) {
+            throw 'Set the workflow publisher input or repository variable VS_MARKETPLACE_PUBLISHER.'
+          }
+
+          powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 `
+            -Publisher $publisher `
+            -InternalName '${{ inputs.internal_name }}' `
+            -Categories '${{ inputs.categories }}' `
+            -DryRun
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v7
+        with:
+          name: RawBufferVisualizer.VisualStudio.Extensibility-${{ steps.inspect.outputs.vsix_version }}
+          path: artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+          if-no-files-found: error
+          archive: false
+
+      - name: Upload publish manifest
+        uses: actions/upload-artifact@v7
+        with:
+          name: RawBufferVisualizer.MarketplaceManifest-${{ steps.inspect.outputs.vsix_version }}
+          path: artifacts\marketplace\vs-publish.json
+          if-no-files-found: error
+          archive: false
+
+  publish:
+    name: Publish to Visual Studio Marketplace
+    needs: package
+    if: ${{ inputs.publish }}
+    runs-on: windows-2022
+    environment: visual-studio-marketplace
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore VSSDK publish tool
+        run: dotnet restore .\src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj
+
+      - name: Download VSIX
+        uses: actions/download-artifact@v7
+        with:
+          name: RawBufferVisualizer.VisualStudio.Extensibility-${{ needs.package.outputs.vsix_version }}
+          path: artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472
+
+      - name: Publish
+        env:
+          VS_MARKETPLACE_TOKEN: ${{ secrets.VS_MARKETPLACE_TOKEN }}
+        run: |
+          $publisher = '${{ inputs.publisher }}'.Trim()
+          if ([string]::IsNullOrWhiteSpace($publisher)) {
+            $publisher = '${{ vars.VS_MARKETPLACE_PUBLISHER }}'.Trim()
+          }
+          if ([string]::IsNullOrWhiteSpace($publisher)) {
+            throw 'Set the workflow publisher input or repository variable VS_MARKETPLACE_PUBLISHER.'
+          }
+          if ([string]::IsNullOrWhiteSpace($env:VS_MARKETPLACE_TOKEN)) {
+            throw 'Set repository secret VS_MARKETPLACE_TOKEN before publishing.'
+          }
+
+          powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 `
+            -Publisher $publisher `
+            -PersonalAccessToken $env:VS_MARKETPLACE_TOKEN `
+            -InternalName '${{ inputs.internal_name }}' `
+            -Categories '${{ inputs.categories }}'

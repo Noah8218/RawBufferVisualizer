@@ -113,6 +113,32 @@ Manual smoke checklist:
 - Reinstall and repeat one debugger inspection.
 - For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
 
+## Marketplace CD
+
+Use [release-runbook.md](release-runbook.md) for repeatable updates.
+
+GitHub setup:
+
+| Setting | Kind | Notes |
+| --- | --- | --- |
+| `VS_MARKETPLACE_TOKEN` | Secret | Azure DevOps PAT with Marketplace manage permission. |
+| `VS_MARKETPLACE_PUBLISHER` | Repository variable | Marketplace publisher ID, not display name. |
+| `visual-studio-marketplace` | Environment | Add required reviewer approval before publish. |
+
+Workflow:
+
+1. Run `Actions > Marketplace CD` with `publish=false`.
+2. Verify the generated VSIX artifact and `vs-publish.json`.
+3. Run again with `publish=true`.
+4. Approve the `visual-studio-marketplace` environment.
+5. Wait for Marketplace propagation.
+6. Test Visual Studio update from `Extensions > Manage Extensions > Updates`.
+7. Verify the installed version:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.23.0
+```
+
 ## Release Notes Template
 
 ```text
