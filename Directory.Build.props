@@ -10,6 +10,7 @@
     <Company>Noah Choi</Company>
     <Copyright>Copyright (c) 2026 Noah Choi</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <NoWarn>$(NoWarn);CS9057</NoWarn>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'net472'">
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net472" Version="1.0.3" PrivateAssets="all" />

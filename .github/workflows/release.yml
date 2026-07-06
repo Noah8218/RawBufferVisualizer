@@ -20,7 +20,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 8.0.x
 
       - name: Restore
         run: dotnet restore .\RawBufferVisualizer.sln
@@ -29,7 +29,7 @@ jobs:
         run: dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
 
       - name: Self-test
-        run: dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net9.0-windows
+        run: dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
 
       - name: Publish package
         run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
@@ -40,7 +40,7 @@ jobs:
       - name: Create GitHub Release
         run: >
           gh release create $env:GITHUB_REF_NAME
-          .\artifacts\publish\RawBufferVisualizer-net9.0-windows-win-x64-sc.zip
+          .\artifacts\publish\RawBufferVisualizer-net8.0-windows-win-x64-sc.zip
           .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
           --verify-tag
           --generate-notes

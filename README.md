@@ -55,7 +55,7 @@ Build the WPF viewer or download the Windows package from GitHub Releases once a
 
 ```powershell
 dotnet build .\RawBufferVisualizer.sln -c Release
-dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net9.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
+dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net8.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
 ```
 
 The standalone viewer opens `.rbuf.json` snapshot files and is useful for saved samples, large-image validation, and screenshots.
@@ -210,6 +210,11 @@ The viewer avoids allocating one full-frame bitmap for large raw payloads. It us
 
 ## Build And Test
 
+Build prerequisites:
+
+- Visual Studio 2022 with .NET desktop development.
+- .NET 8 SDK or newer. The solution does not require the .NET 9 SDK.
+
 From a fresh clone, build the solution once before inspecting the generated VSIX payload:
 
 ```powershell
@@ -228,7 +233,7 @@ dotnet build .\RawBufferVisualizer.sln -c Release
 Run core tests:
 
 ```powershell
-dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net9.0-windows
+dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
 ```
 
 Run Visual Studio docked smoke checks:
@@ -241,7 +246,7 @@ powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.
 Create sample snapshots:
 
 ```powershell
-dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj --framework net9.0
+dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj --framework net8.0
 ```
 
 Run the debugger visualizer sample:

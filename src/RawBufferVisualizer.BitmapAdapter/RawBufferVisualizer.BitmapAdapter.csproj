@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net472;netstandard2.0;net9.0-windows</TargetFrameworks>
+    <TargetFrameworks>net472;netstandard2.0;net8.0-windows</TargetFrameworks>
     <UseWindowsForms Condition="'$(TargetFramework)' != 'netstandard2.0'">true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.0'">

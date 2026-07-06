@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>net472;net9.0-windows</TargetFrameworks>
+    <TargetFrameworks>net472;net8.0-windows</TargetFrameworks>
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <!-- The viewer dependency ships net40 assets. net472 is native; net10-windows is covered by runtime smoke checks. -->

@@ -1,7 +1,7 @@
 param(
     [string]$Configuration = "Debug",
     [string]$ViewerFramework = "net472",
-    [string]$SampleFramework = "net9.0",
+    [string]$SampleFramework = "net8.0",
     [string]$OutputDir = "artifacts\ui\viewer-interactions"
 )
 
