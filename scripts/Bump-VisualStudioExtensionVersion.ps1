@@ -68,6 +68,16 @@ function Replace-One {
     return [regex]::Replace($Content, $Pattern, $Replacement, 1)
 }
 
+function Write-Utf8NoBom {
+    param(
+        [string]$Path,
+        [string]$Content
+    )
+
+    $encoding = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($Path, $Content, $encoding)
+}
+
 Assert-FileExists -Path $ProjectPath -Message 'Visual Studio extension project was not found'
 Assert-FileExists -Path $ManifestPath -Message 'Visual Studio extension manifest was not found'
 
@@ -77,11 +87,11 @@ $project = Get-Content -Raw -LiteralPath $ProjectPath
 $project = Replace-One -Content $project -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'AssemblyVersion'
 $project = Replace-One -Content $project -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'FileVersion'
 $project = Replace-One -Content $project -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'Version'
-Set-Content -LiteralPath $ProjectPath -Encoding UTF8 -Value $project
+Write-Utf8NoBom -Path $ProjectPath -Content $project
 
 $manifest = Get-Content -Raw -LiteralPath $ManifestPath
 $manifest = Replace-One -Content $manifest -Pattern '(<Identity\b[^>]*\bVersion=")[^"]+(")' -Replacement "`${1}$($versions.Assembly)`${2}" -Description 'VSIX Identity Version'
-Set-Content -LiteralPath $ManifestPath -Encoding UTF8 -Value $manifest
+Write-Utf8NoBom -Path $ManifestPath -Content $manifest
 
 Write-Host "Updated Visual Studio extension version:"
 Write-Host "  Package:  $($versions.Package)"
