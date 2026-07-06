@@ -1,4 +1,4 @@
-# Release Runbook
+﻿# Release Runbook
 
 Use this for a Marketplace update after the normal CI build is green.
 
@@ -19,7 +19,7 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 Use the bump script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.23
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.25
 ```
 
 This updates both files:
@@ -30,13 +30,13 @@ This updates both files:
 Example:
 
 ```xml
-<AssemblyVersion>1.0.23.0</AssemblyVersion>
-<FileVersion>1.0.23.0</FileVersion>
-<Version>1.0.23</Version>
+<AssemblyVersion>1.0.25.0</AssemblyVersion>
+<FileVersion>1.0.25.0</FileVersion>
+<Version>1.0.25</Version>
 ```
 
 ```xml
-<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.23.0" Language="en-US" Publisher="Noah Choi" />
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.25.0" Language="en-US" Publisher="Noah Choi" />
 ```
 
 ## Local release check
@@ -72,7 +72,7 @@ Recommended inputs:
 | `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
 | `internal_name` | `RawBufferVisualizer` |
 | `categories` | `other` |
-| `expected_version` | Exact VSIX version, for example `1.0.23.0`. |
+| `expected_version` | Exact VSIX version, for example `1.0.25.0`. |
 
 The workflow publishes only when `publish=true`; the default path is a dry validation build.
 
@@ -89,7 +89,7 @@ Use a real Visual Studio 2022 machine that already has the previous Marketplace 
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.23.0
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.25.0
 ```
 
 8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
@@ -108,6 +108,14 @@ Then restart Visual Studio and repeat the smoke.
 
 Root cause to check in `ActivityLog.xml`: Visual Studio may keep a stale VSSDK `CodeBase` pointing to a deleted folder under `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<id>\Extensions`. Version `1.0.24.0` and later no longer auto-loads the package on startup; the docked window loads when the visualizer command is invoked.
 
+If the popup appears only when inspecting an image, also check whether `ActivityLog.xml` reports a missing or mismatched `Microsoft.VisualStudio.Threading` assembly. Version `1.0.25.0` and later build the docked VSSDK package against Visual Studio 2022 17.9-compatible references. The release package step fails if the VSSDK package references a newer `Microsoft.VisualStudio.Threading` version than 17.9.
+
+The package also writes a small diagnostic log here:
+
+```text
+%TEMP%\RawBufferVisualizer\VisualStudio\package.log
+```
+
 ## Do not publish if
 
 - The version in the VSIX does not match the Marketplace update version.
@@ -115,3 +123,4 @@ Root cause to check in `ActivityLog.xml`: Visual Studio may keep a stale VSSDK `
 - Visual Studio opens multiple viewer windows instead of one docked image list.
 - Mouse-wheel zoom or drag pan is slow in the docked window.
 - README or Marketplace screenshots show stale UI or unrelated private applications.
+- `RawBufferVisualizer.VisualStudio.Vssdk.dll` references `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.

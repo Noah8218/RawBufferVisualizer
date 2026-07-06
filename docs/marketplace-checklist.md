@@ -1,4 +1,4 @@
-# Visual Studio Marketplace Checklist
+﻿# Visual Studio Marketplace Checklist
 
 Use this before publishing the first Marketplace preview build.
 
@@ -90,6 +90,7 @@ The docked smoke must validate:
 - Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
 - Save visible PNG, raw snapshot export path, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, pan, zoom, drag, and wheel interaction.
 - Non-blank framebuffer capture.
+- `Publish-VisualStudioExtension.ps1` must pass its VSSDK compatibility guard: `RawBufferVisualizer.VisualStudio.Vssdk.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 ## Install, Update, Uninstall, Reinstall
 
@@ -128,7 +129,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.23
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.25
 ```
 
 GitHub setup:
@@ -150,7 +151,7 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.23.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.25.0
 ```
 
 ## Release Notes Template
@@ -189,3 +190,4 @@ artifacts\ui\docked-layout-widths\layout-widths.json
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license and third-party notice requirement.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.
+- Visual Studio shows `RawBufferVisualizerPackage did not load correctly` when inspecting an image on a VS 2022 17.9-17.13 machine.
