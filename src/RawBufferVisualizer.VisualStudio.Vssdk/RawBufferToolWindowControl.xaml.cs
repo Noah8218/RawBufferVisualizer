@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -486,6 +487,80 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (document != null)
             {
                 ActivateDocument(document);
+            }
+        }
+
+        private void ImageList_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Delete)
+            {
+                return;
+            }
+
+            RemoveSelectedDocument();
+            e.Handled = true;
+        }
+
+        private void RemoveSelectedDocument()
+        {
+            var document = ImageList.SelectedItem as ImageDocument;
+            if (document == null)
+            {
+                return;
+            }
+
+            var index = _documents.IndexOf(document);
+            if (index < 0)
+            {
+                return;
+            }
+
+            var wasActive = ReferenceEquals(_activeDocument, document);
+            if (ReferenceEquals(_compareA, document))
+            {
+                _compareA = null;
+            }
+
+            if (ReferenceEquals(_compareB, document))
+            {
+                _compareB = null;
+            }
+
+            if (wasActive)
+            {
+                _activeDocument = null;
+                _blinkTimer.Stop();
+            }
+
+            _syncingDocumentSelection = true;
+            try
+            {
+                _documents.RemoveAt(index);
+            }
+            finally
+            {
+                _syncingDocumentSelection = false;
+            }
+
+            document.Dispose();
+
+            if (_documents.Count > 0)
+            {
+                ActivateDocument(_documents[Math.Min(index, _documents.Count - 1)]);
+            }
+            else
+            {
+                OpenGlImageView.ClearImage();
+                DescriptorText.Text = string.Empty;
+                DiagnosticsList.Items.Clear();
+                HistogramCanvas.Children.Clear();
+                SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
+                SetMarkerText(string.Empty);
+                ClearPixelStatus();
+                OpenGlImageView.ClearPinnedMarker();
+                UpdatePerformanceText();
+                UpdateCompareText();
+                UpdateStatus();
             }
         }
 

@@ -168,7 +168,7 @@
 
                 <DockPanel Grid.Row="0" Margin="10">
                     <TextBlock DockPanel.Dock="Top" Text="Images" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <ListBox x:Name="ImageList" SelectionChanged="ImageList_SelectionChanged">
+                    <ListBox x:Name="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown">
                         <ListBox.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>

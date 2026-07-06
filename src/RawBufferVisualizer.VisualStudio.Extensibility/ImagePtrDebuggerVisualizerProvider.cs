@@ -22,9 +22,6 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new(new[]
             {
-                new VisualizerTargetType(DisplayName, "ImageModel.ImagePtr"),
-                new VisualizerTargetType(DisplayName, "ImageModels.ImagePtr"),
-                new VisualizerTargetType(DisplayName, "Cressem.ImageModel.ImagePtr"),
                 new VisualizerTargetType(DisplayName, "Cressem.ImageModel.ImagePtr, Cressem.ImageModel"),
                 new VisualizerTargetType(DisplayName, "Cressem.ImageModel.ImagePtr, OpticaLX"),
                 new VisualizerTargetType(DisplayName, "Cressem.ImageModel.ImagePtr, OpticalX")
