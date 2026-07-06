@@ -300,6 +300,7 @@ The extension is intended to be published as a Visual Studio Marketplace preview
 - Large file-backed snapshots and the standalone viewer.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
+For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
 
 ## License
 

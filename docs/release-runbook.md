@@ -1,0 +1,108 @@
+# Release Runbook
+
+Use this for a Marketplace update after the normal CI build is green.
+
+## One-time GitHub setup
+
+Create these repository settings:
+
+| Setting | Kind | Value |
+| --- | --- | --- |
+| `VS_MARKETPLACE_TOKEN` | Secret | Azure DevOps PAT with Marketplace manage permission. |
+| `VS_MARKETPLACE_PUBLISHER` | Variable | Marketplace publisher ID, not the display name. |
+| `visual-studio-marketplace` | Environment | Add a required reviewer before publishing. |
+
+Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a VSIX payload, a publish manifest, and a PAT.
+
+## Version bump
+
+Update both files to the same version:
+
+- `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj`
+- `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest`
+
+Example:
+
+```xml
+<AssemblyVersion>1.0.23.0</AssemblyVersion>
+<FileVersion>1.0.23.0</FileVersion>
+<Version>1.0.23</Version>
+```
+
+```xml
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.23.0" Language="en-US" Publisher="Noah Choi" />
+```
+
+## Local release check
+
+Run this before pushing the version bump:
+
+```powershell
+dotnet restore C:\Git\RawBufferVisualizer\RawBufferVisualizer.sln
+dotnet build C:\Git\RawBufferVisualizer\RawBufferVisualizer.sln --configuration Release --no-restore
+dotnet run --project C:\Git\RawBufferVisualizer\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoZip
+```
+
+The VSIX to upload or smoke-test is:
+
+```text
+C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+```
+
+## GitHub Marketplace CD
+
+1. Push the version bump to `main`.
+2. Open `Actions > Marketplace CD`.
+3. Run once with `publish=false`.
+4. Confirm the generated VSIX artifact has the expected version.
+5. Run again with `publish=true`.
+6. Approve the `visual-studio-marketplace` environment gate.
+
+Recommended inputs:
+
+| Input | Value |
+| --- | --- |
+| `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
+| `internal_name` | `RawBufferVisualizer` |
+| `categories` | `other` |
+| `expected_version` | Exact VSIX version, for example `1.0.23.0`. |
+
+The workflow publishes only when `publish=true`; the default path is a dry validation build.
+
+## Visual Studio update smoke
+
+Use a real Visual Studio 2022 machine that already has the previous Marketplace version installed.
+
+1. Wait for Marketplace propagation after publishing.
+2. Open Visual Studio.
+3. Go to `Extensions > Manage Extensions > Updates`.
+4. Update `Raw Buffer Visualizer`.
+5. Close all Visual Studio windows when prompted.
+6. Reopen Visual Studio.
+7. Verify the installed version:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.23.0
+```
+
+8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
+9. Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+10. Confirm one docked `Raw Buffer Visualizer` window receives all inspected images.
+11. Smoke pan, mouse-wheel zoom, Save PNG, pixel status, selection marker, and diagnostics.
+
+If Visual Studio reports `RawBufferVisualizerPackage did not load correctly`, close all Visual Studio windows and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Repair-VisualStudioExtensionRegistration.ps1
+```
+
+Then restart Visual Studio and repeat the smoke.
+
+## Do not publish if
+
+- The version in the VSIX does not match the Marketplace update version.
+- `ImagePtr`, OpenCvSharp `Mat`, or Emgu CV `Mat` fails to show the visualizer icon.
+- Visual Studio opens multiple viewer windows instead of one docked image list.
+- Mouse-wheel zoom or drag pan is slow in the docked window.
+- README or Marketplace screenshots show stale UI or unrelated private applications.
