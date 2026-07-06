@@ -137,6 +137,7 @@
                 <WrapPanel VerticalAlignment="Center">
                     <Button Content="Open" Click="Open_Click"/>
                     <Button Content="Clear" Click="Clear_Click"/>
+                    <Button Content="Save" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click"/>
                     <Button Content="Fit" Click="Fit_Click"/>
                     <Button Content="1:1" Click="ActualSize_Click"/>
                     <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
@@ -168,6 +169,12 @@
                 <DockPanel Grid.Row="0" Margin="10">
                     <TextBlock DockPanel.Dock="Top" Text="Images" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
                     <ListBox x:Name="ImageList" SelectionChanged="ImageList_SelectionChanged">
+                        <ListBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
+                                <MenuItem Header="Save raw snapshot" Click="SaveSnapshot_Click"/>
+                            </ContextMenu>
+                        </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
                                 <Grid Height="66">

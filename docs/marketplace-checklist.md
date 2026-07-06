@@ -41,7 +41,7 @@ Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine
 
 Inspect raw buffers, RawBufferView pointer-backed images, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
 
-Use the docked viewer to pan, zoom, read pixel coordinates, GV/RGB channel values, source bytes, ROI 5x5 statistics, pinned marker values, high-zoom pixel grid overlays, render levels, Try interpretation, and A/B comparison.
+Use the docked viewer to pan, zoom, save the visible view as PNG, save raw snapshots, read pixel coordinates, GV/RGB channel values, source bytes, ROI 5x5 statistics, pinned marker values, high-zoom pixel grid overlays, render levels, Try interpretation, and A/B comparison.
 ```
 
 ## Required Screenshots
@@ -71,6 +71,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Wid
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -PixelFormat Mono16 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat BGR24 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat Float32 -Width 320 -Height 240
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild
 ```
 
 The docked smoke must validate:
@@ -78,8 +79,9 @@ The docked smoke must validate:
 - One Visual Studio docked ToolWindow.
 - Single image list accumulation.
 - Error rows remain visible.
-- Narrow docked compact inspector is visible.
-- Pixel status, raw bytes, ROI 5x5, pinned marker, levels, pan, zoom, drag, and wheel interaction.
+- Narrow docked layout keeps the Inspector collapsed by default and preserves image list, viewer, Save, and status strip access.
+- Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
+- Save visible PNG, raw snapshot export path, pixel status, raw bytes, ROI 5x5, pinned marker, levels, pan, zoom, drag, and wheel interaction.
 - Non-blank framebuffer capture.
 
 ## Install, Update, Uninstall, Reinstall
@@ -111,6 +113,7 @@ Raw Buffer Visualizer preview
 - Adds a docked Visual Studio image inspector for debugger visualizer sessions.
 - Supports RawBufferSnapshot, RawBufferView, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
 - Adds thumbnails, image list accumulation, descriptor diagnostics, pixel status, raw bytes, ROI 5x5, marker, levels, and A/B comparison.
+- Adds visible PNG export and raw snapshot export from the docked viewer.
 - Includes large file-backed image validation up to 200000 x 200000 sparse raw payloads.
 
 Known limits:
@@ -127,12 +130,13 @@ artifacts\perf\vs-docked\visual-studio-docked-performance.json
 artifacts\perf\vs-docked\visual-studio-docked-session.json
 artifacts\perf\vs-docked\visual-studio-docked-session.png
 artifacts\perf\vs-docked\visual-studio-docked-framebuffer.png
+artifacts\ui\docked-layout-widths\layout-widths.json
 ```
 
 ## Do Not Ship If
 
 - User-facing text still mentions rendering implementation details.
-- Narrow Visual Studio docking hides pixel, ROI, marker, or levels access.
+- Narrow Visual Studio docking hides Save, image list, viewer, status strip, or Inspector access.
 - Debugger inspections open multiple independent viewer windows instead of one docked image list.
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license requirement.

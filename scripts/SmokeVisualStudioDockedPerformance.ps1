@@ -13,6 +13,7 @@ param(
     [int]$MaxCommandMs = 150,
     [int]$MaxFrameMs = 350,
     [int]$MaxUploadMs = 150,
+    [int]$ToolWindowWidth = 0,
     [string]$OutputDir = "artifacts\perf\vs-docked",
     [string]$SolutionPath = "",
     [switch]$IncludeExternalInput,
@@ -250,6 +251,14 @@ function Focus-VisualStudioWindow([IntPtr]$hwnd) {
     }
 }
 
+function Minimize-OtherWindows([int]$ExceptProcessId) {
+    Get-Process | Where-Object {
+        $_.Id -ne $ExceptProcessId -and $_.MainWindowHandle -ne 0
+    } | ForEach-Object {
+        [RawBufferVsDockedPerfNative]::ShowWindow($_.MainWindowHandle, 6) | Out-Null
+    }
+}
+
 if (-not ("RawBufferVsDockedPerfRot" -as [type])) {
     Add-Type @'
 using System;
@@ -349,7 +358,7 @@ public sealed class RawBufferVsDockedPerfMessageFilter : IOleMessageFilter, IDis
 '@
 }
 
-function Invoke-RawBufferVisualizerCommand([int]$ProcessId) {
+function Invoke-RawBufferVisualizerCommand([int]$ProcessId, [int]$ToolWindowWidth) {
     $dte = Wait-Until "Visual Studio DTE" {
         [RawBufferVsDockedPerfRot]::GetDte($ProcessId)
     } 120
@@ -388,6 +397,15 @@ function Invoke-RawBufferVisualizerCommand([int]$ProcessId) {
                         }
 
                         $window.Activate()
+                        if ($ToolWindowWidth -gt 0) {
+                            try {
+                                $window.Width = $ToolWindowWidth
+                            }
+                            catch {
+                                Write-Host "ToolWindow width probe skipped: $($_.Exception.Message)"
+                            }
+                        }
+
                         return $true
                     }
                 }
@@ -625,9 +643,10 @@ try {
         if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } else { $null }
     } 120
 
+    Minimize-OtherWindows $process.Id
     Focus-VisualStudioWindow $hwnd
 
-    Invoke-RawBufferVisualizerCommand $process.Id
+    Invoke-RawBufferVisualizerCommand $process.Id $ToolWindowWidth
     Start-Sleep -Seconds 2
     $displayPrefix = switch ($PixelFormat) {
         "BGR24" { "rawBgr24" }

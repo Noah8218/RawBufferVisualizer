@@ -21,6 +21,7 @@ The viewer is built around the workflow machine-vision developers use every day:
 - Failed opens stay visible as error rows with the reason, instead of disappearing silently.
 - Pixel status strip with X/Y, GV or RGB channel values, color swatches, and source bytes.
 - High-zoom pixel grid overlay for reading values directly on the image.
+- Save the current visible view as PNG, or save a raw `.rbuf.json` snapshot from the image list context menu.
 - 5x5 neighborhood, ROI 5x5 statistics, pinned marker, line profile, histogram, diagnostics, and render levels.
 - Try interpretation controls for changing pixel format, stride, valid bits, and byte order while debugging.
 - A/B comparison MVP: set A/B, link pan/zoom, split view, diff view, and blink compare.
@@ -63,8 +64,9 @@ The standalone viewer opens `.rbuf.json` snapshot files and is useful for saved 
 6. Use the `Images` list to switch between captured variables.
 7. Use mouse wheel for zoom and mouse drag for pan.
 8. Use the status strip and Inspector for pixel values, raw bytes, ROI, marker, diagnostics, levels, interpretation, and comparison.
+9. Use `Save` to export the current visible view as PNG. Right-click an image row to save the raw snapshot.
 
-The toolbar intentionally stays small: `Open`, `Clear`, `Fit`, `1:1`, and `Link Views`. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
+The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
 
 ![Failed opens remain visible as error rows](docs/images/viewer-vs-docked-error.png)
 
@@ -228,7 +230,7 @@ The extension is intended to be published as a Visual Studio Marketplace preview
 
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
-- Pixel status, ROI, marker, levels, pan, zoom, high-zoom overlay, and error rows.
+- Save PNG, raw snapshot export, pixel status, ROI, marker, levels, pan, zoom, high-zoom overlay, and error rows.
 - `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - Large file-backed snapshots and the standalone viewer.
 

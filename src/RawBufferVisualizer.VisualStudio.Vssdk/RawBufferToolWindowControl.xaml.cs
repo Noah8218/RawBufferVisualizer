@@ -175,6 +175,103 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateStatus();
         }
 
+        private void SaveVisiblePng_Click(object sender, RoutedEventArgs e)
+        {
+            if (!CanSaveActiveImage("Save PNG"))
+            {
+                return;
+            }
+
+            var dialog = new SaveFileDialog
+            {
+                Filter = "PNG Image (*.png)|*.png",
+                FileName = GetDefaultExportName("-view.png")
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                OpenGlImageView.SaveFramebufferPng(dialog.FileName);
+                DiagnosticsList.Items.Add("Info: saved visible PNG to " + dialog.FileName);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Add("Error: PNG export failed. " + ex.Message);
+                MessageBox.Show(ex.Message, "Save PNG failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void SaveSnapshot_Click(object sender, RoutedEventArgs e)
+        {
+            if (!CanSaveActiveImage("Save Snapshot"))
+            {
+                return;
+            }
+
+            var dialog = new SaveFileDialog
+            {
+                Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json",
+                FileName = GetDefaultExportName(".rbuf.json")
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            try
+            {
+                var rawPath = RawBufferSnapshot.SaveMetadata(dialog.FileName, _activeDocument!.Descriptor);
+                _activeDocument.Source.CopyRawTo(rawPath);
+                DiagnosticsList.Items.Add("Info: saved raw snapshot to " + dialog.FileName);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Add("Error: snapshot export failed. " + ex.Message);
+                MessageBox.Show(ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private bool CanSaveActiveImage(string title)
+        {
+            if (_activeDocument == null)
+            {
+                MessageBox.Show("Select an image before saving.", title, MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            if (_activeDocument.IsError)
+            {
+                MessageBox.Show("Error rows cannot be saved as images.", title, MessageBoxButton.OK, MessageBoxImage.Information);
+                return false;
+            }
+
+            return true;
+        }
+
+        private string GetDefaultExportName(string suffix)
+        {
+            var title = _activeDocument == null ? "raw-buffer" : _activeDocument.Title;
+            return SanitizeFileName(title) + suffix;
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            var invalid = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(value.Length);
+            foreach (var ch in value)
+            {
+                builder.Append(invalid.Contains(ch) ? '_' : ch);
+            }
+
+            var result = builder.ToString().Trim();
+            return string.IsNullOrWhiteSpace(result) ? "raw-buffer" : result;
+        }
+
         private void ActivateDocument(ImageDocument document)
         {
             if (ReferenceEquals(_activeDocument, document))
@@ -1242,7 +1339,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 ImagesColumn.Width = new GridLength(width < 880 ? 260 : 300);
                 InspectorColumn.Width = new GridLength(0);
-                DescriptorPanel.Visibility = width < 880 ? Visibility.Collapsed : Visibility.Visible;
+                DescriptorPanel.Visibility = Visibility.Collapsed;
                 InspectorPanel.Visibility = Visibility.Collapsed;
                 CompactInspectorPanel.Visibility = Visibility.Visible;
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
