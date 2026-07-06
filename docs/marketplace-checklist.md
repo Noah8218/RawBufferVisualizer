@@ -112,6 +112,14 @@ Manual smoke checklist:
 - Restart Visual Studio and confirm the visualizer is gone.
 - Reinstall and repeat one debugger inspection.
 - For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
+- After update, restart Visual Studio once with no solution open and confirm no `RawBufferVisualizerPackage did not load correctly` popup appears.
+- If a PC already has stale VSSDK registration, close Visual Studio and run:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
+```
+
+This rewrites the VSSDK package `CodeBase` to the current installed VSIX folder and removes old startup autoload registration.
 
 ## Marketplace CD
 
@@ -180,3 +188,4 @@ artifacts\ui\docked-layout-widths\layout-widths.json
 - Debugger inspections open multiple independent viewer windows instead of one docked image list.
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license and third-party notice requirement.
+- Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.

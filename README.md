@@ -49,7 +49,7 @@ If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
 ```
 
-This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder.
+This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder and removes old startup autoload registrations.
 
 To uninstall, use `Extensions > Manage Extensions > Installed` in Visual Studio, or uninstall the VSIX by extension id:
 
@@ -298,6 +298,7 @@ The extension is intended to be published as a Visual Studio Marketplace preview
 - Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, and error rows.
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - Large file-backed snapshots and the standalone viewer.
+- Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.

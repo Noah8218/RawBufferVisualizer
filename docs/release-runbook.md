@@ -96,6 +96,7 @@ powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test
 9. Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 10. Confirm one docked `Raw Buffer Visualizer` window receives all inspected images.
 11. Smoke pan, mouse-wheel zoom, Save PNG, pixel status, selection marker, and diagnostics.
+12. Restart Visual Studio with no solution open and confirm there is no `RawBufferVisualizerPackage did not load correctly` popup.
 
 If Visual Studio reports `RawBufferVisualizerPackage did not load correctly`, close all Visual Studio windows and run:
 
@@ -104,6 +105,8 @@ powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Repa
 ```
 
 Then restart Visual Studio and repeat the smoke.
+
+Root cause to check in `ActivityLog.xml`: Visual Studio may keep a stale VSSDK `CodeBase` pointing to a deleted folder under `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<id>\Extensions`. Version `1.0.24.0` and later no longer auto-loads the package on startup; the docked window loads when the visualizer command is invoked.
 
 ## Do not publish if
 

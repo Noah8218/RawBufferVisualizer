@@ -17,12 +17,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "1.0")]
-    [ProvideAutoLoad(VSConstants.UICONTEXT.ShellInitialized_string, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideAutoLoad(VSConstants.UICONTEXT.NoSolution_string, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideAutoLoad(DebuggingContextString, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideAutoLoad(SolutionExistsAndFullyLoadedContextString, PackageAutoLoadFlags.BackgroundLoad)]
-    [ProvideAutoLoad(SolutionExistsAndNotBuildingAndNotDebuggingContextString, PackageAutoLoadFlags.BackgroundLoad)]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(
@@ -39,9 +33,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public const string CommandSetGuidString = "8e7bc2db-12a4-4f45-8f5a-38c1846a0f26";
         public const int ShowToolWindowCommandId = 0x0100;
 
-        private const string DebuggingContextString = "ADFC4E61-0397-11D1-9F4E-00A0C911004F";
-        private const string SolutionExistsAndFullyLoadedContextString = "10534154-102D-46E2-ABA8-A6BFA25BA0BE";
-        private const string SolutionExistsAndNotBuildingAndNotDebuggingContextString = "D0E4DEEC-1B53-4CDA-8559-D454583AD23B";
         private static readonly Guid CommandSetGuid = new Guid(CommandSetGuidString);
 
         private readonly object _requestGate = new object();
