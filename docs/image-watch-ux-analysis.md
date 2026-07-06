@@ -53,7 +53,7 @@ The OpenCV tutorial highlights the practical comparison workflow: zoom into a re
 
 6. Per-Image Display Settings
 
-   Keep global defaults, but allow per-image overrides for display range, pseudo color, alpha handling, and Bayer/color interpretation. Large raw files should avoid full-file autoscale unless explicitly requested.
+   Keep global defaults, but allow per-image overrides for pseudo color, alpha handling, and Bayer/color interpretation. Large raw files should avoid full-file autoscale unless explicitly requested.
 
 ## Recommended Raw Buffer Visualizer Order
 
