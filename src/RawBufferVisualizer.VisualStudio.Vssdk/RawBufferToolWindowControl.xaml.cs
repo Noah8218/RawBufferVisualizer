@@ -27,9 +27,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
         private const int HistogramMaxSampleDimension = 1024;
 
+        private enum LayoutMode
+        {
+            Unknown,
+            Narrow,
+            Medium,
+            Wide
+        }
+
         private readonly ObservableCollection<ImageDocument> _documents = new ObservableCollection<ImageDocument>();
         private readonly DispatcherTimer _performanceTimer;
         private ImageDocument? _activeDocument;
+        private LayoutMode _layoutMode = LayoutMode.Unknown;
         private bool _syncingZoomSlider;
         private bool _syncingDocumentSelection;
         private bool _switchingDocument;
@@ -44,6 +53,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private double _lastOpenPathMilliseconds;
         private int _lastHoverX = -1;
         private int _lastHoverY = -1;
+        private double _lastCompactInspectorHeight = 168;
         private string _lastFramebufferCapturePath = string.Empty;
         private string _lastFramebufferCaptureError = string.Empty;
 
@@ -1398,7 +1408,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ApplyResponsiveLayout(double width)
         {
-            if (ImagesColumn == null || InspectorColumn == null || InspectorPanel == null || CompactInspectorPanel == null || StatusText == null)
+            if (ImagesColumn == null
+                || InspectorColumn == null
+                || InspectorSplitterColumn == null
+                || ImagesGridSplitter == null
+                || InspectorGridSplitter == null
+                || CompactInspectorGridSplitter == null
+                || CompactInspectorRow == null
+                || InspectorPanel == null
+                || CompactInspectorPanel == null
+                || StatusText == null)
             {
                 return;
             }
@@ -1408,39 +1427,97 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 width = ActualWidth;
             }
 
-            if (width < 760)
+            var nextMode = width < 760
+                ? LayoutMode.Narrow
+                : width < 1040
+                    ? LayoutMode.Medium
+                    : LayoutMode.Wide;
+            var modeChanged = nextMode != _layoutMode;
+
+            ImagesGridSplitter.Visibility = Visibility.Visible;
+
+            if (nextMode == LayoutMode.Narrow)
             {
-                ImagesColumn.Width = new GridLength(width < 620 ? 180 : 220);
-                InspectorColumn.Width = new GridLength(0);
+                if (modeChanged)
+                {
+                    ImagesColumn.Width = new GridLength(width < 620 ? 180 : 220);
+                    InspectorColumn.Width = new GridLength(0);
+                }
+
+                InspectorSplitterColumn.Width = new GridLength(0);
                 DescriptorPanel.Visibility = Visibility.Collapsed;
                 InspectorPanel.Visibility = Visibility.Collapsed;
-                CompactInspectorPanel.Visibility = InspectorToggleButton.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+                InspectorGridSplitter.Visibility = Visibility.Collapsed;
+                SetCompactInspectorVisible(InspectorToggleButton.IsChecked == true);
                 InspectorToggleButton.Visibility = Visibility.Visible;
                 LinkViewsBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
                 StatusText.Width = 95;
             }
-            else if (width < 1040)
+            else if (nextMode == LayoutMode.Medium)
             {
-                ImagesColumn.Width = new GridLength(width < 880 ? 260 : 300);
-                InspectorColumn.Width = new GridLength(0);
+                if (modeChanged)
+                {
+                    ImagesColumn.Width = new GridLength(width < 880 ? 260 : 300);
+                    InspectorColumn.Width = new GridLength(0);
+                }
+
+                InspectorSplitterColumn.Width = new GridLength(0);
                 DescriptorPanel.Visibility = Visibility.Collapsed;
                 InspectorPanel.Visibility = Visibility.Collapsed;
-                CompactInspectorPanel.Visibility = Visibility.Visible;
+                InspectorGridSplitter.Visibility = Visibility.Collapsed;
+                SetCompactInspectorVisible(true);
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
                 LinkViewsBox.Visibility = Visibility.Visible;
                 StatusText.Width = 115;
             }
             else
             {
-                ImagesColumn.Width = new GridLength(320);
-                InspectorColumn.Width = new GridLength(300);
+                if (modeChanged)
+                {
+                    ImagesColumn.Width = new GridLength(320);
+                    InspectorColumn.Width = new GridLength(300);
+                }
+
+                InspectorSplitterColumn.Width = new GridLength(5);
                 DescriptorPanel.Visibility = Visibility.Visible;
                 InspectorPanel.Visibility = Visibility.Visible;
-                CompactInspectorPanel.Visibility = Visibility.Collapsed;
+                InspectorGridSplitter.Visibility = Visibility.Visible;
+                SetCompactInspectorVisible(false);
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
                 LinkViewsBox.Visibility = Visibility.Visible;
                 StatusText.Width = 150;
             }
+
+            _layoutMode = nextMode;
+        }
+
+        private void SetCompactInspectorVisible(bool visible)
+        {
+            if (CompactInspectorPanel == null || CompactInspectorGridSplitter == null || CompactInspectorRow == null)
+            {
+                return;
+            }
+
+            if (visible)
+            {
+                CompactInspectorPanel.Visibility = Visibility.Visible;
+                CompactInspectorGridSplitter.Visibility = Visibility.Visible;
+                if (CompactInspectorRow.Height.Value <= 0)
+                {
+                    CompactInspectorRow.Height = new GridLength(Math.Max(96, _lastCompactInspectorHeight));
+                }
+
+                return;
+            }
+
+            if (CompactInspectorRow.Height.Value > 0)
+            {
+                _lastCompactInspectorHeight = CompactInspectorRow.Height.Value;
+            }
+
+            CompactInspectorPanel.Visibility = Visibility.Collapsed;
+            CompactInspectorGridSplitter.Visibility = Visibility.Collapsed;
+            CompactInspectorRow.Height = new GridLength(0);
         }
 
         private void UpdateStatus()

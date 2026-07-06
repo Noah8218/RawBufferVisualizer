@@ -19,6 +19,8 @@
         <SolidColorBrush x:Key="StatusAccentBrush" Color="#007ACC"/>
         <SolidColorBrush x:Key="StatusTextBrush" Color="#CCCCCC"/>
         <SolidColorBrush x:Key="ChannelChipBrush" Color="#303033"/>
+        <SolidColorBrush x:Key="SplitterBrush" Color="#3C3C3C"/>
+        <SolidColorBrush x:Key="SplitterHoverBrush" Color="#007ACC"/>
         <Style TargetType="{x:Type TextBlock}">
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
         </Style>
@@ -102,12 +104,76 @@
             <Setter Property="Background" Value="{StaticResource PanelBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TabControl}">
+                        <Grid ClipToBounds="True">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TabPanel Grid.Row="0"
+                                      IsItemsHost="True"
+                                      KeyboardNavigation.TabIndex="1"
+                                      Background="{StaticResource PanelBrush}"/>
+                            <Border Grid.Row="1"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="1">
+                                <ContentPresenter x:Name="PART_SelectedContentHost"
+                                                  Margin="0"
+                                                  ContentSource="SelectedContent"/>
+                            </Border>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="{x:Type TabItem}">
             <Setter Property="Background" Value="#2D2D30"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="{x:Type TabItem}">
+                        <Border x:Name="TabBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1,1,1,0"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="ContentSite"
+                                              ContentSource="Header"
+                                              RecognizesAccessKey="True"
+                                              HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource PanelBrush}"/>
+                                <Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
+                                <Setter Property="Panel.ZIndex" Value="1"/>
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource CommandHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="{x:Type GridSplitter}">
+            <Setter Property="Background" Value="{StaticResource SplitterBrush}"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="ShowsPreview" Value="False"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource SplitterHoverBrush}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
         <Style TargetType="{x:Type ListBox}">
             <Setter Property="Background" Value="#1B1B1B"/>
@@ -150,13 +216,16 @@
         <Grid Grid.Row="1">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
-                <RowDefinition Height="Auto"/>
+                <RowDefinition x:Name="CompactInspectorSplitterRow" Height="Auto"/>
+                <RowDefinition x:Name="CompactInspectorRow" Height="0" MinHeight="0" MaxHeight="360"/>
             </Grid.RowDefinitions>
 
             <Grid x:Name="MainContentGrid" Grid.Row="0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition x:Name="ImagesColumn" Width="320" MinWidth="160"/>
+                    <ColumnDefinition Width="5"/>
                     <ColumnDefinition Width="*" MinWidth="140"/>
+                    <ColumnDefinition x:Name="InspectorSplitterColumn" Width="5"/>
                     <ColumnDefinition x:Name="InspectorColumn" Width="300" MinWidth="0"/>
                 </Grid.ColumnDefinitions>
 
@@ -205,17 +274,33 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Column="1" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
+            <GridSplitter x:Name="ImagesGridSplitter"
+                          Grid.Column="1"
+                          Width="5"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"/>
+
+            <Border Grid.Column="2" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
                 <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
             </Border>
 
-            <ScrollViewer x:Name="InspectorPanel" Grid.Column="2" Background="{StaticResource PanelBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <GridSplitter x:Name="InspectorGridSplitter"
+                          Grid.Column="3"
+                          Width="5"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Columns"
+                          ResizeBehavior="PreviousAndNext"/>
+
+            <ScrollViewer x:Name="InspectorPanel" Grid.Column="4" Background="{StaticResource PanelBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="10">
                     <TextBlock Text="Pixel" FontSize="16" FontWeight="SemiBold"/>
                     <TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
-                    <TextBlock Text="5x5" Margin="0,10,0,4" FontWeight="SemiBold"/>
+                    <TextBlock Text="Hover 5x5 Values" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <TextBlock x:Name="PixelNeighborhoodText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
-                    <TextBlock Text="ROI 5x5" Margin="0,10,0,4" FontWeight="SemiBold"/>
+                    <TextBlock Text="Hover 5x5 Stats" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <TextBlock x:Name="RoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                     <TextBlock Text="Marker" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <WrapPanel>
@@ -293,13 +378,22 @@
             </ScrollViewer>
             </Grid>
 
+            <GridSplitter x:Name="CompactInspectorGridSplitter"
+                          Grid.Row="1"
+                          Height="5"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch"
+                          ResizeDirection="Rows"
+                          ResizeBehavior="PreviousAndNext"
+                          Visibility="Collapsed"/>
+
             <Border x:Name="CompactInspectorPanel"
-                    Grid.Row="1"
+                    Grid.Row="2"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrush}"
                     BorderThickness="0,1,0,0"
                     Padding="8"
-                    MaxHeight="168"
+                    MaxHeight="360"
                     Visibility="Collapsed">
                 <TabControl x:Name="CompactInspectorTabs">
                     <TabItem Header="Pixel">
@@ -312,11 +406,11 @@
                                 <StackPanel Grid.Column="0" Margin="0,0,12,0">
                                     <TextBlock Text="Current" FontWeight="SemiBold" Margin="0,0,0,4"/>
                                     <TextBlock x:Name="CompactPixelText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="36"/>
-                                    <TextBlock Text="5x5" FontWeight="SemiBold" Margin="0,8,0,4"/>
+                                    <TextBlock Text="Hover 5x5 Values" FontWeight="SemiBold" Margin="0,8,0,4"/>
                                     <TextBlock x:Name="CompactPixelNeighborhoodText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="10"/>
                                 </StackPanel>
                                 <StackPanel Grid.Column="1">
-                                    <TextBlock Text="ROI 5x5" FontWeight="SemiBold" Margin="0,0,0,4"/>
+                                    <TextBlock Text="Hover 5x5 Stats" FontWeight="SemiBold" Margin="0,0,0,4"/>
                                     <TextBlock x:Name="CompactRoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                                     <TextBlock Text="Marker" FontWeight="SemiBold" Margin="0,8,0,4"/>
                                     <WrapPanel>
