@@ -210,6 +210,15 @@ The viewer avoids allocating one full-frame bitmap for large raw payloads. It us
 
 ## Build And Test
 
+From a fresh clone, build the solution once before inspecting the generated VSIX payload:
+
+```powershell
+dotnet restore .\RawBufferVisualizer.sln
+dotnet build .\RawBufferVisualizer.sln -c Release
+```
+
+The Visual Studio extension project packages generated files from `.build\bin` into the VSIX. Those DLL and `.pkgdef` payloads are generated build outputs, not source files, and are intentionally hidden from Solution Explorer.
+
 Build:
 
 ```powershell

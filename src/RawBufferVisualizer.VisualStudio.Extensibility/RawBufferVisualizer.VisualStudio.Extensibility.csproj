@@ -30,36 +30,47 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.Core\$(Configuration)\net472\RawBufferVisualizer.Core.dll" Link="RawBufferVisualizer.Core.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.Sdk\$(Configuration)\net472\RawBufferVisualizer.Sdk.dll" Link="RawBufferVisualizer.Sdk.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.dll" Link="RawBufferVisualizer.VisualStudio.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.OpenGlCanvas\$(Configuration)\net472\RawBufferVisualizer.OpenGlCanvas.dll" Link="RawBufferVisualizer.OpenGlCanvas.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.dll" Link="netstandard2.0\%(Filename)%(Extension)">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.deps.json" Link="netstandard2.0\%(Filename)%(Extension)">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Vssdk.dll" Link="RawBufferVisualizer.VisualStudio.Vssdk.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.dll" Link="SharpGL.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.SceneGraph.dll" Link="SharpGL.SceneGraph.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.WinForms.dll" Link="SharpGL.WinForms.dll">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\intermediate\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Vssdk.pkgdef" Link="RawBufferVisualizer.VisualStudio.Vssdk.pkgdef">
+      <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
