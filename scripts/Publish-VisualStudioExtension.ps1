@@ -61,6 +61,10 @@ function Assert-DebuggerVisualizerTargetTypes {
                 if ($targetType.IndexOf(',') -lt 0) {
                     throw "Debugger visualizer targetType must include an assembly name: '$targetType'"
                 }
+
+                if ($targetType -like 'Cressem.ImageModel.ImagePtr,*' -and $targetType -notlike '*Version=*') {
+                    throw "ImagePtr targetType must be fully assembly-qualified: '$targetType'"
+                }
             }
         }
     }
