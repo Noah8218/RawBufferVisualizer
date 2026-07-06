@@ -4,9 +4,9 @@
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
     <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
-    <AssemblyVersion>1.0.18.0</AssemblyVersion>
-    <FileVersion>1.0.18.0</FileVersion>
-    <Version>1.0.18</Version>
+    <AssemblyVersion>1.0.19.0</AssemblyVersion>
+    <FileVersion>1.0.19.0</FileVersion>
+    <Version>1.0.19</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" PrivateAssets="all" />
