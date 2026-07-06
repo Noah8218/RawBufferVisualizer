@@ -24,7 +24,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             {
                 new VisualizerTargetType(DisplayName, "ImagePtr"),
                 new VisualizerTargetType(DisplayName, "ImageModel.ImagePtr"),
-                new VisualizerTargetType(DisplayName, "ImageModels.ImagePtr")
+                new VisualizerTargetType(DisplayName, "ImageModels.ImagePtr"),
+                new VisualizerTargetType(DisplayName, "Cressem.ImageModel.ImagePtr")
             })
             {
                 Style = VisualizerStyle.ToolWindow,
