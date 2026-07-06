@@ -63,7 +63,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ImageList.ItemsSource = _documents;
             OpenGlImageView.PixelHovered += OpenGlImageView_PixelHovered;
             OpenGlImageView.PixelPinned += OpenGlImageView_PixelPinned;
+            OpenGlImageView.PixelSelected += OpenGlImageView_PixelSelected;
             OpenGlImageView.ViewChanged += OpenGlImageView_ViewChanged;
+            OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
             InterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
             InterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
             _performanceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
@@ -742,6 +744,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
+        private void SelectionOverlayBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (OpenGlImageView != null && SelectionOverlayBox != null)
+            {
+                OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
+            }
+        }
+
         private void InspectorToggleButton_Changed(object sender, RoutedEventArgs e)
         {
             ApplyResponsiveLayout(ActualWidth);
@@ -795,6 +805,28 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdatePixelStatus(_activeDocument, e.X, e.Y, pixelDescription);
         }
 
+        private void OpenGlImageView_PixelSelected(object? sender, RawOpenGlPixelEventArgs e)
+        {
+            if (_activeDocument == null
+                || e.X < 0
+                || e.Y < 0
+                || e.X >= _activeDocument.Descriptor.Width
+                || e.Y >= _activeDocument.Descriptor.Height)
+            {
+                return;
+            }
+
+            _lastHoverX = e.X;
+            _lastHoverY = e.Y;
+            var pixelDescription = _activeDocument.Source.DescribePixel(e.X, e.Y);
+            SetPixelDetails(
+                pixelDescription,
+                BuildPixelNeighborhood(_activeDocument, e.X, e.Y, 2),
+                BuildRoiStats(_activeDocument, e.X, e.Y, 2),
+                BuildLineProfile(_activeDocument, e.X, e.Y));
+            UpdatePixelStatus(_activeDocument, e.X, e.Y, pixelDescription);
+        }
+
         private void OpenGlImageView_PixelPinned(object? sender, RawOpenGlPixelEventArgs e)
         {
             if (_activeDocument == null || e.X < 0 || e.Y < 0 || e.X >= _activeDocument.Descriptor.Width || e.Y >= _activeDocument.Descriptor.Height)
@@ -813,12 +845,25 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void PinMarker_Click(object sender, RoutedEventArgs e)
         {
-            if (_activeDocument == null || _lastHoverX < 0 || _lastHoverY < 0)
+            if (_activeDocument == null)
             {
                 return;
             }
 
-            OpenGlImageView.PinMarkerAtImagePixel(_lastHoverX, _lastHoverY);
+            int x;
+            int y;
+            if (!OpenGlImageView.TryGetSelectedPixel(out x, out y))
+            {
+                x = _lastHoverX;
+                y = _lastHoverY;
+            }
+
+            if (x < 0 || y < 0 || x >= _activeDocument.Descriptor.Width || y >= _activeDocument.Descriptor.Height)
+            {
+                return;
+            }
+
+            OpenGlImageView.PinMarkerAtImagePixel(x, y);
         }
 
         private void ClearMarker_Click(object sender, RoutedEventArgs e)
@@ -1415,6 +1460,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || InspectorGridSplitter == null
                 || CompactInspectorGridSplitter == null
                 || CompactInspectorRow == null
+                || SelectionOverlayBox == null
                 || InspectorPanel == null
                 || CompactInspectorPanel == null
                 || StatusText == null)
@@ -1451,6 +1497,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SetCompactInspectorVisible(InspectorToggleButton.IsChecked == true);
                 InspectorToggleButton.Visibility = Visibility.Visible;
                 LinkViewsBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
+                SelectionOverlayBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
                 StatusText.Width = 95;
             }
             else if (nextMode == LayoutMode.Medium)
@@ -1468,6 +1515,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SetCompactInspectorVisible(true);
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
                 LinkViewsBox.Visibility = Visibility.Visible;
+                SelectionOverlayBox.Visibility = Visibility.Visible;
                 StatusText.Width = 115;
             }
             else
@@ -1485,6 +1533,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SetCompactInspectorVisible(false);
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
                 LinkViewsBox.Visibility = Visibility.Visible;
+                SelectionOverlayBox.Visibility = Visibility.Visible;
                 StatusText.Width = 150;
             }
 
@@ -1822,6 +1871,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 BuildPixelNeighborhood(_activeDocument, x, y, 2),
                 BuildRoiStats(_activeDocument, x, y, 2),
                 BuildLineProfile(_activeDocument, x, y));
+            OpenGlImageView.SelectPixelAtImagePixel(x, y);
             OpenGlImageView.PinMarkerAtImagePixel(x, y);
             var options = OpenGlImageView.GetRenderOptionsSnapshot();
             if (options != null)
@@ -1899,6 +1949,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "pixelStatusRaw", PixelRawText.Text, true);
                 AppendJsonProperty(builder, "roiStats", RoiStatsText.Text, true);
                 AppendJsonProperty(builder, "markerText", MarkerText.Text, true);
+                AppendJsonProperty(builder, "selectedPixel", OpenGlImageView.SelectedPixelText, true);
+                AppendJsonProperty(builder, "selectionOverlayEnabled", OpenGlImageView.SelectionOverlayEnabled, true);
                 AppendJsonProperty(builder, "pinnedMarker", OpenGlImageView.PinnedMarkerText, true);
                 AppendJsonProperty(builder, "blackLevel", BlackLevelTextBox.Text, true);
                 AppendJsonProperty(builder, "whiteLevel", WhiteLevelTextBox.Text, true);
