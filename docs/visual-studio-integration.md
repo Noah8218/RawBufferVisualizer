@@ -94,6 +94,31 @@ The current Visual Studio session handoff is:
 
 The docked viewer owns mouse wheel zoom, drag pan, descriptor display, diagnostics, Try interpretation, pixel inspection, and A/B comparison.
 
+## Temporary Snapshot Storage
+
+Debugger inspection writes temporary files under:
+
+```text
+%TEMP%\RawBufferVisualizer\VisualStudio\<session-id>\
+```
+
+Each inspected debugger image creates:
+
+- one small `.rbuf.json` descriptor file
+- one `.raw` payload file with the same byte length as the inspected buffer
+
+The extension does not create persistent preview PNG files during normal debugger inspection. PNG files are created only when the user explicitly chooses save/export.
+
+Large images can therefore consume real temp-disk space while they remain in the `Images` list. For example, a `36000 x 96000 Mono8` image is about `3.46 GB`.
+
+Cleanup policy:
+
+- Selecting an image row and pressing `Delete` removes that row and deletes its owned debugger temp snapshot directory.
+- `Clear` disposes all current rows and deletes their owned debugger temp snapshot directories.
+- Failed debugger handoffs delete partial temp snapshot directories.
+- On each new debugger snapshot, stale Raw Buffer Visualizer temp snapshot directories older than 24 hours are cleaned up.
+- User-opened external `.rbuf.json` files are not deleted.
+
 VSSDK tool window acceptance criteria:
 
 - Visual Studio docked preview stays inside the IDE and does not block stepping.

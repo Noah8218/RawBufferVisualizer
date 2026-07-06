@@ -116,7 +116,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var reference = RawBufferSnapshot.LoadReference(fullPath);
                 var source = CreateImageSource(reference.RawPath, reference.Descriptor, reference.RawByteLength);
                 var resolvedSourceType = string.IsNullOrWhiteSpace(sourceType) ? "Raw snapshot" : sourceType!;
-                var document = new ImageDocument(fullPath, source, reference.Descriptor, title, resolvedSourceType);
+                var document = new ImageDocument(
+                    fullPath,
+                    source,
+                    reference.Descriptor,
+                    title,
+                    resolvedSourceType,
+                    ShouldDeleteSnapshotDirectoryOnDispose(fullPath));
                 _documents.Add(document);
                 ActivateDocument(document);
                 _lastOpenPathMilliseconds = openWatch.Elapsed.TotalMilliseconds;
@@ -366,7 +372,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void AddErrorDocument(string displayPath, Exception exception)
         {
-            var document = ImageDocument.CreateError(displayPath, exception.Message);
+            var document = ImageDocument.CreateError(
+                displayPath,
+                exception.Message,
+                ShouldDeleteSnapshotDirectoryOnDispose(displayPath));
             _documents.Add(document);
             ActivateDocument(document);
         }
@@ -1980,6 +1989,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return RawImageSource.FromMemory(File.ReadAllBytes(rawPath), descriptor);
         }
 
+        private static bool ShouldDeleteSnapshotDirectoryOnDispose(string metadataPath)
+        {
+            string snapshotDirectory;
+            return VisualStudioTempStore.TryGetOwnedSnapshotDirectory(metadataPath, out snapshotDirectory);
+        }
+
         private static BitmapSource? CreateThumbnailSource(RawImageSource source, RawImageDescriptor descriptor)
         {
             try
@@ -2075,6 +2090,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public RawOpenGlViewState? ViewState { get; set; }
             public BitmapSource? Thumbnail { get; private set; }
             public string ErrorMessage { get; private set; }
+            private readonly string? _ownedSnapshotDirectory;
+            private bool _disposed;
+
             public bool IsError
             {
                 get { return !string.IsNullOrWhiteSpace(ErrorMessage); }
@@ -2100,7 +2118,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
             }
 
-            public ImageDocument(string displayPath, RawImageSource source, RawImageDescriptor descriptor, string? title, string sourceType)
+            public ImageDocument(
+                string displayPath,
+                RawImageSource source,
+                RawImageDescriptor descriptor,
+                string? title,
+                string sourceType,
+                bool deleteSnapshotDirectoryOnDispose = false)
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = string.IsNullOrWhiteSpace(title) ? CreateTitle(DisplayPath) : title!.Trim();
@@ -2109,9 +2133,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
                 Thumbnail = CreateThumbnailSource(Source, Descriptor);
                 ErrorMessage = string.Empty;
+                _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
-            private ImageDocument(string displayPath, string errorMessage)
+            private ImageDocument(string displayPath, string errorMessage, bool deleteSnapshotDirectoryOnDispose)
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = "Open failed: " + CreateTitle(DisplayPath);
@@ -2128,11 +2153,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Source = RawImageSource.FromMemory(new byte[] { 0 }, Descriptor);
                 Thumbnail = CreateErrorThumbnailSource();
                 ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Unknown open failure." : errorMessage;
+                _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
-            public static ImageDocument CreateError(string displayPath, string errorMessage)
+            public static ImageDocument CreateError(string displayPath, string errorMessage, bool deleteSnapshotDirectoryOnDispose = false)
             {
-                return new ImageDocument(displayPath, errorMessage);
+                return new ImageDocument(displayPath, errorMessage, deleteSnapshotDirectoryOnDispose);
             }
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)
@@ -2150,7 +2176,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             public void Dispose()
             {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                _disposed = true;
                 Source.Dispose();
+                if (_ownedSnapshotDirectory != null)
+                {
+                    VisualStudioTempStore.TryDeleteDirectory(_ownedSnapshotDirectory);
+                }
             }
 
             private static string CreateTitle(string displayPath)
@@ -2172,6 +2208,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     return displayPath ?? string.Empty;
                 }
+            }
+
+            private static string? GetOwnedSnapshotDirectory(string displayPath, bool deleteSnapshotDirectoryOnDispose)
+            {
+                if (!deleteSnapshotDirectoryOnDispose)
+                {
+                    return null;
+                }
+
+                string snapshotDirectory;
+                return VisualStudioTempStore.TryGetOwnedSnapshotDirectory(displayPath, out snapshotDirectory)
+                    ? snapshotDirectory
+                    : null;
             }
         }
     }

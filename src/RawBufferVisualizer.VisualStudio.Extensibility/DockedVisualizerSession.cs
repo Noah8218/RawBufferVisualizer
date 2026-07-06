@@ -14,13 +14,11 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         private const double MinimumZoom = 0.1;
         private const double MaximumZoom = 8.0;
 
-        public static DockedVisualizerSession Shared { get; } = new DockedVisualizerSession();
-
         private DockedVisualizerImageItem? _selectedImage;
         private string _status = "No images captured.";
         private double _zoom = 1;
 
-        private DockedVisualizerSession()
+        public DockedVisualizerSession()
         {
             ClearCommand = new AsyncCommand((parameter, context, cancellationToken) =>
             {
