@@ -42,6 +42,30 @@ function Assert-FileExists {
     }
 }
 
+function Assert-DebuggerVisualizerTargetTypes {
+    param([string]$ExtensionJsonPath)
+
+    $extension = Get-Content -Raw -LiteralPath $ExtensionJsonPath | ConvertFrom-Json
+    foreach ($part in @($extension.parts)) {
+        if ($part.contract -ne 'Microsoft.VisualStudio.RpcContracts.DebuggerVisualizers.IDebuggerVisualizerProvider') {
+            continue
+        }
+
+        foreach ($metadata in @($part.metadata)) {
+            foreach ($target in @($metadata.values.targets)) {
+                $targetType = [string]$target.targetType
+                if ([string]::IsNullOrWhiteSpace($targetType)) {
+                    throw "Debugger visualizer targetType is empty in $ExtensionJsonPath"
+                }
+
+                if ($targetType.IndexOf(',') -lt 0) {
+                    throw "Debugger visualizer targetType must include an assembly name: '$targetType'"
+                }
+            }
+        }
+    }
+}
+
 if ($ViewerFramework -ne 'net472') {
     throw 'The Visual Studio ToolWindow is packaged into the single net472 hybrid VSIX. Use -ViewerFramework net472 or omit it.'
 }
@@ -67,7 +91,9 @@ finally {
     Pop-Location
 }
 
-Assert-FileExists -Path (Join-Path $buildOutput '.vsextension\extension.json') -Message 'Visual Studio extension metadata was not created'
+$extensionJsonPath = Join-Path $buildOutput '.vsextension\extension.json'
+Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension metadata was not created'
+Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
 Assert-FileExists -Path $vsixPath -Message 'Visual Studio extension VSIX was not created'
 

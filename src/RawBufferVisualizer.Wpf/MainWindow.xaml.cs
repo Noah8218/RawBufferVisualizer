@@ -557,6 +557,68 @@ namespace RawBufferVisualizer.Wpf
             }
         }
 
+        private void ImageList_KeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Delete)
+            {
+                return;
+            }
+
+            RemoveSelectedDocument();
+            e.Handled = true;
+        }
+
+        private void RemoveSelectedDocument()
+        {
+            var document = ImageList.SelectedItem as ImageDocument;
+            if (document == null)
+            {
+                return;
+            }
+
+            var index = _documents.IndexOf(document);
+            if (index < 0)
+            {
+                return;
+            }
+
+            var wasActive = ReferenceEquals(_activeDocument, document);
+            if (wasActive)
+            {
+                _activeDocument = null;
+                _imageSource = null;
+                _rendered = null;
+                _currentPath = null;
+            }
+
+            _syncingDocumentSelection = true;
+            try
+            {
+                _documents.RemoveAt(index);
+            }
+            finally
+            {
+                _syncingDocumentSelection = false;
+            }
+
+            document.Dispose();
+
+            if (_documents.Count > 0)
+            {
+                ActivateDocument(_documents[Math.Min(index, _documents.Count - 1)]);
+            }
+            else
+            {
+                ClearPreview();
+                FileText.Text = string.Empty;
+                PixelText.Text = string.Empty;
+                DiagnosticsList.Items.Clear();
+                HistogramCanvas.Children.Clear();
+                UpdateStatus();
+                UpdateZoomStatus();
+            }
+        }
+
         private void DocumentTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_syncingDocumentSelection)
