@@ -19,3 +19,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+Additional distribution notice
+
+7. External library licenses
+
+This MIT License applies to Raw Buffer Visualizer source code written for this
+project. External libraries, SDKs, build tools, and runtime components keep
+their own licenses and notices. Do not remove this LICENSE file or the
+third-party notice file when redistributing source or binary packages.
+
+See THIRD-PARTY-NOTICES.md for the current external library license summary.
