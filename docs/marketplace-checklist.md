@@ -117,6 +117,12 @@ Manual smoke checklist:
 
 Use [release-runbook.md](release-runbook.md) for repeatable updates.
 
+Version bump:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.23
+```
+
 GitHub setup:
 
 | Setting | Kind | Notes |

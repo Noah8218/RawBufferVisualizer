@@ -16,7 +16,13 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 
 ## Version bump
 
-Update both files to the same version:
+Use the bump script:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.23
+```
+
+This updates both files:
 
 - `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj`
 - `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest`
