@@ -22,10 +22,12 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new(new[]
             {
-                new VisualizerTargetType(DisplayName, "PointerFrame"),
                 new VisualizerTargetType(DisplayName, "DemoFrames.PointerFrame"),
                 new VisualizerTargetType(DisplayName, "DemoFramess.PointerFrame"),
-                new VisualizerTargetType(DisplayName, "SampleBuffers.Frames.PointerFrame")
+                new VisualizerTargetType(DisplayName, "SampleBuffers.Frames.PointerFrame"),
+                new VisualizerTargetType(DisplayName, "SampleBuffers.Frames.PointerFrame, SampleBuffers.Frames"),
+                new VisualizerTargetType(DisplayName, "SampleBuffers.Frames.PointerFrame, OpticaLX"),
+                new VisualizerTargetType(DisplayName, "SampleBuffers.Frames.PointerFrame, OpticalX")
             })
             {
                 Style = VisualizerStyle.ToolWindow,

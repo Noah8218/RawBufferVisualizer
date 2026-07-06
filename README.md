@@ -217,6 +217,8 @@ The viewer avoids allocating one full-frame bitmap for large raw payloads. It us
 | 100k packed `Mono10PackedLsb` and `Mono12PackedLsb` | Passed as file-backed smoke captures. |
 | Core tests | Cover descriptor planning, file-backed tile reads, diff rendering, diagnostics, and raw-byte pixel inspection. |
 
+To generate portable `100000 x 100000` and `200000 x 200000` sparse sample files on another PC, see [large image samples](docs/large-image-samples.md).
+
 ![100000 x 100000 file-backed Mono8 payload](docs/images/viewer-100k-file-backed.png)
 
 ![200000 x 200000 file-backed Mono8 payload](docs/images/viewer-200k-file-backed.png)
