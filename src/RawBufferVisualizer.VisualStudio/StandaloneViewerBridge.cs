@@ -162,9 +162,12 @@ namespace RawBufferVisualizer.VisualStudio
 
         private static string CreateSnapshotDirectory(string? snapshotRootDirectory)
         {
-            var root = string.IsNullOrWhiteSpace(snapshotRootDirectory)
-                ? Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio")
-                : Path.GetFullPath(snapshotRootDirectory);
+            if (string.IsNullOrWhiteSpace(snapshotRootDirectory))
+            {
+                return VisualStudioTempStore.CreateSnapshotDirectory();
+            }
+
+            var root = Path.GetFullPath(snapshotRootDirectory);
             var snapshotDirectory = Path.Combine(root, Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(snapshotDirectory);
             return snapshotDirectory;

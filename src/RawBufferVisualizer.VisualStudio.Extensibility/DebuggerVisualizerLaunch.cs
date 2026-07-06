@@ -18,6 +18,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             VisualizerTarget visualizerTarget,
             CancellationToken cancellationToken)
         {
+            var session = new DockedVisualizerSession();
+            string? snapshotDirectory = null;
             try
             {
                 var metadata = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerSnapshotMetadata>(
@@ -28,25 +30,36 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Visualizer object source returned no data.");
                 }
 
-                var snapshotDirectory = CreateSnapshotDirectory();
+                snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
+                EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
                 var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
                 var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
                 await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, rawPath, cancellationToken);
 
                 VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath, metadata.DisplayName, metadata.SourceType);
                 TryWakeDockedToolWindow();
-                DockedVisualizerSession.Shared.ReportForwarded(metadata);
+                session.ReportForwarded(metadata);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                if (snapshotDirectory != null)
+                {
+                    VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
+                }
+
                 throw;
             }
             catch (Exception ex)
             {
-                DockedVisualizerSession.Shared.ReportFailure(ex.Message);
+                if (snapshotDirectory != null)
+                {
+                    VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
+                }
+
+                session.ReportFailure(ex.Message);
             }
 
-            return new DockedVisualizerControl();
+            return new DockedVisualizerControl(session);
         }
 
         private static void TryWakeDockedToolWindow()
@@ -168,13 +181,6 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             return string.Format(CultureInfo.InvariantCulture, "{0}_{1}", name.Length <= 64 ? name : name.Substring(0, 64), DateTime.UtcNow.Ticks);
         }
 
-        private static string CreateSnapshotDirectory()
-        {
-            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(directory);
-            return directory;
-        }
-
         private static async Task WriteRawChunksAsync(
             VisualizerObjectSourceClient objectSource,
             VisualizerSnapshotMetadata metadata,
@@ -233,6 +239,46 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             {
                 throw new InvalidOperationException("Visualizer object source returned an incomplete buffer.");
             }
+        }
+
+        private static void EnsureTempDiskSpace(string snapshotDirectory, long bufferLength)
+        {
+            if (bufferLength <= 0)
+            {
+                return;
+            }
+
+            var root = Path.GetPathRoot(Path.GetFullPath(snapshotDirectory));
+            if (string.IsNullOrWhiteSpace(root))
+            {
+                return;
+            }
+
+            var drive = new DriveInfo(root);
+            const long safetyMargin = 512L * 1024L * 1024L;
+            var required = bufferLength + safetyMargin;
+            if (drive.AvailableFreeSpace < required)
+            {
+                throw new IOException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Not enough temporary disk space for this image. Required about {0}, available {1}.",
+                    FormatBytes(required),
+                    FormatBytes(drive.AvailableFreeSpace)));
+            }
+        }
+
+        private static string FormatBytes(long bytes)
+        {
+            var value = (double)Math.Max(0, bytes);
+            string[] units = { "bytes", "KB", "MB", "GB", "TB" };
+            var unit = 0;
+            while (value >= 1024 && unit < units.Length - 1)
+            {
+                value /= 1024;
+                unit++;
+            }
+
+            return string.Format(CultureInfo.InvariantCulture, "{0:0.##} {1}", value, units[unit]);
         }
     }
 }

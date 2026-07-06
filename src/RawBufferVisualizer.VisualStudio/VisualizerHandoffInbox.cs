@@ -11,7 +11,7 @@ namespace RawBufferVisualizer.VisualStudio
     {
         public static string InboxDirectory
         {
-            get { return Path.Combine(Path.GetTempPath(), "RawBufferVisualizer", "VisualStudio", "Inbox"); }
+            get { return Path.Combine(VisualStudioTempStore.RootDirectory, "Inbox"); }
         }
 
         public static string WriteSnapshotRequest(string metadataPath, string? displayName = null, string? sourceType = null)

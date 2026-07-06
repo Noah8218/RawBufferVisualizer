@@ -58,6 +58,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
                 VisualizerHandoffInboxRoundTripsMetadataPath();
+                VisualStudioTempStoreDeletesOwnedSnapshotDirectories();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
@@ -1072,6 +1073,40 @@ namespace RawBufferVisualizer.Tests
                 if (Directory.Exists(directory))
                 {
                     Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void VisualStudioTempStoreDeletesOwnedSnapshotDirectories()
+        {
+            var snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
+            var externalDirectory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(externalDirectory);
+                var metadataPath = Path.Combine(snapshotDirectory, "sample.rbuf.json");
+                var externalMetadataPath = Path.Combine(externalDirectory, "sample.rbuf.json");
+                File.WriteAllText(metadataPath, "{}");
+                File.WriteAllText(externalMetadataPath, "{}");
+
+                string ownedDirectory;
+                Assert(VisualStudioTempStore.TryGetOwnedSnapshotDirectory(metadataPath, out ownedDirectory), "Temp store should identify owned snapshot metadata.");
+                Assert(!VisualStudioTempStore.TryGetOwnedSnapshotDirectory(externalMetadataPath, out ownedDirectory), "Temp store must not claim external metadata.");
+                Assert(!VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(externalMetadataPath), "Temp store must not delete external metadata directories.");
+                Assert(Directory.Exists(externalDirectory), "External directory should remain after temp cleanup request.");
+                Assert(VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(metadataPath), "Temp store should delete owned snapshot metadata directory.");
+                Assert(!Directory.Exists(snapshotDirectory), "Owned snapshot directory should be deleted.");
+            }
+            finally
+            {
+                if (Directory.Exists(snapshotDirectory))
+                {
+                    Directory.Delete(snapshotDirectory, true);
+                }
+
+                if (Directory.Exists(externalDirectory))
+                {
+                    Directory.Delete(externalDirectory, true);
                 }
             }
         }
