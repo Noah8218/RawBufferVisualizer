@@ -813,9 +813,6 @@ try {
     if ([string]::IsNullOrWhiteSpace([string]$metrics.pinnedMarker) -or ([string]$metrics.pinnedMarker).IndexOf("X ", [System.StringComparison]::Ordinal) -lt 0) {
         $failures.Add("Pinned marker was not kept by the image canvas: $($metrics.pinnedMarker)")
     }
-    if ([string]::IsNullOrWhiteSpace([string]$metrics.blackLevel) -or [string]::IsNullOrWhiteSpace([string]$metrics.whiteLevel)) {
-        $failures.Add("Display range was not exposed: black=$($metrics.blackLevel), white=$($metrics.whiteLevel)")
-    }
     if (($metrics.zoom.frameCount + $metrics.pan.frameCount) -le 0) {
         $failures.Add("No viewer frames were recorded in the docked ToolWindow")
     }

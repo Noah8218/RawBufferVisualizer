@@ -317,8 +317,8 @@
                         <Canvas x:Name="HistogramCanvas" Margin="8"/>
                     </Border>
 
-                    <TextBlock Text="Display Range" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold" ToolTip="Display black/white range. Raw data is not changed."/>
-                    <Grid>
+                    <TextBlock Text="Display Range" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold" ToolTip="Display black/white range. Raw data is not changed." Visibility="Collapsed"/>
+                    <Grid Visibility="Collapsed">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="80"/>
                             <ColumnDefinition Width="*"/>
@@ -423,7 +423,7 @@
                             </Grid>
                         </ScrollViewer>
                     </TabItem>
-                    <TabItem Header="Range">
+                    <TabItem Header="Range" Visibility="Collapsed">
                         <Grid Margin="4">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="64"/>

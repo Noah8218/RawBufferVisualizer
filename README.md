@@ -22,7 +22,7 @@ The viewer is built around the workflow machine-vision developers use every day:
 - Pixel status strip with X/Y, GV or RGB channel values, color swatches, and source bytes.
 - High-zoom pixel grid overlay for reading values directly on the image.
 - Save the current visible view as PNG, or save a raw `.rbuf.json` snapshot from the image list context menu.
-- Hover 5x5 values/statistics, selectable pixel marker overlay, pinned marker, line profile, histogram, diagnostics, and display range controls.
+- Hover 5x5 values/statistics, selectable pixel marker overlay, pinned marker, line profile, histogram, and diagnostics.
 - Try interpretation controls for changing pixel format, stride, valid bits, and byte order while debugging.
 - A/B comparison MVP: set A/B, link pan/zoom, split view, diff view, and blink compare.
 - File-backed tiled display for very large raw payloads.
@@ -69,7 +69,7 @@ The standalone viewer opens `.rbuf.json` snapshot files and is useful for saved 
 5. The image is appended to the docked `Raw Buffer Visualizer` window.
 6. Use the `Images` list to switch between captured variables.
 7. Use mouse wheel for zoom and mouse drag for pan.
-8. Use the status strip and Inspector for pixel values, raw bytes, ROI, marker, diagnostics, levels, interpretation, and comparison.
+8. Use the status strip and Inspector for pixel values, raw bytes, hover 5x5 statistics, marker values, diagnostics, interpretation, and comparison.
 9. Use `Save` to export the current visible view as PNG. Right-click an image row to save the raw snapshot.
 
 The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
@@ -132,14 +132,14 @@ public sealed class ImagePtr
 | Format | Storage | Valid Bits | Display |
 | --- | ---: | ---: | --- |
 | `Mono8` | 1 byte / pixel | 8 | Grayscale |
-| `Mono16` | 2 bytes / pixel | 1-16 | Grayscale with levels |
-| `Mono10PackedLsb` | 10-bit packed | 10 | Grayscale with levels |
-| `Mono12PackedLsb` | 12-bit packed | 12 | Grayscale with levels |
+| `Mono16` | 2 bytes / pixel | 1-16 | Grayscale |
+| `Mono10PackedLsb` | 10-bit packed | 10 | Grayscale |
+| `Mono12PackedLsb` | 12-bit packed | 12 | Grayscale |
 | `Binary` | 1 byte / pixel | 1 | 0 black, non-zero white |
 | `RGB24` | 3 bytes / pixel | 8 | Color, RGB byte order |
 | `BGR24` | 3 bytes / pixel | 8 | Color, BGR byte order |
 | `BGRA32` | 4 bytes / pixel | 8 | Color with alpha |
-| `Float32` | 4 bytes / pixel | 32 | Grayscale with levels |
+| `Float32` | 4 bytes / pixel | 32 | Grayscale |
 | `BayerRGGB8` | 1 byte / pixel | 8 | Simple Bayer preview |
 | `BayerGRBG8` | 1 byte / pixel | 8 | Simple Bayer preview |
 | `BayerGBRG8` | 1 byte / pixel | 8 | Simple Bayer preview |
@@ -226,9 +226,9 @@ $env:OPENCV_IO_MAX_IMAGE_PIXELS = "4000000000"
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj --configuration Release -- --emgu-tiff-smoke "C:\path\large.tif"
 ```
 
-![100000 x 100000 file-backed Mono8 payload](docs/images/viewer-100k-file-backed.png)
+![100000 x 100000 file-backed Mono8 payload in the standalone validation viewer](docs/images/viewer-100k-file-backed.png)
 
-![200000 x 200000 file-backed Mono8 payload](docs/images/viewer-200k-file-backed.png)
+![200000 x 200000 file-backed Mono8 payload in the standalone validation viewer](docs/images/viewer-200k-file-backed.png)
 
 ## Build And Test
 
@@ -287,7 +287,7 @@ The extension is intended to be published as a Visual Studio Marketplace preview
 
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
-- Save PNG, raw snapshot export, pixel status, ROI, marker, levels, pan, zoom, high-zoom overlay, and error rows.
+- Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, and error rows.
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - Large file-backed snapshots and the standalone viewer.
 
