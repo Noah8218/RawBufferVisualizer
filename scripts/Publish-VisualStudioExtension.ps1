@@ -61,6 +61,10 @@ function Assert-DebuggerVisualizerTargetTypes {
                 if ($targetType.IndexOf(',') -lt 0) {
                     throw "Debugger visualizer targetType must include an assembly name: '$targetType'"
                 }
+
+                if ($targetType -like 'SampleBuffers.Frames.PointerFrame,*' -and $targetType -notlike '*Version=*') {
+                    throw "PointerFrame targetType must be fully assembly-qualified: '$targetType'"
+                }
             }
         }
     }
