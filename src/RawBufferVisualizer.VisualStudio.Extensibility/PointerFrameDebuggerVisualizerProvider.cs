@@ -24,7 +24,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             {
                 new VisualizerTargetType(DisplayName, "PointerFrame"),
                 new VisualizerTargetType(DisplayName, "DemoFrames.PointerFrame"),
-                new VisualizerTargetType(DisplayName, "DemoFramess.PointerFrame")
+                new VisualizerTargetType(DisplayName, "DemoFramess.PointerFrame"),
+                new VisualizerTargetType(DisplayName, "SampleBuffers.Frames.PointerFrame")
             })
             {
                 Style = VisualizerStyle.ToolWindow,
