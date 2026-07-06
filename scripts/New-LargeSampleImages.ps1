@@ -5,6 +5,8 @@ param(
     [int]$RowInterval = 512,
     [string]$Configuration = "Debug",
     [string]$ViewerFramework = "net472",
+    [switch]$Dense,
+    [int]$DenseBlockRows = 64,
     [switch]$BuildViewer,
     [switch]$Open
 )
@@ -151,7 +153,7 @@ function New-LargeSampleRow([int]$width, [int]$stride, [string]$pixelFormat) {
         }
     }
 
-    return $row
+    return ,$row
 }
 
 function New-SparseRawFile([string]$path, [int]$width, [int]$height, [int]$stride, [string]$pixelFormat, [int]$rowInterval) {
@@ -189,16 +191,48 @@ function New-SparseRawFile([string]$path, [int]$width, [int]$height, [int]$strid
     }
 }
 
+function New-DenseRawFile([string]$path, [int]$width, [int]$height, [int]$stride, [string]$pixelFormat, [int]$blockRows) {
+    if (Test-Path -LiteralPath $path) {
+        Remove-Item -LiteralPath $path -Force
+    }
+
+    $rowsPerBlock = [Math]::Max(1, [Math]::Min($blockRows, $height))
+    $row = New-LargeSampleRow $width $stride $pixelFormat
+    $block = New-Object byte[] ([int64]$stride * [int64]$rowsPerBlock)
+    for ($i = 0; $i -lt $rowsPerBlock; $i++) {
+        [Buffer]::BlockCopy($row, 0, $block, $i * $stride, $stride)
+    }
+
+    $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+    try {
+        $remainingRows = $height
+        while ($remainingRows -gt 0) {
+            $writeRows = [Math]::Min($rowsPerBlock, $remainingRows)
+            $stream.Write($block, 0, $writeRows * $stride)
+            $remainingRows -= $writeRows
+        }
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
 $created = New-Object System.Collections.Generic.List[object]
 
 foreach ($size in $requestedSizes) {
     foreach ($format in $requestedFormats) {
         $descriptor = Get-LargeSampleDescriptor $size $size $format
-        $sampleName = "large-$($size)x$($size)-$($format.ToLowerInvariant())"
+        $mode = if ($Dense) { "dense" } else { "sparse" }
+        $sampleName = "large-$($size)x$($size)-$($format.ToLowerInvariant())-$mode"
         $rawPath = Join-Path $outputRoot "$sampleName.raw"
         $metadataPath = Join-Path $outputRoot "$sampleName.rbuf.json"
 
-        New-SparseRawFile $rawPath $size $size $descriptor.Stride $format $RowInterval
+        if ($Dense) {
+            New-DenseRawFile $rawPath $size $size $descriptor.Stride $format $DenseBlockRows
+        }
+        else {
+            New-SparseRawFile $rawPath $size $size $descriptor.Stride $format $RowInterval
+        }
 
         $metadata = [ordered]@{
             rawFile = "$sampleName.raw"
@@ -217,6 +251,7 @@ foreach ($size in $requestedSizes) {
             PixelFormat = $format
             Width = $size
             Height = $size
+            Mode = $mode
             LogicalBytes = (Get-Item -LiteralPath $rawPath).Length
         }) | Out-Null
     }
