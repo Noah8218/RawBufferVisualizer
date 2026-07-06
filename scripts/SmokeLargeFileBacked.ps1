@@ -8,6 +8,8 @@ param(
     [string]$PixelFormat = "Mono8",
     [string]$OutputDir = "artifacts\ui\large-file-backed",
     [string]$CaptureFileName = "",
+    [switch]$Dense,
+    [int]$DenseBlockRows = 64,
     [switch]$NoBuild
 )
 
@@ -29,7 +31,8 @@ New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 $sampleRoot = Join-Path $repoRoot "artifacts\large-file-backed"
 New-Item -ItemType Directory -Force -Path $sampleRoot | Out-Null
-$sampleName = "huge-$($Width)x$($Height)-$($PixelFormat.ToLowerInvariant())"
+$mode = if ($Dense) { "dense" } else { "sparse" }
+$sampleName = "huge-$($Width)x$($Height)-$($PixelFormat.ToLowerInvariant())-$mode"
 $metadataPath = Join-Path $sampleRoot "$sampleName.rbuf.json"
 $rawPath = Join-Path $sampleRoot "$sampleName.raw"
 if ([string]::IsNullOrWhiteSpace($CaptureFileName)) {
@@ -116,7 +119,7 @@ function New-PatternRow([string]$pixelFormat, [int]$width, [int]$stride) {
         }
     }
 
-    $row
+    return ,$row
 }
 
 function New-SparsePatternRaw([string]$path, [int]$width, [int]$height, [int]$stride, [string]$pixelFormat) {
@@ -147,6 +150,32 @@ function New-SparsePatternRaw([string]$path, [int]$width, [int]$height, [int]$st
 
         $stream.Position = $length - 1
         $stream.WriteByte(255)
+    }
+    finally {
+        $stream.Dispose()
+    }
+}
+
+function New-DensePatternRaw([string]$path, [int]$width, [int]$height, [int]$stride, [string]$pixelFormat, [int]$blockRows) {
+    if (Test-Path -LiteralPath $path) {
+        Remove-Item -LiteralPath $path -Force
+    }
+
+    $rowsPerBlock = [Math]::Max(1, [Math]::Min($blockRows, $height))
+    $row = New-PatternRow $pixelFormat $width $stride
+    $block = New-Object byte[] ([int64]$stride * [int64]$rowsPerBlock)
+    for ($i = 0; $i -lt $rowsPerBlock; $i++) {
+        [Buffer]::BlockCopy($row, 0, $block, $i * $stride, $stride)
+    }
+
+    $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::Read)
+    try {
+        $remainingRows = $height
+        while ($remainingRows -gt 0) {
+            $writeRows = [Math]::Min($rowsPerBlock, $remainingRows)
+            $stream.Write($block, 0, $writeRows * $stride)
+            $remainingRows -= $writeRows
+        }
     }
     finally {
         $stream.Dispose()
@@ -241,7 +270,12 @@ function Get-ElementName([System.Windows.Automation.AutomationElement]$root, [st
     $element.Current.Name
 }
 
-New-SparsePatternRaw $rawPath $Width $Height $stride $PixelFormat
+if ($Dense) {
+    New-DensePatternRaw $rawPath $Width $Height $stride $PixelFormat $DenseBlockRows
+}
+else {
+    New-SparsePatternRaw $rawPath $Width $Height $stride $PixelFormat
+}
 
 $viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
 if (-not (Test-Path $viewerExe)) {
