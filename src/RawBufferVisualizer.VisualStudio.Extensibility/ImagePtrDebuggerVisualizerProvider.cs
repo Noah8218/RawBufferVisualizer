@@ -8,11 +8,11 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
     [VisualStudioContribution]
-    internal sealed class EmguCvMatDebuggerVisualizerProvider : DebuggerVisualizerProvider
+    internal sealed class ImagePtrDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
         private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";
 
-        public EmguCvMatDebuggerVisualizerProvider(
+        public ImagePtrDebuggerVisualizerProvider(
             RawBufferVisualizerExtension extension,
             VisualStudioExtensibility extensibility)
             : base(extension, extensibility)
@@ -22,11 +22,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new(new[]
             {
-                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV, Version=4.13.0.5924, Culture=neutral, PublicKeyToken=7281126722ab4438")
+                new VisualizerTargetType(DisplayName, "ImagePtr"),
+                new VisualizerTargetType(DisplayName, "ImageModel.ImagePtr"),
+                new VisualizerTargetType(DisplayName, "ImageModels.ImagePtr")
             })
             {
                 Style = VisualizerStyle.ToolWindow,
-                VisualizerObjectSourceType = new(typeof(EmguCvMatVisualizerObjectSource))
+                VisualizerObjectSourceType = new(typeof(ImagePtrVisualizerObjectSource))
             };
 
         public override Task<IRemoteUserControl> CreateVisualizerAsync(

@@ -88,13 +88,14 @@ The docked layout adapts to the available width:
 | --- | --- | --- |
 | `RawBufferSnapshot` | Supported | SDK snapshot from `byte[]`, `ushort[]`, `float[]`, or `IntPtr`. |
 | `RawBufferView` | Supported | Pointer-backed wrapper for common camera/frame-grabber image shapes. |
+| `ImagePtr`-style objects | Supported | Reflection-based pointer shape with `Ptr`, `Length`, `Width`, `Height`, `Step`, and `Bpp`. |
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. |
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
 
-Industrial camera and frame-grabber SDK objects are best supported through a common shape adapter first. If your object exposes buffer pointer, width, height, stride, channels, bit depth, and pixel format, wrap it as `RawBufferView`.
+Industrial camera and frame-grabber SDK objects are best supported through a common shape adapter first. If your object exposes buffer pointer, width, height, stride, channels, bit depth, and pixel format, inspect it through `RawBufferView` or an `ImagePtr`-style object.
 
 ```csharp
 var view = new RawBufferView
@@ -112,7 +113,19 @@ var view = new RawBufferView
 };
 ```
 
-Inspect `view` directly from Visual Studio after the VSIX is installed.
+Inspect `view` directly from Visual Studio after the VSIX is installed. For existing pointer classes, the visualizer can also read this minimal shape:
+
+```csharp
+public sealed class ImagePtr
+{
+    public IntPtr Ptr { get; set; }
+    public long Length { get; set; }
+    public int Width { get; set; }
+    public int Height { get; set; }
+    public int Step { get; set; }
+    public int Bpp { get; set; } // 1=Mono8, 3=BGR24, 4=BGRA32
+}
+```
 
 ## Supported Pixel Formats
 
@@ -255,7 +268,7 @@ Run the debugger visualizer sample:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables so each visualizer path can be checked from Watch, Locals, Autos, or DataTip.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables so each visualizer path can be checked from Watch, Locals, Autos, or DataTip.
 
 README and Marketplace screenshots must be reviewed before commit. Do not publish screenshots that include unrelated applications, private desktop content, stale UI, or a feature state that does not match the text.
 
@@ -266,7 +279,7 @@ The extension is intended to be published as a Visual Studio Marketplace preview
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
 - Save PNG, raw snapshot export, pixel status, ROI, marker, levels, pan, zoom, high-zoom overlay, and error rows.
-- `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - Large file-backed snapshots and the standalone viewer.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.

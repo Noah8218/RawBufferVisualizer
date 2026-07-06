@@ -253,7 +253,8 @@ function Test-DebuggerVisualizerVsixInstall {
         'RawBufferSnapshotDebuggerVisualizerProvider',
         'BitmapDebuggerVisualizerProvider',
         'OpenCvSharpMatDebuggerVisualizerProvider',
-        'EmguCvMatDebuggerVisualizerProvider'
+        'EmguCvMatDebuggerVisualizerProvider',
+        'ImagePtrDebuggerVisualizerProvider'
     )) {
         if ($extensionJsonText -notmatch [regex]::Escape($requiredText)) {
             throw "Debugger visualizer metadata does not contain '$requiredText': $extensionJson"

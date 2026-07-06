@@ -37,6 +37,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             Emgu.CV.Mat? emguBgra32 = null;
             Emgu.CV.Mat? emguMono16 = null;
             Emgu.CV.Mat? emguFloat32 = null;
+            ImageModel.ImagePtr? imagePtrBgr24 = null;
 
             try
             {
@@ -136,6 +137,16 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     3);
                 var rawViewBgr24 = rawViewBgr24Owner.View;
                 PrintCase(ref caseNumber, "rawViewBgr24 as RawBufferView / IntPtr BGR24");
+                if (shouldBreak) Debugger.Break();
+
+                imagePtrBgr24 = new ImageModel.ImagePtr(
+                    rawViewBgr24.Buffer,
+                    rawViewBgr24.BufferLength,
+                    rawViewBgr24.Width,
+                    rawViewBgr24.Height,
+                    rawViewBgr24.Stride,
+                    3);
+                PrintCase(ref caseNumber, "imagePtrBgr24 as ImageModel.ImagePtr / BGR24");
                 if (shouldBreak) Debugger.Break();
 
                 var rawViewMono16Owner = PinView(
@@ -245,6 +256,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(rawBayerBggr8Snapshot);
                 GC.KeepAlive(rawViewMono8);
                 GC.KeepAlive(rawViewBgr24);
+                GC.KeepAlive(imagePtrBgr24);
                 GC.KeepAlive(rawViewMono16);
                 GC.KeepAlive(rawViewBgra32);
                 GC.KeepAlive(baslerPylonLikeFrame);

@@ -49,6 +49,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerTransferRoundTrips();
                 VisualizerChunkedTransferCreatesChunks();
                 RawBufferViewCreatesDescriptorAndChunks();
+                ImagePtrVisualizerObjectSourceCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
                 MatVisualizerObjectSourceCreatesTransfer();
                 EmguCvMatVisualizerObjectSourceCreatesTransfer();
@@ -816,6 +817,39 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void ImagePtrVisualizerObjectSourceCreatesChunks()
+        {
+            var buffer = new byte[] { 3, 2, 1, 6, 5, 4 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var image = new ImagePtrLike(handle.AddrOfPinnedObject(), buffer.Length, 2, 1, 6, 3);
+                var view = ImagePtrVisualizerTransfer.CreateView(image);
+
+                Assert(view.BufferLength == 6, "ImagePtr buffer length failed.");
+                Assert(view.Descriptor.Width == 2 && view.Descriptor.Height == 1, "ImagePtr dimensions failed.");
+                Assert(view.Descriptor.Stride == 6, "ImagePtr stride failed.");
+                Assert(view.Descriptor.PixelFormat == RawPixelFormat.BGR24, "ImagePtr Bpp=3 should map to BGR24.");
+
+                var metadata = ImagePtrVisualizerTransfer.CreateMetadata(view);
+                Assert(metadata.SourceType == typeof(ImagePtrLike).FullName, "ImagePtr metadata source type failed.");
+
+                var chunk = ImagePtrVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 1,
+                        Count = 3
+                    });
+
+                Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 2 && chunk.Buffer[2] == 6, "ImagePtr chunk failed.");
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
         private static void MatVisualizerObjectSourceCreatesTransfer()
         {
             using (var mat = new Mat(1, 2, MatType.CV_8UC3, new Scalar(3, 2, 1)))
@@ -1175,6 +1209,26 @@ namespace RawBufferVisualizer.Tests
             {
                 Buffer = buffer;
                 Descriptor = descriptor;
+            }
+        }
+
+        private sealed class ImagePtrLike
+        {
+            public IntPtr Ptr { get; private set; }
+            public long Length { get; private set; }
+            public int Width { get; private set; }
+            public int Height { get; private set; }
+            public int Step { get; private set; }
+            public int Bpp { get; private set; }
+
+            public ImagePtrLike(IntPtr ptr, long length, int width, int height, int step, int bpp)
+            {
+                Ptr = ptr;
+                Length = length;
+                Width = width;
+                Height = height;
+                Step = step;
+                Bpp = bpp;
             }
         }
 

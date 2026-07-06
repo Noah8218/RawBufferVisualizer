@@ -39,7 +39,7 @@ Overview copy:
 ```text
 Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers.
 
-Inspect raw buffers, RawBufferView pointer-backed images, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
+Inspect raw buffers, RawBufferView pointer-backed images, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
 
 Use the docked viewer to pan, zoom, save the visible view as PNG, save raw snapshots, read pixel coordinates, GV/RGB channel values, source bytes, ROI 5x5 statistics, pinned marker values, high-zoom pixel grid overlays, render levels, Try interpretation, and A/B comparison.
 ```
@@ -105,7 +105,7 @@ Manual smoke checklist:
 - Restart Visual Studio.
 - Confirm `Raw Buffer Visualizer` appears in `Extensions > Manage Extensions > Installed`.
 - Debug `RawBufferVisualizer.VisualizerDebuggee`.
-- Inspect `RawBufferSnapshot`, `RawBufferView`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - Close Visual Studio.
 - Install the same VSIX again and confirm update/reinstall path does not leave a broken package.
 - Uninstall from Manage Extensions.
@@ -119,7 +119,7 @@ Manual smoke checklist:
 Raw Buffer Visualizer preview
 
 - Adds a docked Visual Studio image inspector for debugger visualizer sessions.
-- Supports RawBufferSnapshot, RawBufferView, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
+- Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
 - Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, ROI 5x5, marker, levels, and A/B comparison.
 - Adds visible PNG export and raw snapshot export from the docked viewer.
 - Includes large file-backed image validation up to 200000 x 200000 sparse raw payloads.
