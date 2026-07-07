@@ -474,6 +474,16 @@
                            Foreground="{StaticResource StatusTextBrush}"
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"/>
+                <TextBlock x:Name="TempUsageText"
+                           DockPanel.Dock="Right"
+                           Width="92"
+                           Margin="10,0,0,0"
+                           VerticalAlignment="Center"
+                           TextAlignment="Right"
+                           Foreground="{StaticResource StatusTextBrush}"
+                           FontSize="11"
+                           TextTrimming="CharacterEllipsis"
+                           AutomationProperties.AutomationId="TempUsageText"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MinWidth="76"/>
                     <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>

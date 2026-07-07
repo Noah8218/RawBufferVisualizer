@@ -34,11 +34,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public const int ShowToolWindowCommandId = 0x0100;
 
         private static readonly Guid CommandSetGuid = new Guid(CommandSetGuidString);
+        private static readonly TimeSpan InboxPollMinInterval = TimeSpan.FromMilliseconds(500);
+        private static readonly TimeSpan InboxPollMaxInterval = TimeSpan.FromSeconds(10);
 
         private readonly object _requestGate = new object();
         private readonly HashSet<string> _queuedRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         private FileSystemWatcher? _watcher;
         private Timer? _inboxPollTimer;
+        private TimeSpan _inboxPollInterval = InboxPollMinInterval;
+        private int _inboxPollActive;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -63,7 +67,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 WriteAutomationLog("RegisterCommands error " + ex);
             }
 
-            ScanInbox();
+            ScheduleNextInboxPoll(ScanInbox());
             WriteAutomationLog("InitializeAsync end");
         }
 
@@ -91,7 +95,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size
             };
             _watcher.Created += OnHandoffCreated;
-            _inboxPollTimer = new Timer(_ => ScanInbox(), null, TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(500));
+            _inboxPollTimer = new Timer(_ => PollInbox(), null, InboxPollMinInterval, Timeout.InfiniteTimeSpan);
         }
 
         private async Task RegisterCommandsAsync(CancellationToken cancellationToken)
@@ -117,7 +121,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     WriteAutomationLog("Command invoked");
                     await ShowRawBufferToolWindowAsync(DisposalToken);
-                    ScanInbox();
+                    ScheduleNextInboxPoll(ScanInbox());
                 }
                 catch (Exception ex)
                 {
@@ -129,7 +133,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void OnHandoffCreated(object sender, FileSystemEventArgs e)
         {
             WriteAutomationLog("Created " + e.FullPath);
+            _inboxPollInterval = InboxPollMinInterval;
             QueueOpenHandoff(e.FullPath);
+            ScheduleInboxPoll(InboxPollMinInterval);
         }
 
         private void QueueOpenHandoff(string requestPath)
@@ -166,7 +172,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             });
         }
 
-        private void ScanInbox()
+        private void PollInbox()
+        {
+            if (Interlocked.Exchange(ref _inboxPollActive, 1) == 1)
+            {
+                return;
+            }
+
+            var foundCount = 0;
+            try
+            {
+                foundCount = ScanInbox();
+            }
+            finally
+            {
+                Interlocked.Exchange(ref _inboxPollActive, 0);
+                ScheduleNextInboxPoll(foundCount);
+            }
+        }
+
+        private int ScanInbox()
         {
             try
             {
@@ -184,10 +209,41 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     QueueOpenHandoff(requestPath);
                 }
+
+                return requestPaths.Count;
             }
             catch (Exception ex)
             {
                 WriteAutomationLog("Scan error " + ex);
+                return 0;
+            }
+        }
+
+        private void ScheduleNextInboxPoll(int foundCount)
+        {
+            if (foundCount > 0)
+            {
+                _inboxPollInterval = InboxPollMinInterval;
+            }
+            else
+            {
+                var nextMilliseconds = Math.Min(
+                    InboxPollMaxInterval.TotalMilliseconds,
+                    Math.Max(InboxPollMinInterval.TotalMilliseconds, _inboxPollInterval.TotalMilliseconds * 2));
+                _inboxPollInterval = TimeSpan.FromMilliseconds(nextMilliseconds);
+            }
+
+            ScheduleInboxPoll(_inboxPollInterval);
+        }
+
+        private void ScheduleInboxPoll(TimeSpan dueTime)
+        {
+            try
+            {
+                _inboxPollTimer?.Change(dueTime, Timeout.InfiniteTimeSpan);
+            }
+            catch (ObjectDisposedException)
+            {
             }
         }
 

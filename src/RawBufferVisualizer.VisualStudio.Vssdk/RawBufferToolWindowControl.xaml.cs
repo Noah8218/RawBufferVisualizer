@@ -80,6 +80,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdatePerformanceText();
             UpdateCompareText();
             UpdateStatus();
+            UpdateTempUsageStatus();
             ApplyResponsiveLayout(ActualWidth);
         }
 
@@ -93,6 +94,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
+                SetTransientStatus("Loading handoff...");
                 var request = ReadHandoffRequestWithRetry(requestPath);
                 OpenPath(request.MetadataPath, request.DisplayName, request.SourceType);
             }
@@ -104,6 +106,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             finally
             {
                 TryDeleteHandoffRequest(requestPath);
+                UpdateTempUsageStatus();
             }
         }
 
@@ -125,6 +128,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 fullPath = Path.GetFullPath(path);
+                SetTransientStatus("Opening " + Path.GetFileName(fullPath));
                 var reference = RawBufferSnapshot.LoadReference(fullPath);
                 var source = CreateImageSource(reference.RawPath, reference.Descriptor, reference.RawByteLength);
                 var resolvedSourceType = string.IsNullOrWhiteSpace(sourceType) ? "Raw snapshot" : sourceType!;
@@ -137,6 +141,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     ShouldDeleteSnapshotDirectoryOnDispose(fullPath));
                 _documents.Add(document);
                 ActivateDocument(document);
+                DiagnosticsList.Items.Insert(0, string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Info: {0} source ready, {1}, open {2:0.0} ms.",
+                    GetSourceMode(document.Source),
+                    FormatByteCount(document.Source.Length),
+                    openWatch.Elapsed.TotalMilliseconds));
                 _lastOpenPathMilliseconds = openWatch.Elapsed.TotalMilliseconds;
                 ScheduleAutomationProbeIfRequested(fullPath);
             }
@@ -153,6 +163,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             finally
             {
                 openWatch.Stop();
+                UpdateTempUsageStatus();
             }
         }
 
@@ -192,6 +203,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdatePerformanceText();
             UpdateCompareText();
             UpdateStatus();
+            UpdateTempUsageStatus();
         }
 
         private void SaveVisiblePng_Click(object sender, RoutedEventArgs e)
@@ -583,6 +595,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 UpdateCompareText();
                 UpdateStatus();
             }
+
+            UpdateTempUsageStatus();
         }
 
         private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1463,7 +1477,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || SelectionOverlayBox == null
                 || InspectorPanel == null
                 || CompactInspectorPanel == null
-                || StatusText == null)
+                || StatusText == null
+                || TempUsageText == null)
             {
                 return;
             }
@@ -1498,6 +1513,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 InspectorToggleButton.Visibility = Visibility.Visible;
                 LinkViewsBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
                 SelectionOverlayBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
+                TempUsageText.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
+                TempUsageText.Width = 82;
                 StatusText.Width = 95;
             }
             else if (nextMode == LayoutMode.Medium)
@@ -1516,6 +1533,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
                 LinkViewsBox.Visibility = Visibility.Visible;
                 SelectionOverlayBox.Visibility = Visibility.Visible;
+                TempUsageText.Visibility = Visibility.Visible;
+                TempUsageText.Width = 92;
                 StatusText.Width = 115;
             }
             else
@@ -1534,6 +1553,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 InspectorToggleButton.Visibility = Visibility.Collapsed;
                 LinkViewsBox.Visibility = Visibility.Visible;
                 SelectionOverlayBox.Visibility = Visibility.Visible;
+                TempUsageText.Visibility = Visibility.Visible;
+                TempUsageText.Width = 100;
                 StatusText.Width = 150;
             }
 
@@ -1580,12 +1601,60 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             StatusText.Text = string.Format(
                 CultureInfo.InvariantCulture,
-                "{0}x{1} {2} tiles {3}",
+                "{0}x{1} {2} {3} {4} tiles",
                 _activeDocument.Descriptor.Width,
                 _activeDocument.Descriptor.Height,
                 _activeDocument.Descriptor.PixelFormat,
+                GetSourceMode(_activeDocument.Source),
                 OpenGlImageView.TileCount);
             WriteSessionStateIfRequested();
+        }
+
+        private void SetTransientStatus(string text)
+        {
+            if (StatusText != null)
+            {
+                StatusText.Text = text;
+            }
+        }
+
+        private void UpdateTempUsageStatus()
+        {
+            if (TempUsageText == null)
+            {
+                return;
+            }
+
+            long byteCount;
+            TempUsageText.Text = VisualStudioTempStore.TryGetRootByteCount(out byteCount)
+                ? "Temp " + FormatByteCount(byteCount)
+                : "Temp -";
+        }
+
+        private static string GetSourceMode(RawImageSource source)
+        {
+            return source.IsFileBacked ? "file" : "mem";
+        }
+
+        private static string FormatByteCount(long byteCount)
+        {
+            if (byteCount < 0)
+            {
+                return "-";
+            }
+
+            string[] units = { "B", "KB", "MB", "GB", "TB" };
+            var value = (double)byteCount;
+            var unitIndex = 0;
+            while (value >= 1024 && unitIndex < units.Length - 1)
+            {
+                value /= 1024;
+                unitIndex++;
+            }
+
+            return unitIndex == 0
+                ? string.Format(CultureInfo.InvariantCulture, "{0:0} {1}", value, units[unitIndex])
+                : string.Format(CultureInfo.InvariantCulture, "{0:0.#} {1}", value, units[unitIndex]);
         }
 
         private void WriteSessionStateIfRequested()
@@ -1605,10 +1674,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
 
                 var errorCount = _documents.Count(document => document.IsError);
+                long tempByteCount;
+                var hasTempByteCount = VisualStudioTempStore.TryGetRootByteCount(out tempByteCount);
                 var builder = new StringBuilder();
                 builder.AppendLine("{");
                 AppendJsonProperty(builder, "documentCount", _documents.Count, true);
                 AppendJsonProperty(builder, "errorCount", errorCount, true);
+                AppendJsonProperty(builder, "tempBytes", hasTempByteCount ? tempByteCount : -1, true);
                 AppendJsonProperty(builder, "activeTitle", _activeDocument == null ? string.Empty : _activeDocument.Title, true);
                 AppendJsonProperty(builder, "status", StatusText.Text, true);
                 builder.AppendLine("  \"documents\": [");
@@ -1623,6 +1695,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     AppendJsonProperty(builder, "height", document.Descriptor.Height, true, 6);
                     AppendJsonProperty(builder, "stride", document.Descriptor.Stride, true, 6);
                     AppendJsonProperty(builder, "pixelFormat", document.Descriptor.PixelFormat.ToString(), true, 6);
+                    AppendJsonProperty(builder, "sourceMode", GetSourceMode(document.Source), true, 6);
                     AppendJsonProperty(builder, "isError", document.IsError, true, 6);
                     AppendJsonProperty(builder, "hasThumbnail", document.Thumbnail != null, true, 6);
                     AppendJsonProperty(builder, "errorMessage", document.ErrorMessage, false, 6);
@@ -2042,6 +2115,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         }
 
         private static void AppendJsonProperty(StringBuilder builder, string name, int value, bool trailingComma, int indent = 2)
+        {
+            builder.Append(' ', indent).Append('"').Append(name).Append("\": ");
+            builder.Append(value.ToString(CultureInfo.InvariantCulture));
+            builder.AppendLine(trailingComma ? "," : string.Empty);
+        }
+
+        private static void AppendJsonProperty(StringBuilder builder, string name, long value, bool trailingComma, int indent = 2)
         {
             builder.Append(' ', indent).Append('"').Append(name).Append("\": ");
             builder.Append(value.ToString(CultureInfo.InvariantCulture));

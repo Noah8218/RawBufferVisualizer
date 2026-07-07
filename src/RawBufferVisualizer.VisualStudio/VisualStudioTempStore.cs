@@ -114,6 +114,58 @@ namespace RawBufferVisualizer.VisualStudio
             }
         }
 
+        public static bool TryGetRootByteCount(out long byteCount)
+        {
+            byteCount = 0;
+            try
+            {
+                var root = RootDirectory;
+                if (!Directory.Exists(root))
+                {
+                    return true;
+                }
+
+                byteCount = GetDirectoryByteCount(root);
+                return true;
+            }
+            catch
+            {
+                byteCount = 0;
+                return false;
+            }
+        }
+
+        private static long GetDirectoryByteCount(string directory)
+        {
+            long total = 0;
+
+            foreach (var file in Directory.EnumerateFiles(directory))
+            {
+                try
+                {
+                    total += new FileInfo(file).Length;
+                }
+                catch
+                {
+                    // Locked or transient temp files are ignored for the display estimate.
+                }
+            }
+
+            foreach (var childDirectory in Directory.EnumerateDirectories(directory))
+            {
+                try
+                {
+                    total += GetDirectoryByteCount(childDirectory);
+                }
+                catch
+                {
+                    // Temp folders can disappear while Visual Studio is processing a snapshot.
+                }
+            }
+
+            return total;
+        }
+
         private static string EnsureTrailingSeparator(string path)
         {
             if (path.EndsWith(Path.DirectorySeparatorChar.ToString(), StringComparison.Ordinal)
