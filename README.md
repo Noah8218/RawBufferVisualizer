@@ -4,6 +4,8 @@
 
 Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers. It lets you inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and pointer-backed image views directly inside Visual Studio.
 
+The Visual Studio extension is published on Visual Studio Marketplace as a preview extension. Install the Marketplace version first unless you are developing or testing the extension itself.
+
 The viewer is built around the workflow machine-vision developers use every day:
 
 1. Stop at a breakpoint.
@@ -33,25 +35,49 @@ The viewer is built around the workflow machine-vision developers use every day:
 
 ### Visual Studio extension
 
-Build or download `RawBufferVisualizer.VisualStudio.Extensibility.vsix`, then install that single VSIX. It contains both the debugger visualizers and the docked Visual Studio image inspector.
+Install the Marketplace extension from Visual Studio:
 
-For local development builds:
+1. Open `Extensions > Manage Extensions`.
+2. Search for `Raw Buffer Visualizer`.
+3. Install the extension.
+4. Close all Visual Studio windows when prompted.
+5. Reopen Visual Studio before debugging.
+
+The Marketplace package is one VSIX that contains both parts required for normal use:
+
+- debugger visualizers for supported image variables
+- the docked Visual Studio image inspector
+
+Use version `1.0.25.0` or newer. That version builds the docked package against Visual Studio 2022 17.9-compatible references.
+
+For local development builds only:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
-Restart Visual Studio after installation or update.
+### Update
 
-If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the VSSDK tool-window registration:
+Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the update, close all Visual Studio windows and reopen Visual Studio.
+
+If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the docked tool-window registration:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
 ```
 
-This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder and removes old startup autoload registrations.
+This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder and removes old startup auto-load registrations.
 
-If the popup appears only when inspecting an image, check `%TEMP%\RawBufferVisualizer\VisualStudio\package.log` and Visual Studio's `ActivityLog.xml`. Version `1.0.25.0` builds the docked VSSDK package against Visual Studio 2022 17.9-compatible references; older `1.0.24.0` builds could require `Microsoft.VisualStudio.Threading 17.14.0.0` and fail on PCs that had not updated Visual Studio to 17.14.
+If the popup appears only when inspecting an image, check:
+
+```text
+%TEMP%\RawBufferVisualizer\VisualStudio\package.log
+%APPDATA%\Microsoft\VisualStudio\17.0_...\ActivityLog.xml
+```
+
+Older `1.0.24.0` builds could require `Microsoft.VisualStudio.Threading 17.14.0.0` and fail on PCs that had not updated Visual Studio to 17.14. Version `1.0.25.0` and later target Visual Studio 2022 17.9-compatible references.
+
+### Uninstall
 
 To uninstall, use `Extensions > Manage Extensions > Installed` in Visual Studio, or uninstall the VSIX by extension id:
 
@@ -61,18 +87,16 @@ VSIXInstaller.exe /quiet /uninstall:RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-
 
 ### Standalone viewer
 
-Build the WPF viewer or download the Windows package from GitHub Releases once a release is published.
+The standalone viewer is optional. It opens saved `.rbuf.json` snapshots and is useful for saved samples, large-image validation, and screenshots.
 
 ```powershell
 dotnet build .\RawBufferVisualizer.sln -c Release
 dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj -f net8.0-windows -- .\artifacts\samples\mono8-gradient.rbuf.json
 ```
 
-The standalone viewer opens `.rbuf.json` snapshot files and is useful for saved samples, large-image validation, and screenshots.
-
 ## Visual Studio Usage
 
-1. Install `RawBufferVisualizer.VisualStudio.Extensibility.vsix`.
+1. Install `Raw Buffer Visualizer` from Visual Studio Marketplace.
 2. Start debugging a C# project in Visual Studio.
 3. Stop at a breakpoint where a supported image variable is alive.
 4. In DataTip, Watch, Locals, or Autos, click the visualizer icon.
@@ -291,9 +315,9 @@ For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee
 
 README and Marketplace screenshots must be reviewed before commit. Do not publish screenshots that include unrelated applications, private desktop content, stale UI, or a feature state that does not match the text.
 
-## Marketplace Readiness
+## Release And Marketplace
 
-The extension is intended to be published as a Visual Studio Marketplace preview first. Before a public stable release, validate:
+The Marketplace extension is currently distributed as a preview. Before publishing an update, validate:
 
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
@@ -301,6 +325,7 @@ The extension is intended to be published as a Visual Studio Marketplace preview
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
+- VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Vssdk.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
