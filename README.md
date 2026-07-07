@@ -6,6 +6,85 @@ Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine
 
 The Visual Studio extension is published on Visual Studio Marketplace as a preview extension. Install the Marketplace version first unless you are developing or testing the extension itself.
 
+## 1-Minute Summary
+
+- Raw Buffer Visualizer is a Visual Studio 2022 debugger visualizer for machine-vision image variables.
+- It opens images in one docked `Raw Buffer Visualizer` tool window instead of spawning separate viewer windows.
+- It supports raw snapshots, raw pointer views, `ImagePtr`-style objects, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- It is built for debugging stride, pixel format, byte order, raw bytes, GV/RGB values, and large image display problems.
+- Version `1.0.26.0` or newer includes the current Marketplace package-load and runtime stability fixes.
+
+## Quick Start
+
+### Install And Run
+
+1. In Visual Studio, open `Extensions > Manage Extensions`.
+2. Search for `Raw Buffer Visualizer`.
+3. Install it, close all Visual Studio windows, then reopen Visual Studio.
+4. Start debugging and stop at a breakpoint with a supported image variable.
+5. Click the debugger visualizer icon from DataTip, Watch, Locals, or Autos.
+
+### Sample Data
+
+Create small sample snapshots:
+
+```powershell
+dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj --framework net8.0
+```
+
+Create large file-backed samples:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\New-LargeSampleImages.ps1 -BuildViewer
+```
+
+More sample options are documented in [large image samples](docs/large-image-samples.md).
+
+### Build Command
+
+```powershell
+dotnet restore .\RawBufferVisualizer.sln
+dotnet build .\RawBufferVisualizer.sln -c Release
+```
+
+### Smoke Commands
+
+```powershell
+dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild
+```
+
+### CI
+
+CI runs on GitHub Actions: [CI workflow](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml).
+
+### Release Notes
+
+Current release line: `1.0.26.0`.
+
+- Runtime stability: temp usage display, file/memory source status, and inbox polling backoff.
+- Marketplace compatibility: Visual Studio 2022 17.9-compatible extension references.
+- Large image validation: file-backed tiled display remains the required path for very large raw payloads.
+
+Release checklist and publishing steps are in [Marketplace checklist](docs/marketplace-checklist.md) and [release runbook](docs/release-runbook.md).
+
+### Roadmap
+
+- Continue measuring long-session temp usage, memory pressure, and docked-window performance.
+- Expand common-shape adapters for industrial camera and frame-grabber objects before adding vendor-specific SDK adapters.
+- Improve comparison and pixel diagnostics based on real machine-vision debugging feedback.
+- Harden Marketplace install/update/reinstall flows as more team PCs install the extension.
+
+### Known Limitations
+
+- Visual Studio 2022 17.9 or newer is required.
+- `.raw` and `.bin` files need a matching `.rbuf.json` descriptor.
+- Direct vendor SDK adapters are not first-class yet; use `RawBufferView` or an `ImagePtr`-style shape.
+- Very large images consume temp disk while they remain in the docked `Images` list.
+- Some CPU-heavy features, such as full histogram work, are skipped for file-backed large payloads.
+- Large TIFF loading through OpenCV/Emgu may require `OPENCV_IO_MAX_IMAGE_PIXELS`.
+
 The viewer is built around the workflow machine-vision developers use every day:
 
 1. Stop at a breakpoint.
