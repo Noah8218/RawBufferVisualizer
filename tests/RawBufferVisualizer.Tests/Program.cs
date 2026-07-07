@@ -59,6 +59,7 @@ namespace RawBufferVisualizer.Tests
                 ViewerPathResolverFindsConfiguredViewer();
                 VisualizerHandoffInboxRoundTripsMetadataPath();
                 VisualStudioTempStoreDeletesOwnedSnapshotDirectories();
+                VisualStudioTempStoreReportsRootByteCount();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
@@ -1125,6 +1126,28 @@ namespace RawBufferVisualizer.Tests
                 if (Directory.Exists(externalDirectory))
                 {
                     Directory.Delete(externalDirectory, true);
+                }
+            }
+        }
+
+        private static void VisualStudioTempStoreReportsRootByteCount()
+        {
+            var snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
+            try
+            {
+                Directory.CreateDirectory(snapshotDirectory);
+                File.WriteAllBytes(Path.Combine(snapshotDirectory, "a.raw"), new byte[] { 1, 2, 3 });
+                File.WriteAllBytes(Path.Combine(snapshotDirectory, "b.rbuf.json"), Encoding.UTF8.GetBytes("{}"));
+
+                long byteCount;
+                Assert(VisualStudioTempStore.TryGetRootByteCount(out byteCount), "Temp store byte count should be available.");
+                Assert(byteCount >= 5, "Temp store byte count should include owned snapshot files.");
+            }
+            finally
+            {
+                if (Directory.Exists(snapshotDirectory))
+                {
+                    Directory.Delete(snapshotDirectory, true);
                 }
             }
         }

@@ -48,7 +48,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Use version `1.0.25.0` or newer. That version builds the docked package against Visual Studio 2022 17.9-compatible references.
+Use version `1.0.26.0` or newer. That version builds the docked package against Visual Studio 2022 17.9-compatible references and includes the docked-window stability improvements described below.
 
 For local development builds only:
 
@@ -263,6 +263,39 @@ dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferV
 ![100000 x 100000 file-backed Mono8 payload in the standalone validation viewer](docs/images/viewer-100k-file-backed.png)
 
 ![200000 x 200000 file-backed Mono8 payload in the standalone validation viewer](docs/images/viewer-200k-file-backed.png)
+
+## Runtime Stability
+
+Raw Buffer Visualizer writes temporary snapshot files while Visual Studio transfers debugger data into the docked viewer. The extension keeps these files under:
+
+```text
+%TEMP%\RawBufferVisualizer\VisualStudio
+```
+
+Version `1.0.26.0` adds the following runtime safeguards:
+
+- The docked window status bar shows current temp usage as `Temp ...` so long debug sessions can be monitored.
+- The active image status shows whether the payload is memory-backed or file-backed.
+- `Clear` and image-row `Delete` dispose loaded sources and remove owned temporary snapshot folders.
+- Startup inbox polling now uses file-system events plus backoff polling instead of a fixed 500 ms background loop.
+- Payloads above 512 MB are opened as file-backed tiled sources instead of one large `byte[]`.
+- Stale owned snapshot folders are cleaned on later visualizer runs when they are older than 24 hours.
+- The package log is capped so repeated package-load diagnostics do not grow without bound.
+
+If disk usage looks high after a crashed debug session, close Visual Studio and delete:
+
+```text
+%TEMP%\RawBufferVisualizer\VisualStudio
+```
+
+Current `1.0.26.0` stabilization smoke:
+
+| Check | Result |
+| --- | --- |
+| VS docked `640 x 484 Mono8` open | Passed, `45.27 ms` open path, `4.117 ms` max frame in local smoke. |
+| VS docked temp/session telemetry | Passed, session JSON includes `tempBytes` and per-document `sourceMode`. |
+| VS docked responsive layout | Passed at 540, 900, and 1160 px widths. |
+| Dense file-backed `24576 x 24576 Mono8` | Passed, `603,979,776` byte payload, 576 tiles, non-dark capture ratio `0.8945`. |
 
 ## Build And Test
 
