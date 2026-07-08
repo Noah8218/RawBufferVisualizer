@@ -71,17 +71,18 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentException("Mat is empty.", nameof(mat));
             }
 
-            if (Get<int>(mat, "Dims") != 2)
+            if (!IsTwoDimensionalMat(mat))
             {
                 throw new NotSupportedException("Only 2D Mat images are supported.");
             }
 
             var matType = Invoke<object>(mat, "Type");
-            var stride = ToPositiveInt(Invoke<long>(mat, "Step"), "Step");
-            var height = Get<int>(mat, "Height");
+            var stride = ToPositiveInt(Invoke<object>(mat, "Step"), "Step");
+            var width = GetPositiveDimension(mat, "Width", "Cols");
+            var height = GetPositiveDimension(mat, "Height", "Rows");
             var descriptor = new RawImageDescriptor
             {
-                Width = Get<int>(mat, "Width"),
+                Width = width,
                 Height = height,
                 Stride = stride,
                 PixelFormat = ToRawPixelFormat(matType),
@@ -89,7 +90,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 ByteOrder = RawByteOrder.LittleEndian
             };
 
-            var data = Get<IntPtr>(mat, "Data");
+            var data = GetPointer(mat, "Data", "DataPointer");
             if (data == IntPtr.Zero)
             {
                 throw new ArgumentException("Mat data pointer is empty.", nameof(mat));
@@ -211,6 +212,57 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
         }
 
+        private static bool IsTwoDimensionalMat(object mat)
+        {
+            int dims;
+            if (TryGet(mat, "Dims", out dims))
+            {
+                return dims == 2;
+            }
+
+            return TryGetPositiveDimension(mat, out _, "Rows", "Height")
+                && TryGetPositiveDimension(mat, out _, "Cols", "Width");
+        }
+
+        private static int GetPositiveDimension(object instance, params string[] propertyNames)
+        {
+            int value;
+            if (TryGetPositiveDimension(instance, out value, propertyNames))
+            {
+                return value;
+            }
+
+            throw new MissingMemberException(instance.GetType().FullName, string.Join("/", propertyNames));
+        }
+
+        private static bool TryGetPositiveDimension(object instance, out int value, params string[] propertyNames)
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                if (TryGet(instance, propertyName, out value) && value > 0)
+                {
+                    return true;
+                }
+            }
+
+            value = 0;
+            return false;
+        }
+
+        private static IntPtr GetPointer(object instance, params string[] propertyNames)
+        {
+            foreach (var propertyName in propertyNames)
+            {
+                IntPtr pointer;
+                if (TryGet(instance, propertyName, out pointer))
+                {
+                    return pointer;
+                }
+            }
+
+            throw new MissingMemberException(instance.GetType().FullName, string.Join("/", propertyNames));
+        }
+
         private static T Get<T>(object instance, string propertyName)
         {
             var property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
@@ -226,6 +278,26 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             return (T)value;
+        }
+
+        private static bool TryGet<T>(object instance, string propertyName, out T value)
+        {
+            var property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            if (property == null)
+            {
+                value = default!;
+                return false;
+            }
+
+            var propertyValue = property.GetValue(instance);
+            if (propertyValue == null)
+            {
+                value = default!;
+                return false;
+            }
+
+            value = (T)propertyValue;
+            return true;
         }
 
         private static T Invoke<T>(object instance, string methodName)
@@ -245,14 +317,17 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return (T)value;
         }
 
-        private static int ToPositiveInt(long value, string name)
+        private static int ToPositiveInt(object value, string name)
         {
-            if (value <= 0 || value > int.MaxValue)
+            var number = value is IntPtr pointer
+                ? pointer.ToInt64()
+                : Convert.ToInt64(value, CultureInfo.InvariantCulture);
+            if (number <= 0 || number > int.MaxValue)
             {
                 throw new ArgumentOutOfRangeException(name);
             }
 
-            return (int)value;
+            return (int)number;
         }
 
         private static IntPtr Add(IntPtr pointer, long offset)
