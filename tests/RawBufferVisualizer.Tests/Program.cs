@@ -2,6 +2,8 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
+using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using System.Text;
 using OpenCvSharp;
@@ -16,6 +18,8 @@ namespace RawBufferVisualizer.Tests
 {
     internal static class Program
     {
+        private static readonly Type LegacyOpenCvSharpMatRuntimeType = CreateLegacyOpenCvSharpMatRuntimeType();
+
         private static int Main()
         {
             try
@@ -52,6 +56,7 @@ namespace RawBufferVisualizer.Tests
                 ImagePtrVisualizerObjectSourceCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
                 MatVisualizerObjectSourceCreatesChunks();
+                OpenCvSharpMatVisualizerObjectSourceSupportsLegacyMatWithoutDims();
                 EmguCvMatVisualizerObjectSourceCreatesChunks();
                 VisualizerBridgeWritesLaunchSnapshot();
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
@@ -901,6 +906,155 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.BufferLength >= 6, "Mat visualizer buffer length failed.");
                 Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2, "Mat visualizer chunk failed.");
             }
+        }
+
+        private static void OpenCvSharpMatVisualizerObjectSourceSupportsLegacyMatWithoutDims()
+        {
+            var buffer = new byte[] { 3, 2, 1, 6, 5, 4 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var mat = CreateLegacyOpenCvSharpMat(
+                    rows: 1,
+                    cols: 2,
+                    step: 6,
+                    data: handle.AddrOfPinnedObject(),
+                    depth: 0,
+                    channels: 3);
+                var view = OpenCvSharpMatVisualizerTransfer.CreateView(mat, "legacyMat");
+                var metadata = OpenCvSharpMatVisualizerTransfer.CreateMetadata(view);
+                var chunk = OpenCvSharpMatVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 1,
+                        Count = 4
+                    });
+
+                Assert(metadata.DisplayName == "legacyMat", "Legacy Mat visualizer display name failed.");
+                Assert(metadata.SourceType == "OpenCvSharp.Mat", "Legacy Mat visualizer source type failed.");
+                Assert(metadata.Descriptor.Width == 2 && metadata.Descriptor.Height == 1, "Legacy Mat dimensions failed.");
+                Assert(metadata.Descriptor.Stride == 6, "Legacy Mat stride failed.");
+                Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Legacy Mat pixel format failed.");
+                Assert(metadata.BufferLength == 6, "Legacy Mat buffer length failed.");
+                Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2 && chunk.Buffer[3] == 5, "Legacy Mat chunk failed.");
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
+        private static object CreateLegacyOpenCvSharpMat(int rows, int cols, long step, IntPtr data, int depth, int channels)
+        {
+            var mat = Activator.CreateInstance(LegacyOpenCvSharpMatRuntimeType)
+                ?? throw new InvalidOperationException("Legacy OpenCvSharp.Mat test type was not created.");
+            SetProperty(mat, "Rows", rows);
+            SetProperty(mat, "Cols", cols);
+            SetProperty(mat, "StepValue", step);
+            SetProperty(mat, "Data", data);
+            SetProperty(mat, "TypeValue", new LegacyOpenCvSharpMatType
+            {
+                Depth = depth,
+                Channels = channels
+            });
+            return mat;
+        }
+
+        private static void SetProperty(object target, string propertyName, object value)
+        {
+            var property = target.GetType().GetProperty(propertyName);
+            if (property == null)
+            {
+                throw new MissingMemberException(target.GetType().FullName, propertyName);
+            }
+
+            property.SetValue(target, value);
+        }
+
+        private static Type CreateLegacyOpenCvSharpMatRuntimeType()
+        {
+            var assemblyName = new AssemblyName("RawBufferVisualizer.LegacyOpenCvSharpTest");
+            var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
+            var moduleBuilder = assemblyBuilder.DefineDynamicModule(assemblyName.Name ?? "LegacyOpenCvSharpTest");
+            var typeBuilder = moduleBuilder.DefineType(
+                "OpenCvSharp.Mat",
+                TypeAttributes.Public | TypeAttributes.Class);
+
+            DefineAutoProperty(typeBuilder, "Rows", typeof(int));
+            DefineAutoProperty(typeBuilder, "Cols", typeof(int));
+            DefineAutoProperty(typeBuilder, "Data", typeof(IntPtr));
+            var stepGetter = DefineAutoProperty(typeBuilder, "StepValue", typeof(long));
+            var typeGetter = DefineAutoProperty(typeBuilder, "TypeValue", typeof(object));
+
+            var emptyMethod = typeBuilder.DefineMethod(
+                "Empty",
+                MethodAttributes.Public,
+                typeof(bool),
+                Type.EmptyTypes);
+            var emptyIl = emptyMethod.GetILGenerator();
+            emptyIl.Emit(OpCodes.Ldc_I4_0);
+            emptyIl.Emit(OpCodes.Ret);
+
+            var stepMethod = typeBuilder.DefineMethod(
+                "Step",
+                MethodAttributes.Public,
+                typeof(long),
+                Type.EmptyTypes);
+            var stepIl = stepMethod.GetILGenerator();
+            stepIl.Emit(OpCodes.Ldarg_0);
+            stepIl.Emit(OpCodes.Call, stepGetter);
+            stepIl.Emit(OpCodes.Ret);
+
+            var typeMethod = typeBuilder.DefineMethod(
+                "Type",
+                MethodAttributes.Public,
+                typeof(object),
+                Type.EmptyTypes);
+            var typeIl = typeMethod.GetILGenerator();
+            typeIl.Emit(OpCodes.Ldarg_0);
+            typeIl.Emit(OpCodes.Call, typeGetter);
+            typeIl.Emit(OpCodes.Ret);
+
+            return typeBuilder.CreateTypeInfo()?.AsType()
+                ?? throw new InvalidOperationException("Legacy OpenCvSharp.Mat test type was not created.");
+        }
+
+        private static MethodBuilder DefineAutoProperty(TypeBuilder typeBuilder, string propertyName, Type propertyType)
+        {
+            var fieldBuilder = typeBuilder.DefineField("_" + propertyName, propertyType, FieldAttributes.Private);
+            var propertyBuilder = typeBuilder.DefineProperty(propertyName, PropertyAttributes.None, propertyType, null);
+
+            var getter = typeBuilder.DefineMethod(
+                "get_" + propertyName,
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+                propertyType,
+                Type.EmptyTypes);
+            var getterIl = getter.GetILGenerator();
+            getterIl.Emit(OpCodes.Ldarg_0);
+            getterIl.Emit(OpCodes.Ldfld, fieldBuilder);
+            getterIl.Emit(OpCodes.Ret);
+
+            var setter = typeBuilder.DefineMethod(
+                "set_" + propertyName,
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+                null,
+                new[] { propertyType });
+            var setterIl = setter.GetILGenerator();
+            setterIl.Emit(OpCodes.Ldarg_0);
+            setterIl.Emit(OpCodes.Ldarg_1);
+            setterIl.Emit(OpCodes.Stfld, fieldBuilder);
+            setterIl.Emit(OpCodes.Ret);
+
+            propertyBuilder.SetGetMethod(getter);
+            propertyBuilder.SetSetMethod(setter);
+            return getter;
+        }
+
+        private sealed class LegacyOpenCvSharpMatType
+        {
+            public int Depth { get; set; }
+            public int Channels { get; set; }
         }
 
         private static void EmguCvMatVisualizerObjectSourceCreatesChunks()

@@ -19,7 +19,7 @@ namespace RawBufferVisualizer.OpenCvSharpAdapter
                 throw new ArgumentException("Mat is empty.", nameof(mat));
             }
 
-            if (mat.Dims != 2)
+            if (mat.Rows <= 0 || mat.Cols <= 0)
             {
                 throw new NotSupportedException("Only 2D Mat images are supported.");
             }
@@ -29,15 +29,15 @@ namespace RawBufferVisualizer.OpenCvSharpAdapter
             var stride = checked((int)mat.Step());
             var descriptor = new RawImageDescriptor
             {
-                Width = mat.Width,
-                Height = mat.Height,
+                Width = mat.Cols,
+                Height = mat.Rows,
                 Stride = stride,
                 PixelFormat = pixelFormat,
                 ValidBits = GetValidBits(type),
                 ByteOrder = RawByteOrder.LittleEndian
             };
 
-            var byteCount = checked(stride * mat.Height);
+            var byteCount = checked(stride * mat.Rows);
             return RawBufferSnapshot.FromIntPtr(mat.Data, byteCount, descriptor);
         }
 

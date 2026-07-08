@@ -61,7 +61,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Use version `1.0.26.0` or newer. That version builds the docked package against Visual Studio 2022 17.9-compatible references and includes the docked-window stability improvements described below.
+Use version `1.0.27.0` or newer. That version builds the docked package against Visual Studio 2022 17.9-compatible references, includes the docked-window stability improvements described below, and supports older OpenCvSharp `Mat` objects that expose `Rows`/`Cols` but not `Dims`.
 
 For local development builds only:
 
@@ -137,7 +137,7 @@ The docked layout adapts to the available width:
 | `RawBufferView` | Supported | Pointer-backed wrapper for common camera/frame-grabber image shapes. |
 | `ImagePtr`-style objects | Supported | Reflection-based pointer shape with `Ptr`, `Length`, `Width`, `Height`, `Step`, and `Bpp`. |
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. |
-| OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. |
+| OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Version `1.0.27.0` can read older Mat APIs through `Rows`, `Cols`, `Step()`, `Type()`, and `Data`/`DataPointer`. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
@@ -285,7 +285,7 @@ Raw Buffer Visualizer writes temporary snapshot files while Visual Studio transf
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Version `1.0.26.0` adds the following runtime safeguards:
+Version `1.0.27.0` includes the following runtime safeguards:
 
 - The docked window status bar shows current temp usage as `Temp ...` so long debug sessions can be monitored.
 - The active image status shows whether the payload is memory-backed or file-backed.
@@ -301,7 +301,7 @@ If disk usage looks high after a crashed debug session, close Visual Studio and 
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Current `1.0.26.0` stabilization smoke:
+Latest recorded stabilization smoke for the current runtime line:
 
 | Check | Result |
 | --- | --- |
