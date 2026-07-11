@@ -8,12 +8,15 @@
     <LangVersion>latest</LangVersion>
     <EmguVersion Condition="'$(EmguVersion)' == ''">4.13.0.5924</EmguVersion>
     <IncludeEmguRuntime Condition="'$(IncludeEmguRuntime)' == ''">true</IncludeEmguRuntime>
+    <OpenCvSharpVersion Condition="'$(OpenCvSharpVersion)' == ''">4.13.0.20260627</OpenCvSharpVersion>
   </PropertyGroup>
 
   <ItemGroup>
     <Reference Include="System.Drawing" />
     <PackageReference Include="Emgu.CV" Version="$(EmguVersion)" />
     <PackageReference Include="Emgu.CV.runtime.windows" Version="$(EmguVersion)" Condition="'$(IncludeEmguRuntime)' == 'true'" />
+    <PackageReference Include="OpenCvSharp4" Version="$(OpenCvSharpVersion)" />
+    <PackageReference Include="OpenCvSharp4.runtime.win" Version="$(OpenCvSharpVersion)" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
   </ItemGroup>
 
