@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml)
 
-Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers. It lets you inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and pointer-backed image views directly inside Visual Studio.
+Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers. It lets you inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed image views, and supported image collections directly inside Visual Studio.
 
 The Visual Studio extension is published on Visual Studio Marketplace as a preview extension. Install the Marketplace version first unless you are developing or testing the extension itself.
 
@@ -32,6 +32,7 @@ For details:
 ## Key Features
 
 - Single docked Visual Studio window where inspected images accumulate in an `Images` list.
+- Open a `List<T>`, `Dictionary<TKey,TValue>`, or supported image array once to append its image entries to that same list.
 - Image rows include variable/title, thumbnail, width x height, pixel format, stride, and source type.
 - Failed opens stay visible as error rows with the reason, instead of disappearing silently.
 - Pixel status strip with X/Y, GV or RGB channel values, color swatches, and source bytes.
@@ -61,7 +62,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Use version `1.0.27.0` or newer. That version builds the docked package against Visual Studio 2022 17.9-compatible references, includes the docked-window stability improvements described below, and supports older OpenCvSharp `Mat` objects that expose `Rows`/`Cols` but not `Dims`.
+Use version `1.0.28.0` or newer. It includes the Visual Studio 2022 17.9-compatible docked package, legacy OpenCvSharp support, version-independent Emgu registration, and collection visualization.
 
 For local development builds only:
 
@@ -119,6 +120,19 @@ dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.cspro
 8. Use the status strip and Inspector for pixel values, raw bytes, hover 5x5 statistics, marker values, diagnostics, interpretation, and comparison.
 9. Use `Save` to export the current visible view as PNG. Right-click an image row to save the raw snapshot.
 
+To inspect several images at once, click the visualizer on the collection variable itself:
+
+```csharp
+var stages = new List<Mat> { input, threshold, result };
+var named = new Dictionary<string, Bitmap>
+{
+    ["input"] = inputBitmap,
+    ["result"] = resultBitmap
+};
+```
+
+Collection entries appear as `[0]`, `[1]`, or `[key]` in the existing docked `Images` list. One invocation processes at most 256 entries. Null and unsupported entries are skipped and counted in the launch status. Lazy or arbitrary `IEnumerable` sequences are intentionally not enumerated while the debugger is paused.
+
 The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
 
 The docked layout adapts to the available width:
@@ -139,8 +153,11 @@ The docked layout adapts to the available width:
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. |
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Version `1.0.27.0` can read older Mat APIs through `Rows`, `Cols`, `Step()`, `Type()`, and `Data`/`DataPointer`. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
+| Image collections | Supported | `List<T>`, `Dictionary<TKey,TValue>`, `ArrayList`, `Hashtable`, `object[]`, and arrays of supported built-in image types. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
+
+Emgu CV compatibility was exercised with real `Mat` instances from packages `3.4.3.3016`, `4.2.0.3662`, `4.5.5.4823`, `4.8.1.5350`, and `4.13.0.5924`. `System.Drawing.Bitmap` is handled through the stable .NET Framework drawing API and is tested in the `net472` debugger sample.
 
 Industrial camera and frame-grabber SDK objects are best supported through a common shape adapter first. If your object exposes buffer pointer, width, height, stride, channels, bit depth, and pixel format, inspect it through `RawBufferView` or an `ImagePtr`-style object.
 
@@ -285,7 +302,7 @@ Raw Buffer Visualizer writes temporary snapshot files while Visual Studio transf
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Version `1.0.27.0` includes the following runtime safeguards:
+Version `1.0.27.0` and later include the following runtime safeguards:
 
 - The docked window status bar shows current temp usage as `Temp ...` so long debug sessions can be monitored.
 - The active image status shows whether the payload is memory-backed or file-backed.
@@ -338,6 +355,12 @@ Run core tests:
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
 ```
 
+Run the .NET Framework Bitmap and Emgu CV version matrix:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLegacyImageCompatibility.ps1
+```
+
 Run Visual Studio docked smoke checks:
 
 ```powershell
@@ -357,7 +380,7 @@ Run the debugger visualizer sample:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables so each visualizer path can be checked from Watch, Locals, Autos, or DataTip.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates individual image variables plus mixed `List<object>`, `Dictionary<string, object>`, and `object[]` collections so each visualizer path can be checked from Watch, Locals, Autos, or DataTip.
 
 README and Marketplace screenshots must be reviewed before commit. Do not publish screenshots that include unrelated applications, private desktop content, stale UI, or a feature state that does not match the text.
 
@@ -368,13 +391,14 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
 - Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, and error rows.
-- `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and supported collections.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
 - VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Vssdk.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
+Marketplace release text for this version: [1.0.28 release notes](docs/marketplace-release-notes-1.0.28.md).
 
 ## License
 

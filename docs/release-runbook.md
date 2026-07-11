@@ -19,7 +19,7 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 Use the bump script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.25
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.28
 ```
 
 This updates both files:
@@ -30,13 +30,13 @@ This updates both files:
 Example:
 
 ```xml
-<AssemblyVersion>1.0.25.0</AssemblyVersion>
-<FileVersion>1.0.25.0</FileVersion>
-<Version>1.0.25</Version>
+<AssemblyVersion>1.0.28.0</AssemblyVersion>
+<FileVersion>1.0.28.0</FileVersion>
+<Version>1.0.28</Version>
 ```
 
 ```xml
-<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.25.0" Language="en-US" Publisher="Noah Choi" />
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.28.0" Language="en-US" Publisher="Noah Choi" />
 ```
 
 ## Local release check
@@ -72,7 +72,7 @@ Recommended inputs:
 | `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
 | `internal_name` | `RawBufferVisualizer` |
 | `categories` | `other` |
-| `expected_version` | Exact VSIX version, for example `1.0.25.0`. |
+| `expected_version` | Exact VSIX version, for example `1.0.28.0`. |
 
 The workflow publishes only when `publish=true`; the default path is a dry validation build.
 
@@ -89,11 +89,11 @@ Use a real Visual Studio 2022 machine that already has the previous Marketplace 
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.25.0
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.28.0
 ```
 
 8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
-9. Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+9. Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `imageList`, `imageDictionary`, and `imageArray`.
 10. Confirm one docked `Raw Buffer Visualizer` window receives all inspected images.
 11. Smoke pan, mouse-wheel zoom, Save PNG, pixel status, selection marker, and diagnostics.
 12. Restart Visual Studio with no solution open and confirm there is no `RawBufferVisualizerPackage did not load correctly` popup.
@@ -119,7 +119,7 @@ The package also writes a small diagnostic log here:
 ## Do not publish if
 
 - The version in the VSIX does not match the Marketplace update version.
-- `ImagePtr`, OpenCvSharp `Mat`, or Emgu CV `Mat` fails to show the visualizer icon.
+- `ImagePtr`, OpenCvSharp `Mat`, Emgu CV `Mat`, `List<T>`, or `Dictionary<TKey,TValue>` fails to show the visualizer icon.
 - Visual Studio opens multiple viewer windows instead of one docked image list.
 - Mouse-wheel zoom or drag pan is slow in the docked window.
 - README or Marketplace screenshots show stale UI or unrelated private applications.

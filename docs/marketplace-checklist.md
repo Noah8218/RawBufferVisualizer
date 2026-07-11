@@ -1,6 +1,6 @@
 ﻿# Visual Studio Marketplace Checklist
 
-Use this before publishing the first Marketplace preview build.
+Use this before publishing each Marketplace update.
 
 ## Package
 
@@ -39,7 +39,7 @@ Overview copy:
 ```text
 Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers.
 
-Inspect raw buffers, RawBufferView pointer-backed images, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
+Inspect raw buffers, pointer-backed images, System.Drawing.Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
 
 Use the docked viewer to pan, zoom, save the visible view as PNG, save raw snapshots, read pixel coordinates, GV/RGB channel values, source bytes, hover 5x5 statistics, selected/pinned marker values, high-zoom pixel grid overlays, Try interpretation, and A/B comparison.
 ```
@@ -73,6 +73,7 @@ Run before uploading:
 ```powershell
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --no-build
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLegacyImageCompatibility.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 100000 -Height 100000 -Configuration Release -Framework net472 -Dense -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 200000 -Height 200000 -Configuration Release -Framework net472 -Dense -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -PixelFormat Mono16 -Width 640 -Height 484
@@ -106,7 +107,7 @@ Manual smoke checklist:
 - Restart Visual Studio.
 - Confirm `Raw Buffer Visualizer` appears in `Extensions > Manage Extensions > Installed`.
 - Debug `RawBufferVisualizer.VisualizerDebuggee`.
-- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `imageList`, `imageDictionary`, and `imageArray`.
 - Close Visual Studio.
 - Install the same VSIX again and confirm update/reinstall path does not leave a broken package.
 - Uninstall from Manage Extensions.
@@ -129,7 +130,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.25
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.28
 ```
 
 GitHub setup:
@@ -151,16 +152,18 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.25.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.28.0
 ```
 
 ## Release Notes Template
+
+For the current update, paste [marketplace-release-notes-1.0.28.md](marketplace-release-notes-1.0.28.md) into the Marketplace release notes field.
 
 ```text
 Raw Buffer Visualizer preview
 
 - Adds a docked Visual Studio image inspector for debugger visualizer sessions.
-- Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, and Emgu CV Mat.
+- Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections.
 - Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, and A/B comparison.
 - Adds visible PNG export and raw snapshot export from the docked viewer.
 - Includes large file-backed image validation up to 200000 x 200000 dense raw payloads.

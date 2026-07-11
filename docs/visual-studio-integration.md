@@ -74,11 +74,11 @@ src\RawBufferVisualizer.VisualStudio.Extensibility\
 
 ## Current Prototype Status
 
-- `RawBufferVisualizer.VisualStudio.ObjectSource` converts `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`-style objects, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
-- `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` converts individual supported images and supported `List`, `Dictionary`, and array entries.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for individual images and image collections.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
 - `RawBufferVisualizer.VisualStudio.Extensibility` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot and hands it to the docked viewer.
-- `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat`.
+- `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for individual supported images plus `List<T>`, `Dictionary<TKey,TValue>`, `ArrayList`, `Hashtable`, and supported arrays.
 - The Visual Studio debugger visualizer is hosted as a docked tool window and appends inspected images into one shared `Images` session.
 - Manual Visual Studio installation and DataTip/Watch verification are documented in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
 
@@ -169,7 +169,7 @@ start .\.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Debug\net472\R
 
 Close Visual Studio before running the VSIX installer. Select Visual Studio 2022 Community when the installer asks for a target instance.
 
-Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, select the `RawBufferVisualizer.VisualStudio.Extensibility` debug profile, press `F5`, then inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` variables from DataTip, Watch, Locals, or Autos.
+Manual Visual Studio testing still requires Visual Studio 2022 with the extension development workload. Open this solution in Visual Studio, set `RawBufferVisualizer.VisualStudio.Extensibility` as the startup project, select the `RawBufferVisualizer.VisualStudio.Extensibility` debug profile, press `F5`, then inspect individual image variables and the sample `imageList`, `imageDictionary`, and `imageArray` collections from DataTip, Watch, Locals, or Autos.
 
 If Visual Studio shows `A project with an Output Type of Class Library cannot be started directly`, the extension debug profile is not selected. Use the Start button dropdown and choose `RawBufferVisualizer.VisualStudio.Extensibility`, or open the project's Debug properties and verify:
 
@@ -221,7 +221,7 @@ This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currentl
 
 ## Validation Checklist
 
-- Visualizer appears for `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, and Emgu CV `Mat` in Watch, Locals, Autos, and DataTip.
+- Visualizer appears for individual supported images and registered collection types in Watch, Locals, Autos, and DataTip.
 - Viewer opens docked inside Visual Studio with a generated temp snapshot.
 - Pixel format, width, height, stride, valid bits, and byte order match the debuggee object.
 - Mono, color, packed mono, float, and Bayer samples still render correctly after the VS path.

@@ -248,6 +248,34 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 PrintCase(ref caseNumber, "emguFloat32 as Emgu.CV.Mat / Cv32F C1");
                 if (shouldBreak) Debugger.Break();
 
+                var imageList = new List<object>
+                {
+                    bitmapMono8,
+                    bitmapBgr24,
+                    matMono8,
+                    matBgr24,
+                    emguMono8,
+                    emguBgr24,
+                    rawMono8Snapshot,
+                    imagePtrBgr24
+                };
+                PrintCase(ref caseNumber, "imageList as List<object> / mixed supported images");
+                if (shouldBreak) Debugger.Break();
+
+                var imageDictionary = new Dictionary<string, object>
+                {
+                    ["bitmap-input"] = bitmapBgr24,
+                    ["opencv-result"] = matBgr24,
+                    ["emgu-result"] = emguBgr24,
+                    ["raw-result"] = rawBgr24Snapshot
+                };
+                PrintCase(ref caseNumber, "imageDictionary as Dictionary<string, object> / named images");
+                if (shouldBreak) Debugger.Break();
+
+                var imageArray = new object[] { bitmapBgra32, matBgra32, emguBgra32, rawBgra32Snapshot };
+                PrintCase(ref caseNumber, "imageArray as object[] / mixed supported images");
+                if (shouldBreak) Debugger.Break();
+
                 GC.KeepAlive(rawMono8Snapshot);
                 GC.KeepAlive(rawMono16Snapshot);
                 GC.KeepAlive(rawMono10PackedSnapshot);
@@ -270,6 +298,9 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(hikrobotMvsLikeFrame);
                 GC.KeepAlive(spinnakerLikeFrame);
                 GC.KeepAlive(frameGrabberLikeBuffer);
+                GC.KeepAlive(imageList);
+                GC.KeepAlive(imageDictionary);
+                GC.KeepAlive(imageArray);
 
                 Console.WriteLine("Done.");
                 return 0;

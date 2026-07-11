@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -58,6 +59,7 @@ namespace RawBufferVisualizer.Tests
                 MatVisualizerObjectSourceCreatesChunks();
                 OpenCvSharpMatVisualizerObjectSourceSupportsLegacyMatWithoutDims();
                 EmguCvMatVisualizerObjectSourceCreatesChunks();
+                ImageCollectionVisualizerHandlesListArrayAndDictionary();
                 VisualizerBridgeWritesLaunchSnapshot();
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
                 VisualizerBridgePreparesMultiLaunchSnapshots();
@@ -1083,6 +1085,79 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu Mat visualizer pixel format failed.");
                 Assert(metadata.BufferLength == 6, "Emgu Mat visualizer buffer length failed.");
                 Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 1 && chunk.Buffer[2] == 5, "Emgu Mat visualizer chunk failed.");
+            }
+        }
+
+        private static void ImageCollectionVisualizerHandlesListArrayAndDictionary()
+        {
+            var snapshot = RawBufferSnapshot.FromByteArray(
+                new byte[] { 10, 20 },
+                CreateDescriptor(2, 1, 2, RawPixelFormat.Mono8, 8));
+
+            using (var bitmap = new Bitmap(2, 1, PixelFormat.Format24bppRgb))
+            using (var openCvMat = new Mat(1, 2, MatType.CV_8UC3, new Scalar(3, 2, 1)))
+            using (var emguMat = new Emgu.CV.Mat(
+                1,
+                2,
+                Emgu.CV.DepthType.Cv8U,
+                3,
+                new byte[] { 3, 2, 1, 6, 5, 4 },
+                6))
+            {
+                var list = new List<object>
+                {
+                    bitmap,
+                    openCvMat,
+                    emguMat,
+                    snapshot,
+                    42,
+                    null!
+                };
+                var listView = ImageCollectionVisualizerTransfer.CreateView(list);
+
+                Assert(listView.Summary.TotalCount == 6 && listView.Summary.ItemCount == 6, "Collection list count failed.");
+                Assert(listView.GetMetadata(0).DisplayName == "[0]", "Collection list display name failed.");
+                Assert(listView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Collection Bitmap format failed.");
+                Assert(listView.GetMetadata(1).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Collection OpenCvSharp Mat format failed.");
+                Assert(listView.GetMetadata(2).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Collection Emgu Mat format failed.");
+                Assert(listView.GetMetadata(3).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Collection snapshot format failed.");
+                Assert(!string.IsNullOrWhiteSpace(listView.GetMetadata(4).Error), "Unsupported collection item should report an error.");
+                Assert(!string.IsNullOrWhiteSpace(listView.GetMetadata(5).Error), "Null collection item should report an error.");
+
+                var chunk = listView.GetChunk(
+                    3,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 1,
+                        Count = 1
+                    });
+                Assert(chunk.Buffer.Length == 1 && chunk.Buffer[0] == 20, "Collection snapshot chunk failed.");
+                Assert(listView.GetMetadata(3).Metadata?.BufferLength == 2, "Collection transfer should be reusable after final chunk release.");
+
+                var arrayView = ImageCollectionVisualizerTransfer.CreateView(new object[] { snapshot, bitmap });
+                Assert(arrayView.Summary.TotalCount == 2, "Collection array count failed.");
+                Assert(arrayView.GetMetadata(1).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Collection array Bitmap failed.");
+
+                var dictionaryView = ImageCollectionVisualizerTransfer.CreateView(
+                    new Dictionary<string, object>
+                    {
+                        ["input"] = snapshot,
+                        ["invalid"] = 42
+                    });
+                Assert(dictionaryView.Summary.TotalCount == 2, "Collection dictionary count failed.");
+                Assert(dictionaryView.GetMetadata(0).DisplayName == "[input]", "Collection dictionary key name failed.");
+                Assert(dictionaryView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Collection dictionary snapshot failed.");
+                Assert(!string.IsNullOrWhiteSpace(dictionaryView.GetMetadata(1).Error), "Unsupported dictionary item should report an error.");
+
+                var many = new object[ImageCollectionVisualizerTransfer.MaximumItemsPerOpen + 5];
+                for (var index = 0; index < many.Length; index++)
+                {
+                    many[index] = snapshot;
+                }
+
+                var limitedView = ImageCollectionVisualizerTransfer.CreateView(many);
+                Assert(limitedView.Summary.TotalCount == many.Length, "Collection total count limit failed.");
+                Assert(limitedView.Summary.ItemCount == ImageCollectionVisualizerTransfer.MaximumItemsPerOpen, "Collection item limit failed.");
             }
         }
 

@@ -170,6 +170,17 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 metadata.BufferLength);
         }
 
+        public void ReportCollectionForwarded(int total, int forwarded, int failed, int truncated)
+        {
+            Status = string.Format(
+                CultureInfo.InvariantCulture,
+                "Sent {0} of {1} collection image(s). Skipped {2}, limited {3}.",
+                forwarded,
+                total,
+                failed,
+                truncated);
+        }
+
         private void RaisePreviewViewChanged()
         {
             RaiseNotifyPropertyChangedEvent(nameof(PreviewDisplayWidth));

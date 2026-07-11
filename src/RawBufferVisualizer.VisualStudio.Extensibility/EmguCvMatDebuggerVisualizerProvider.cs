@@ -22,7 +22,11 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new(new[]
             {
-                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV, Version=4.13.0.5924, Culture=neutral, PublicKeyToken=7281126722ab4438")
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV, Version=4.13.0.5924, Culture=neutral, PublicKeyToken=7281126722ab4438"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.World"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.World.NetStandard"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.Platform.NetStandard")
             })
             {
                 Style = VisualizerStyle.ToolWindow,
