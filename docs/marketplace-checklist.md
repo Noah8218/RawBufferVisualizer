@@ -41,6 +41,10 @@ Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine
 
 It helps inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed image views, and supported image collections directly inside Visual Studio.
 
+![Raw Buffer Visualizer docked in Visual Studio with pixel values visible](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/viewer-vs-docked.png)
+
+The docked image list keeps every inspected value in one place. Select a thumbnail to compare variables without opening a separate viewer window for each image.
+
 ## Key Features
 
 - Single docked Visual Studio window where inspected images accumulate in an image list
@@ -83,9 +87,15 @@ Emgu CV `Mat` transfers were validated with Emgu CV `3.4.3.3016`, `4.2.0.3662`, 
 4. The image is appended to the docked Raw Buffer Visualizer window.
 5. Inspect pixels, raw bytes, stride, format, and diagnostics.
 
+Failed values remain visible as error rows, so unsupported formats or invalid buffers do not disappear silently.
+
+![Failed image values remain visible with diagnostics](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/viewer-vs-docked-error.png)
+
 ## Large Image Support
 
 The viewer uses file-backed tiled rendering for large raw payloads. Dense Mono8 payloads at `100000 x 100000` and `200000 x 200000` were exercised without loading the complete payload into managed memory.
+
+![File-backed 100000 by 100000 Mono8 image](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/viewer-100k-file-backed.png)
 
 ## Known Limits
 
