@@ -151,13 +151,13 @@ The docked layout adapts to the available width:
 | `RawBufferView` | Supported | Pointer-backed wrapper for common camera/frame-grabber image shapes. |
 | `ImagePtr`-style objects | Supported | Reflection-based pointer shape with `Ptr`, `Length`, `Width`, `Height`, `Step`, and `Bpp`. |
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. |
-| OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Version `1.0.27.0` can read older Mat APIs through `Rows`, `Cols`, `Step()`, `Type()`, and `Data`/`DataPointer`. |
+| OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs instead of requiring the debuggee's OpenCvSharp package version. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
 | Image collections | Supported | `List<T>`, `Dictionary<TKey,TValue>`, `ArrayList`, `Hashtable`, `object[]`, and arrays of supported built-in image types. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
 
-Emgu CV compatibility was exercised with real `Mat` instances from packages `3.4.3.3016`, `4.2.0.3662`, `4.5.5.4823`, `4.8.1.5350`, and `4.13.0.5924`. `System.Drawing.Bitmap` is handled through the stable .NET Framework drawing API and is tested in the `net472` debugger sample.
+OpenCvSharp compatibility was exercised with real `Mat` instances from `OpenCvSharp4` packages `4.0.0.20181225`, `4.2.0.20200208`, `4.5.5.20211231`, `4.8.0.20230708`, and `4.13.0.20260627`. Emgu CV compatibility was exercised with real `Mat` instances from packages `3.4.3.3016`, `4.2.0.3662`, `4.5.5.4823`, `4.8.1.5350`, and `4.13.0.5924`. These are tested compatibility points, not a guarantee for every package version between them. `System.Drawing.Bitmap` is handled through the stable .NET Framework drawing API and is tested in the `net472` debugger sample.
 
 Industrial camera and frame-grabber SDK objects are best supported through a common shape adapter first. If your object exposes buffer pointer, width, height, stride, channels, bit depth, and pixel format, inspect it through `RawBufferView` or an `ImagePtr`-style object.
 
@@ -355,7 +355,7 @@ Run core tests:
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
 ```
 
-Run the .NET Framework Bitmap and Emgu CV version matrix:
+Run the .NET Framework Bitmap, OpenCvSharp, and Emgu CV version matrix:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLegacyImageCompatibility.ps1

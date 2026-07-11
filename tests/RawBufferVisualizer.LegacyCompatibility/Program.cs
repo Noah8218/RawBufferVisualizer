@@ -12,11 +12,21 @@ namespace RawBufferVisualizer.LegacyCompatibility
     {
         private static int Main(string[] args)
         {
-            var packageVersion = args.Length == 1 ? args[0] : "unknown";
+            var library = args.Length >= 1 ? args[0] : "all";
+            var packageVersion = args.Length >= 2 ? args[1] : "unknown";
             try
             {
                 VerifyBitmap();
-                VerifyEmgu(packageVersion);
+                if (library == "all" || library == "emgu")
+                {
+                    VerifyEmgu(packageVersion);
+                }
+
+                if (library == "all" || library == "opencvsharp")
+                {
+                    VerifyOpenCvSharp(packageVersion);
+                }
+
                 return 0;
             }
             catch (Exception exception)
@@ -27,6 +37,36 @@ namespace RawBufferVisualizer.LegacyCompatibility
                     exception.GetType().FullName,
                     exception.Message);
                 return 1;
+            }
+        }
+
+        private static void VerifyOpenCvSharp(string packageVersion)
+        {
+            using (var mat = new OpenCvSharp.Mat(2, 3, OpenCvSharp.MatType.CV_8UC3))
+            {
+                var view = OpenCvSharpMatVisualizerTransfer.CreateView(mat, "legacy-opencvsharp");
+                var chunk = OpenCvSharpMatVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 0,
+                        Count = (int)Math.Min(view.BufferLength, 16)
+                    });
+
+                Require(view.Descriptor.Width == 3 && view.Descriptor.Height == 2, "OpenCvSharp dimensions");
+                Require(view.Descriptor.PixelFormat == RawPixelFormat.BGR24, "OpenCvSharp pixel format");
+                Require(view.BufferLength == (long)view.Descriptor.Stride * 2, "OpenCvSharp buffer length");
+                Require(chunk.Buffer.Length > 0, "OpenCvSharp chunk length");
+
+                var matType = typeof(OpenCvSharp.Mat);
+                Console.WriteLine(
+                    "PASS library=OpenCvSharp package={0} assembly={1} typeAssembly={2} stride={3}",
+                    packageVersion,
+                    matType.Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
+                        ?? matType.Assembly.GetName().Version?.ToString()
+                        ?? "unknown",
+                    matType.Assembly.FullName,
+                    view.Descriptor.Stride);
             }
         }
 
@@ -62,7 +102,7 @@ namespace RawBufferVisualizer.LegacyCompatibility
 
                 var matType = typeof(Mat);
                 Console.WriteLine(
-                    "PASS package={0} assembly={1} typeAssembly={2} stride={3}",
+                    "PASS library=Emgu package={0} assembly={1} typeAssembly={2} stride={3}",
                     packageVersion,
                     matType.Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion
                         ?? matType.Assembly.GetName().Version?.ToString()

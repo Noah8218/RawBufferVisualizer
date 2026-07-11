@@ -1,5 +1,12 @@
 [CmdletBinding()]
 param(
+    [string[]]$OpenCvSharpVersions = @(
+        '4.0.0.20181225',
+        '4.2.0.20200208',
+        '4.5.5.20211231',
+        '4.8.0.20230708',
+        '4.13.0.20260627'
+    ),
     [string[]]$EmguVersions = @(
         '3.4.3.3016',
         '4.2.0.3662',
@@ -22,11 +29,23 @@ foreach ($version in $EmguVersions) {
         --configuration $Configuration `
         -p:EmguVersion=$version `
         -p:IncludeEmguRuntime=$includeRuntime `
-        -- $version
+        -- emgu $version
 
     if ($LASTEXITCODE -ne 0) {
         throw "Legacy image compatibility smoke failed for Emgu CV $version."
     }
 }
 
-Write-Host "Legacy Bitmap and Emgu CV compatibility smoke passed for $($EmguVersions.Count) Emgu package version(s)."
+foreach ($version in $OpenCvSharpVersions) {
+    & dotnet run `
+        --project $project `
+        --configuration $Configuration `
+        -p:OpenCvSharpVersion=$version `
+        -- opencvsharp $version
+
+    if ($LASTEXITCODE -ne 0) {
+        throw "Legacy image compatibility smoke failed for OpenCvSharp $version."
+    }
+}
+
+Write-Host "Legacy Bitmap, OpenCvSharp, and Emgu CV compatibility smoke passed for $($OpenCvSharpVersions.Count) OpenCvSharp and $($EmguVersions.Count) Emgu package version(s)."

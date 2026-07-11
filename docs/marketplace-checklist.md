@@ -27,7 +27,7 @@ Suggested Marketplace fields:
 | --- | --- |
 | Display name | Raw Buffer Visualizer |
 | Publisher/author | Noah Choi |
-| Short description | Image Watch style debugger visualizer for raw buffers, Bitmap, Mat, and pointer-backed image views. |
+| Short description | Image Watch style debugger visualizer for raw buffers, Bitmap, Mat, pointer-backed images, and image collections. |
 | Type | Tools |
 | Categories | Debugging, Other Tools |
 | Tags | image-watch, raw-buffer, vision, opencv, emgu |
@@ -36,12 +36,66 @@ Suggested Marketplace fields:
 
 Overview copy:
 
-```text
+```markdown
 Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers.
 
-Inspect raw buffers, pointer-backed images, System.Drawing.Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections while debugging in Visual Studio. Every inspected image is appended to one docked image list with thumbnail, dimensions, pixel format, stride, source type, diagnostics, and visible error rows.
+It helps inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed image views, and supported image collections directly inside Visual Studio.
 
-Use the docked viewer to pan, zoom, save the visible view as PNG, save raw snapshots, read pixel coordinates, GV/RGB channel values, source bytes, hover 5x5 statistics, selected/pinned marker values, high-zoom pixel grid overlays, Try interpretation, and A/B comparison.
+## Key Features
+
+- Single docked Visual Studio window where inspected images accumulate in an image list
+- Thumbnail preview for each inspected variable
+- Width, height, stride, pixel format, source type, and diagnostics
+- Pixel inspection with X/Y position, GV/RGB values, channel swatches, and raw bytes
+- Zoom, pan, fit, 1:1 view, and high-zoom pixel value overlay
+- Raw buffer diagnostics for stride, buffer size, valid bits, byte order, and format interpretation
+- PNG export and raw snapshot export
+- File-backed tiled viewer for very large raw payloads
+
+## Supported Inputs
+
+- `RawBufferSnapshot`
+- `RawBufferView`
+- ImagePtr-style pointer objects
+- `System.Drawing.Bitmap`
+- OpenCvSharp `Mat`
+- Emgu CV `Mat`
+- `List<T>`, `Dictionary<TKey,TValue>`, arrays, and other explicitly supported collection types
+- `.rbuf.json` + `.raw` snapshot files
+
+OpenCvSharp `Mat` transfers were validated with OpenCvSharp4 `4.0.0.20181225`, `4.2.0.20200208`, `4.5.5.20211231`, `4.8.0.20230708`, and `4.13.0.20260627`.
+
+Emgu CV `Mat` transfers were validated with Emgu CV `3.4.3.3016`, `4.2.0.3662`, `4.5.5.4823`, `4.8.1.5350`, and `4.13.0.5924`.
+
+## Supported Pixel Formats
+
+- `Mono8`, `Mono16`, `Mono10PackedLsb`, `Mono12PackedLsb`
+- `Binary`
+- `RGB24`, `BGR24`, `BGRA32`
+- `Float32`
+- `BayerRGGB8`, `BayerGRBG8`, `BayerGBRG8`, `BayerBGGR8`
+
+## Typical Workflow
+
+1. Start debugging in Visual Studio.
+2. Stop at a breakpoint where an image variable is alive.
+3. Click the debugger visualizer icon from DataTip, Watch, Locals, or Autos.
+4. The image is appended to the docked Raw Buffer Visualizer window.
+5. Inspect pixels, raw bytes, stride, format, and diagnostics.
+
+## Large Image Support
+
+The viewer uses file-backed tiled rendering for large raw payloads. Dense Mono8 payloads at `100000 x 100000` and `200000 x 200000` were exercised without loading the complete payload into managed memory.
+
+## Known Limits
+
+- A collection visualization processes the first 256 entries.
+- Lazy or arbitrary `IEnumerable` sequences are not enumerated while the debugger is paused.
+- Tested library versions are compatibility points, not a guarantee for every intermediate package build.
+
+## License
+
+Raw Buffer Visualizer is licensed under the MIT License. External libraries retain their own licenses; see `THIRD-PARTY-NOTICES.md` in the source repository.
 ```
 
 ## Required Screenshots
@@ -164,6 +218,7 @@ Raw Buffer Visualizer preview
 
 - Adds a docked Visual Studio image inspector for debugger visualizer sessions.
 - Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections.
+- Includes real Mat transfer checks across OpenCvSharp4 4.0.0 through 4.13.0 compatibility points and Emgu CV 3.4.3 through 4.13.0 compatibility points.
 - Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, and A/B comparison.
 - Adds visible PNG export and raw snapshot export from the docked viewer.
 - Includes large file-backed image validation up to 200000 x 200000 dense raw payloads.
