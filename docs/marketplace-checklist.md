@@ -194,7 +194,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.28
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.29
 ```
 
 GitHub setup:
@@ -216,12 +216,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.28.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.29.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.28.md](marketplace-release-notes-1.0.28.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.29.md](marketplace-release-notes-1.0.29.md) into the Marketplace release notes field.
 
 ```text
 Raw Buffer Visualizer preview

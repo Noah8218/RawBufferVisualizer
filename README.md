@@ -62,7 +62,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Use version `1.0.28.0` or newer. It includes the Visual Studio 2022 17.9-compatible docked package, legacy OpenCvSharp support, version-independent Emgu registration, and collection visualization.
+Use version `1.0.29.0` or newer. It includes the Visual Studio 2022 17.9-compatible docked package, legacy OpenCvSharp support, version-independent Emgu registration, collection visualization, and the current Marketplace documentation set.
 
 For local development builds only:
 
@@ -398,7 +398,7 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.28 release notes](docs/marketplace-release-notes-1.0.28.md).
+Marketplace release text for this version: [1.0.29 release notes](docs/marketplace-release-notes-1.0.29.md).
 
 ## License
 
