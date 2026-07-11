@@ -154,7 +154,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     'RawBufferVisualizer.VisualStudio.Extensibility.vsix',
     '',
     'The VSIX contains both parts required for normal operation:',
-    '- Visual Studio debugger visualizers for RawBufferSnapshot, RawBufferView, Bitmap, OpenCvSharp Mat, and Emgu CV Mat variables',
+    '- Visual Studio debugger visualizers for RawBufferSnapshot, RawBufferView, Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections',
     '- In-process Visual Studio ToolWindow used as the docked image viewer',
     '',
     'Manual validation prerequisites:',

@@ -62,6 +62,120 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             return new DockedVisualizerControl(session);
         }
 
+        public static async Task<IRemoteUserControl> CreateCollectionControlAsync(
+            VisualizerTarget visualizerTarget,
+            CancellationToken cancellationToken)
+        {
+            var session = new DockedVisualizerSession();
+            try
+            {
+                var summary = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerCollectionSummary>(
+                    jsonSerializer: null,
+                    cancellationToken);
+                if (summary == null)
+                {
+                    throw new InvalidOperationException("Collection visualizer object source returned no data.");
+                }
+
+                if (summary.TotalCount == 0)
+                {
+                    throw new InvalidOperationException("Collection contains no items.");
+                }
+
+                var forwarded = 0;
+                var failed = 0;
+                var firstError = string.Empty;
+                for (var index = 0; index < summary.ItemCount; index++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var item = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerCollectionItemRequest, VisualizerCollectionItemMetadata>(
+                        new VisualizerCollectionItemRequest
+                        {
+                            Operation = VisualizerCollectionOperation.Metadata,
+                            Index = index
+                        },
+                        jsonSerializer: null,
+                        cancellationToken);
+                    if (item == null || item.Metadata == null)
+                    {
+                        failed++;
+                        if (string.IsNullOrWhiteSpace(firstError))
+                        {
+                            firstError = item == null || string.IsNullOrWhiteSpace(item.Error)
+                                ? "Collection item returned no metadata."
+                                : item.Error;
+                        }
+                        continue;
+                    }
+
+                    string? snapshotDirectory = null;
+                    try
+                    {
+                        var metadata = item.Metadata;
+                        snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
+                        EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
+                        var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
+                        var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
+                        await WriteCollectionRawChunksAsync(
+                            visualizerTarget.ObjectSource,
+                            index,
+                            metadata,
+                            rawPath,
+                            cancellationToken);
+
+                        VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath, metadata.DisplayName, metadata.SourceType);
+                        forwarded++;
+                    }
+                    catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                    {
+                        if (snapshotDirectory != null)
+                        {
+                            VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
+                        }
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        if (snapshotDirectory != null)
+                        {
+                            VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
+                        }
+
+                        failed++;
+                        if (string.IsNullOrWhiteSpace(firstError))
+                        {
+                            firstError = ex.Message;
+                        }
+                    }
+                }
+
+                if (forwarded == 0)
+                {
+                    throw new InvalidOperationException(
+                        string.IsNullOrWhiteSpace(firstError)
+                            ? "Collection contains no supported image items."
+                            : "Collection contains no supported image items. " + firstError);
+                }
+
+                TryWakeDockedToolWindow();
+                session.ReportCollectionForwarded(
+                    summary.TotalCount,
+                    forwarded,
+                    failed,
+                    Math.Max(0, summary.TotalCount - summary.ItemCount));
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                session.ReportFailure(ex.Message);
+            }
+
+            return new DockedVisualizerControl(session);
+        }
+
         private static void TryWakeDockedToolWindow()
         {
             try
@@ -187,6 +301,49 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             string rawPath,
             CancellationToken cancellationToken)
         {
+            await WriteRawChunksCoreAsync(
+                metadata,
+                rawPath,
+                (offset, count) => objectSource.RequestDataAsync<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk>(
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = offset,
+                        Count = count
+                    },
+                    jsonSerializer: null,
+                    cancellationToken),
+                cancellationToken);
+        }
+
+        private static async Task WriteCollectionRawChunksAsync(
+            VisualizerObjectSourceClient objectSource,
+            int index,
+            VisualizerSnapshotMetadata metadata,
+            string rawPath,
+            CancellationToken cancellationToken)
+        {
+            await WriteRawChunksCoreAsync(
+                metadata,
+                rawPath,
+                (offset, count) => objectSource.RequestDataAsync<VisualizerCollectionItemRequest, VisualizerSnapshotChunk>(
+                    new VisualizerCollectionItemRequest
+                    {
+                        Operation = VisualizerCollectionOperation.Chunk,
+                        Index = index,
+                        Offset = offset,
+                        Count = count
+                    },
+                    jsonSerializer: null,
+                    cancellationToken),
+                cancellationToken);
+        }
+
+        private static async Task WriteRawChunksCoreAsync(
+            VisualizerSnapshotMetadata metadata,
+            string rawPath,
+            Func<long, int, Task<VisualizerSnapshotChunk>> requestChunk,
+            CancellationToken cancellationToken)
+        {
             if (metadata.ChunkSize <= 0)
             {
                 throw new InvalidOperationException("Chunk size must be greater than zero.");
@@ -197,14 +354,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             while (offset < metadata.BufferLength)
             {
                 var count = (int)Math.Min(metadata.ChunkSize, metadata.BufferLength - offset);
-                var chunk = await objectSource.RequestDataAsync<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk>(
-                    new VisualizerSnapshotChunkRequest
-                    {
-                        Offset = offset,
-                        Count = count
-                    },
-                    jsonSerializer: null,
-                    cancellationToken);
+                var chunk = await requestChunk(offset, count);
 
                 if (chunk == null || chunk.Buffer == null)
                 {

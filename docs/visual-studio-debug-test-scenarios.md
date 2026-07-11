@@ -56,6 +56,9 @@ The debuggee prints the variable name before each `Debugger.Break()` call.
 | 32 | `emguBgra32` | Opens as Emgu CV `Mat` mapped to `BGRA32`. |
 | 33 | `emguMono16` | Opens as Emgu CV `Mat` mapped to `Mono16`. |
 | 34 | `emguFloat32` | Opens as Emgu CV `Mat` mapped to `Float32`. |
+| 35 | `imageList` | Appends eight mixed image entries with `[index]` names. |
+| 36 | `imageDictionary` | Appends four mixed image entries with `[key]` names. |
+| 37 | `imageArray` | Appends four mixed entries from `object[]`. |
 
 For SDK-style objects, the visualizer target is the `RawBufferView` property, so add the exact `.View` expression to Watch when the visualizer icon is not shown directly on the parent object.
 
