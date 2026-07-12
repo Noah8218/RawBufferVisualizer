@@ -27,23 +27,98 @@ Suggested Marketplace fields:
 | --- | --- |
 | Display name | Raw Buffer Visualizer |
 | Publisher/author | Noah Choi |
-| Short description | Image Watch style debugger visualizer for raw buffers, Bitmap, Mat, pointer-backed images, and image collections. |
+| Short description | Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, IntPtr, and raw image buffers directly inside Visual Studio. |
 | Type | Tools |
 | Categories | Debugging, Other Tools |
-| Tags | image-watch, raw-buffer, vision, opencv, emgu |
+| Tags | image-watch, csharp, opencvsharp, machine-vision, raw-buffer, emgucv |
 | License | MIT |
 | Release stage | Preview for the first Marketplace upload |
+
+Keep the product name stable and put the search-oriented positioning in the short description and first Overview paragraph. Keep the extension ID unchanged.
+
+## GitHub Discovery
+
+Recommended repository description:
+
+```text
+Image Watch for C# machine vision: inspect OpenCvSharp Mat, Emgu CV Mat, Bitmap, IntPtr, and raw image buffers inside Visual Studio.
+```
+
+Recommended repository homepage:
+
+```text
+https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer
+```
+
+Recommended topics:
+
+```text
+csharp, visual-studio, visual-studio-extension, opencvsharp, emgucv,
+machine-vision, computer-vision, image-debugger, debugger-visualizer,
+raw-buffer, intptr, industrial-camera, bitmap
+```
+
+Create the first GitHub Release from tag `v1.0.30` using [github-release-1.0.30.md](github-release-1.0.30.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+
+Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
+
+## Launch Post Copy
+
+Use the demo GIF with this title:
+
+```text
+Raw Buffer Visualizer: inspect OpenCvSharp Mat, Bitmap, and IntPtr buffers inside Visual Studio
+```
+
+Suggested post:
+
+```text
+I built Raw Buffer Visualizer for C# machine-vision debugging.
+
+It lets you inspect OpenCvSharp Mat, Emgu CV Mat, System.Drawing.Bitmap,
+IntPtr-backed images, and raw buffers at a Visual Studio breakpoint without
+saving temporary files or adding debug-only conversion code.
+
+The docked viewer includes pixel values, raw bytes, stride/format diagnostics,
+multiple-image comparison, and file-backed display for very large payloads.
+
+Marketplace: https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer
+Source: https://github.com/Noah8218/RawBufferVisualizer
+```
+
+Lead with the debugger workflow, not the large-image benchmark. Publish only in C#, OpenCvSharp, computer-vision, or machine-vision communities whose self-promotion rules allow project posts.
 
 Overview copy:
 
 ```markdown
-Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers.
+Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables directly while stopped at a breakpoint.
 
-It helps inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed image views, and supported image collections directly inside Visual Studio.
+Raw Buffer Visualizer is an Image Watch style debugger tool for C# machine-vision developers. It combines a C# image debugger, OpenCvSharp and Emgu CV visualizer, IntPtr image viewer, and raw image buffer inspector directly inside Visual Studio.
 
-![Raw Buffer Visualizer docked in Visual Studio with pixel values visible](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/viewer-vs-docked.png)
+![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
 
-The docked image list keeps every inspected value in one place. Select a thumbnail to compare variables without opening a separate viewer window for each image.
+## One-Minute Quick Start
+
+1. Install the extension and restart Visual Studio.
+2. Start debugging and stop where an image variable is alive.
+3. Click the visualizer icon in DataTip, Watch, Locals, or Autos.
+4. Select the thumbnail added to the docked Raw Buffer Visualizer window.
+5. Zoom, pan, and inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
+
+## Why Raw Buffer Visualizer?
+
+| Capability | Typical basic Mat viewer | Raw Buffer Visualizer |
+| --- | --- | --- |
+| OpenCvSharp `Mat` | Common | Supported |
+| Emgu CV `Mat` and `System.Drawing.Bitmap` | Varies | Supported |
+| `IntPtr` and raw image buffers | Limited | Supported |
+| Stride, byte order, valid bits, and raw-byte diagnostics | Limited | Supported |
+| `Mono10PackedLsb` and `Mono12PackedLsb` | Uncommon | Supported |
+| Multiple inspected images in one docked list | Varies | Supported |
+| Split, absolute diff, blink, and linked pan/zoom | Varies | Supported |
+| File-backed tiled display for very large payloads | Uncommon | Supported |
+
+The docked image list keeps inspected values in one place. Select a thumbnail to compare variables without opening a separate viewer window for each image. Other visualizers vary; this table describes the difference between a basic Mat-only workflow and the features implemented here.
 
 ## Key Features
 
@@ -95,8 +170,6 @@ Failed values remain visible as error rows, so unsupported formats or invalid bu
 
 The viewer uses file-backed tiled rendering for large raw payloads. Dense Mono8 payloads at `100000 x 100000` and `200000 x 200000` were exercised without loading the complete payload into managed memory.
 
-![File-backed 100000 by 100000 Mono8 image](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/viewer-100k-file-backed.png)
-
 ## Known Limits
 
 - A collection visualization processes the first 256 entries.
@@ -117,11 +190,10 @@ docs\images\marketplace-icon.png
 docs\images\viewer-vs-docked.png
 docs\images\viewer-vs-docked-overlay.png
 docs\images\viewer-vs-docked-error.png
-docs\images\viewer-100k-file-backed.png
-docs\images\viewer-200k-file-backed.png
+docs\images\raw-buffer-visualizer-demo.gif
 ```
 
-The first Marketplace screenshot should show the docked Visual Studio workflow, not the standalone viewer.
+The first Marketplace media item must show the reviewed Visual Studio debugger workflow GIF, not the standalone viewer.
 
 Screenshot gate:
 
@@ -194,7 +266,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.29
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.30
 ```
 
 GitHub setup:
@@ -216,27 +288,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.29.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.30.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.29.md](marketplace-release-notes-1.0.29.md) into the Marketplace release notes field.
-
-```text
-Raw Buffer Visualizer preview
-
-- Adds a docked Visual Studio image inspector for debugger visualizer sessions.
-- Supports RawBufferSnapshot, RawBufferView, ImagePtr-style pointer objects, System.Drawing.Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections.
-- Includes real Mat transfer checks across OpenCvSharp4 4.0.0 through 4.13.0 compatibility points and Emgu CV 3.4.3 through 4.13.0 compatibility points.
-- Adds thumbnails, image list accumulation, responsive docked layouts, descriptor diagnostics, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, and A/B comparison.
-- Adds visible PNG export and raw snapshot export from the docked viewer.
-- Includes large file-backed image validation up to 200000 x 200000 dense raw payloads.
-
-Known limits:
-- Vendor SDK-specific adapters are not shipped yet. Use RawBufferView for common camera and frame-grabber buffer shapes.
-- Unsupported planar, compressed, YUV, signed integer, and additional packed formats fail with diagnostics instead of rendering silently.
-```
+For the current update, paste [marketplace-release-notes-1.0.30.md](marketplace-release-notes-1.0.30.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 

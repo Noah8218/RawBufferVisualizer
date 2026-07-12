@@ -23,7 +23,7 @@ on:
         type: string
         default: other
       expected_version:
-        description: Optional VSIX version guard, for example 1.0.29.0
+        description: Optional VSIX version guard, for example 1.0.30.0
         required: false
         type: string
 

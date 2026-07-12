@@ -1,33 +1,43 @@
 # Raw Buffer Visualizer
 
+### Image Watch for C# and OpenCvSharp machine-vision debugging
+
+[![Visual Studio Marketplace](https://img.shields.io/visual-studio-marketplace/v/openvisionlab.RawBufferVisualizer?label=Marketplace)](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
+[![Marketplace installs](https://img.shields.io/visual-studio-marketplace/i/openvisionlab.RawBufferVisualizer)](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 [![CI](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml)
 
-Raw Buffer Visualizer is an Image Watch style debugger visualizer for C# machine-vision developers. It lets you inspect raw image memory, `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed image views, and supported image collections directly inside Visual Studio.
+**Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables directly while stopped at a breakpoint.**
 
-The Visual Studio extension is published on Visual Studio Marketplace as a preview extension. Install the Marketplace version first unless you are developing or testing the extension itself.
+Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, and supported image collections in one docked Visual Studio window. It combines a C# image debugger, OpenCvSharp and Emgu CV visualizer, IntPtr image viewer, and raw image buffer inspector for machine-vision work.
 
-## At A Glance
+![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
-Raw Buffer Visualizer keeps inspected machine-vision images in one docked Visual Studio tool window. It is focused on raw-buffer debugging: dimensions, stride, pixel format, byte order, GV/RGB values, raw bytes, and large-image display.
+[Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-Typical workflow:
+## One-Minute Quick Start
 
-1. Stop at a breakpoint.
-2. Click the debugger visualizer icon on an image variable.
-3. Keep every inspected image in one docked `Raw Buffer Visualizer` window.
-4. Compare thumbnails, dimensions, stride, type, and pixel format.
-5. Pan, zoom, inspect pixels, check raw bytes, and diagnose buffer interpretation issues.
+1. Install the extension from [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer) and restart Visual Studio.
+2. Start debugging and stop where an image variable is alive.
+3. Open DataTip, Watch, Locals, or Autos and click the visualizer icon.
+4. Select the new thumbnail in the docked `Raw Buffer Visualizer` window.
+5. Use the mouse wheel and drag to zoom and pan, then inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
 
-For details:
+The same workflow works for a single image or a supported `List<T>`, `Dictionary<TKey,TValue>`, or image array.
 
-- Install and update: [Install](#install)
-- Debugger workflow: [Visual Studio Usage](#visual-studio-usage)
-- Supported objects and formats: [Supported Inputs](#supported-inputs)
-- Sample files: [Snapshot Files](#snapshot-files) and [Large Image Validation](#large-image-validation)
-- Build, tests, and smoke checks: [Build And Test](#build-and-test)
-- Release process and notes: [Release And Marketplace](#release-and-marketplace)
+## Why Raw Buffer Visualizer?
 
-![Raw Buffer Visualizer docked in Visual Studio](docs/images/viewer-vs-docked.png)
+| Capability | Typical basic Mat viewer | Raw Buffer Visualizer |
+| --- | --- | --- |
+| OpenCvSharp `Mat` | Common | Supported |
+| Emgu CV `Mat` and `System.Drawing.Bitmap` | Varies | Supported |
+| `IntPtr` and raw image buffers | Limited | Supported through pointer shapes and `RawBufferView` |
+| Stride, byte order, valid bits, and raw-byte diagnostics | Limited | Supported |
+| `Mono10PackedLsb` and `Mono12PackedLsb` | Uncommon | Supported |
+| Multiple inspected images in one docked list | Varies | Supported |
+| Split, absolute diff, blink, and linked pan/zoom | Varies | Supported |
+| File-backed tiled display for very large payloads | Uncommon | Supported |
+
+Other debugger visualizers have different feature sets. This comparison describes the difference between a basic Mat-only workflow and the capabilities implemented in this project.
 
 ## Key Features
 
@@ -62,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Use version `1.0.29.0` or newer. It includes the Visual Studio 2022 17.9-compatible docked package, legacy OpenCvSharp support, version-independent Emgu registration, collection visualization, and the current Marketplace documentation set.
+Use version `1.0.30.0` or newer. It includes the Visual Studio 2022 17.9-compatible docked package, legacy OpenCvSharp support, version-independent Emgu registration, collection visualization, and the current Marketplace demo and documentation set.
 
 For local development builds only:
 
@@ -290,9 +300,7 @@ $env:OPENCV_IO_MAX_IMAGE_PIXELS = "4000000000"
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj --configuration Release -- --emgu-tiff-smoke "C:\path\large.tif"
 ```
 
-![100000 x 100000 file-backed Mono8 payload in the standalone validation viewer](docs/images/viewer-100k-file-backed.png)
-
-![200000 x 200000 file-backed Mono8 payload in the standalone validation viewer](docs/images/viewer-200k-file-backed.png)
+The large-image dimensions above are validation evidence, not sample payloads committed to Git. Generate the dense files locally with [large image samples](docs/large-image-samples.md).
 
 ## Runtime Stability
 
@@ -398,7 +406,9 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.29 release notes](docs/marketplace-release-notes-1.0.29.md).
+Marketplace release text for this version: [1.0.30 release notes](docs/marketplace-release-notes-1.0.30.md).
+GitHub Release body for this version: [1.0.30 GitHub Release draft](docs/github-release-1.0.30.md).
+For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License
 
