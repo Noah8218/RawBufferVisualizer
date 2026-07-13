@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -14,14 +15,22 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
     internal static class DebuggerVisualizerLaunch
     {
+        private static readonly TimeSpan HandoffAcknowledgementTimeout = TimeSpan.FromSeconds(30);
+
         public static async Task<IRemoteUserControl> CreateControlAsync(
             VisualizerTarget visualizerTarget,
             CancellationToken cancellationToken)
         {
             var session = new DockedVisualizerSession();
+            var visualStudioProcessId = 0;
+            var displayName = visualizerTarget.TargetTypeFullName ?? "Debugger visualizer";
+            var sourceType = displayName;
+            var closeWhenLoaded = false;
             string? snapshotDirectory = null;
+            string? requestPath = null;
             try
             {
+                visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
                 var metadata = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerSnapshotMetadata>(
                     jsonSerializer: null,
                     cancellationToken);
@@ -30,19 +39,32 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Visualizer object source returned no data.");
                 }
 
+                displayName = metadata.DisplayName;
+                sourceType = metadata.SourceType;
                 snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
                 EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
                 var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
                 var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
                 await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, rawPath, cancellationToken);
 
-                VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath, metadata.DisplayName, metadata.SourceType);
-                TryWakeDockedToolWindow();
-                session.ReportForwarded(metadata);
+                requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                    visualStudioProcessId,
+                    metadataPath,
+                    metadata.DisplayName,
+                    metadata.SourceType);
+                if (await TryCompleteHandoffAsync(visualStudioProcessId, new[] { requestPath }, cancellationToken))
+                {
+                    session.ReportForwarded(metadata);
+                    closeWhenLoaded = true;
+                }
+                else
+                {
+                    session.ReportFailure("The docked Raw Buffer Visualizer did not acknowledge the image handoff.");
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                if (snapshotDirectory != null)
+                if (requestPath == null && snapshotDirectory != null)
                 {
                     VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                 }
@@ -51,15 +73,24 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
-                if (snapshotDirectory != null)
+                if (snapshotDirectory != null && requestPath == null)
                 {
                     VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                 }
 
-                session.ReportFailure(ex.Message);
+                closeWhenLoaded = await TryForwardFailureAsync(
+                    visualStudioProcessId,
+                    displayName,
+                    sourceType,
+                    ex.Message,
+                    cancellationToken);
+                if (!closeWhenLoaded)
+                {
+                    session.ReportFailure(ex.Message);
+                }
             }
 
-            return new DockedVisualizerControl(session);
+            return new DockedVisualizerControl(session, closeWhenLoaded ? visualizerTarget : null);
         }
 
         public static async Task<IRemoteUserControl> CreateCollectionControlAsync(
@@ -67,8 +98,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             CancellationToken cancellationToken)
         {
             var session = new DockedVisualizerSession();
+            var visualStudioProcessId = 0;
+            var sourceType = visualizerTarget.TargetTypeFullName ?? "Image collection";
+            var closeWhenLoaded = false;
+            var requestPaths = new List<string>();
             try
             {
+                visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
                 var summary = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerCollectionSummary>(
                     jsonSerializer: null,
                     cancellationToken);
@@ -82,9 +118,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Collection contains no items.");
                 }
 
+                sourceType = summary.SourceType;
                 var forwarded = 0;
                 var failed = 0;
-                var firstError = string.Empty;
                 for (var index = 0; index < summary.ItemCount; index++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
@@ -99,12 +135,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     if (item == null || item.Metadata == null)
                     {
                         failed++;
-                        if (string.IsNullOrWhiteSpace(firstError))
-                        {
-                            firstError = item == null || string.IsNullOrWhiteSpace(item.Error)
+                        requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                            visualStudioProcessId,
+                            item == null || string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName,
+                            summary.SourceType,
+                            item == null || string.IsNullOrWhiteSpace(item.Error)
                                 ? "Collection item returned no metadata."
-                                : item.Error;
-                        }
+                                : item.Error));
                         continue;
                     }
 
@@ -123,7 +160,11 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             rawPath,
                             cancellationToken);
 
-                        VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath, metadata.DisplayName, metadata.SourceType);
+                        requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
+                            visualStudioProcessId,
+                            metadataPath,
+                            metadata.DisplayName,
+                            metadata.SourceType));
                         forwarded++;
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -142,27 +183,32 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         }
 
                         failed++;
-                        if (string.IsNullOrWhiteSpace(firstError))
-                        {
-                            firstError = ex.Message;
-                        }
+                        requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                            visualStudioProcessId,
+                            string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName,
+                            summary.SourceType,
+                            ex.Message));
                     }
                 }
 
-                if (forwarded == 0)
+                if (requestPaths.Count == 0)
                 {
-                    throw new InvalidOperationException(
-                        string.IsNullOrWhiteSpace(firstError)
-                            ? "Collection contains no supported image items."
-                            : "Collection contains no supported image items. " + firstError);
+                    throw new InvalidOperationException("Collection contains no supported image items.");
                 }
 
-                TryWakeDockedToolWindow();
-                session.ReportCollectionForwarded(
-                    summary.TotalCount,
-                    forwarded,
-                    failed,
-                    Math.Max(0, summary.TotalCount - summary.ItemCount));
+                if (await TryCompleteHandoffAsync(visualStudioProcessId, requestPaths, cancellationToken))
+                {
+                    session.ReportCollectionForwarded(
+                        summary.TotalCount,
+                        forwarded,
+                        failed,
+                        Math.Max(0, summary.TotalCount - summary.ItemCount));
+                    closeWhenLoaded = true;
+                }
+                else
+                {
+                    session.ReportFailure("The docked Raw Buffer Visualizer did not acknowledge the collection handoff.");
+                }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -170,17 +216,100 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
-                session.ReportFailure(ex.Message);
+                closeWhenLoaded = await TryForwardFailureAsync(
+                    visualStudioProcessId,
+                    "Image collection",
+                    sourceType,
+                    ex.Message,
+                    cancellationToken,
+                    requestPaths);
+                if (!closeWhenLoaded)
+                {
+                    session.ReportFailure(ex.Message);
+                }
             }
 
-            return new DockedVisualizerControl(session);
+            return new DockedVisualizerControl(session, closeWhenLoaded ? visualizerTarget : null);
         }
 
-        private static void TryWakeDockedToolWindow()
+        private static async Task<bool> TryForwardFailureAsync(
+            int visualStudioProcessId,
+            string displayName,
+            string sourceType,
+            string errorMessage,
+            CancellationToken cancellationToken,
+            List<string>? requestPaths = null)
+        {
+            if (visualStudioProcessId <= 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                requestPaths ??= new List<string>();
+                requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                    visualStudioProcessId,
+                    displayName,
+                    sourceType,
+                    errorMessage));
+                if (!await TryCompleteHandoffAsync(visualStudioProcessId, requestPaths, cancellationToken))
+                {
+                    return false;
+                }
+
+                return true;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static async Task<bool> TryCompleteHandoffAsync(
+            int visualStudioProcessId,
+            IReadOnlyList<string> requestPaths,
+            CancellationToken cancellationToken)
+        {
+            if (requestPaths.Count == 0)
+            {
+                return false;
+            }
+
+            TryWakeDockedToolWindow(visualStudioProcessId);
+            var deadline = DateTime.UtcNow.Add(HandoffAcknowledgementTimeout);
+            while (DateTime.UtcNow < deadline)
+            {
+                var pending = false;
+                for (var index = 0; index < requestPaths.Count; index++)
+                {
+                    if (File.Exists(requestPaths[index]))
+                    {
+                        pending = true;
+                        break;
+                    }
+                }
+
+                if (!pending)
+                {
+                    return true;
+                }
+
+                await Task.Delay(50, cancellationToken);
+            }
+
+            return false;
+        }
+
+        private static void TryWakeDockedToolWindow(int visualStudioProcessId)
         {
             try
             {
-                var thread = new Thread(TryWakeDockedToolWindowOnSta)
+                var thread = new Thread(() => TryWakeDockedToolWindowOnSta(visualStudioProcessId))
                 {
                     IsBackground = true,
                     Name = "RawBufferVisualizerWakeDockedToolWindow"
@@ -194,7 +323,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
         }
 
-        private static void TryWakeDockedToolWindowOnSta()
+        private static void TryWakeDockedToolWindowOnSta(int visualStudioProcessId)
         {
             try
             {
@@ -204,10 +333,14 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 {
                     try
                     {
-                        RaiseShowToolWindowCommand();
+                        RaiseShowToolWindowCommand(visualStudioProcessId);
                         return;
                     }
                     catch (COMException ex) when (IsRejectedComCall(ex))
+                    {
+                        Thread.Sleep(250);
+                    }
+                    catch (InvalidOperationException)
                     {
                         Thread.Sleep(250);
                     }
@@ -219,9 +352,10 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
         }
 
-        private static void RaiseShowToolWindowCommand()
+        private static void RaiseShowToolWindowCommand(int visualStudioProcessId)
         {
-            dynamic dte = Marshal.GetActiveObject("VisualStudio.DTE.17.0");
+            dynamic dte = VisualStudioInstance.GetDte(visualStudioProcessId)
+                ?? throw new InvalidOperationException("The hosting Visual Studio DTE is not available.");
             object? input = null;
             object? output = null;
             dte.Commands.Raise("{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}", 0x0100, ref input, ref output);
