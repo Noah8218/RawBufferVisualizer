@@ -187,8 +187,8 @@ function New-SampleRaw([string]$path, [int]$width, [int]$height, [int]$stride, [
     }
 }
 
-function Write-HandoffRequest([string]$metadataPath, [string]$displayName = "", [string]$sourceType = "") {
-    $inbox = Join-Path $env:TEMP "RawBufferVisualizer\VisualStudio\Inbox"
+function Write-HandoffRequest([int]$visualStudioProcessId, [string]$metadataPath, [string]$displayName = "", [string]$sourceType = "") {
+    $inbox = Join-Path $env:TEMP "RawBufferVisualizer\VisualStudio\Inbox\$visualStudioProcessId"
     New-Item -ItemType Directory -Force -Path $inbox | Out-Null
     $name = "{0}_{1}.rbuf-handoff" -f ([DateTime]::UtcNow.ToString("yyyyMMddHHmmssfffffff", [Globalization.CultureInfo]::InvariantCulture)), ([Guid]::NewGuid().ToString("N"))
     $requestPath = Join-Path $inbox $name
@@ -206,9 +206,9 @@ function Write-HandoffRequest([string]$metadataPath, [string]$displayName = "", 
     $requestPath
 }
 
-function Clear-HandoffInbox {
+function Clear-HandoffInbox([int]$visualStudioProcessId) {
     $tempRoot = [System.IO.Path]::GetFullPath($env:TEMP)
-    $inbox = Join-Path $env:TEMP "RawBufferVisualizer\VisualStudio\Inbox"
+    $inbox = Join-Path $env:TEMP "RawBufferVisualizer\VisualStudio\Inbox\$visualStudioProcessId"
     New-Item -ItemType Directory -Force -Path $inbox | Out-Null
     $fullInbox = [System.IO.Path]::GetFullPath($inbox)
     if (-not $fullInbox.StartsWith($tempRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
@@ -556,7 +556,6 @@ $stride = switch ($PixelFormat) {
 $validBits = if ($PixelFormat -eq "Float32") { 32 } elseif ($PixelFormat -eq "Mono16") { 16 } else { 8 }
 $rawLength = [int64]$stride * [int64]$Height
 New-SampleRaw $rawPath $Width $Height $stride $PixelFormat
-Clear-HandoffInbox
 ([ordered]@{
     rawFile = "$sampleName.raw"
     width = $Width
@@ -636,6 +635,7 @@ $psi.EnvironmentVariables["RAWBUFFERVISUALIZER_DOCKED_PERF_EXTERNAL_READY_FILE"]
 $psi.EnvironmentVariables["RAWBUFFERVISUALIZER_DOCKED_FRAMEBUFFER_PNG"] = $framebufferPath
 $psi.EnvironmentVariables["RAWBUFFERVISUALIZER_DOCKED_SESSION_JSON"] = $sessionPath
 $process = [Diagnostics.Process]::Start($psi)
+Clear-HandoffInbox $process.Id
 
 try {
     $hwnd = Wait-Until "Visual Studio main window" {
@@ -654,7 +654,7 @@ try {
         "Float32" { "rawFloat32" }
         default { "rawMono8" }
     }
-    $requestPath = Write-HandoffRequest $metadataPath "$($displayPrefix)Snapshot" "RawBufferVisualizer.Sdk.RawBufferSnapshot"
+    $requestPath = Write-HandoffRequest $process.Id $metadataPath "$($displayPrefix)Snapshot" "RawBufferVisualizer.Sdk.RawBufferSnapshot"
 
     if ($IncludeExternalInput) {
         Wait-Until "external mouse input probe" {
@@ -691,7 +691,7 @@ try {
     Capture-Window $hwnd $screenshotPath
     $framebufferContent = Measure-ImageContent $framebufferPath
 
-    $secondRequestPath = Write-HandoffRequest $metadataPath2 "$($displayPrefix)View" "RawBufferVisualizer.Sdk.RawBufferView"
+    $secondRequestPath = Write-HandoffRequest $process.Id $metadataPath2 "$($displayPrefix)View" "RawBufferVisualizer.Sdk.RawBufferView"
     Wait-Until "second docked image session state" {
         if (-not (Test-Path -LiteralPath $sessionPath)) {
             return $null
@@ -703,7 +703,7 @@ try {
     Focus-VisualStudioWindow $hwnd
     Capture-Window $hwnd $sessionScreenshotPath
 
-    $badRequestPath = Write-HandoffRequest $missingMetadataPath "missingBuffer" "InvalidSample"
+    $badRequestPath = Write-HandoffRequest $process.Id $missingMetadataPath "missingBuffer" "InvalidSample"
     $sessionState = Wait-Until "error docked image session state" {
         if (-not (Test-Path -LiteralPath $sessionPath)) {
             return $null

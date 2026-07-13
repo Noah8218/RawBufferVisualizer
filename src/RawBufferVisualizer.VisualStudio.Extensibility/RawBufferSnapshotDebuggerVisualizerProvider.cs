@@ -8,7 +8,6 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
-    [VisualStudioContribution]
     internal sealed class RawBufferSnapshotDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
         public RawBufferSnapshotDebuggerVisualizerProvider(

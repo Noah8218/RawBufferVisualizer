@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
     [string]$ProjectPath,
+    [string]$ClassicProjectPath,
     [string]$ManifestPath
 )
 
@@ -16,6 +17,10 @@ if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
 
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
     $ManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest'
+}
+
+if ([string]::IsNullOrWhiteSpace($ClassicProjectPath)) {
+    $ClassicProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj'
 }
 
 function Assert-FileExists {
@@ -79,6 +84,7 @@ function Write-Utf8NoBom {
 }
 
 Assert-FileExists -Path $ProjectPath -Message 'Visual Studio extension project was not found'
+Assert-FileExists -Path $ClassicProjectPath -Message 'Classic Bitmap visualizer project was not found'
 Assert-FileExists -Path $ManifestPath -Message 'Visual Studio extension manifest was not found'
 
 $versions = Get-NormalizedVersion -Value $Version
@@ -89,6 +95,12 @@ $project = Replace-One -Content $project -Pattern '<FileVersion>[^<]+</FileVersi
 $project = Replace-One -Content $project -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'Version'
 Write-Utf8NoBom -Path $ProjectPath -Content $project
 
+$classicProject = Get-Content -Raw -LiteralPath $ClassicProjectPath
+$classicProject = Replace-One -Content $classicProject -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'classic AssemblyVersion'
+$classicProject = Replace-One -Content $classicProject -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'classic FileVersion'
+$classicProject = Replace-One -Content $classicProject -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'classic Version'
+Write-Utf8NoBom -Path $ClassicProjectPath -Content $classicProject
+
 $manifest = Get-Content -Raw -LiteralPath $ManifestPath
 $manifest = Replace-One -Content $manifest -Pattern '(<Identity\b[^>]*\bVersion=")[^"]+(")' -Replacement "`${1}$($versions.Assembly)`${2}" -Description 'VSIX Identity Version'
 Write-Utf8NoBom -Path $ManifestPath -Content $manifest
@@ -97,4 +109,5 @@ Write-Host "Updated Visual Studio extension version:"
 Write-Host "  Package:  $($versions.Package)"
 Write-Host "  Assembly: $($versions.Assembly)"
 Write-Host "  Project:  $ProjectPath"
+Write-Host "  Classic:  $ClassicProjectPath"
 Write-Host "  Manifest: $ManifestPath"

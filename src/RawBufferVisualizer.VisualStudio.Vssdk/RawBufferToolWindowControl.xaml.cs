@@ -96,7 +96,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 SetTransientStatus("Loading handoff...");
                 var request = ReadHandoffRequestWithRetry(requestPath);
-                OpenPath(request.MetadataPath, request.DisplayName, request.SourceType);
+                VisualizerHandoffInbox.TryDeleteRequest(requestPath);
+                if (request.IsError)
+                {
+                    var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
+                        ? (string.IsNullOrWhiteSpace(request.SourceType) ? "Debugger visualizer" : request.SourceType)
+                        : request.DisplayName;
+                    AddErrorDocument(displayName, new InvalidOperationException(request.ErrorMessage));
+                }
+                else
+                {
+                    OpenPath(request.MetadataPath, request.DisplayName, request.SourceType);
+                }
             }
             catch (Exception ex)
             {
@@ -105,7 +116,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             finally
             {
-                TryDeleteHandoffRequest(requestPath);
+                VisualizerHandoffInbox.TryDeleteRequest(requestPath);
                 UpdateTempUsageStatus();
             }
         }
@@ -2161,21 +2172,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             throw last ?? new IOException("Handoff request could not be read.");
-        }
-
-        private static void TryDeleteHandoffRequest(string requestPath)
-        {
-            try
-            {
-                if (!string.IsNullOrWhiteSpace(requestPath) && File.Exists(requestPath))
-                {
-                    File.Delete(requestPath);
-                }
-            }
-            catch
-            {
-                // Temp handoff cleanup must not affect visualizer display.
-            }
         }
 
         private static RawImageSource CreateImageSource(string rawPath, RawImageDescriptor descriptor, long rawByteLength)

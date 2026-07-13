@@ -72,17 +72,21 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Use version `1.0.30.0` or newer. It includes the Visual Studio 2022 17.9-compatible docked package, legacy OpenCvSharp support, version-independent Emgu registration, collection visualization, and the current Marketplace demo and documentation set.
+The source build for this fix is version `1.0.36.0`. It routes single images and supported collections through one docked viewer, keeps transfer errors visible in that viewer, and isolates debugger handoffs by the hosting Visual Studio process so another Visual Studio instance cannot receive the image. Until that version is available through Marketplace, use the local development install below.
 
-For local development builds only:
+For local development builds, close every Visual Studio window and run this from the repository root:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
+The script builds and reinstalls the VSIX, registers the docked ToolWindow, and installs the Classic debugger visualizers under `Documents\Visual Studio 2022\Visualizers`. Restart Visual Studio after it finishes.
+
 ### Update
 
 Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the update, close all Visual Studio windows and reopen Visual Studio.
+
+If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Version `1.0.36.0` no longer publishes the Modern debugger visualizer providers that created it; new debugger invocations use only the main docked viewer.
 
 If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the docked tool-window registration:
 
@@ -141,7 +145,7 @@ var named = new Dictionary<string, Bitmap>
 };
 ```
 
-Collection entries appear as `[0]`, `[1]`, or `[key]` in the existing docked `Images` list. One invocation processes at most 256 entries. Null and unsupported entries are skipped and counted in the launch status. Lazy or arbitrary `IEnumerable` sequences are intentionally not enumerated while the debugger is paused.
+Collection entries appear as `[0]`, `[1]`, or `[key]` in the existing docked `Images` list. Valid entries remain normal image rows. Null, unsupported, and failed entries remain visible as red error rows with the reason. One invocation processes at most 256 entries; a collection above that limit adds an error row explaining that only the first 256 entries were shown. Lazy or arbitrary `IEnumerable` sequences are intentionally not enumerated while the debugger is paused.
 
 The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
 
@@ -397,6 +401,7 @@ README and Marketplace screenshots must be reviewed before commit. Do not publis
 The Marketplace extension is currently distributed as a preview. Before publishing an update, validate:
 
 - Clean install, update, uninstall, and reinstall of the VSIX.
+- Multi-instance isolation: with two separate `devenv.exe` processes running, each debugger visualizer invocation must reach only that Visual Studio instance's docked viewer.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
 - Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, and error rows.
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and supported collections.
@@ -406,8 +411,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.30 release notes](docs/marketplace-release-notes-1.0.30.md).
-GitHub Release body for this version: [1.0.30 GitHub Release draft](docs/github-release-1.0.30.md).
+Marketplace release text for this version: [1.0.36 release notes](docs/marketplace-release-notes-1.0.36.md).
+GitHub Release body for this version: [1.0.36 GitHub Release draft](docs/github-release-1.0.36.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License

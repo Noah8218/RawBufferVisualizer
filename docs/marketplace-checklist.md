@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the first GitHub Release from tag `v1.0.30` using [github-release-1.0.30.md](github-release-1.0.30.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+Create the GitHub Release from tag `v1.0.36` using [github-release-1.0.36.md](github-release-1.0.36.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -222,7 +222,8 @@ The docked smoke must validate:
 
 - One Visual Studio docked ToolWindow.
 - Single image list accumulation.
-- Error rows remain visible.
+- Single images and supported collections append only to the main docked image list; no debugger invocation opens a second lower ToolWindow.
+- Error rows remain visible with a red error thumbnail, `Open failed` title, reason, and Diagnostics entry.
 - Narrow docked layout keeps the Inspector collapsed by default and preserves image list, viewer, Save, and status strip access.
 - Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
 - Save visible PNG, raw snapshot export path, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, pan, zoom, drag, and wheel interaction.
@@ -243,7 +244,9 @@ Manual smoke checklist:
 - Restart Visual Studio.
 - Confirm `Raw Buffer Visualizer` appears in `Extensions > Manage Extensions > Installed`.
 - Debug `RawBufferVisualizer.VisualizerDebuggee`.
-- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `imageList`, `imageDictionary`, and `imageArray`.
+- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `imageList`, `imageDictionary`, and `imageArray`; confirm every result uses the same upper docked viewer.
+- Inspect a mixed `object[]` containing a valid image, `null`, and an unsupported object; confirm the valid image row and per-item error rows appear together in the upper `Images` list.
+- Start two separate Visual Studio `devenv.exe` processes, invoke the visualizer in each process, and confirm each snapshot appears only in the docked viewer belonging to the process that invoked it.
 - Close Visual Studio.
 - Install the same VSIX again and confirm update/reinstall path does not leave a broken package.
 - Uninstall from Manage Extensions.
@@ -266,7 +269,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.30
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.36
 ```
 
 GitHub setup:
@@ -288,12 +291,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.30.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.36.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.30.md](marketplace-release-notes-1.0.30.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.36.md](marketplace-release-notes-1.0.36.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
@@ -312,6 +315,8 @@ artifacts\ui\docked-layout-widths\layout-widths.json
 - User-facing text still mentions rendering implementation details.
 - Narrow Visual Studio docking hides Save, image list, viewer, status strip, or Inspector access.
 - Debugger inspections open multiple independent viewer windows instead of one docked image list.
+- The generated `.vsextension\extension.json` still contains `IDebuggerVisualizerProvider` or any Modern debugger visualizer provider.
+- A debugger snapshot invoked from one Visual Studio process appears in another Visual Studio process's docked viewer.
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license and third-party notice requirement.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.

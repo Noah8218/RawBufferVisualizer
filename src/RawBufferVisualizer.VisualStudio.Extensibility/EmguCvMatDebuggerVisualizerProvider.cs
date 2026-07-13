@@ -7,7 +7,6 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
-    [VisualStudioContribution]
     internal sealed class EmguCvMatDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
         private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";

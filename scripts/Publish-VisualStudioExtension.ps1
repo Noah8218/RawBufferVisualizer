@@ -70,6 +70,29 @@ function Assert-DebuggerVisualizerTargetTypes {
     }
 }
 
+function Assert-ModernDebuggerVisualizerProvidersAbsent {
+    param([string]$ExtensionJsonPath)
+
+    $extensionJson = Get-Content -Raw -LiteralPath $ExtensionJsonPath
+    foreach ($provider in @(
+        'RawBufferSnapshotDebuggerVisualizerProvider',
+        'RawBufferViewDebuggerVisualizerProvider',
+        'BitmapDebuggerVisualizerProvider',
+        'OpenCvSharpMatDebuggerVisualizerProvider',
+        'EmguCvMatDebuggerVisualizerProvider',
+        'ImagePtrDebuggerVisualizerProvider',
+        'ImageCollectionDebuggerVisualizerProvider'
+    )) {
+        if ($extensionJson -match [regex]::Escape($provider)) {
+            throw "Modern debugger visualizer must not be published: $provider"
+        }
+    }
+
+    if ($extensionJson -match [regex]::Escape('IDebuggerVisualizerProvider')) {
+        throw 'Modern debugger visualizer contract must not be published.'
+    }
+}
+
 function Assert-VssdkReferenceCompatibility {
     param([string]$AssemblyPath)
 
@@ -113,6 +136,7 @@ finally {
 $extensionJsonPath = Join-Path $buildOutput '.vsextension\extension.json'
 Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension metadata was not created'
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
+Assert-ModernDebuggerVisualizerProvidersAbsent -ExtensionJsonPath $extensionJsonPath
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
 Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')
@@ -133,6 +157,7 @@ $requiredEntries = @(
     '.vsextension/extension.json',
     'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef',
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
+    'RawBufferVisualizer.VisualStudio.Classic.dll',
     'RawBufferVisualizer.OpenGlCanvas.dll',
     'SharpGL.dll',
     'SharpGL.WinForms.dll'
@@ -156,6 +181,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     'The VSIX contains both parts required for normal operation:',
     '- Visual Studio debugger visualizers for RawBufferSnapshot, RawBufferView, Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections',
     '- In-process Visual Studio ToolWindow used as the docked image viewer',
+    '- Local single-window visualizers for supported image types and collections installed by scripts\Install-VisualStudioExtension.ps1',
     '',
     'Manual validation prerequisites:',
     '- Visual Studio 2022 17.9 or newer',

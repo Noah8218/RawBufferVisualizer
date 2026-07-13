@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -39,6 +40,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private readonly object _requestGate = new object();
         private readonly HashSet<string> _queuedRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly string _inboxDirectory = VisualizerHandoffInbox.GetInboxDirectory(Process.GetCurrentProcess().Id);
         private FileSystemWatcher? _watcher;
         private Timer? _inboxPollTimer;
         private TimeSpan _inboxPollInterval = InboxPollMinInterval;
@@ -86,9 +88,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void StartInboxWatcher()
         {
-            Directory.CreateDirectory(VisualizerHandoffInbox.InboxDirectory);
-            WriteAutomationLog("StartInboxWatcher " + VisualizerHandoffInbox.InboxDirectory);
-            _watcher = new FileSystemWatcher(VisualizerHandoffInbox.InboxDirectory, "*.rbuf-handoff")
+            Directory.CreateDirectory(_inboxDirectory);
+            WriteAutomationLog("StartInboxWatcher " + _inboxDirectory);
+            _watcher = new FileSystemWatcher(_inboxDirectory, "*.rbuf-handoff")
             {
                 EnableRaisingEvents = true,
                 IncludeSubdirectories = false,
@@ -196,7 +198,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 var cutoff = DateTime.UtcNow.AddMinutes(-10);
-                var requestPaths = Directory.GetFiles(VisualizerHandoffInbox.InboxDirectory, "*.rbuf-handoff")
+                var requestPaths = Directory.GetFiles(_inboxDirectory, "*.rbuf-handoff")
                              .Where(path => File.GetLastWriteTimeUtc(path) >= cutoff)
                              .OrderBy(File.GetLastWriteTimeUtc)
                              .ToList();
@@ -268,7 +270,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 File.AppendAllText(
                     logPath,
-                    DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " " + message + Environment.NewLine);
+                    DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+                    + " [devenv:"
+                    + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture)
+                    + "] "
+                    + message
+                    + Environment.NewLine);
             }
             catch
             {

@@ -19,24 +19,25 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 Use the bump script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.30
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.36
 ```
 
-This updates both files:
+This updates all three version sources:
 
 - `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj`
+- `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj`
 - `C:\Git\RawBufferVisualizer\src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest`
 
 Example:
 
 ```xml
-<AssemblyVersion>1.0.30.0</AssemblyVersion>
-<FileVersion>1.0.30.0</FileVersion>
-<Version>1.0.30</Version>
+<AssemblyVersion>1.0.36.0</AssemblyVersion>
+<FileVersion>1.0.36.0</FileVersion>
+<Version>1.0.36</Version>
 ```
 
 ```xml
-<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.30.0" Language="en-US" Publisher="Noah Choi" />
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.36.0" Language="en-US" Publisher="Noah Choi" />
 ```
 
 ## Local release check
@@ -72,7 +73,7 @@ Recommended inputs:
 | `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
 | `internal_name` | `RawBufferVisualizer` |
 | `categories` | `other` |
-| `expected_version` | Exact VSIX version, for example `1.0.30.0`. |
+| `expected_version` | Exact VSIX version, for example `1.0.36.0`. |
 
 The workflow publishes only when `publish=true`; the default path is a dry validation build.
 
@@ -89,14 +90,17 @@ Use a real Visual Studio 2022 machine that already has the previous Marketplace 
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.30.0
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.36.0
 ```
 
 8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
 9. Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `imageList`, `imageDictionary`, and `imageArray`.
-10. Confirm one docked `Raw Buffer Visualizer` window receives all inspected images.
-11. Smoke pan, mouse-wheel zoom, Save PNG, pixel status, selection marker, and diagnostics.
-12. Restart Visual Studio with no solution open and confirm there is no `RawBufferVisualizerPackage did not load correctly` popup.
+10. Confirm single images and collections append only to the main docked `Raw Buffer Visualizer`; no second lower debugger ToolWindow opens.
+11. Inspect a mixed `object[]` containing a valid image, `null`, and an unsupported object; confirm normal and red error rows appear together in the upper `Images` list.
+12. Select an error row and confirm the viewer clears while Descriptor and Diagnostics show the failure reason.
+13. Start two separate Visual Studio `devenv.exe` processes, invoke the visualizer in each process, and confirm each snapshot appears only in the docked viewer belonging to the process that invoked it.
+14. Smoke pan, mouse-wheel zoom, Save PNG, pixel status, selection marker, and diagnostics.
+15. Restart Visual Studio with no solution open and confirm there is no `RawBufferVisualizerPackage did not load correctly` popup.
 
 If Visual Studio reports `RawBufferVisualizerPackage did not load correctly`, close all Visual Studio windows and run:
 
@@ -121,6 +125,8 @@ The package also writes a small diagnostic log here:
 - The version in the VSIX does not match the Marketplace update version.
 - `ImagePtr`, OpenCvSharp `Mat`, Emgu CV `Mat`, `List<T>`, or `Dictionary<TKey,TValue>` fails to show the visualizer icon.
 - Visual Studio opens multiple viewer windows instead of one docked image list.
+- The generated `.vsextension\extension.json` contains `IDebuggerVisualizerProvider` or any Modern debugger visualizer provider.
+- A debugger snapshot invoked from one Visual Studio process appears in another Visual Studio process's docked viewer.
 - Mouse-wheel zoom or drag pan is slow in the docked window.
 - README or Marketplace screenshots show stale UI or unrelated private applications.
 - `RawBufferVisualizer.VisualStudio.Vssdk.dll` references `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.

@@ -232,6 +232,80 @@ function Find-InstalledExtensionFolder {
     ''
 }
 
+function Install-ClassicVisualizer {
+    param([string]$InstanceId)
+
+    $visualizersDirectory = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Visual Studio 2022\Visualizers'
+    if ($WhatIfPreference) {
+        Write-Host "WhatIf: would install the single-window debugger visualizers under: $visualizersDirectory"
+        return
+    }
+
+    $extensionPath = Find-InstalledExtensionFolder -InstanceId $InstanceId
+    if ([string]::IsNullOrWhiteSpace($extensionPath)) {
+        throw 'The installed Raw Buffer Visualizer extension folder was not found for classic visualizer registration.'
+    }
+
+    $rootFiles = @(
+        'RawBufferVisualizer.VisualStudio.Classic.dll',
+        'RawBufferVisualizer.Core.dll',
+        'RawBufferVisualizer.Sdk.dll',
+        'RawBufferVisualizer.VisualStudio.dll',
+        'RawBufferVisualizer.VisualStudio.ObjectSource.dll'
+    )
+    $debuggeeFiles = @(
+        'RawBufferVisualizer.Core.dll',
+        'RawBufferVisualizer.Sdk.dll',
+        'RawBufferVisualizer.VisualStudio.ObjectSource.dll'
+    )
+
+    foreach ($fileName in $rootFiles) {
+        $source = Join-Path $extensionPath $fileName
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "Classic visualizer file is missing from the installed extension: $source"
+        }
+    }
+
+    foreach ($fileName in $debuggeeFiles) {
+        $source = Join-Path $extensionPath "netstandard2.0\$fileName"
+        if (-not (Test-Path -LiteralPath $source)) {
+            throw "Classic visualizer debuggee file is missing from the installed extension: $source"
+        }
+    }
+
+    if (-not $PSCmdlet.ShouldProcess($visualizersDirectory, 'Install single-window debugger visualizers')) {
+        return
+    }
+
+    $debuggeeDirectory = Join-Path $visualizersDirectory 'netstandard2.0'
+    New-Item -ItemType Directory -Force -Path $visualizersDirectory, $debuggeeDirectory | Out-Null
+    foreach ($fileName in $rootFiles) {
+        Copy-Item -LiteralPath (Join-Path $extensionPath $fileName) -Destination (Join-Path $visualizersDirectory $fileName) -Force
+    }
+
+    foreach ($fileName in $debuggeeFiles) {
+        Copy-Item -LiteralPath (Join-Path $extensionPath "netstandard2.0\$fileName") -Destination (Join-Path $debuggeeDirectory $fileName) -Force
+    }
+
+    Write-Host "Installed single-window debugger visualizers: $visualizersDirectory"
+}
+
+function Test-ClassicVisualizerInstall {
+    $visualizersDirectory = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Visual Studio 2022\Visualizers'
+    foreach ($relativePath in @(
+        'RawBufferVisualizer.VisualStudio.Classic.dll',
+        'RawBufferVisualizer.VisualStudio.ObjectSource.dll',
+        'netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll'
+    )) {
+        $path = Join-Path $visualizersDirectory $relativePath
+        if (-not (Test-Path -LiteralPath $path)) {
+            throw "Classic visualizer registration is incomplete: $path"
+        }
+    }
+
+    Write-Host "Validated single-window debugger visualizer registration: $visualizersDirectory"
+}
+
 function Test-DebuggerVisualizerVsixInstall {
     param([string]$InstanceId)
 
@@ -251,23 +325,29 @@ function Test-DebuggerVisualizerVsixInstall {
     }
 
     $extensionJsonText = Get-Content -LiteralPath $extensionJson -Raw
-    foreach ($requiredText in @(
-        'IDebuggerVisualizerProvider',
+    $objectSource = Join-Path $extensionPath 'netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll'
+    if (-not (Test-Path -LiteralPath $objectSource)) {
+        throw "Debugger object source is missing: $objectSource"
+    }
+
+    foreach ($forbiddenText in @(
         'RawBufferSnapshotDebuggerVisualizerProvider',
+        'RawBufferViewDebuggerVisualizerProvider',
         'BitmapDebuggerVisualizerProvider',
         'OpenCvSharpMatDebuggerVisualizerProvider',
         'EmguCvMatDebuggerVisualizerProvider',
         'ImagePtrDebuggerVisualizerProvider',
-        'ImageCollectionDebuggerVisualizerProvider'
+        'ImageCollectionDebuggerVisualizerProvider',
+        'IDebuggerVisualizerProvider'
     )) {
-        if ($extensionJsonText -notmatch [regex]::Escape($requiredText)) {
-            throw "Debugger visualizer metadata does not contain '$requiredText': $extensionJson"
+        if ($extensionJsonText -match [regex]::Escape($forbiddenText)) {
+            throw "Debugger visualizer metadata still contains the Modern provider '$forbiddenText': $extensionJson"
         }
     }
 
-    $objectSource = Join-Path $extensionPath 'netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll'
-    if (-not (Test-Path -LiteralPath $objectSource)) {
-        throw "Debugger object source is missing: $objectSource"
+    $classicVisualizer = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Classic.dll'
+    if (-not (Test-Path -LiteralPath $classicVisualizer)) {
+        throw "Classic single-window visualizer assembly is missing: $classicVisualizer"
     }
 
     Write-Host "Validated debugger visualizer VSIX metadata: $extensionPath"
@@ -310,6 +390,10 @@ if ($RepairRegistrationOnly) {
 
     Write-Host "Visual Studio instance: $instanceId"
     Register-VssdkToolWindow -InstanceId $instanceId
+    Install-ClassicVisualizer -InstanceId $instanceId
+    if (-not $WhatIfPreference) {
+        Test-ClassicVisualizerInstall
+    }
     Write-Host 'Repaired Raw Buffer Visualizer VSSDK registration. Restart Visual Studio before testing.'
     return
 }
@@ -359,11 +443,13 @@ if (-not [string]::IsNullOrWhiteSpace($instanceId)) {
 
 Invoke-VsixInstaller -InstallerPath $installer -Arguments ($installArguments + @($vsixPath)) -Action 'Install Raw Buffer Visualizer VSIX'
 Register-VssdkToolWindow -InstanceId $instanceId
+Install-ClassicVisualizer -InstanceId $instanceId
 if ($WhatIfPreference) {
     Write-Host 'WhatIf completed: no VSIX changes were made.'
 }
 else {
     Test-DebuggerVisualizerVsixInstall -InstanceId $instanceId
+    Test-ClassicVisualizerInstall
     Write-Host "Installed: $vsixPath"
     Write-Host 'Restart Visual Studio before testing the debugger visualizer.'
 }

@@ -53,6 +53,8 @@ namespace RawBufferVisualizer.Tests
                 SnapshotReferenceLoadsUtf8BomPrettyMetadata();
                 VisualizerTransferRoundTrips();
                 VisualizerChunkedTransferCreatesChunks();
+                VisualizerSnapshotStoreWritesChunkedSnapshot();
+                VisualizerSnapshotStoreWritesCollection();
                 RawBufferViewCreatesDescriptorAndChunks();
                 ImagePtrVisualizerObjectSourceCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
@@ -64,7 +66,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
                 VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
-                VisualizerHandoffInboxRoundTripsMetadataPath();
+                VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance();
                 VisualStudioTempStoreDeletesOwnedSnapshotDirectories();
                 VisualStudioTempStoreReportsRootByteCount();
                 BitmapAdapterCreatesSnapshot();
@@ -745,6 +747,115 @@ namespace RawBufferVisualizer.Tests
             Assert(!chunk.IsLastChunk, "Chunk last flag failed.");
         }
 
+        private static void VisualizerSnapshotStoreWritesChunkedSnapshot()
+        {
+            var buffer = new byte[] { 1, 2, 3, 4, 5, 6 };
+            var metadata = new VisualizerSnapshotMetadata
+            {
+                Descriptor = CreateDescriptor(6, 1, 6, RawPixelFormat.Mono8, 8),
+                BufferLength = buffer.Length,
+                ChunkSize = 2,
+                SourceType = "Test.Image",
+                DisplayName = "chunked"
+            };
+            string? metadataPath = null;
+            try
+            {
+                metadataPath = VisualizerSnapshotStore.WriteSnapshot(
+                    metadata,
+                    request =>
+                    {
+                        var length = Math.Min(request.Count, buffer.Length - checked((int)request.Offset));
+                        var chunk = new byte[length];
+                        Buffer.BlockCopy(buffer, checked((int)request.Offset), chunk, 0, length);
+                        return new VisualizerSnapshotChunk
+                        {
+                            Offset = request.Offset,
+                            Buffer = chunk,
+                            TotalLength = buffer.Length,
+                            IsLastChunk = request.Offset + length >= buffer.Length
+                        };
+                    });
+
+                var restored = RawBufferSnapshot.Load(metadataPath);
+                Assert(restored.Buffer.Length == buffer.Length, "Stored visualizer snapshot length failed.");
+                Assert(restored.Buffer[0] == 1 && restored.Buffer[5] == 6, "Stored visualizer snapshot chunks failed.");
+            }
+            finally
+            {
+                if (metadataPath != null)
+                {
+                    VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(metadataPath);
+                }
+            }
+        }
+
+        private static void VisualizerSnapshotStoreWritesCollection()
+        {
+            var buffer = new byte[] { 7, 8, 9, 10 };
+            var metadata = new VisualizerSnapshotMetadata
+            {
+                Descriptor = CreateDescriptor(4, 1, 4, RawPixelFormat.Mono8, 8),
+                BufferLength = buffer.Length,
+                ChunkSize = 2,
+                SourceType = "Test.Image",
+                DisplayName = "[0]"
+            };
+            var results = VisualizerSnapshotStore.WriteCollection(
+                new VisualizerCollectionSummary
+                {
+                    TotalCount = 2,
+                    ItemCount = 2,
+                    SourceType = "Test.Collection"
+                },
+                index => index == 0
+                    ? new VisualizerCollectionItemMetadata
+                    {
+                        Index = index,
+                        DisplayName = "[0]",
+                        Metadata = metadata
+                    }
+                    : new VisualizerCollectionItemMetadata
+                    {
+                        Index = index,
+                        DisplayName = "[1]",
+                        Error = "Unsupported collection image type."
+                    },
+                (index, request) =>
+                {
+                    Assert(index == 0, "Collection chunk requested for an error item.");
+                    var length = Math.Min(request.Count, buffer.Length - checked((int)request.Offset));
+                    var chunk = new byte[length];
+                    Buffer.BlockCopy(buffer, checked((int)request.Offset), chunk, 0, length);
+                    return new VisualizerSnapshotChunk
+                    {
+                        Offset = request.Offset,
+                        Buffer = chunk,
+                        TotalLength = buffer.Length,
+                        IsLastChunk = request.Offset + length >= buffer.Length
+                    };
+                });
+
+            try
+            {
+                Assert(results.Count == 2, "Collection snapshot result count failed.");
+                Assert(!results[0].IsError && File.Exists(results[0].MetadataPath), "Collection success item was not stored.");
+                Assert(results[1].IsError && results[1].ErrorMessage.Contains("Unsupported"), "Collection error item was not preserved.");
+                var restored = RawBufferSnapshot.Load(results[0].MetadataPath);
+                Assert(restored.Buffer[0] == 7 && restored.Buffer[3] == 10, "Collection stored snapshot data failed.");
+            }
+            finally
+            {
+                foreach (var result in results)
+                {
+                    if (!result.IsError)
+                    {
+                        VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(result.MetadataPath);
+                    }
+                }
+            }
+        }
+
         private static void RawBufferViewCreatesDescriptorAndChunks()
         {
             var buffer = new byte[] { 1, 2, 3, 4, 5, 6 };
@@ -1294,33 +1405,68 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
-        private static void VisualizerHandoffInboxRoundTripsMetadataPath()
+        private static void VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance()
         {
             var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            const int firstVisualStudioProcessId = int.MaxValue;
+            const int secondVisualStudioProcessId = int.MaxValue - 1;
+            var firstInbox = VisualizerHandoffInbox.GetInboxDirectory(firstVisualStudioProcessId);
+            var secondInbox = VisualizerHandoffInbox.GetInboxDirectory(secondVisualStudioProcessId);
             try
             {
                 Directory.CreateDirectory(directory);
                 var metadataPath = Path.Combine(directory, "camera.rbuf.json");
                 File.WriteAllText(metadataPath, "{}");
 
-                var requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath);
+                var requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(firstVisualStudioProcessId, metadataPath);
                 var restored = VisualizerHandoffInbox.ReadSnapshotRequest(requestPath);
                 var request = VisualizerHandoffInbox.ReadSnapshotRequestInfo(requestPath);
 
-                var typedRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(metadataPath, "bitmapBgr24", "System.Drawing.Bitmap");
+                var typedRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                    secondVisualStudioProcessId,
+                    metadataPath,
+                    "bitmapBgr24",
+                    "System.Drawing.Bitmap");
                 var typedRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(typedRequestPath);
+                var errorRequestPath = VisualizerHandoffInbox.WriteErrorRequest(
+                    secondVisualStudioProcessId,
+                    "unsupportedMat",
+                    "OpenCvSharp.Mat",
+                    "The matrix format is not supported.");
+                var errorRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(errorRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
+                Assert(Path.GetDirectoryName(requestPath) == firstInbox, "Handoff request was not routed to the first Visual Studio inbox.");
+                Assert(Path.GetDirectoryName(typedRequestPath) == secondInbox, "Handoff request was not routed to the second Visual Studio inbox.");
+                Assert(!string.Equals(firstInbox, secondInbox, StringComparison.OrdinalIgnoreCase), "Visual Studio inboxes must be isolated.");
                 Assert(restored == Path.GetFullPath(metadataPath), "Handoff metadata path roundtrip failed.");
                 Assert(request.MetadataPath == Path.GetFullPath(metadataPath), "Handoff request info metadata path failed.");
                 Assert(typedRequest.DisplayName == "bitmapBgr24", "Handoff display name roundtrip failed.");
                 Assert(typedRequest.SourceType == "System.Drawing.Bitmap", "Handoff source type roundtrip failed.");
+                Assert(Path.GetDirectoryName(errorRequestPath) == secondInbox, "Error handoff was not routed to the target Visual Studio inbox.");
+                Assert(errorRequest.IsError, "Error handoff was not identified as an error.");
+                Assert(errorRequest.MetadataPath == string.Empty, "Error handoff should not contain a metadata path.");
+                Assert(errorRequest.DisplayName == "unsupportedMat", "Error handoff display name roundtrip failed.");
+                Assert(errorRequest.SourceType == "OpenCvSharp.Mat", "Error handoff source type roundtrip failed.");
+                Assert(errorRequest.ErrorMessage == "The matrix format is not supported.", "Error handoff message roundtrip failed.");
+                VisualizerHandoffInbox.TryDeleteRequest(errorRequestPath);
+                Assert(!File.Exists(errorRequestPath), "Handled error handoff request was not deleted.");
             }
             finally
             {
                 if (Directory.Exists(directory))
                 {
                     Directory.Delete(directory, true);
+                }
+
+                if (Directory.Exists(firstInbox))
+                {
+                    Directory.Delete(firstInbox, true);
+                }
+
+                if (Directory.Exists(secondInbox))
+                {
+                    Directory.Delete(secondInbox, true);
                 }
             }
         }
