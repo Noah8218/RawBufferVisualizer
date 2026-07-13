@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the GitHub Release from tag `v1.0.36` using [github-release-1.0.36.md](github-release-1.0.36.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+Create the GitHub Release from tag `v1.0.37` using [github-release-1.0.37.md](github-release-1.0.37.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -139,7 +139,7 @@ The docked image list keeps inspected values in one place. Select a thumbnail to
 - `System.Drawing.Bitmap`
 - OpenCvSharp `Mat`
 - Emgu CV `Mat`
-- `List<T>`, `Dictionary<TKey,TValue>`, arrays, and other explicitly supported collection types
+- `List<object>`, `Dictionary<string, object>`, and `object[]`
 - `.rbuf.json` + `.raw` snapshot files
 
 OpenCvSharp `Mat` transfers were validated with OpenCvSharp4 `4.0.0.20181225`, `4.2.0.20200208`, `4.5.5.20211231`, `4.8.0.20230708`, and `4.13.0.20260627`.
@@ -173,6 +173,7 @@ The viewer uses file-backed tiled rendering for large raw payloads. Dense Mono8 
 ## Known Limits
 
 - A collection visualization processes the first 256 entries.
+- Typed generic collections such as `List<Mat>` are not registered directly. Convert them to one of the supported closed collection types before inspection.
 - Lazy or arbitrary `IEnumerable` sequences are not enumerated while the debugger is paused.
 - Tested library versions are compatibility points, not a guarantee for every intermediate package build.
 
@@ -269,7 +270,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.36
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.37
 ```
 
 GitHub setup:
@@ -291,12 +292,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.36.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.37.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.36.md](marketplace-release-notes-1.0.36.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.37.md](marketplace-release-notes-1.0.37.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 

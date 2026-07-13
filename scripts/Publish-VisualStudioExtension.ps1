@@ -93,6 +93,27 @@ function Assert-ModernDebuggerVisualizerProvidersAbsent {
     }
 }
 
+function Assert-ClassicVisualizerRegistrationsClosed {
+    param([string]$SourcePath)
+
+    $source = Get-Content -Raw -LiteralPath $SourcePath
+    $requiredRegistrations = @(
+        'Target = typeof(List<object>),',
+        'Target = typeof(Dictionary<string, object>),',
+        'Target = typeof(object[]),'
+    )
+    foreach ($requiredRegistration in $requiredRegistrations) {
+        if (-not $source.Contains($requiredRegistration)) {
+            throw "Required closed Classic collection visualizer registration is missing: $requiredRegistration"
+        }
+    }
+
+    $targetCount = [regex]::Matches($source, 'Target\s*=\s*typeof\(').Count
+    if ($targetCount -ne $requiredRegistrations.Count -or $source.Contains('TargetTypeName =')) {
+        throw "Classic collection visualizers must register only List<object>, Dictionary<string, object>, and object[]. Found $targetCount Target registration(s)."
+    }
+}
+
 function Assert-VssdkReferenceCompatibility {
     param([string]$AssemblyPath)
 
@@ -124,7 +145,7 @@ New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
 
 Push-Location $repoRoot
 try {
-    & dotnet build $project --configuration $Configuration --framework $Framework
+    & dotnet build $project --configuration $Configuration --framework $Framework /nodeReuse:false
     if ($LASTEXITCODE -ne 0) {
         throw "Visual Studio extension build failed with exit code $LASTEXITCODE"
     }
@@ -137,6 +158,7 @@ $extensionJsonPath = Join-Path $buildOutput '.vsextension\extension.json'
 Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension metadata was not created'
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
 Assert-ModernDebuggerVisualizerProvidersAbsent -ExtensionJsonPath $extensionJsonPath
+Assert-ClassicVisualizerRegistrationsClosed -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Classic\ImageCollectionClassicDebuggerVisualizer.cs')
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
 Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')

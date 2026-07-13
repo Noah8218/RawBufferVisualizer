@@ -19,7 +19,7 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 Use the bump script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.36
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.37
 ```
 
 This updates all three version sources:
@@ -31,13 +31,13 @@ This updates all three version sources:
 Example:
 
 ```xml
-<AssemblyVersion>1.0.36.0</AssemblyVersion>
-<FileVersion>1.0.36.0</FileVersion>
-<Version>1.0.36</Version>
+<AssemblyVersion>1.0.37.0</AssemblyVersion>
+<FileVersion>1.0.37.0</FileVersion>
+<Version>1.0.37</Version>
 ```
 
 ```xml
-<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.36.0" Language="en-US" Publisher="Noah Choi" />
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.37.0" Language="en-US" Publisher="Noah Choi" />
 ```
 
 ## Local release check
@@ -73,7 +73,7 @@ Recommended inputs:
 | `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
 | `internal_name` | `RawBufferVisualizer` |
 | `categories` | `other` |
-| `expected_version` | Exact VSIX version, for example `1.0.36.0`. |
+| `expected_version` | Exact VSIX version, for example `1.0.37.0`. |
 
 The workflow publishes only when `publish=true`; the default path is a dry validation build.
 
@@ -90,7 +90,7 @@ Use a real Visual Studio 2022 machine that already has the previous Marketplace 
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.36.0
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.37.0
 ```
 
 8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
@@ -123,7 +123,7 @@ The package also writes a small diagnostic log here:
 ## Do not publish if
 
 - The version in the VSIX does not match the Marketplace update version.
-- `ImagePtr`, OpenCvSharp `Mat`, Emgu CV `Mat`, `List<T>`, or `Dictionary<TKey,TValue>` fails to show the visualizer icon.
+- `ImagePtr`, OpenCvSharp `Mat`, Emgu CV `Mat`, `List<object>`, `Dictionary<string, object>`, or `object[]` fails to show the visualizer icon.
 - Visual Studio opens multiple viewer windows instead of one docked image list.
 - The generated `.vsextension\extension.json` contains `IDebuggerVisualizerProvider` or any Modern debugger visualizer provider.
 - A debugger snapshot invoked from one Visual Studio process appears in another Visual Studio process's docked viewer.
