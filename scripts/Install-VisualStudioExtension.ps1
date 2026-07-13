@@ -380,6 +380,19 @@ function Stop-DotNetBuildServers {
     catch {
         Write-Warning "Could not stop dotnet build servers. Continuing. $($_.Exception.Message)"
     }
+
+    $orphanedMsBuildNodes = @(Get-CimInstance Win32_Process -Filter "Name='MSBuild.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            $_.CommandLine -match '/nodemode:\d+' -and
+            $null -eq (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue)
+        })
+    foreach ($node in $orphanedMsBuildNodes) {
+        Stop-Process -Id $node.ProcessId -Force -ErrorAction SilentlyContinue
+    }
+
+    if ($orphanedMsBuildNodes.Count -gt 0) {
+        Write-Host "Stopped $($orphanedMsBuildNodes.Count) orphaned Visual Studio MSBuild node(s)."
+    }
 }
 
 if ($RepairRegistrationOnly) {

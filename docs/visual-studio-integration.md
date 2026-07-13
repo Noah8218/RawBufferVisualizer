@@ -74,11 +74,12 @@ src\RawBufferVisualizer.VisualStudio.Extensibility\
 
 ## Current Prototype Status
 
-- `RawBufferVisualizer.VisualStudio.ObjectSource` converts individual supported images and supported `List`, `Dictionary`, and array entries.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` converts individual supported images and entries from `List<object>`, `Dictionary<string, object>`, and `object[]`.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for individual images and image collections.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
 - `RawBufferVisualizer.VisualStudio.Extensibility` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot and hands it to the docked viewer.
-- `RawBufferVisualizer.VisualStudio.Extensibility` registers debugger visualizer providers for individual supported images plus `List<T>`, `Dictionary<TKey,TValue>`, `ArrayList`, `Hashtable`, and supported arrays.
+- The Classic debugger visualizer registers individual supported images plus the closed collection types `List<object>`, `Dictionary<string, object>`, and `object[]`.
+- Open generic collection targets are deliberately not registered because Visual Studio 2022 can disable expression evaluation when a Classic visualizer targets `List<>` or `Dictionary<,>`.
 - The Visual Studio debugger visualizer is hosted as a docked tool window and appends inspected images into one shared `Images` session.
 - Manual Visual Studio installation and DataTip/Watch verification are documented in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
 

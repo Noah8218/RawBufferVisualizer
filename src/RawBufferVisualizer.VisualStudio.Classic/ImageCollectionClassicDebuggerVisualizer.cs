@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -7,92 +6,22 @@ using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
+// Visual Studio 2022 rejects open generic visualizer targets and can disable expression evaluation.
 [assembly: DebuggerVisualizer(
     typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
     typeof(ImageCollectionVisualizerObjectSource),
-    Target = typeof(List<>),
+    Target = typeof(List<object>),
     Description = "Raw Buffer Visualizer")]
 [assembly: DebuggerVisualizer(
     typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
     typeof(ImageCollectionVisualizerObjectSource),
-    Target = typeof(Dictionary<,>),
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    Target = typeof(ArrayList),
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    Target = typeof(Hashtable),
+    Target = typeof(Dictionary<string, object>),
     Description = "Raw Buffer Visualizer")]
 [assembly: DebuggerVisualizer(
     typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
     typeof(ImageCollectionVisualizerObjectSource),
     Target = typeof(object[]),
     Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "System.Collections.Generic.List`1, System.Private.CoreLib",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "System.Collections.Generic.Dictionary`2, System.Private.CoreLib",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "System.Object[], System.Private.CoreLib",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    Target = typeof(RawBufferSnapshot[]),
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    Target = typeof(RawBufferView[]),
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "System.Drawing.Bitmap[], System.Drawing",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "System.Drawing.Bitmap[], System.Drawing.Common",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "OpenCvSharp.Mat[], OpenCvSharp",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "Emgu.CV.Mat[], Emgu.CV",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "Emgu.CV.Mat[], Emgu.CV.World",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "Emgu.CV.Mat[], Emgu.CV.World.NetStandard",
-    Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer),
-    typeof(ImageCollectionVisualizerObjectSource),
-    TargetTypeName = "Emgu.CV.Mat[], Emgu.CV.Platform.NetStandard",
-    Description = "Raw Buffer Visualizer")]
-
 namespace RawBufferVisualizer.VisualStudio.Classic
 {
     public sealed class ImageCollectionClassicDebuggerVisualizer : DialogDebuggerVisualizer
