@@ -1245,9 +1245,41 @@ namespace RawBufferVisualizer.Tests
                 Assert(chunk.Buffer.Length == 1 && chunk.Buffer[0] == 20, "Collection snapshot chunk failed.");
                 Assert(listView.GetMetadata(3).Metadata?.BufferLength == 2, "Collection transfer should be reusable after final chunk release.");
 
+                var openCvListView = ImageCollectionVisualizerTransfer.CreateView(new List<Mat> { openCvMat });
+                Assert(openCvListView.Summary.TotalCount == 1, "Typed OpenCvSharp list count failed.");
+                Assert(openCvListView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed OpenCvSharp list transfer failed.");
+
+                var emguListView = ImageCollectionVisualizerTransfer.CreateView(new List<Emgu.CV.Mat> { emguMat });
+                Assert(emguListView.Summary.TotalCount == 1, "Typed Emgu CV list count failed.");
+                Assert(emguListView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Emgu CV list transfer failed.");
+
+                var bitmapListView = ImageCollectionVisualizerTransfer.CreateView(new List<Bitmap> { bitmap });
+                Assert(bitmapListView.Summary.TotalCount == 1, "Typed Bitmap list count failed.");
+                Assert(bitmapListView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Bitmap list transfer failed.");
+
+                var openCvDictionaryView = ImageCollectionVisualizerTransfer.CreateView(
+                    new Dictionary<string, Mat> { ["opencv"] = openCvMat });
+                Assert(openCvDictionaryView.Summary.TotalCount == 1, "Typed OpenCvSharp dictionary count failed.");
+                Assert(openCvDictionaryView.GetMetadata(0).DisplayName == "[opencv]", "Typed OpenCvSharp dictionary key failed.");
+                Assert(openCvDictionaryView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed OpenCvSharp dictionary transfer failed.");
+
+                var emguDictionaryView = ImageCollectionVisualizerTransfer.CreateView(
+                    new Dictionary<string, Emgu.CV.Mat> { ["emgu"] = emguMat });
+                Assert(emguDictionaryView.Summary.TotalCount == 1, "Typed Emgu CV dictionary count failed.");
+                Assert(emguDictionaryView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Emgu CV dictionary transfer failed.");
+
+                var bitmapDictionaryView = ImageCollectionVisualizerTransfer.CreateView(
+                    new Dictionary<string, Bitmap> { ["bitmap"] = bitmap });
+                Assert(bitmapDictionaryView.Summary.TotalCount == 1, "Typed Bitmap dictionary count failed.");
+                Assert(bitmapDictionaryView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Bitmap dictionary transfer failed.");
+
                 var arrayView = ImageCollectionVisualizerTransfer.CreateView(new object[] { snapshot, bitmap });
                 Assert(arrayView.Summary.TotalCount == 2, "Collection array count failed.");
                 Assert(arrayView.GetMetadata(1).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Collection array Bitmap failed.");
+
+                var typedArrayView = ImageCollectionVisualizerTransfer.CreateView(new[] { openCvMat });
+                Assert(typedArrayView.Summary.TotalCount == 1, "Typed OpenCvSharp array count failed.");
+                Assert(typedArrayView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed OpenCvSharp array transfer failed.");
 
                 var dictionaryView = ImageCollectionVisualizerTransfer.CreateView(
                     new Dictionary<string, object>

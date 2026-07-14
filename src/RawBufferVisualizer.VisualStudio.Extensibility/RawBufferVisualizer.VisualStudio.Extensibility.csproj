@@ -4,9 +4,9 @@
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
     <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
-    <AssemblyVersion>1.0.37.0</AssemblyVersion>
-    <FileVersion>1.0.37.0</FileVersion>
-    <Version>1.0.37</Version>
+    <AssemblyVersion>1.0.38.0</AssemblyVersion>
+    <FileVersion>1.0.38.0</FileVersion>
+    <Version>1.0.38</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" PrivateAssets="all" />
@@ -31,7 +31,6 @@
     <ProjectReference Include="..\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
-    <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
   </ItemGroup>
@@ -45,10 +44,6 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.dll" Link="RawBufferVisualizer.VisualStudio.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Classic\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Classic.dll" Link="RawBufferVisualizer.VisualStudio.Classic.dll">
       <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
@@ -86,9 +81,6 @@
     </Content>
   </ItemGroup>
   <Target Name="BuildVssdkToolWindowForVsix" BeforeTargets="AssignTargetPaths">
-    <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj"
-             Targets="Build"
-             Properties="Configuration=$(Configuration);TargetFramework=net472" />
     <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj"
              Targets="Build;GeneratePkgDef"
              Properties="Configuration=$(Configuration);TargetFramework=net472" />
