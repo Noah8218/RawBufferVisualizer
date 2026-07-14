@@ -1162,6 +1162,10 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             UpdatePixelOverlay(position, force);
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+            if (_selectionOverlayEnabled && !_selectedPixel.HasValue)
+            {
+                RequestRender();
+            }
         }
 
         private void PinMarkerAtScreenPoint(Point position)

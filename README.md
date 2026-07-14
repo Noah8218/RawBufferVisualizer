@@ -72,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Version `1.0.40.0` stabilizes the initial Fit view in resized docked windows and makes Pin freeze the pixel value, 5x5 neighborhood, statistics, marker, and status readouts until Clear is selected. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections continue to route into one docked viewer.
+Version `1.0.41.0` restores live mouse-following pixel markers in the manual OpenGL renderer while preserving pinned inspection. Hover coordinates, values, and the yellow/cyan image marker now update together without re-uploading the image texture. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections continue to route into one docked viewer.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -414,8 +414,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.40 release notes](docs/marketplace-release-notes-1.0.40.md).
-GitHub Release body for this version: [1.0.40 GitHub Release draft](docs/github-release-1.0.40.md).
+Marketplace release text for this version: [1.0.41 release notes](docs/marketplace-release-notes-1.0.41.md).
+GitHub Release body for this version: [1.0.41 GitHub Release draft](docs/github-release-1.0.41.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License

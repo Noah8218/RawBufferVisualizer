@@ -95,6 +95,30 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
     }
 }
 
+function Measure-NonDarkRatio([string]$path) {
+    $bitmap = New-Object System.Drawing.Bitmap $path
+    try {
+        $sampled = 0
+        $nonDark = 0
+        $stepX = [Math]::Max(1, [int]($bitmap.Width / 160))
+        $stepY = [Math]::Max(1, [int]($bitmap.Height / 120))
+        for ($y = 0; $y -lt $bitmap.Height; $y += $stepY) {
+            for ($x = 0; $x -lt $bitmap.Width; $x += $stepX) {
+                $color = $bitmap.GetPixel($x, $y)
+                $sampled++
+                if ([Math]::Max($color.R, [Math]::Max($color.G, $color.B)) -gt 24) {
+                    $nonDark++
+                }
+            }
+        }
+
+        return $nonDark / [double][Math]::Max(1, $sampled)
+    }
+    finally {
+        $bitmap.Dispose()
+    }
+}
+
 $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
 [Reflection.Assembly]::LoadFrom($assemblyPath) | Out-Null
 
@@ -144,11 +168,10 @@ foreach ($layoutWidth in $Widths) {
     $pinnedNeighborhood = $neighborhoodText.Text
     $pinnedStats = $statsText.Text
     $pinnedStatus = $statusText.Text
-    $hoverHandler = $control.GetType().GetMethod("OpenGlImageView_PixelHovered", [Reflection.BindingFlags]"Instance,NonPublic")
-    $hoverArgs = [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(310, 220)
-    $invokeArgs = [object[]]@($imageView, $hoverArgs)
-    $null = $hoverHandler.Invoke($control, $invokeArgs)
-    Wait-Dispatcher 50
+    $raiseHover = $imageView.GetType().GetMethod("RaisePixelHovered", [Reflection.BindingFlags]"Instance,NonPublic")
+    $pinnedHoverPoint = [System.Windows.Point]::new($imageView.ActualWidth * 0.55, $imageView.ActualHeight * 0.5)
+    $null = $raiseHover.Invoke($imageView, [object[]]@($pinnedHoverPoint, $false))
+    Wait-Dispatcher 100
     $pinFrozen = ($pixelText.Text -eq $pinnedPixel) -and
         ($neighborhoodText.Text -eq $pinnedNeighborhood) -and
         ($statsText.Text -eq $pinnedStats) -and
@@ -159,12 +182,43 @@ foreach ($layoutWidth in $Widths) {
     }
 
     $imageView.ClearPinnedMarker()
-    $null = $hoverHandler.Invoke($control, $invokeArgs)
-    Wait-Dispatcher 50
+    $resumedHoverPoint = [System.Windows.Point]::new($imageView.ActualWidth * 0.65, $imageView.ActualHeight * 0.45)
+    $null = $raiseHover.Invoke($imageView, [object[]]@($resumedHoverPoint, $false))
+    Wait-Dispatcher 100
     $hoverResumed = ($pixelText.Text -ne $pinnedPixel) -and
         ($control.FindName("CompactPixelHeadingText").Text -eq "Current")
     if (-not $hoverResumed) {
         throw "Inspector did not resume hover updates after clearing the pin at width $layoutWidth."
+    }
+
+    $imageView.ResetRenderStats()
+    $hoverPoints = @(
+        [System.Windows.Point]::new($imageView.ActualWidth * 0.35, $imageView.ActualHeight * 0.35),
+        [System.Windows.Point]::new($imageView.ActualWidth * 0.55, $imageView.ActualHeight * 0.50),
+        [System.Windows.Point]::new($imageView.ActualWidth * 0.72, $imageView.ActualHeight * 0.38)
+    )
+    $hoverReadouts = foreach ($screenPoint in $hoverPoints) {
+        $null = $raiseHover.Invoke($imageView, [object[]]@($screenPoint, $false))
+        Wait-Dispatcher 100
+        $pixelText.Text
+    }
+    $hoverStats = $imageView.GetRenderStatsSnapshot()
+    $hoverFrameCount = $hoverStats.FrameCount
+    $hoverReadoutCount = @($hoverReadouts | Select-Object -Unique).Count
+    $hoverCapturePath = Join-Path $outputRoot "hover-$layoutWidth.png"
+    Capture-Window $helper.Handle $hoverCapturePath
+    if ($hoverFrameCount -lt $hoverPoints.Count) {
+        throw "Hover marker did not render each settled pointer position at width $layoutWidth. Frames: $hoverFrameCount"
+    }
+    if ($hoverReadoutCount -ne $hoverPoints.Count) {
+        throw "Hover inspector did not follow each pointer position at width $layoutWidth. Readouts: $hoverReadoutCount"
+    }
+
+    $hoverFramebufferPath = Join-Path $outputRoot "hover-framebuffer-$layoutWidth.png"
+    $imageView.SaveFramebufferPng($hoverFramebufferPath)
+    $hoverNonDarkRatio = Measure-NonDarkRatio $hoverFramebufferPath
+    if ($hoverNonDarkRatio -lt 0.05) {
+        throw "Hover redraw produced a blank framebuffer at width $layoutWidth. Non-dark ratio: $hoverNonDarkRatio"
     }
 
     $results.Add([pscustomobject]@{
@@ -177,6 +231,12 @@ foreach ($layoutWidth in $Widths) {
         RelativeAspectError = [Math]::Round($aspectError, 8)
         PinFrozenAfterHover = $pinFrozen
         HoverResumedAfterClear = $hoverResumed
+        HoverRenderFrameCount = $hoverFrameCount
+        HoverDistinctReadoutCount = $hoverReadoutCount
+        HoverTextureUploadCount = $hoverStats.TextureUploadCount
+        HoverNonDarkRatio = [Math]::Round($hoverNonDarkRatio, 6)
+        HoverCapture = $hoverCapturePath
+        HoverFramebuffer = $hoverFramebufferPath
     })
 
     $window.Close()
