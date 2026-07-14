@@ -55,6 +55,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private Point? _selectedPixel;
         private Point? _hoverPixel;
         private bool _selectionOverlayEnabled = true;
+        private long _imageGeneration;
+        private bool _initialFitPending;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelPinned;
@@ -348,12 +350,13 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 _tiles.Add(new TextureTile(tile.X, tile.Y, tile.Width, tile.Height));
             }
 
-            FitToImage();
-            RequestRender();
+            ScheduleInitialFit();
         }
 
         public void ClearImage()
         {
+            _imageGeneration++;
+            _initialFitPending = false;
             DeleteTextures();
             _tiles.Clear();
             _imageSource = null;
@@ -365,6 +368,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             HidePixelOverlay();
             PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
             PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
 
@@ -479,6 +483,12 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void FitToImage()
         {
+            _initialFitPending = false;
+            FitToImageCore();
+        }
+
+        private void FitToImageCore()
+        {
             var width = ViewportWidth;
             var height = ViewportHeight;
             if (_descriptor == null || width <= 0 || height <= 0)
@@ -507,6 +517,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void SetZoomScale(double scale)
         {
+            _initialFitPending = false;
             var width = ViewportWidth;
             var height = ViewportHeight;
             if (_descriptor == null || width <= 0 || height <= 0 || scale <= 0)
@@ -526,6 +537,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void PanByImagePixels(double deltaX, double deltaY)
         {
+            _initialFitPending = false;
             if (_descriptor == null)
             {
                 return;
@@ -539,6 +551,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void PanByScreenPixels(double deltaX, double deltaY)
         {
+            _initialFitPending = false;
             if (_descriptor == null)
             {
                 return;
@@ -552,6 +565,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void ZoomAtScreenPoint(Point position, int wheelDelta)
         {
+            _initialFitPending = false;
             if (_descriptor == null || wheelDelta == 0)
             {
                 return;
@@ -577,6 +591,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return false;
             }
 
+            _initialFitPending = false;
             _viewLeft = state.Left;
             _viewTop = state.Top;
             _viewWidth = state.Width;
@@ -591,7 +606,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
             base.OnRenderSizeChanged(sizeInfo);
             if (_descriptor != null)
             {
-                ResizeViewKeepingZoom(sizeInfo.PreviousSize, sizeInfo.NewSize);
+                if (_initialFitPending)
+                {
+                    FitToImageCore();
+                }
+                else
+                {
+                    ResizeViewKeepingZoom(sizeInfo.PreviousSize, sizeInfo.NewSize);
+                }
             }
         }
 
@@ -664,6 +686,18 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void OpenGlResized(object? sender, EventArgs args)
         {
+            if (_descriptor != null)
+            {
+                if (_initialFitPending)
+                {
+                    FitToImageCore();
+                }
+                else
+                {
+                    MatchViewToViewportAspect();
+                }
+            }
+
             RequestRender();
         }
 
@@ -819,6 +853,40 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _viewTop = centerY - (_viewHeight / 2);
             RaiseViewChangedNow();
             RequestRender();
+        }
+
+        private void ScheduleInitialFit()
+        {
+            var generation = _imageGeneration;
+            _initialFitPending = true;
+            FitToImageCore();
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.ContextIdle,
+                new Action(() =>
+                {
+                    if (!_initialFitPending || generation != _imageGeneration || _descriptor == null)
+                    {
+                        return;
+                    }
+
+                    FitToImageCore();
+                    _initialFitPending = false;
+                }));
+        }
+
+        private void MatchViewToViewportAspect()
+        {
+            var width = ViewportWidth;
+            var height = ViewportHeight;
+            if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            {
+                return;
+            }
+
+            var centerY = _viewTop + (_viewHeight / 2);
+            _viewHeight = _viewWidth / Math.Max(width / height, 0.0001);
+            _viewTop = centerY - (_viewHeight / 2);
+            RaiseViewChangedNow();
         }
 
         private Point ScreenToImage(Point screenPoint)

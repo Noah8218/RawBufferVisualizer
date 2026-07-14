@@ -126,6 +126,47 @@ foreach ($layoutWidth in $Widths) {
     $inspector = $control.FindName("InspectorPanel")
     $compact = $control.FindName("CompactInspectorPanel")
     $imageView = $control.FindName("OpenGlImageView")
+    $viewState = $imageView.GetViewState()
+    $viewAspect = $viewState.Width / $viewState.Height
+    $viewportAspect = $imageView.ActualWidth / $imageView.ActualHeight
+    $aspectError = [Math]::Abs($viewAspect - $viewportAspect) / $viewportAspect
+    if ($aspectError -gt 0.01) {
+        throw "Fit aspect mismatch at width $layoutWidth. Relative error: $aspectError"
+    }
+
+    $imageView.PinMarkerAtImagePixel(100, 100) | Out-Null
+    Wait-Dispatcher 50
+    $pixelText = $control.FindName("CompactPixelText")
+    $neighborhoodText = $control.FindName("CompactPixelNeighborhoodText")
+    $statsText = $control.FindName("CompactRoiStatsText")
+    $statusText = $control.FindName("StatusText")
+    $pinnedPixel = $pixelText.Text
+    $pinnedNeighborhood = $neighborhoodText.Text
+    $pinnedStats = $statsText.Text
+    $pinnedStatus = $statusText.Text
+    $hoverHandler = $control.GetType().GetMethod("OpenGlImageView_PixelHovered", [Reflection.BindingFlags]"Instance,NonPublic")
+    $hoverArgs = [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(310, 220)
+    $invokeArgs = [object[]]@($imageView, $hoverArgs)
+    $null = $hoverHandler.Invoke($control, $invokeArgs)
+    Wait-Dispatcher 50
+    $pinFrozen = ($pixelText.Text -eq $pinnedPixel) -and
+        ($neighborhoodText.Text -eq $pinnedNeighborhood) -and
+        ($statsText.Text -eq $pinnedStats) -and
+        ($statusText.Text -eq $pinnedStatus) -and
+        ($control.FindName("CompactPixelHeadingText").Text -eq "Pinned")
+    if (-not $pinFrozen) {
+        throw "Pinned inspector changed after hover at width $layoutWidth."
+    }
+
+    $imageView.ClearPinnedMarker()
+    $null = $hoverHandler.Invoke($control, $invokeArgs)
+    Wait-Dispatcher 50
+    $hoverResumed = ($pixelText.Text -ne $pinnedPixel) -and
+        ($control.FindName("CompactPixelHeadingText").Text -eq "Current")
+    if (-not $hoverResumed) {
+        throw "Inspector did not resume hover updates after clearing the pin at width $layoutWidth."
+    }
+
     $results.Add([pscustomobject]@{
         Width = $layoutWidth
         Capture = $capturePath
@@ -133,6 +174,9 @@ foreach ($layoutWidth in $Widths) {
         CompactInspectorVisible = $compact.Visibility.ToString()
         ImageViewWidth = [Math]::Round($imageView.ActualWidth, 1)
         ImageViewHeight = [Math]::Round($imageView.ActualHeight, 1)
+        RelativeAspectError = [Math]::Round($aspectError, 8)
+        PinFrozenAfterHover = $pinFrozen
+        HoverResumedAfterClear = $hoverResumed
     })
 
     $window.Close()
@@ -143,4 +187,3 @@ $resultPath = Join-Path $outputRoot "layout-widths.json"
 $results | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $resultPath -Encoding UTF8
 $results | Format-Table -AutoSize
 Write-Host "Docked layout width smoke passed. Results: $resultPath"
-

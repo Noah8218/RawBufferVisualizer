@@ -53,6 +53,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private double _lastOpenPathMilliseconds;
         private int _lastHoverX = -1;
         private int _lastHoverY = -1;
+        private int _pinnedInspectorX = -1;
+        private int _pinnedInspectorY = -1;
         private double _lastCompactInspectorHeight = 168;
         private string _lastFramebufferCapturePath = string.Empty;
         private string _lastFramebufferCaptureError = string.Empty;
@@ -352,6 +354,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             DiagnosticsList.Items.Clear();
             HistogramCanvas.Children.Clear();
+            _lastHoverX = -1;
+            _lastHoverY = -1;
+            _pinnedInspectorX = -1;
+            _pinnedInspectorY = -1;
+            SetInspectorPinnedState(false);
+            SetMarkerText(string.Empty);
             SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
             ClearPixelStatus();
 
@@ -812,22 +820,23 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || e.X >= _activeDocument.Descriptor.Width
                 || e.Y >= _activeDocument.Descriptor.Height)
             {
-                SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
-                ClearPixelStatus();
                 _lastHoverX = -1;
                 _lastHoverY = -1;
+                if (!IsInspectorPinned)
+                {
+                    SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
+                    ClearPixelStatus();
+                }
+
                 return;
             }
 
             _lastHoverX = e.X;
             _lastHoverY = e.Y;
-            var pixelDescription = _activeDocument.Source.DescribePixel(e.X, e.Y);
-            SetPixelDetails(
-                pixelDescription,
-                BuildPixelNeighborhood(_activeDocument, e.X, e.Y, 2),
-                BuildRoiStats(_activeDocument, e.X, e.Y, 2),
-                BuildLineProfile(_activeDocument, e.X, e.Y));
-            UpdatePixelStatus(_activeDocument, e.X, e.Y, pixelDescription);
+            if (!IsInspectorPinned)
+            {
+                UpdateInspectorPixel(_activeDocument, e.X, e.Y);
+            }
         }
 
         private void OpenGlImageView_PixelSelected(object? sender, RawOpenGlPixelEventArgs e)
@@ -843,29 +852,47 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             _lastHoverX = e.X;
             _lastHoverY = e.Y;
-            var pixelDescription = _activeDocument.Source.DescribePixel(e.X, e.Y);
-            SetPixelDetails(
-                pixelDescription,
-                BuildPixelNeighborhood(_activeDocument, e.X, e.Y, 2),
-                BuildRoiStats(_activeDocument, e.X, e.Y, 2),
-                BuildLineProfile(_activeDocument, e.X, e.Y));
-            UpdatePixelStatus(_activeDocument, e.X, e.Y, pixelDescription);
+            if (!IsInspectorPinned)
+            {
+                UpdateInspectorPixel(_activeDocument, e.X, e.Y);
+            }
         }
 
         private void OpenGlImageView_PixelPinned(object? sender, RawOpenGlPixelEventArgs e)
         {
             if (_activeDocument == null || e.X < 0 || e.Y < 0 || e.X >= _activeDocument.Descriptor.Width || e.Y >= _activeDocument.Descriptor.Height)
             {
+                _pinnedInspectorX = -1;
+                _pinnedInspectorY = -1;
+                SetInspectorPinnedState(false);
                 SetMarkerText(string.Empty);
+                if (_activeDocument != null
+                    && _lastHoverX >= 0
+                    && _lastHoverY >= 0
+                    && _lastHoverX < _activeDocument.Descriptor.Width
+                    && _lastHoverY < _activeDocument.Descriptor.Height)
+                {
+                    UpdateInspectorPixel(_activeDocument, _lastHoverX, _lastHoverY);
+                }
+                else
+                {
+                    SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
+                    ClearPixelStatus();
+                }
+
                 return;
             }
 
+            _pinnedInspectorX = e.X;
+            _pinnedInspectorY = e.Y;
+            SetInspectorPinnedState(true);
             SetMarkerText(string.Format(
                 CultureInfo.InvariantCulture,
                 "X {0}  Y {1}\n{2}",
                 e.X,
                 e.Y,
                 _activeDocument.Source.DescribePixel(e.X, e.Y)));
+            UpdateInspectorPixel(_activeDocument, e.X, e.Y);
         }
 
         private void PinMarker_Click(object sender, RoutedEventArgs e)
@@ -1064,6 +1091,32 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             CompactPixelText.Text = pixel;
             CompactPixelNeighborhoodText.Text = neighborhood;
             CompactRoiStatsText.Text = roi;
+        }
+
+        private bool IsInspectorPinned
+        {
+            get { return _pinnedInspectorX >= 0 && _pinnedInspectorY >= 0; }
+        }
+
+        private void UpdateInspectorPixel(ImageDocument document, int x, int y)
+        {
+            var pixelDescription = document.Source.DescribePixel(x, y);
+            SetPixelDetails(
+                pixelDescription,
+                BuildPixelNeighborhood(document, x, y, 2),
+                BuildRoiStats(document, x, y, 2),
+                BuildLineProfile(document, x, y));
+            UpdatePixelStatus(document, x, y, pixelDescription);
+        }
+
+        private void SetInspectorPinnedState(bool pinned)
+        {
+            PixelHeadingText.Text = pinned ? "Pinned Pixel" : "Pixel";
+            PixelNeighborhoodHeadingText.Text = pinned ? "Pinned 5x5 Values" : "Hover 5x5 Values";
+            PixelStatsHeadingText.Text = pinned ? "Pinned 5x5 Stats" : "Hover 5x5 Stats";
+            CompactPixelHeadingText.Text = pinned ? "Pinned" : "Current";
+            CompactPixelNeighborhoodHeadingText.Text = pinned ? "Pinned 5x5 Values" : "Hover 5x5 Values";
+            CompactPixelStatsHeadingText.Text = pinned ? "Pinned 5x5 Stats" : "Hover 5x5 Stats";
         }
 
         private void SetMarkerText(string text)
