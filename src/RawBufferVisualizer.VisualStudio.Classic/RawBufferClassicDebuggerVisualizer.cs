@@ -120,7 +120,9 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     visualStudioProcessId,
                     displayName,
                     sourceType,
-                    ex.Message);
+                    ex.Message,
+                    ex.GetType().FullName,
+                    ex.ToString());
             }
 
             WakeDockedToolWindow(visualStudioProcessId);

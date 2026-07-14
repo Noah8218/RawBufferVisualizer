@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the GitHub Release from tag `v1.0.41` using [github-release-1.0.41.md](github-release-1.0.41.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+Create the GitHub Release from tag `v1.0.42` using [github-release-1.0.42.md](github-release-1.0.42.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -227,7 +227,8 @@ The docked smoke must validate:
 - One Visual Studio docked ToolWindow.
 - Single image list accumulation.
 - Single images and supported collections append only to the main docked image list; no debugger invocation opens a second lower ToolWindow.
-- Error rows remain visible with a red error thumbnail, `Open failed` title, reason, and Diagnostics entry.
+- Error rows remain visible with a red error thumbnail, `Open failed` title, stable error ID, reason, `Copy Report`, and `Open Logs`.
+- Support reports contain actionable version/source/error context and explicitly exclude image payloads; selecting a valid row after an error restores the normal viewer.
 - Narrow docked layout keeps the Inspector collapsed by default and preserves image list, viewer, Save, and status strip access.
 - Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
 - Save visible PNG, raw snapshot export path, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, pan, zoom, drag, and wheel interaction.
@@ -273,7 +274,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.41
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.42
 ```
 
 GitHub setup:
@@ -295,12 +296,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.41.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.42.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.41.md](marketplace-release-notes-1.0.41.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.42.md](marketplace-release-notes-1.0.42.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 

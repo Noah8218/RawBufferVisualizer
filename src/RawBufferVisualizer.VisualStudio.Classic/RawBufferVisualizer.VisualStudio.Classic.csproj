@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net472</TargetFramework>
-    <AssemblyVersion>1.0.41.0</AssemblyVersion>
-    <FileVersion>1.0.41.0</FileVersion>
-    <Version>1.0.41</Version>
+    <AssemblyVersion>1.0.42.0</AssemblyVersion>
+    <FileVersion>1.0.42.0</FileVersion>
+    <Version>1.0.42</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.DebuggerVisualizers" Version="17.6.1032901" />

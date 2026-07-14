@@ -72,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Version `1.0.41.0` restores live mouse-following pixel markers in the manual OpenGL renderer while preserving pinned inspection. Hover coordinates, values, and the yellow/cyan image marker now update together without re-uploading the image texture. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections continue to route into one docked viewer.
+Version `1.0.42.0` keeps visualization failures in the docked image list with a stable error ID, failure details, and `Copy Report` / `Open Logs` actions. Support reports include diagnostic and environment context without image payloads, and selecting a valid image after an error restores the normal viewer. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections continue to route into one docked viewer.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -147,6 +147,8 @@ var mixed = new object[] { inputBitmap, resultMat };
 ```
 
 Collection entries appear as `[0]`, `[1]`, or `[key]` in the existing docked `Images` list. Valid entries remain normal image rows. Null, unsupported, and failed entries remain visible as red error rows with the reason. One invocation processes at most 256 entries; a collection above that limit adds an error row explaining that only the first 256 entries were shown. Lazy or arbitrary `IEnumerable` sequences are intentionally not enumerated while the debugger is paused.
+
+When an image cannot be opened, select its red error row. The viewer shows a stable error ID, the failure reason, `Copy Report`, and `Open Logs`. `Copy Report` includes the extension and Visual Studio versions, source type, descriptor/diagnostics, and stack details when available. It does not include the image payload. Review paths and variable names in the report before sharing it in a GitHub issue.
 
 Visual Studio requires generic debugger visualizers to register the open generic `List<>` and `Dictionary<,>` types. Raw Buffer Visualizer therefore appears for typed and mixed lists or dictionaries. It transfers supported image entries only; null, unsupported, and failed entries remain visible as error rows. Visual Studio's built-in `IEnumerable Visualizer` can remain in the visualizer menu, so select `Raw Buffer Visualizer` when more than one visualizer is offered.
 
@@ -406,7 +408,7 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Multi-instance isolation: with two separate `devenv.exe` processes running, each debugger visualizer invocation must reach only that Visual Studio instance's docked viewer.
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
-- Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, and error rows.
+- Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, error rows, and support-report actions.
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and supported collections.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
@@ -414,8 +416,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.41 release notes](docs/marketplace-release-notes-1.0.41.md).
-GitHub Release body for this version: [1.0.41 GitHub Release draft](docs/github-release-1.0.41.md).
+Marketplace release text for this version: [1.0.42 release notes](docs/marketplace-release-notes-1.0.42.md).
+GitHub Release body for this version: [1.0.42 GitHub Release draft](docs/github-release-1.0.42.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License

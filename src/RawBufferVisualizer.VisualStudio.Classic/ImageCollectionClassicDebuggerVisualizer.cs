@@ -95,7 +95,9 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                             visualStudioProcessId,
                             result.DisplayName,
                             result.SourceType,
-                            ex.Message);
+                            ex.Message,
+                            ex.GetType().FullName,
+                            ex.ToString());
                     }
                 }
             }
@@ -105,7 +107,9 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     visualStudioProcessId,
                     "Image collection",
                     sourceType,
-                    ex.Message);
+                    ex.Message,
+                    ex.GetType().FullName,
+                    ex.ToString());
             }
 
             RawBufferClassicDebuggerVisualizer.WakeDockedToolWindow(visualStudioProcessId);
