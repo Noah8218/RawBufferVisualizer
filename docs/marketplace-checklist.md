@@ -1,4 +1,4 @@
-﻿# Visual Studio Marketplace Checklist
+# Visual Studio Marketplace Checklist
 
 Use this before publishing each Marketplace update.
 
