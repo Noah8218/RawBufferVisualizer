@@ -67,6 +67,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
                 VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance();
+                VisualizerSupportReportContainsActionableContextWithoutImageData();
                 VisualStudioTempStoreDeletesOwnedSnapshotDirectories();
                 VisualStudioTempStoreReportsRootByteCount();
                 BitmapAdapterCreatesSnapshot();
@@ -1464,7 +1465,9 @@ namespace RawBufferVisualizer.Tests
                     secondVisualStudioProcessId,
                     "unsupportedMat",
                     "OpenCvSharp.Mat",
-                    "The matrix format is not supported.");
+                    "The matrix format is not supported.",
+                    "System.NotSupportedException",
+                    "System.NotSupportedException: The matrix format is not supported.");
                 var errorRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(errorRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
@@ -1481,6 +1484,8 @@ namespace RawBufferVisualizer.Tests
                 Assert(errorRequest.DisplayName == "unsupportedMat", "Error handoff display name roundtrip failed.");
                 Assert(errorRequest.SourceType == "OpenCvSharp.Mat", "Error handoff source type roundtrip failed.");
                 Assert(errorRequest.ErrorMessage == "The matrix format is not supported.", "Error handoff message roundtrip failed.");
+                Assert(errorRequest.ErrorType == "System.NotSupportedException", "Error handoff type roundtrip failed.");
+                Assert(errorRequest.ErrorDetails.StartsWith("System.NotSupportedException:", StringComparison.Ordinal), "Error handoff details roundtrip failed.");
                 VisualizerHandoffInbox.TryDeleteRequest(errorRequestPath);
                 Assert(!File.Exists(errorRequestPath), "Handled error handoff request was not deleted.");
             }
@@ -1501,6 +1506,38 @@ namespace RawBufferVisualizer.Tests
                     Directory.Delete(secondInbox, true);
                 }
             }
+        }
+
+        private static void VisualizerSupportReportContainsActionableContextWithoutImageData()
+        {
+            var data = new VisualizerSupportReportData
+            {
+                ReportType = "Visualization error",
+                ErrorId = "RBV-TEST-1234",
+                TimestampUtc = new DateTime(2026, 7, 14, 8, 30, 0, DateTimeKind.Utc),
+                ExtensionVersion = "1.0.41.0",
+                VisualStudioVersion = "17.14.0",
+                OperatingSystem = "Windows",
+                ProcessArchitecture = "x64",
+                SourceName = "cameraFrame",
+                SourceType = "OpenCvSharp.Mat",
+                ErrorType = "System.NotSupportedException",
+                ErrorMessage = "Unsupported depth.",
+                ErrorDetails = "System.NotSupportedException: Unsupported depth.",
+                Descriptor = "640x480 BGR24 stride 1920",
+                DisplayPath = @"C:\Temp\camera.rbuf.json",
+                PackageLogPath = @"C:\Temp\package.log",
+                ActivityLogPath = @"C:\Temp\ActivityLog.xml"
+            };
+            data.Diagnostics.Add("Error: Unsupported depth.");
+
+            var report = VisualizerSupportReport.Create(data);
+
+            Assert(report.Contains("Error ID: RBV-TEST-1234"), "Support report error ID failed.");
+            Assert(report.Contains("Extension version: 1.0.41.0"), "Support report extension version failed.");
+            Assert(report.Contains("Source type: OpenCvSharp.Mat"), "Support report source type failed.");
+            Assert(report.Contains("Diagnostics:"), "Support report diagnostics failed.");
+            Assert(report.Contains("Image payload included: No"), "Support report image privacy declaration failed.");
         }
 
         private static void VisualStudioTempStoreDeletesOwnedSnapshotDirectories()

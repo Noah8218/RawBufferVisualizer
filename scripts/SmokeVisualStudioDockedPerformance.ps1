@@ -710,7 +710,16 @@ try {
         }
 
         $session = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-        if ($session.documentCount -ge 3 -and $session.errorCount -ge 1) { $session } else { $null }
+        if ($session.documentCount -ge 3 -and
+            $session.errorCount -ge 1 -and
+            $session.errorPanelVisible -and
+            $session.supportReportAvailable -and
+            ([string]$session.activeErrorId).StartsWith("RBV-ERROR-", [System.StringComparison]::Ordinal)) {
+            $session
+        }
+        else {
+            $null
+        }
     } 120
     Focus-VisualStudioWindow $hwnd
     Capture-Window $hwnd $errorSessionScreenshotPath
@@ -883,6 +892,16 @@ try {
     }
     if ($sessionState.errorCount -lt 1) {
         $failures.Add("Docket session did not keep an error row")
+    }
+    if (-not $sessionState.errorPanelVisible) {
+        $failures.Add("Active error row did not show the error overlay")
+    }
+    if (-not $sessionState.supportReportAvailable) {
+        $failures.Add("Active error row did not expose a support report")
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$sessionState.activeErrorId) -or
+        -not ([string]$sessionState.activeErrorId).StartsWith("RBV-ERROR-", [System.StringComparison]::Ordinal)) {
+        $failures.Add("Active error row did not expose a stable error ID: $($sessionState.activeErrorId)")
     }
     $sourceTypes = @($sessionState.documents | ForEach-Object { $_.sourceType })
     if ($sourceTypes -notcontains "RawBufferVisualizer.Sdk.RawBufferSnapshot") {

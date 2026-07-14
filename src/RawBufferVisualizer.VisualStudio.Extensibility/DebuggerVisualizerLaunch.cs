@@ -83,7 +83,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     displayName,
                     sourceType,
                     ex.Message,
-                    cancellationToken);
+                    cancellationToken,
+                    errorType: ex.GetType().FullName,
+                    errorDetails: ex.ToString());
                 if (!closeWhenLoaded)
                 {
                     session.ReportFailure(ex.Message);
@@ -187,7 +189,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             visualStudioProcessId,
                             string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName,
                             summary.SourceType,
-                            ex.Message));
+                            ex.Message,
+                            ex.GetType().FullName,
+                            ex.ToString()));
                     }
                 }
 
@@ -222,7 +226,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     sourceType,
                     ex.Message,
                     cancellationToken,
-                    requestPaths);
+                    requestPaths,
+                    ex.GetType().FullName,
+                    ex.ToString());
                 if (!closeWhenLoaded)
                 {
                     session.ReportFailure(ex.Message);
@@ -238,7 +244,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             string sourceType,
             string errorMessage,
             CancellationToken cancellationToken,
-            List<string>? requestPaths = null)
+            List<string>? requestPaths = null,
+            string? errorType = null,
+            string? errorDetails = null)
         {
             if (visualStudioProcessId <= 0)
             {
@@ -252,7 +260,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     visualStudioProcessId,
                     displayName,
                     sourceType,
-                    errorMessage));
+                    errorMessage,
+                    errorType,
+                    errorDetails));
                 if (!await TryCompleteHandoffAsync(visualStudioProcessId, requestPaths, cancellationToken))
                 {
                     return false;

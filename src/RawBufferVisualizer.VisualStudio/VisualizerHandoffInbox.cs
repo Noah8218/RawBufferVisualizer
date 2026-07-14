@@ -45,7 +45,9 @@ namespace RawBufferVisualizer.VisualStudio
             int visualStudioProcessId,
             string? displayName,
             string? sourceType,
-            string errorMessage)
+            string errorMessage,
+            string? errorType = null,
+            string? errorDetails = null)
         {
             if (string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -58,7 +60,9 @@ namespace RawBufferVisualizer.VisualStudio
                     string.Empty,
                     displayName ?? string.Empty,
                     sourceType ?? string.Empty,
-                    errorMessage));
+                    errorMessage,
+                    errorType ?? string.Empty,
+                    errorDetails ?? string.Empty));
         }
 
         public static string ReadSnapshotRequest(string requestPath)
@@ -105,7 +109,9 @@ namespace RawBufferVisualizer.VisualStudio
                     loaded.MetadataPath ?? string.Empty,
                     loaded.DisplayName ?? string.Empty,
                     loaded.SourceType ?? string.Empty,
-                    loaded.ErrorMessage ?? string.Empty);
+                    loaded.ErrorMessage ?? string.Empty,
+                    loaded.ErrorType ?? string.Empty,
+                    loaded.ErrorDetails ?? string.Empty);
             }
         }
 
@@ -145,7 +151,9 @@ namespace RawBufferVisualizer.VisualStudio
                 MetadataPath = request.MetadataPath,
                 DisplayName = request.DisplayName,
                 SourceType = request.SourceType,
-                ErrorMessage = request.ErrorMessage
+                ErrorMessage = request.ErrorMessage,
+                ErrorType = request.ErrorType,
+                ErrorDetails = request.ErrorDetails
             };
 
             using (var stream = new MemoryStream())
@@ -163,6 +171,8 @@ namespace RawBufferVisualizer.VisualStudio
         public string DisplayName { get; private set; }
         public string SourceType { get; private set; }
         public string ErrorMessage { get; private set; }
+        public string ErrorType { get; private set; }
+        public string ErrorDetails { get; private set; }
 
         public bool IsError
         {
@@ -170,11 +180,22 @@ namespace RawBufferVisualizer.VisualStudio
         }
 
         public VisualizerHandoffRequest(string metadataPath, string displayName, string sourceType)
-            : this(metadataPath, displayName, sourceType, string.Empty)
+            : this(metadataPath, displayName, sourceType, string.Empty, string.Empty, string.Empty)
         {
         }
 
         public VisualizerHandoffRequest(string metadataPath, string displayName, string sourceType, string errorMessage)
+            : this(metadataPath, displayName, sourceType, errorMessage, string.Empty, string.Empty)
+        {
+        }
+
+        public VisualizerHandoffRequest(
+            string metadataPath,
+            string displayName,
+            string sourceType,
+            string errorMessage,
+            string errorType,
+            string errorDetails)
         {
             if (string.IsNullOrWhiteSpace(metadataPath) && string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -185,6 +206,8 @@ namespace RawBufferVisualizer.VisualStudio
             DisplayName = displayName ?? string.Empty;
             SourceType = sourceType ?? string.Empty;
             ErrorMessage = errorMessage ?? string.Empty;
+            ErrorType = errorType ?? string.Empty;
+            ErrorDetails = errorDetails ?? string.Empty;
         }
     }
 
@@ -202,5 +225,11 @@ namespace RawBufferVisualizer.VisualStudio
 
         [DataMember(Name = "errorMessage")]
         public string? ErrorMessage { get; set; }
+
+        [DataMember(Name = "errorType", EmitDefaultValue = false)]
+        public string? ErrorType { get; set; }
+
+        [DataMember(Name = "errorDetails", EmitDefaultValue = false)]
+        public string? ErrorDetails { get; set; }
     }
 }

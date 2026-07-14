@@ -104,7 +104,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
                         ? (string.IsNullOrWhiteSpace(request.SourceType) ? "Debugger visualizer" : request.SourceType)
                         : request.DisplayName;
-                    AddErrorDocument(displayName, new InvalidOperationException(request.ErrorMessage));
+                    AddErrorDocument(
+                        displayName,
+                        request.SourceType,
+                        request.ErrorType,
+                        request.ErrorMessage,
+                        request.ErrorDetails);
                 }
                 else
                 {
@@ -113,7 +118,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             catch (Exception ex)
             {
-                DiagnosticsList.Items.Add("Error: handoff failed. " + ex.Message);
+                AddErrorDocument(
+                    requestPath,
+                    "Debugger handoff",
+                    ex.GetType().FullName ?? ex.GetType().Name,
+                    ex.Message,
+                    ex.ToString());
                 WriteAutomationProbeFailureIfRequested(requestPath, ex);
             }
             finally
@@ -166,7 +176,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             catch (Exception ex)
             {
                 _lastOpenPathMilliseconds = openWatch.Elapsed.TotalMilliseconds;
-                AddErrorDocument(fullPath, ex);
+                AddErrorDocument(
+                    fullPath,
+                    string.IsNullOrWhiteSpace(sourceType) ? "Raw snapshot" : sourceType!,
+                    ex.GetType().FullName ?? ex.GetType().Name,
+                    ex.Message,
+                    ex.ToString());
                 WriteAutomationProbeFailureIfRequested(fullPath, ex);
                 if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("RAWBUFFERVISUALIZER_DOCKED_PERF_JSON")))
                 {
@@ -352,6 +367,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void RenderActiveDocument()
         {
+            HideErrorPanel();
             DiagnosticsList.Items.Clear();
             HistogramCanvas.Children.Clear();
             _lastHoverX = -1;
@@ -373,6 +389,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 OpenGlImageView.ClearImage();
                 DiagnosticsList.Items.Add("Error: " + _activeDocument.ErrorMessage);
+                ShowErrorPanel(_activeDocument);
                 UpdatePerformanceText();
                 UpdateStatus();
                 return;
@@ -413,14 +430,224 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateStatus();
         }
 
-        private void AddErrorDocument(string displayPath, Exception exception)
+        private void AddErrorDocument(
+            string displayPath,
+            string sourceType,
+            string errorType,
+            string errorMessage,
+            string errorDetails)
         {
             var document = ImageDocument.CreateError(
                 displayPath,
-                exception.Message,
+                sourceType,
+                errorType,
+                errorMessage,
+                errorDetails,
                 ShouldDeleteSnapshotDirectoryOnDispose(displayPath));
             _documents.Add(document);
             ActivateDocument(document);
+        }
+
+        private void ShowErrorPanel(ImageDocument document)
+        {
+            OpenGlImageView.Visibility = Visibility.Collapsed;
+            ErrorIdText.Text = document.ErrorId;
+            ErrorMessageText.Text = document.ErrorMessage;
+            ErrorPanel.Visibility = Visibility.Visible;
+        }
+
+        private void HideErrorPanel()
+        {
+            if (ErrorPanel == null)
+            {
+                return;
+            }
+
+            ErrorPanel.Visibility = Visibility.Collapsed;
+            OpenGlImageView.Visibility = Visibility.Visible;
+            ErrorIdText.Text = string.Empty;
+            ErrorMessageText.Text = string.Empty;
+        }
+
+        private void CopySupportReport_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Clipboard.SetText(CreateActiveSupportReport());
+                DiagnosticsList.Items.Insert(0, "Info: support report copied to the clipboard.");
+                SetTransientStatus("Support report copied");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: support report copy failed. " + ex.Message);
+                SetTransientStatus("Report copy failed");
+            }
+        }
+
+        private void OpenSupportLogs_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var reportPath = WriteActiveSupportReportFile();
+                var logDirectory = Path.GetDirectoryName(reportPath) ?? VisualStudioTempStore.RootDirectory;
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = "/select,\"" + reportPath + "\"",
+                    UseShellExecute = false
+                });
+                DiagnosticsList.Items.Insert(0, "Info: opened support logs at " + logDirectory);
+                SetTransientStatus("Support logs opened");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: support log folder failed. " + ex.Message);
+                SetTransientStatus("Open logs failed");
+            }
+        }
+
+        private string WriteActiveSupportReportFile()
+        {
+            var logDirectory = VisualStudioTempStore.RootDirectory;
+            Directory.CreateDirectory(logDirectory);
+            var reportPath = Path.Combine(logDirectory, "latest-error-report.txt");
+            File.WriteAllText(reportPath, CreateActiveSupportReport(), new UTF8Encoding(false));
+            return reportPath;
+        }
+
+        private string CreateActiveSupportReport()
+        {
+            var now = DateTime.UtcNow;
+            var document = _activeDocument;
+            var data = new VisualizerSupportReportData
+            {
+                ReportType = document != null && document.IsError ? "Visualization error" : "Diagnostics",
+                ErrorId = document != null && document.IsError
+                    ? document.ErrorId
+                    : CreateSupportId("DIAG", now),
+                TimestampUtc = document != null && document.IsError ? document.ErrorOccurredUtc : now,
+                ExtensionVersion = GetExtensionVersion(),
+                VisualStudioVersion = GetVisualStudioVersion(),
+                OperatingSystem = Environment.OSVersion.VersionString,
+                ProcessArchitecture = Environment.Is64BitProcess ? "x64" : "x86",
+                SourceName = document == null ? string.Empty : document.Title,
+                SourceType = document == null ? string.Empty : document.SourceType,
+                ErrorType = document == null ? string.Empty : document.ErrorType,
+                ErrorMessage = document == null ? string.Empty : document.ErrorMessage,
+                ErrorDetails = document == null ? string.Empty : document.ErrorDetails,
+                Descriptor = document == null || document.IsError ? string.Empty : FormatDescriptorForReport(document),
+                DisplayPath = document == null ? string.Empty : document.DisplayPath,
+                PackageLogPath = Path.Combine(VisualStudioTempStore.RootDirectory, "package.log"),
+                ActivityLogPath = GetLatestActivityLogPath()
+            };
+
+            foreach (var diagnostic in DiagnosticsList.Items)
+            {
+                var text = Convert.ToString(diagnostic, CultureInfo.InvariantCulture);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    data.Diagnostics.Add(text!);
+                }
+            }
+
+            return VisualizerSupportReport.Create(data);
+        }
+
+        private static string FormatDescriptorForReport(ImageDocument document)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0}x{1} {2}, stride {3}, valid bits {4}, {5}, {6:N0} bytes",
+                document.Descriptor.Width,
+                document.Descriptor.Height,
+                document.Descriptor.PixelFormat,
+                document.Descriptor.Stride,
+                document.Descriptor.ValidBits,
+                document.Descriptor.ByteOrder,
+                document.Source.Length);
+        }
+
+        private static string CreateSupportId(string kind, DateTime utcNow)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "RBV-{0}-{1}-{2}",
+                kind,
+                utcNow.ToUniversalTime().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture),
+                Guid.NewGuid().ToString("N").Substring(0, 8).ToUpperInvariant());
+        }
+
+        private static string GetExtensionVersion()
+        {
+            try
+            {
+                var assemblyDirectory = Path.GetDirectoryName(typeof(RawBufferToolWindowControl).Assembly.Location);
+                var extensionAssemblyPath = string.IsNullOrWhiteSpace(assemblyDirectory)
+                    ? string.Empty
+                    : Path.Combine(assemblyDirectory, "RawBufferVisualizer.VisualStudio.Extensibility.dll");
+                if (File.Exists(extensionAssemblyPath))
+                {
+                    var fileVersion = FileVersionInfo.GetVersionInfo(extensionAssemblyPath).FileVersion;
+                    if (!string.IsNullOrWhiteSpace(fileVersion))
+                    {
+                        return fileVersion;
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return typeof(RawBufferToolWindowControl).Assembly.GetName().Version?.ToString() ?? "Unknown";
+        }
+
+        private static string GetVisualStudioVersion()
+        {
+            try
+            {
+                using (var process = Process.GetCurrentProcess())
+                {
+                    var executablePath = process.MainModule?.FileName;
+                    if (!string.IsNullOrWhiteSpace(executablePath))
+                    {
+                        return FileVersionInfo.GetVersionInfo(executablePath).FileVersion ?? "Unknown";
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return "Unknown";
+        }
+
+        private static string GetLatestActivityLogPath()
+        {
+            try
+            {
+                var root = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                    "Microsoft",
+                    "VisualStudio");
+                if (Directory.Exists(root))
+                {
+                    var latest = Directory.GetDirectories(root, "17.0_*")
+                        .Select(directory => Path.Combine(directory, "ActivityLog.xml"))
+                        .Where(File.Exists)
+                        .OrderByDescending(File.GetLastWriteTimeUtc)
+                        .FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(latest))
+                    {
+                        return latest!;
+                    }
+                }
+
+                return Path.Combine(root, "17.0_*", "ActivityLog.xml");
+            }
+            catch
+            {
+                return "%APPDATA%\\Microsoft\\VisualStudio\\17.0_*\\ActivityLog.xml";
+            }
         }
 
         private void DrawHistogramIfReasonable(ImageDocument document)
@@ -1663,6 +1890,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            if (_activeDocument.IsError)
+            {
+                StatusText.Text = "Error " + _activeDocument.ErrorId;
+                WriteSessionStateIfRequested();
+                return;
+            }
+
             StatusText.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "{0}x{1} {2} {3} {4} tiles",
@@ -1747,6 +1981,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "tempBytes", hasTempByteCount ? tempByteCount : -1, true);
                 AppendJsonProperty(builder, "activeTitle", _activeDocument == null ? string.Empty : _activeDocument.Title, true);
                 AppendJsonProperty(builder, "status", StatusText.Text, true);
+                AppendJsonProperty(builder, "activeErrorId", _activeDocument == null ? string.Empty : _activeDocument.ErrorId, true);
+                AppendJsonProperty(builder, "errorPanelVisible", ErrorPanel != null && ErrorPanel.Visibility == Visibility.Visible, true);
+                AppendJsonProperty(builder, "supportReportAvailable", _activeDocument != null && _activeDocument.IsError, true);
                 builder.AppendLine("  \"documents\": [");
                 for (var i = 0; i < _documents.Count; i++)
                 {
@@ -1762,6 +1999,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     AppendJsonProperty(builder, "sourceMode", GetSourceMode(document.Source), true, 6);
                     AppendJsonProperty(builder, "isError", document.IsError, true, 6);
                     AppendJsonProperty(builder, "hasThumbnail", document.Thumbnail != null, true, 6);
+                    AppendJsonProperty(builder, "errorId", document.ErrorId, true, 6);
+                    AppendJsonProperty(builder, "errorType", document.ErrorType, true, 6);
                     AppendJsonProperty(builder, "errorMessage", document.ErrorMessage, false, 6);
                     builder.Append("    }");
                     builder.AppendLine(i + 1 == _documents.Count ? string.Empty : ",");
@@ -2317,7 +2556,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 return string.Format(
                     CultureInfo.InvariantCulture,
-                    "Type       Error\nReason     {0}\nFile       {1}",
+                    "Type       Error\nError ID   {0}\nSource     {1}\nReason     {2}\nFile       {3}",
+                    document.ErrorId,
+                    document.SourceType,
                     document.ErrorMessage,
                     document.DisplayPath);
             }
@@ -2348,6 +2589,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public RawOpenGlViewState? ViewState { get; set; }
             public BitmapSource? Thumbnail { get; private set; }
             public string ErrorMessage { get; private set; }
+            public string ErrorType { get; private set; }
+            public string ErrorDetails { get; private set; }
+            public string ErrorId { get; private set; }
+            public DateTime ErrorOccurredUtc { get; private set; }
             private readonly string? _ownedSnapshotDirectory;
             private bool _disposed;
 
@@ -2391,14 +2636,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
                 Thumbnail = CreateThumbnailSource(Source, Descriptor);
                 ErrorMessage = string.Empty;
+                ErrorType = string.Empty;
+                ErrorDetails = string.Empty;
+                ErrorId = string.Empty;
+                ErrorOccurredUtc = DateTime.MinValue;
                 _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
-            private ImageDocument(string displayPath, string errorMessage, bool deleteSnapshotDirectoryOnDispose)
+            private ImageDocument(
+                string displayPath,
+                string sourceType,
+                string errorType,
+                string errorMessage,
+                string errorDetails,
+                bool deleteSnapshotDirectoryOnDispose)
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = "Open failed: " + CreateTitle(DisplayPath);
-                SourceType = "Error";
+                SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Descriptor = new RawImageDescriptor
                 {
                     Width = 1,
@@ -2411,12 +2666,28 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Source = RawImageSource.FromMemory(new byte[] { 0 }, Descriptor);
                 Thumbnail = CreateErrorThumbnailSource();
                 ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Unknown open failure." : errorMessage;
+                ErrorType = string.IsNullOrWhiteSpace(errorType) ? "Unknown" : errorType;
+                ErrorDetails = errorDetails ?? string.Empty;
+                ErrorOccurredUtc = DateTime.UtcNow;
+                ErrorId = CreateSupportId("ERROR", ErrorOccurredUtc);
                 _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
-            public static ImageDocument CreateError(string displayPath, string errorMessage, bool deleteSnapshotDirectoryOnDispose = false)
+            public static ImageDocument CreateError(
+                string displayPath,
+                string sourceType,
+                string errorType,
+                string errorMessage,
+                string errorDetails,
+                bool deleteSnapshotDirectoryOnDispose = false)
             {
-                return new ImageDocument(displayPath, errorMessage, deleteSnapshotDirectoryOnDispose);
+                return new ImageDocument(
+                    displayPath,
+                    sourceType,
+                    errorType,
+                    errorMessage,
+                    errorDetails,
+                    deleteSnapshotDirectoryOnDispose);
             }
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)
@@ -2430,6 +2701,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
                 Thumbnail = CreateThumbnailSource(Source, Descriptor);
                 ErrorMessage = string.Empty;
+                ErrorType = string.Empty;
+                ErrorDetails = string.Empty;
+                ErrorId = string.Empty;
+                ErrorOccurredUtc = DateTime.MinValue;
             }
 
             public void Dispose()

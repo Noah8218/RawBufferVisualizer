@@ -283,9 +283,33 @@
                           ResizeDirection="Columns"
                           ResizeBehavior="PreviousAndNext"/>
 
-            <Border Grid.Column="2" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
-                <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
-            </Border>
+            <Grid Grid.Column="2">
+                <Border Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
+                    <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
+                </Border>
+                <Border x:Name="ErrorPanel"
+                        Visibility="Collapsed"
+                        Panel.ZIndex="2"
+                        MaxWidth="560"
+                        Margin="12"
+                        Padding="16"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Background="#252526"
+                        BorderBrush="#C94B4B"
+                        BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock Text="Image could not be visualized" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock x:Name="ErrorIdText" Margin="0,5,0,0" Foreground="#F48771" FontFamily="Consolas" FontSize="11"/>
+                        <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
+                        <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                        <WrapPanel Margin="0,12,0,0">
+                            <Button x:Name="CopyErrorReportButton" Content="Copy Report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click"/>
+                            <Button x:Name="OpenErrorLogsButton" Content="Open Logs" AutomationProperties.AutomationId="OpenErrorLogsButton" Click="OpenSupportLogs_Click"/>
+                        </WrapPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
 
             <GridSplitter x:Name="InspectorGridSplitter"
                           Grid.Column="3"
@@ -373,6 +397,10 @@
                     <TextBlock x:Name="CompareText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
 
                     <TextBlock Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
+                    <WrapPanel Margin="0,0,0,6">
+                        <Button Content="Copy Report" ToolTip="Copy diagnostics and environment details without image data" Click="CopySupportReport_Click"/>
+                        <Button Content="Open Logs" ToolTip="Write the current report and open its log folder" Click="OpenSupportLogs_Click"/>
+                    </WrapPanel>
                     <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                     <ListBox x:Name="DiagnosticsList" Height="110"/>
                 </StackPanel>
@@ -448,6 +476,10 @@
                     <TabItem Header="Diagnostics">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="4">
+                                <WrapPanel Margin="0,0,0,8">
+                                    <Button Content="Copy Report" ToolTip="Copy diagnostics and environment details without image data" Click="CopySupportReport_Click"/>
+                                    <Button Content="Open Logs" ToolTip="Write the current report and open its log folder" Click="OpenSupportLogs_Click"/>
+                                </WrapPanel>
                                 <TextBlock x:Name="CompactPerformanceText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="10" Margin="0,0,0,8"/>
                                 <ItemsControl ItemsSource="{Binding ElementName=DiagnosticsList, Path=Items}">
                                     <ItemsControl.ItemTemplate>

@@ -27,6 +27,7 @@ $width = 640
 $height = 480
 $rawPath = Join-Path $sampleRoot "layout-mono8.raw"
 $metadataPath = Join-Path $sampleRoot "layout-mono8.rbuf.json"
+$missingMetadataPath = Join-Path $sampleRoot "missing-layout-mono8.rbuf.json"
 
 $buffer = New-Object byte[] ($width * $height)
 for ($y = 0; $y -lt $height; $y++) {
@@ -221,6 +222,94 @@ foreach ($layoutWidth in $Widths) {
         throw "Hover redraw produced a blank framebuffer at width $layoutWidth. Non-dark ratio: $hoverNonDarkRatio"
     }
 
+    $control.OpenPath($missingMetadataPath)
+    Wait-Dispatcher 250
+    $errorPanel = $control.FindName("ErrorPanel")
+    $errorIdText = $control.FindName("ErrorIdText")
+    $errorPanelVisible = $errorPanel.Visibility -eq [System.Windows.Visibility]::Visible
+    $imageViewHiddenForError = $imageView.Visibility -eq [System.Windows.Visibility]::Collapsed
+    $errorId = $errorIdText.Text
+    $createReport = $control.GetType().GetMethod(
+        "CreateActiveSupportReport",
+        [Reflection.BindingFlags]"Instance,NonPublic")
+    $errorReport = [string]$createReport.Invoke($control, @())
+    $errorReportValid = $errorReport.Contains("Raw Buffer Visualizer Support Report") -and
+        $errorReport.Contains("Error ID: $errorId") -and
+        $errorReport.Contains("Error type: System.IO.FileNotFoundException") -and
+        $errorReport.Contains("Image payload included: No") -and
+        $errorReport.Contains("Package log:")
+    if (-not $errorPanelVisible) {
+        throw "Error overlay was not visible at width $layoutWidth."
+    }
+    if (-not $imageViewHiddenForError) {
+        throw "Image host was not hidden behind the error overlay at width $layoutWidth."
+    }
+    if (-not $errorId.StartsWith("RBV-ERROR-", [System.StringComparison]::Ordinal)) {
+        throw "Error overlay did not expose a support ID at width $layoutWidth. ID: $errorId"
+    }
+    if (-not $errorReportValid) {
+        throw "Support report was missing required diagnostic fields at width $layoutWidth."
+    }
+
+    $copyReportButton = $control.FindName("CopyErrorReportButton")
+    $copyReportButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    Wait-Dispatcher 50
+    $clipboardReportValid = [System.Windows.Clipboard]::ContainsText() -and
+        ([System.Windows.Clipboard]::GetText()).Contains("Error ID: $errorId")
+    if (-not $clipboardReportValid) {
+        throw "Copy Report did not place the active error report on the clipboard at width $layoutWidth."
+    }
+
+    $writeReport = $control.GetType().GetMethod(
+        "WriteActiveSupportReportFile",
+        [Reflection.BindingFlags]"Instance,NonPublic")
+    $supportReportPath = [string]$writeReport.Invoke($control, @())
+    $supportReportFileValid = (Test-Path -LiteralPath $supportReportPath) -and
+        (Get-Content -LiteralPath $supportReportPath -Raw).Contains("Error ID: $errorId")
+    if (-not $supportReportFileValid) {
+        throw "Open Logs report file was not generated correctly at width $layoutWidth."
+    }
+
+    $errorCapturePath = Join-Path $outputRoot "error-$layoutWidth.png"
+    Capture-Window $helper.Handle $errorCapturePath
+
+    $imageList = $control.FindName("ImageList")
+    $imageList.SelectedIndex = 0
+    Wait-Dispatcher 250
+    $recoveredFromError = $errorPanel.Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        $imageView.Visibility -eq [System.Windows.Visibility]::Visible
+    $recoveryFramebufferPath = Join-Path $outputRoot "recovered-framebuffer-$layoutWidth.png"
+    $imageView.SaveFramebufferPng($recoveryFramebufferPath)
+    $recoveryNonDarkRatio = Measure-NonDarkRatio $recoveryFramebufferPath
+    if (-not $recoveredFromError) {
+        throw "Normal image did not recover after selecting it from an error row at width $layoutWidth."
+    }
+    if ($recoveryNonDarkRatio -lt 0.05) {
+        throw "Recovered image framebuffer was blank at width $layoutWidth. Non-dark ratio: $recoveryNonDarkRatio"
+    }
+
+    $recoveryCapturePath = Join-Path $outputRoot "recovered-$layoutWidth.png"
+    Capture-Window $helper.Handle $recoveryCapturePath
+
+    $malformedHandoffPath = Join-Path $sampleRoot "malformed-$layoutWidth.rbuf-handoff"
+    [IO.File]::WriteAllText($malformedHandoffPath, "{")
+    $control.OpenHandoffRequest($malformedHandoffPath)
+    Wait-Dispatcher 250
+    $malformedHandoffVisible = $errorPanel.Visibility -eq [System.Windows.Visibility]::Visible -and
+        $imageView.Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        -not (Test-Path -LiteralPath $malformedHandoffPath)
+    if (-not $malformedHandoffVisible) {
+        throw "Malformed handoff did not become a visible error row at width $layoutWidth."
+    }
+
+    $imageList.SelectedIndex = 0
+    Wait-Dispatcher 250
+    $malformedHandoffRecovered = $errorPanel.Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        $imageView.Visibility -eq [System.Windows.Visibility]::Visible
+    if (-not $malformedHandoffRecovered) {
+        throw "Normal image did not recover after a malformed handoff at width $layoutWidth."
+    }
+
     $results.Add([pscustomobject]@{
         Width = $layoutWidth
         Capture = $capturePath
@@ -237,6 +326,20 @@ foreach ($layoutWidth in $Widths) {
         HoverNonDarkRatio = [Math]::Round($hoverNonDarkRatio, 6)
         HoverCapture = $hoverCapturePath
         HoverFramebuffer = $hoverFramebufferPath
+        ErrorPanelVisible = $errorPanelVisible
+        ImageViewHiddenForError = $imageViewHiddenForError
+        ErrorId = $errorId
+        ErrorReportValid = $errorReportValid
+        ClipboardReportValid = $clipboardReportValid
+        SupportReportPath = $supportReportPath
+        SupportReportFileValid = $supportReportFileValid
+        ErrorCapture = $errorCapturePath
+        RecoveredFromError = $recoveredFromError
+        RecoveryNonDarkRatio = [Math]::Round($recoveryNonDarkRatio, 6)
+        RecoveryCapture = $recoveryCapturePath
+        RecoveryFramebuffer = $recoveryFramebufferPath
+        MalformedHandoffVisible = $malformedHandoffVisible
+        MalformedHandoffRecovered = $malformedHandoffRecovered
     })
 
     $window.Close()
