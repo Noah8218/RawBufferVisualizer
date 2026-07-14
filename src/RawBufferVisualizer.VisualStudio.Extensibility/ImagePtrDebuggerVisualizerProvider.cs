@@ -7,6 +7,7 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
+    [VisualStudioContribution]
     internal sealed class ImagePtrDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
         private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";

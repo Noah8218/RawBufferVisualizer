@@ -25,6 +25,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             }
 
             var shouldBreak = Array.IndexOf(args, "--no-break") < 0;
+            var collectionOnly = Array.IndexOf(args, "--collection-only") >= 0;
+            if (collectionOnly)
+            {
+                shouldBreak = false;
+            }
             var caseNumber = 1;
             var pinnedViews = new List<PinnedRawBufferView>();
 
@@ -248,6 +253,42 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 PrintCase(ref caseNumber, "emguFloat32 as Emgu.CV.Mat / Cv32F C1");
                 if (shouldBreak) Debugger.Break();
 
+                var openCvMatList = new List<Mat> { matMono8, matBgr24 };
+                PrintCase(ref caseNumber, "openCvMatList as List<OpenCvSharp.Mat>");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var emguMatList = new List<Emgu.CV.Mat> { emguMono8, emguBgr24 };
+                PrintCase(ref caseNumber, "emguMatList as List<Emgu.CV.Mat>");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var bitmapList = new List<Bitmap> { bitmapMono8, bitmapBgr24 };
+                PrintCase(ref caseNumber, "bitmapList as List<System.Drawing.Bitmap>");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var openCvMatDictionary = new Dictionary<string, Mat>
+                {
+                    ["mono"] = matMono8,
+                    ["bgr"] = matBgr24
+                };
+                PrintCase(ref caseNumber, "openCvMatDictionary as Dictionary<string, OpenCvSharp.Mat>");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var emguMatDictionary = new Dictionary<string, Emgu.CV.Mat>
+                {
+                    ["mono"] = emguMono8,
+                    ["bgr"] = emguBgr24
+                };
+                PrintCase(ref caseNumber, "emguMatDictionary as Dictionary<string, Emgu.CV.Mat>");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var bitmapDictionary = new Dictionary<string, Bitmap>
+                {
+                    ["mono"] = bitmapMono8,
+                    ["bgr"] = bitmapBgr24
+                };
+                PrintCase(ref caseNumber, "bitmapDictionary as Dictionary<string, System.Drawing.Bitmap>");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
                 var imageList = new List<object>
                 {
                     bitmapMono8,
@@ -301,6 +342,12 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(imageList);
                 GC.KeepAlive(imageDictionary);
                 GC.KeepAlive(imageArray);
+                GC.KeepAlive(openCvMatList);
+                GC.KeepAlive(emguMatList);
+                GC.KeepAlive(bitmapList);
+                GC.KeepAlive(openCvMatDictionary);
+                GC.KeepAlive(emguMatDictionary);
+                GC.KeepAlive(bitmapDictionary);
 
                 Console.WriteLine("Done.");
                 return 0;

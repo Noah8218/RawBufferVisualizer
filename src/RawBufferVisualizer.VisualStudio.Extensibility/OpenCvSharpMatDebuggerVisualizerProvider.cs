@@ -7,6 +7,7 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
+    [VisualStudioContribution]
     internal sealed class OpenCvSharpMatDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
         private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";
@@ -21,6 +22,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new(new[]
             {
+                new VisualizerTargetType(DisplayName, "OpenCvSharp.Mat, OpenCvSharp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=6adad1e807fea099"),
                 new VisualizerTargetType(DisplayName, "OpenCvSharp.Mat, OpenCvSharp, Version=4.0.0.0, Culture=neutral, PublicKeyToken=6adad1e807fea099"),
                 new VisualizerTargetType(DisplayName, "OpenCvSharp.Mat, OpenCvSharp")
             })

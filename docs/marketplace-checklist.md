@@ -27,7 +27,7 @@ Suggested Marketplace fields:
 | --- | --- |
 | Display name | Raw Buffer Visualizer |
 | Publisher/author | Noah Choi |
-| Short description | Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, IntPtr, and raw image buffers directly inside Visual Studio. |
+| Short description | Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, image collections, IntPtr, and raw buffers inside Visual Studio. |
 | Type | Tools |
 | Categories | Debugging, Other Tools |
 | Tags | image-watch, csharp, opencvsharp, machine-vision, raw-buffer, emgucv |
@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the GitHub Release from tag `v1.0.37` using [github-release-1.0.37.md](github-release-1.0.37.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+Create the GitHub Release from tag `v1.0.38` using [github-release-1.0.38.md](github-release-1.0.38.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -93,7 +93,7 @@ Overview copy:
 ```markdown
 Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables directly while stopped at a breakpoint.
 
-Raw Buffer Visualizer is an Image Watch style debugger tool for C# machine-vision developers. It combines a C# image debugger, OpenCvSharp and Emgu CV visualizer, IntPtr image viewer, and raw image buffer inspector directly inside Visual Studio.
+Raw Buffer Visualizer is an Image Watch style debugger tool for C# machine-vision developers. It combines a C# image debugger, OpenCvSharp and Emgu CV visualizer, typed image collection visualizer, IntPtr image viewer, and raw image buffer inspector directly inside Visual Studio.
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
 
@@ -101,8 +101,8 @@ Raw Buffer Visualizer is an Image Watch style debugger tool for C# machine-visio
 
 1. Install the extension and restart Visual Studio.
 2. Start debugging and stop where an image variable is alive.
-3. Click the visualizer icon in DataTip, Watch, Locals, or Autos.
-4. Select the thumbnail added to the docked Raw Buffer Visualizer window.
+3. Click the visualizer icon for an image, typed list, dictionary, or supported array in DataTip, Watch, Locals, or Autos.
+4. Select a thumbnail added to the docked Raw Buffer Visualizer window.
 5. Zoom, pan, and inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
 
 ## Why Raw Buffer Visualizer?
@@ -111,6 +111,7 @@ Raw Buffer Visualizer is an Image Watch style debugger tool for C# machine-visio
 | --- | --- | --- |
 | OpenCvSharp `Mat` | Common | Supported |
 | Emgu CV `Mat` and `System.Drawing.Bitmap` | Varies | Supported |
+| Typed `List<TImage>` and `Dictionary<TKey,TImage>` | Varies | Supported |
 | `IntPtr` and raw image buffers | Limited | Supported |
 | Stride, byte order, valid bits, and raw-byte diagnostics | Limited | Supported |
 | `Mono10PackedLsb` and `Mono12PackedLsb` | Uncommon | Supported |
@@ -123,6 +124,7 @@ The docked image list keeps inspected values in one place. Select a thumbnail to
 ## Key Features
 
 - Single docked Visual Studio window where inspected images accumulate in an image list
+- Typed and mixed image lists, dictionaries, and supported arrays append their entries to that same docked list
 - Thumbnail preview for each inspected variable
 - Width, height, stride, pixel format, source type, and diagnostics
 - Pixel inspection with X/Y position, GV/RGB values, channel swatches, and raw bytes
@@ -139,7 +141,7 @@ The docked image list keeps inspected values in one place. Select a thumbnail to
 - `System.Drawing.Bitmap`
 - OpenCvSharp `Mat`
 - Emgu CV `Mat`
-- `List<object>`, `Dictionary<string, object>`, and `object[]`
+- Typed or mixed `List<T>`, `Dictionary<TKey,TValue>`, `ArrayList`, `Hashtable`, and supported image arrays
 - `.rbuf.json` + `.raw` snapshot files
 
 OpenCvSharp `Mat` transfers were validated with OpenCvSharp4 `4.0.0.20181225`, `4.2.0.20200208`, `4.5.5.20211231`, `4.8.0.20230708`, and `4.13.0.20260627`.
@@ -158,8 +160,8 @@ Emgu CV `Mat` transfers were validated with Emgu CV `3.4.3.3016`, `4.2.0.3662`, 
 
 1. Start debugging in Visual Studio.
 2. Stop at a breakpoint where an image variable is alive.
-3. Click the debugger visualizer icon from DataTip, Watch, Locals, or Autos.
-4. The image is appended to the docked Raw Buffer Visualizer window.
+3. Click the debugger visualizer icon for a supported image or collection from DataTip, Watch, Locals, or Autos.
+4. The image, or each supported collection entry, is appended to the docked Raw Buffer Visualizer window.
 5. Inspect pixels, raw bytes, stride, format, and diagnostics.
 
 Failed values remain visible as error rows, so unsupported formats or invalid buffers do not disappear silently.
@@ -173,7 +175,8 @@ The viewer uses file-backed tiled rendering for large raw payloads. Dense Mono8 
 ## Known Limits
 
 - A collection visualization processes the first 256 entries.
-- Typed generic collections such as `List<Mat>` are not registered directly. Convert them to one of the supported closed collection types before inspection.
+- Open generic registration makes Raw Buffer Visualizer available for typed lists and dictionaries. Only supported image entries are transferred; null, unsupported, and failed entries remain visible as error rows.
+- Visual Studio's built-in `IEnumerable Visualizer` may remain in the visualizer menu. Select `Raw Buffer Visualizer` for the docked image-list workflow.
 - Lazy or arbitrary `IEnumerable` sequences are not enumerated while the debugger is paused.
 - Tested library versions are compatibility points, not a guarantee for every intermediate package build.
 
@@ -245,7 +248,7 @@ Manual smoke checklist:
 - Restart Visual Studio.
 - Confirm `Raw Buffer Visualizer` appears in `Extensions > Manage Extensions > Installed`.
 - Debug `RawBufferVisualizer.VisualizerDebuggee`.
-- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `imageList`, `imageDictionary`, and `imageArray`; confirm every result uses the same upper docked viewer.
+- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, typed OpenCvSharp/Emgu CV/Bitmap lists and dictionaries, `imageList`, `imageDictionary`, and `imageArray`; confirm every result uses the same upper docked viewer.
 - Inspect a mixed `object[]` containing a valid image, `null`, and an unsupported object; confirm the valid image row and per-item error rows appear together in the upper `Images` list.
 - Start two separate Visual Studio `devenv.exe` processes, invoke the visualizer in each process, and confirm each snapshot appears only in the docked viewer belonging to the process that invoked it.
 - Close Visual Studio.
@@ -270,7 +273,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.37
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.38
 ```
 
 GitHub setup:
@@ -292,12 +295,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.37.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.38.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.37.md](marketplace-release-notes-1.0.37.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.38.md](marketplace-release-notes-1.0.38.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
@@ -316,7 +319,7 @@ artifacts\ui\docked-layout-widths\layout-widths.json
 - User-facing text still mentions rendering implementation details.
 - Narrow Visual Studio docking hides Save, image list, viewer, status strip, or Inspector access.
 - Debugger inspections open multiple independent viewer windows instead of one docked image list.
-- The generated `.vsextension\extension.json` still contains `IDebuggerVisualizerProvider` or any Modern debugger visualizer provider.
+- The generated `.vsextension\extension.json` is missing `IDebuggerVisualizerProvider`, a required Modern debugger visualizer provider, or the open generic `List<>`/`Dictionary<,>` collection targets.
 - A debugger snapshot invoked from one Visual Studio process appears in another Visual Studio process's docked viewer.
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license and third-party notice requirement.

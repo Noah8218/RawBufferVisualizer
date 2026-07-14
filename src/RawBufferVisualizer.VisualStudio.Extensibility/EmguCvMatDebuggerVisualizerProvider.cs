@@ -7,6 +7,7 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Extensibility
 {
+    [VisualStudioContribution]
     internal sealed class EmguCvMatDebuggerVisualizerProvider : DebuggerVisualizerProvider
     {
         private const string DisplayName = "%RawBufferVisualizer.DebuggerVisualizer.DisplayName%";
@@ -21,6 +22,10 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration =>
             new(new[]
             {
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.World, Version=3.4.3.3016, Culture=neutral, PublicKeyToken=7281126722ab4438"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.World.NetStandard, Version=1.0.0.0, Culture=neutral, PublicKeyToken=7281126722ab4438"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.Platform.NetStandard, Version=4.5.5.4823, Culture=neutral, PublicKeyToken=7281126722ab4438"),
+                new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV, Version=4.8.1.5350, Culture=neutral, PublicKeyToken=7281126722ab4438"),
                 new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV, Version=4.13.0.5924, Culture=neutral, PublicKeyToken=7281126722ab4438"),
                 new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV"),
                 new VisualizerTargetType(DisplayName, "Emgu.CV.Mat, Emgu.CV.World"),

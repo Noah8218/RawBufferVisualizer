@@ -22,7 +22,7 @@ Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-back
 4. Select the new thumbnail in the docked `Raw Buffer Visualizer` window.
 5. Use the mouse wheel and drag to zoom and pan, then inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
 
-The same workflow works for a single image or an explicitly supported `List<object>`, `Dictionary<string, object>`, or `object[]` collection.
+The same workflow works for a single image, a typed `List<TImage>` or `Dictionary<TKey, TImage>`, a mixed object collection, or a supported image array.
 
 ## Why Raw Buffer Visualizer?
 
@@ -42,7 +42,7 @@ Other debugger visualizers have different feature sets. This comparison describe
 ## Key Features
 
 - Single docked Visual Studio window where inspected images accumulate in an `Images` list.
-- Open a `List<object>`, `Dictionary<string, object>`, or `object[]` once to append its image entries to that same list.
+- Open a typed or mixed image list, dictionary, or array once to append its image entries to that same list.
 - Image rows include variable/title, thumbnail, width x height, pixel format, stride, and source type.
 - Failed opens stay visible as error rows with the reason, instead of disappearing silently.
 - Pixel status strip with X/Y, GV or RGB channel values, color swatches, and source bytes.
@@ -72,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The source build for this fix is version `1.0.37.0`. It keeps the Visual Studio 2022 expression evaluator stable by registering only verified closed collection types, while routing single images and supported collections through one docked viewer. Until that version is available through Marketplace, use the local development install below.
+Version `1.0.38.0` restores the packaged debugger visualizer providers used by Marketplace installs. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections all route into one docked viewer; the temporary provider host closes after the handoff.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -80,13 +80,13 @@ For local development builds, close every Visual Studio window and run this from
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
-The script builds and reinstalls the VSIX, registers the docked ToolWindow, and installs the Classic debugger visualizers under `Documents\Visual Studio 2022\Visualizers`. Restart Visual Studio after it finishes.
+The script builds and reinstalls the single VSIX, registers the docked ToolWindow, and removes obsolete Raw Buffer Visualizer Classic DLLs from `Documents\Visual Studio 2022\Visualizers`. Restart Visual Studio after it finishes.
 
 ### Update
 
 Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the update, close all Visual Studio windows and reopen Visual Studio.
 
-If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Version `1.0.37.0` does not publish the Modern debugger visualizer providers that created it; new debugger invocations use only the main docked viewer.
+If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Version `1.0.38.0` publishes the Marketplace-compatible debugger providers and automatically closes their temporary handoff host, so new invocations remain in the main docked viewer.
 
 If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the docked tool-window registration:
 
@@ -137,17 +137,18 @@ dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.cspro
 To inspect several images at once, click the visualizer on the collection variable itself:
 
 ```csharp
-var stages = new List<object> { input, threshold, result };
-var named = new Dictionary<string, object>
+var stages = new List<OpenCvSharp.Mat> { inputMat, thresholdMat, resultMat };
+var named = new Dictionary<string, OpenCvSharp.Mat>
 {
-    ["input"] = inputBitmap,
-    ["result"] = resultBitmap
+    ["input"] = inputMat,
+    ["result"] = resultMat
 };
+var mixed = new object[] { inputBitmap, resultMat };
 ```
 
 Collection entries appear as `[0]`, `[1]`, or `[key]` in the existing docked `Images` list. Valid entries remain normal image rows. Null, unsupported, and failed entries remain visible as red error rows with the reason. One invocation processes at most 256 entries; a collection above that limit adds an error row explaining that only the first 256 entries were shown. Lazy or arbitrary `IEnumerable` sequences are intentionally not enumerated while the debugger is paused.
 
-Collection visualizers are intentionally registered only for the three closed types above. Visual Studio 2022 can disable expression evaluation when a Classic debugger visualizer registers an open generic target such as `List<>` or `Dictionary<,>`. Convert a typed collection to `List<object>`, `Dictionary<string, object>`, or `object[]` when you want to inspect several images in one operation.
+Visual Studio requires generic debugger visualizers to register the open generic `List<>` and `Dictionary<,>` types. Raw Buffer Visualizer therefore appears for typed and mixed lists or dictionaries. It transfers supported image entries only; null, unsupported, and failed entries remain visible as error rows. Visual Studio's built-in `IEnumerable Visualizer` can remain in the visualizer menu, so select `Raw Buffer Visualizer` when more than one visualizer is offered.
 
 The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
 
@@ -169,7 +170,7 @@ The docked layout adapts to the available width:
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. |
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs instead of requiring the debuggee's OpenCvSharp package version. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
-| Image collections | Supported | `List<object>`, `Dictionary<string, object>`, and `object[]`. These closed types preserve Visual Studio 2022 expression-evaluator stability. |
+| Image collections | Supported | Typed or mixed `List<T>`, `Dictionary<TKey, TValue>`, `ArrayList`, `Hashtable`, `object[]`, and supported image arrays. Up to 256 entries are processed per invocation. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
 
@@ -394,7 +395,7 @@ Run the debugger visualizer sample:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates individual image variables plus mixed `List<object>`, `Dictionary<string, object>`, and `object[]` collections so each visualizer path can be checked from Watch, Locals, Autos, or DataTip.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates individual image variables, typed OpenCvSharp/Emgu CV/Bitmap lists and dictionaries, and mixed object collections and arrays so each visualizer path can be checked from Watch, Locals, Autos, or DataTip. Pass `--collection-only` to stop only at collection cases.
 
 README and Marketplace screenshots must be reviewed before commit. Do not publish screenshots that include unrelated applications, private desktop content, stale UI, or a feature state that does not match the text.
 
@@ -413,8 +414,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.37 release notes](docs/marketplace-release-notes-1.0.37.md).
-GitHub Release body for this version: [1.0.37 GitHub Release draft](docs/github-release-1.0.37.md).
+Marketplace release text for this version: [1.0.38 release notes](docs/marketplace-release-notes-1.0.38.md).
+GitHub Release body for this version: [1.0.38 GitHub Release draft](docs/github-release-1.0.38.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License

@@ -46,11 +46,13 @@ function Assert-DebuggerVisualizerTargetTypes {
     param([string]$ExtensionJsonPath)
 
     $extension = Get-Content -Raw -LiteralPath $ExtensionJsonPath | ConvertFrom-Json
+    $providerCount = 0
     foreach ($part in @($extension.parts)) {
         if ($part.contract -ne 'Microsoft.VisualStudio.RpcContracts.DebuggerVisualizers.IDebuggerVisualizerProvider') {
             continue
         }
 
+        $providerCount++
         foreach ($metadata in @($part.metadata)) {
             foreach ($target in @($metadata.values.targets)) {
                 $targetType = [string]$target.targetType
@@ -68,9 +70,13 @@ function Assert-DebuggerVisualizerTargetTypes {
             }
         }
     }
+
+    if ($providerCount -eq 0) {
+        throw "VSIX contains no debugger visualizer providers: $ExtensionJsonPath"
+    }
 }
 
-function Assert-ModernDebuggerVisualizerProvidersAbsent {
+function Assert-ModernDebuggerVisualizerProvidersPresent {
     param([string]$ExtensionJsonPath)
 
     $extensionJson = Get-Content -Raw -LiteralPath $ExtensionJsonPath
@@ -83,34 +89,52 @@ function Assert-ModernDebuggerVisualizerProvidersAbsent {
         'ImagePtrDebuggerVisualizerProvider',
         'ImageCollectionDebuggerVisualizerProvider'
     )) {
-        if ($extensionJson -match [regex]::Escape($provider)) {
-            throw "Modern debugger visualizer must not be published: $provider"
+        if ($extensionJson -notmatch [regex]::Escape($provider)) {
+            throw "Required Marketplace debugger visualizer is missing: $provider"
         }
     }
 
-    if ($extensionJson -match [regex]::Escape('IDebuggerVisualizerProvider')) {
-        throw 'Modern debugger visualizer contract must not be published.'
+    if ($extensionJson -notmatch [regex]::Escape('IDebuggerVisualizerProvider')) {
+        throw 'Marketplace package contains no debugger visualizer contract.'
+    }
+
+    foreach ($targetType in @(
+        'OpenCvSharp.Mat, OpenCvSharp, Version=1.0.0.0',
+        'OpenCvSharp.Mat, OpenCvSharp, Version=4.0.0.0',
+        'Emgu.CV.Mat, Emgu.CV.World, Version=3.4.3.3016',
+        'Emgu.CV.Mat, Emgu.CV.World.NetStandard, Version=1.0.0.0',
+        'Emgu.CV.Mat, Emgu.CV.Platform.NetStandard, Version=4.5.5.4823',
+        'Emgu.CV.Mat, Emgu.CV, Version=4.8.1.5350',
+        'Emgu.CV.Mat, Emgu.CV, Version=4.13.0.5924',
+        'System.Collections.Generic.List`1, mscorlib, Version=4.0.0.0',
+        'System.Collections.Generic.Dictionary`2, mscorlib, Version=4.0.0.0',
+        'System.Collections.Generic.List`1, System.Private.CoreLib',
+        'System.Collections.Generic.Dictionary`2, System.Private.CoreLib',
+        'OpenCvSharp.Mat[], OpenCvSharp',
+        'Emgu.CV.Mat[], Emgu.CV'
+    )) {
+        if ($extensionJson -notmatch [regex]::Escape($targetType)) {
+            throw "Required debugger visualizer target is missing: $targetType"
+        }
     }
 }
 
-function Assert-ClassicVisualizerRegistrationsClosed {
+function Assert-ModernCollectionRegistrationsOpen {
     param([string]$SourcePath)
 
     $source = Get-Content -Raw -LiteralPath $SourcePath
-    $requiredRegistrations = @(
-        'Target = typeof(List<object>),',
-        'Target = typeof(Dictionary<string, object>),',
-        'Target = typeof(object[]),'
-    )
-    foreach ($requiredRegistration in $requiredRegistrations) {
+    foreach ($requiredRegistration in @(
+        'typeof(List<>)',
+        'typeof(Dictionary<,>)',
+        'typeof(object[])',
+        'System.Collections.Generic.List`1, System.Private.CoreLib',
+        'System.Collections.Generic.Dictionary`2, System.Private.CoreLib',
+        'OpenCvSharp.Mat[], OpenCvSharp',
+        'Emgu.CV.Mat[], Emgu.CV'
+    )) {
         if (-not $source.Contains($requiredRegistration)) {
-            throw "Required closed Classic collection visualizer registration is missing: $requiredRegistration"
+            throw "Required collection visualizer registration is missing: $requiredRegistration"
         }
-    }
-
-    $targetCount = [regex]::Matches($source, 'Target\s*=\s*typeof\(').Count
-    if ($targetCount -ne $requiredRegistrations.Count -or $source.Contains('TargetTypeName =')) {
-        throw "Classic collection visualizers must register only List<object>, Dictionary<string, object>, and object[]. Found $targetCount Target registration(s)."
     }
 }
 
@@ -157,8 +181,8 @@ finally {
 $extensionJsonPath = Join-Path $buildOutput '.vsextension\extension.json'
 Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension metadata was not created'
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
-Assert-ModernDebuggerVisualizerProvidersAbsent -ExtensionJsonPath $extensionJsonPath
-Assert-ClassicVisualizerRegistrationsClosed -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Classic\ImageCollectionClassicDebuggerVisualizer.cs')
+Assert-ModernDebuggerVisualizerProvidersPresent -ExtensionJsonPath $extensionJsonPath
+Assert-ModernCollectionRegistrationsOpen -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\ImageCollectionDebuggerVisualizerProvider.cs')
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
 Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')
@@ -179,7 +203,6 @@ $requiredEntries = @(
     '.vsextension/extension.json',
     'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef',
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
-    'RawBufferVisualizer.VisualStudio.Classic.dll',
     'RawBufferVisualizer.OpenGlCanvas.dll',
     'SharpGL.dll',
     'SharpGL.WinForms.dll'
@@ -191,7 +214,13 @@ foreach ($entryName in $requiredEntries) {
     }
 }
 
-Get-ChildItem -LiteralPath $buildOutput -Force | Copy-Item -Destination $publishDir -Recurse -Force
+if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Classic.dll') {
+    throw 'VSIX must not contain the obsolete Classic debugger visualizer assembly.'
+}
+
+Get-ChildItem -LiteralPath $buildOutput -Force |
+    Where-Object { $_.Name -ne 'RawBufferVisualizer.VisualStudio.Classic.dll' } |
+    Copy-Item -Destination $publishDir -Recurse -Force
 
 $readmePath = Join-Path $publishDir 'README.txt'
 Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
@@ -203,7 +232,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     'The VSIX contains both parts required for normal operation:',
     '- Visual Studio debugger visualizers for RawBufferSnapshot, RawBufferView, Bitmap, OpenCvSharp Mat, Emgu CV Mat, and supported image collections',
     '- In-process Visual Studio ToolWindow used as the docked image viewer',
-    '- Local single-window visualizers for supported image types and collections installed by scripts\Install-VisualStudioExtension.ps1',
+    '- Marketplace-installed debugger providers that forward inspected values to the same docked image list',
     '',
     'Manual validation prerequisites:',
     '- Visual Studio 2022 17.9 or newer',
