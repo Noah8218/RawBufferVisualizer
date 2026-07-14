@@ -72,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Version `1.0.39.0` restores the packaged debugger visualizer providers used by Marketplace installs. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections all route into one docked viewer; the temporary provider host closes after the handoff.
+Version `1.0.40.0` stabilizes the initial Fit view in resized docked windows and makes Pin freeze the pixel value, 5x5 neighborhood, statistics, marker, and status readouts until Clear is selected. Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, raw buffers, pointer-backed images, and typed or mixed image collections continue to route into one docked viewer.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -86,7 +86,7 @@ The script builds and reinstalls the single VSIX, registers the docked ToolWindo
 
 Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the update, close all Visual Studio windows and reopen Visual Studio.
 
-If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Version `1.0.39.0` publishes the Marketplace-compatible debugger providers and automatically closes their temporary handoff host, so new invocations remain in the main docked viewer.
+If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Current Marketplace packages publish the debugger providers and automatically close their temporary handoff host, so new invocations remain in the main docked viewer.
 
 If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the docked tool-window registration:
 
@@ -414,8 +414,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.39 release notes](docs/marketplace-release-notes-1.0.39.md).
-GitHub Release body for this version: [1.0.39 GitHub Release draft](docs/github-release-1.0.39.md).
+Marketplace release text for this version: [1.0.40 release notes](docs/marketplace-release-notes-1.0.40.md).
+GitHub Release body for this version: [1.0.40 GitHub Release draft](docs/github-release-1.0.40.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License
