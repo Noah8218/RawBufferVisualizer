@@ -72,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Version `1.0.44.0` fixes blank or single-color frames that could appear while zooming large images in the Visual Studio docked viewer. Progressive rendering now respects the active OpenGL texture limit, selects a non-aliasing sample step for the visible region, and reports texture upload failures instead of displaying an invalid frame. The preview-first debugger handoff, file-backed large-image path, collections, pixel inspection, export, and comparison workflows remain available.
+Version `1.0.45.0` packages and documents the current large-image performance line: preview-first debugger transfer, file-backed tiled sources, and progressive viewport reads that avoid decoding or uploading an entire large frame for every view change. The large-image zoom stability fixes, collections, pixel inspection, export, and comparison workflows remain available.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -311,6 +311,22 @@ dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferV
 
 The large-image dimensions above are validation evidence, not sample payloads committed to Git. Generate the dense files locally with [large image samples](docs/large-image-samples.md).
 
+## Viewer Performance
+
+The table below compares the viewer before and after the progressive viewport update using the same machine, automated smoke, and dense `5000 x 5000 Mono8` input (`25,000,000` raw bytes). Lower values are better.
+
+| Metric | Before update | Current (`1.0.45`) | Improvement |
+| --- | ---: | ---: | ---: |
+| Initial open path | `179.818 ms` | `115.369 ms` | `35.8%` lower |
+| Zoom average frame | `16.684 ms` | `13.765 ms` | `17.5%` lower |
+| Zoom maximum frame | `49.397 ms` | `36.527 ms` | `26.1%` lower |
+| Pan maximum frame | `21.951 ms` | `17.056 ms` | `22.3%` lower |
+| Pan average tile upload | `20.410 ms` | `15.211 ms` | `25.5%` lower |
+
+An installed-VSIX check in Visual Studio 2022 `17.14` also exercised a dense file-backed `24000 x 24000 Mono8` image with real mouse input. Across `87` wheel and `269` drag events, input handling averaged `0.095 ms` and `0.033 ms`; rendered frames averaged `6.515 ms` with a `13.642 ms` maximum. Pixel status, selection, and pinned-marker state remained active during the run.
+
+These measurements are regression evidence from one test machine, not guaranteed timings for every PC. Image format, storage, GPU driver, debugger state, and docked-window size can change the result.
+
 ## Runtime Stability
 
 Raw Buffer Visualizer writes temporary snapshot files while Visual Studio transfers debugger data into the docked viewer. The extension keeps these files under:
@@ -431,8 +447,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.44 release notes](docs/marketplace-release-notes-1.0.44.md).
-GitHub Release body for this version: [1.0.44 GitHub Release draft](docs/github-release-1.0.44.md).
+Marketplace release text for this version: [1.0.45 release notes](docs/marketplace-release-notes-1.0.45.md).
+GitHub Release body for this version: [1.0.45 GitHub Release draft](docs/github-release-1.0.45.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License
