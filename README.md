@@ -72,7 +72,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Version `1.0.43.0` reduces the startup cost of large debugger images. Large Bitmap, OpenCvSharp `Mat`, Emgu CV `Mat`, `RawBufferView`, and ImagePtr-style values first show a bounded sampled preview and then switch to tiled reads from the paused debuggee instead of copying the full payload through a temporary raw file. If the debuggee continues or exits, the last rendered image remains visible and the row is marked `Unavailable`; pause again and reopen the visualizer to refresh it. Existing error reports, collections, pixel inspection, export, and comparison workflows remain available.
+Version `1.0.44.0` fixes blank or single-color frames that could appear while zooming large images in the Visual Studio docked viewer. Progressive rendering now respects the active OpenGL texture limit, selects a non-aliasing sample step for the visible region, and reports texture upload failures instead of displaying an invalid frame. The preview-first debugger handoff, file-backed large-image path, collections, pixel inspection, export, and comparison workflows remain available.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -431,8 +431,8 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.43 release notes](docs/marketplace-release-notes-1.0.43.md).
-GitHub Release body for this version: [1.0.43 GitHub Release draft](docs/github-release-1.0.43.md).
+Marketplace release text for this version: [1.0.44 release notes](docs/marketplace-release-notes-1.0.44.md).
+GitHub Release body for this version: [1.0.44 GitHub Release draft](docs/github-release-1.0.44.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License

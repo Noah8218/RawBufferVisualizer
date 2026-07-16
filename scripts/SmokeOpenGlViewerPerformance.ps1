@@ -4,6 +4,8 @@ param(
     [string]$Framework = "net472",
     [int]$Width = 5000,
     [int]$Height = 5000,
+    [int]$WindowWidth = 1280,
+    [int]$WindowHeight = 820,
     [int]$ZoomIterations = 30,
     [int]$PanIterations = 30,
     [int]$MaxOpenPathMs = 3000,
@@ -12,6 +14,12 @@ param(
     [int]$MaxUploadMs = 500,
     [int]$MaxFirstVisibleMs = 10000,
     [int]$SettleAfterInteractionMs = 2000,
+    [double]$ValidationZoomScale = 0.073,
+    [int]$MinValidationZoomColors = 4,
+    [int]$MinCaptureColors = 8,
+    [ValidateSet("Block", "Periodic16")]
+    [string]$PatternMode = "Block",
+    [switch]$DenseSample,
     [string]$InputMetadataPath = "",
     [string]$OutputDir = "artifacts\perf\opengl-viewer",
     [switch]$NoBuild
@@ -35,6 +43,10 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
         $Width,
         "-Height",
         $Height,
+        "-WindowWidth",
+        $WindowWidth,
+        "-WindowHeight",
+        $WindowHeight,
         "-ZoomIterations",
         $ZoomIterations,
         "-PanIterations",
@@ -51,6 +63,14 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
         $MaxFirstVisibleMs,
         "-SettleAfterInteractionMs",
         $SettleAfterInteractionMs,
+        "-ValidationZoomScale",
+        $ValidationZoomScale,
+        "-MinValidationZoomColors",
+        $MinValidationZoomColors,
+        "-MinCaptureColors",
+        $MinCaptureColors,
+        "-PatternMode",
+        $PatternMode,
         "-OutputDir",
         $OutputDir
     )
@@ -61,6 +81,10 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
 
     if ($NoBuild) {
         $arguments += "-NoBuild"
+    }
+
+    if ($DenseSample) {
+        $arguments += "-DenseSample"
     }
 
     & powershell.exe @arguments
@@ -87,12 +111,13 @@ $sampleRoot = Join-Path $outputRoot "samples"
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 New-Item -ItemType Directory -Force -Path $sampleRoot | Out-Null
 
-$sampleName = "mono8-$Width-x-$Height"
+$storageMode = if ($DenseSample) { "dense" } else { "auto" }
+$sampleName = "mono8-$Width-x-$Height-$($PatternMode.ToLowerInvariant())-$storageMode"
 $metadataPath = Join-Path $sampleRoot "$sampleName.rbuf.json"
 $rawPath = Join-Path $sampleRoot "$sampleName.raw"
 $stride = $Width
 $rawLength = [int64]$stride * [int64]$Height
-$materializeLimit = 512L * 1024L * 1024L
+$materializeLimit = if ($DenseSample) { [long]::MaxValue } else { 512L * 1024L * 1024L }
 
 if (-not ("RawBufferViewerPerfNative" -as [type])) {
     Add-Type @'
@@ -106,22 +131,35 @@ public static class RawBufferViewerPerfNative {
 '@
 }
 
-function New-PatternRow([int]$rowIndex, [int]$width, [int]$stride) {
+function New-PatternRow([string]$patternMode, [int]$rowIndex, [int]$width, [int]$stride) {
     $row = New-Object byte[] $stride
     for ($x = 0; $x -lt $width; $x++) {
-        $block = ([int][Math]::Floor($x / 32.0)) + ([int][Math]::Floor($rowIndex / 32.0))
-        $row[$x] = [byte](32 + ($block % 224))
+        if ($patternMode -eq "Periodic16") {
+            $row[$x] = [byte](16 + ((($x % 16) * 11 + ($rowIndex % 16) * 7) % 224))
+        }
+        else {
+            $block = ([int][Math]::Floor($x / 32.0)) + ([int][Math]::Floor($rowIndex / 32.0))
+            $row[$x] = [byte](32 + ($block % 224))
+        }
     }
 
-    $row
+    Write-Output -NoEnumerate $row
 }
 
-function New-Mono8Raw([string]$path, [int]$width, [int]$height, [int]$stride, [int64]$length, [int64]$sparseThreshold) {
+function New-Mono8Raw([string]$path, [string]$patternMode, [int]$width, [int]$height, [int]$stride, [int64]$length, [int64]$sparseThreshold) {
     $existing = Get-Item -LiteralPath $path -ErrorAction SilentlyContinue
     if ($existing -and $existing.Length -eq $length) {
         return
     }
 
+    $patternRows = $null
+    if ($patternMode -eq "Periodic16") {
+        $patternRows = @(
+            for ($rowPhase = 0; $rowPhase -lt 16; $rowPhase++) {
+                New-PatternRow $patternMode $rowPhase $width $stride
+            }
+        )
+    }
     $stream = [System.IO.File]::Open($path, [System.IO.FileMode]::Create, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::ReadWrite)
     try {
         if ($length -gt $sparseThreshold) {
@@ -141,7 +179,11 @@ function New-Mono8Raw([string]$path, [int]$width, [int]$height, [int]$stride, [i
 
             $stream.SetLength($length)
             for ($y = 0; $y -lt $height; $y += 128) {
-                $row = New-PatternRow $y $width $stride
+                $row = if ($null -eq $patternRows) {
+                    New-PatternRow $patternMode $y $width $stride
+                } else {
+                    $patternRows[$y % 16]
+                }
                 $stream.Position = [int64]$y * [int64]$stride
                 $stream.Write($row, 0, $row.Length)
             }
@@ -151,8 +193,30 @@ function New-Mono8Raw([string]$path, [int]$width, [int]$height, [int]$stride, [i
             return
         }
 
+        if ($null -ne $patternRows) {
+            $patternBlock = New-Object byte[] ($stride * 16)
+            for ($rowPhase = 0; $rowPhase -lt 16; $rowPhase++) {
+                [Buffer]::BlockCopy($patternRows[$rowPhase], 0, $patternBlock, $rowPhase * $stride, $stride)
+            }
+
+            $fullBlocks = [int][Math]::Floor($height / 16.0)
+            for ($blockIndex = 0; $blockIndex -lt $fullBlocks; $blockIndex++) {
+                $stream.Write($patternBlock, 0, $patternBlock.Length)
+            }
+
+            $remainingRows = $height % 16
+            if ($remainingRows -gt 0) {
+                $stream.Write($patternBlock, 0, $remainingRows * $stride)
+            }
+            return
+        }
+
         for ($y = 0; $y -lt $height; $y++) {
-            $row = New-PatternRow $y $width $stride
+            $row = if ($null -eq $patternRows) {
+                New-PatternRow $patternMode $y $width $stride
+            } else {
+                $patternRows[$y % 16]
+            }
             $stream.Write($row, 0, $row.Length)
         }
     }
@@ -162,7 +226,7 @@ function New-Mono8Raw([string]$path, [int]$width, [int]$height, [int]$stride, [i
 }
 
 if ([string]::IsNullOrWhiteSpace($InputMetadataPath)) {
-    New-Mono8Raw $rawPath $Width $Height $stride $rawLength $materializeLimit
+    New-Mono8Raw $rawPath $PatternMode $Width $Height $stride $rawLength $materializeLimit
     $metadata = [ordered]@{
         rawFile = "$sampleName.raw"
         width = $Width
@@ -377,6 +441,27 @@ function Measure-Capture([string]$path) {
     }
 }
 
+function Measure-Framebuffer([string]$path) {
+    $bitmap = [Drawing.Bitmap]::FromFile($path)
+    try {
+        $colors = New-Object 'System.Collections.Generic.HashSet[int]'
+        for ($y = 0; $y -lt $bitmap.Height; $y += 4) {
+            for ($x = 0; $x -lt $bitmap.Width; $x += 4) {
+                $colors.Add($bitmap.GetPixel($x, $y).ToArgb()) | Out-Null
+            }
+        }
+
+        [pscustomobject]@{
+            Width = $bitmap.Width
+            Height = $bitmap.Height
+            UniqueSampledColors = $colors.Count
+        }
+    }
+    finally {
+        $bitmap.Dispose()
+    }
+}
+
 function Convert-Stats($stats) {
     [ordered]@{
         frameCount = $stats.FrameCount
@@ -390,8 +475,8 @@ function Convert-Stats($stats) {
 
 $window = New-Object Windows.Window
 $window.Title = "Raw Buffer Visualizer OpenGL Performance Smoke"
-$window.Width = 1280
-$window.Height = 820
+$window.Width = $WindowWidth
+$window.Height = $WindowHeight
 $window.Left = 40
 $window.Top = 40
 $window.Topmost = $true
@@ -409,11 +494,15 @@ $script:maxZoomCommandMs = 0.0
 $script:maxPanCommandMs = 0.0
 $script:zoomStats = $null
 $script:panStats = $null
+$script:validationZoomStats = $null
+$script:validationZoomSampleStep = 0
+$script:validationZoomViewReady = $false
 $script:canvas = $null
 $script:failure = $null
 $script:firstVisibleMs = 0.0
 $script:firstVisibleWatch = $null
 $script:screenshotPath = Join-Path $outputRoot "open-gl-viewer-performance.png"
+$script:validationFramebufferPath = Join-Path $outputRoot "open-gl-viewer-validation-zoom.png"
 $script:metricsPath = Join-Path $outputRoot "open-gl-viewer-performance.json"
 $zoomScales = @(0.12, 0.18, 0.25, 0.5, 1.0, 1.5, 2.0, 1.0, 0.35, 0.16)
 
@@ -466,6 +555,37 @@ $timer.add_Tick({
                 return
             }
 
+            if ($ValidationZoomScale -gt 0) {
+                $script:canvas.ResetRenderStats()
+                $script:canvas.SetZoomScale($ValidationZoomScale)
+                $script:tickCount = 0
+                $script:phase = "waitForValidationZoom"
+                return
+            }
+
+            $script:canvas.FitToImage()
+            $script:tickCount = 0
+            $script:phase = "settleAfterInteraction"
+            return
+        }
+
+        if ($script:phase -eq "waitForValidationZoom") {
+            $script:tickCount++
+            $elapsedMs = $script:tickCount * $timer.Interval.TotalMilliseconds
+            $validationStats = $script:canvas.GetRenderStatsSnapshot()
+            $viewReady = $script:canvas.IsCurrentViewReady
+            if ((-not $viewReady -or $elapsedMs -lt $SettleAfterInteractionMs) -and $elapsedMs -lt $MaxFirstVisibleMs) {
+                return
+            }
+
+            if (-not $viewReady) {
+                throw "Validation zoom did not reach its requested sample level within $MaxFirstVisibleMs ms. Current sample step: $($script:canvas.CurrentTextureSampleStep)."
+            }
+
+            $script:validationZoomStats = $validationStats
+            $script:validationZoomSampleStep = $script:canvas.CurrentTextureSampleStep
+            $script:validationZoomViewReady = $viewReady
+            $script:canvas.SaveFramebufferPng($script:validationFramebufferPath)
             $script:canvas.FitToImage()
             $script:tickCount = 0
             $script:phase = "settleAfterInteraction"
@@ -520,6 +640,11 @@ if ($script:failure) {
 }
 
 $captureContent = Measure-Capture $script:screenshotPath
+$validationFramebuffer = if (Test-Path -LiteralPath $script:validationFramebufferPath) {
+    Measure-Framebuffer $script:validationFramebufferPath
+} else {
+    $null
+}
 $result = [ordered]@{
     sample = [ordered]@{
         width = $Width
@@ -535,6 +660,16 @@ $result = [ordered]@{
     maxPanCommandMs = [Math]::Round($script:maxPanCommandMs, 3)
     zoom = Convert-Stats $script:zoomStats
     pan = Convert-Stats $script:panStats
+    validationZoom = if ($null -eq $script:validationZoomStats) { $null } else { Convert-Stats $script:validationZoomStats }
+    validationZoomScale = $ValidationZoomScale
+    validationZoomSampleStep = $script:validationZoomSampleStep
+    validationZoomViewReady = $script:validationZoomViewReady
+    maxTextureSize = $script:canvas.MaxTextureSize
+    lastTextureWidth = $script:canvas.LastTextureWidth
+    lastTextureHeight = $script:canvas.LastTextureHeight
+    lastTextureError = $script:canvas.LastTextureError
+    validationFramebufferPath = $script:validationFramebufferPath
+    validationFramebuffer = $validationFramebuffer
     screenshotPath = $script:screenshotPath
     nonDarkRatio = $captureContent.NonDarkRatio
     uniqueSampledColors = $captureContent.UniqueSampledColors
@@ -581,8 +716,13 @@ if ($captureContent.NonDarkRatio -le 0.02) {
     $failures.Add("Capture appears dark: NonDarkRatio $($captureContent.NonDarkRatio)")
 }
 
-if ($captureContent.UniqueSampledColors -lt 8) {
+if ($captureContent.UniqueSampledColors -lt $MinCaptureColors) {
     $failures.Add("Capture appears blank or uniform: UniqueSampledColors $($captureContent.UniqueSampledColors)")
+}
+
+if ($ValidationZoomScale -gt 0 -and ($null -eq $validationFramebuffer -or $validationFramebuffer.UniqueSampledColors -lt $MinValidationZoomColors)) {
+    $actualColors = if ($null -eq $validationFramebuffer) { 0 } else { $validationFramebuffer.UniqueSampledColors }
+    $failures.Add("Validation zoom appears blank or aliased: UniqueSampledColors $actualColors < $MinValidationZoomColors")
 }
 
 Get-Content -LiteralPath $script:metricsPath

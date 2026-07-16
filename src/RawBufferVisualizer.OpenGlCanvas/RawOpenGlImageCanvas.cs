@@ -26,6 +26,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private const int MaxCachedTextures = 96;
         private const double ProgressiveFrameMargin = 0.25;
         private const int InitialProgressiveSampleMultiplier = 4;
+        private const int FallbackMaxTextureSize = 1024;
         private const double PixelOverlayMinZoom = 8.0;
         private const double PixelGridOverlayMinCellSize = 42.0;
         private const int MaxPixelGridOverlayCells = 600;
@@ -72,6 +73,10 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private bool _useProgressiveViewportRendering;
         private bool _sourceUnavailable;
         private int _logicalTileCount;
+        private int _maxTextureSize;
+        private int _lastTextureWidth;
+        private int _lastTextureHeight;
+        private uint _lastTextureError;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelPinned;
@@ -191,6 +196,50 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             return _renderStats.Clone();
         }
+
+        public int CurrentTextureSampleStep
+        {
+            get
+            {
+                var sampleStep = 0;
+                for (var index = 0; index < _tiles.Count; index++)
+                {
+                    var tile = _tiles[index];
+                    if (tile.ActiveTextureId != 0
+                        && tile.ActiveSampleStep > 0
+                        && (sampleStep == 0 || tile.ActiveSampleStep < sampleStep))
+                    {
+                        sampleStep = tile.ActiveSampleStep;
+                    }
+                }
+
+                return sampleStep;
+            }
+        }
+
+        public bool IsCurrentViewReady
+        {
+            get
+            {
+                if (_descriptor == null)
+                {
+                    return false;
+                }
+
+                return _useProgressiveViewportRendering
+                    ? CurrentProgressiveFrameSatisfiesView(GetProgressiveSampleStep())
+                    : CurrentTextureSampleStep > 0;
+            }
+        }
+
+        public int MaxTextureSize
+        {
+            get { return _maxTextureSize; }
+        }
+
+        public int LastTextureWidth { get { return _lastTextureWidth; } }
+        public int LastTextureHeight { get { return _lastTextureHeight; } }
+        public uint LastTextureError { get { return _lastTextureError; } }
 
         public void ResetRenderStats()
         {
@@ -655,6 +704,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private void OpenGlInitialized(object? sender, EventArgs args)
         {
             var gl = _openGlControl.OpenGL;
+            var maxTextureSize = new int[1];
+            gl.GetInteger(OpenGL.GL_MAX_TEXTURE_SIZE, maxTextureSize);
+            _maxTextureSize = maxTextureSize[0];
             gl.ClearColor(0.06f, 0.06f, 0.06f, 1.0f);
             gl.Disable(OpenGL.GL_DEPTH_TEST);
         }
@@ -974,7 +1026,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             return new Point(x, y);
         }
 
-        private static TextureUpload CreateTexture(OpenGL gl, int width, int height, byte[] bgra)
+        private TextureUpload CreateTexture(OpenGL gl, int width, int height, byte[] bgra)
         {
             if (width <= 0 || height <= 0 || bgra == null || bgra.Length != checked(width * height * 4))
             {
@@ -983,6 +1035,20 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             var textureWidth = NextPowerOfTwo(width);
             var textureHeight = NextPowerOfTwo(height);
+            var textureLimit = GetEffectiveMaxTextureSize();
+            _lastTextureWidth = textureWidth;
+            _lastTextureHeight = textureHeight;
+            _lastTextureError = 0;
+            if (textureWidth > textureLimit || textureHeight > textureLimit)
+            {
+                throw new InvalidOperationException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Texture {0}x{1} exceeds the OpenGL limit of {2}.",
+                    textureWidth,
+                    textureHeight,
+                    textureLimit));
+            }
+
             var uploadPixels = bgra;
             if (textureWidth != width || textureHeight != height)
             {
@@ -1003,6 +1069,17 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP);
 
             gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, textureWidth, textureHeight, 0, OpenGL.GL_BGRA, OpenGL.GL_UNSIGNED_BYTE, uploadPixels);
+            _lastTextureError = gl.GetError();
+            if (_lastTextureError != 0)
+            {
+                gl.DeleteTextures(1, ids);
+                throw new InvalidOperationException(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "OpenGL texture upload failed with error {0} for {1}x{2}.",
+                    _lastTextureError,
+                    textureWidth,
+                    textureHeight));
+            }
 
             return new TextureUpload(ids[0], width / (float)textureWidth, height / (float)textureHeight);
         }
@@ -1064,14 +1141,25 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var horizontalPixelsPerScreenPixel = _viewWidth / width;
             var verticalPixelsPerScreenPixel = _viewHeight / height;
             var imagePixelsPerScreenPixel = Math.Max(horizontalPixelsPerScreenPixel, verticalPixelsPerScreenPixel);
-            if (imagePixelsPerScreenPixel <= 1)
+            var sampleStep = imagePixelsPerScreenPixel <= 1
+                ? 1
+                : Math.Max(1, (int)Math.Floor(imagePixelsPerScreenPixel));
+            if (_descriptor == null)
             {
-                return 1;
+                return sampleStep;
             }
 
-            var exponent = (int)Math.Round(Math.Log(imagePixelsPerScreenPixel, 2.0));
-            exponent = Math.Max(0, Math.Min(exponent, 30));
-            return 1 << exponent;
+            var visibleWidth = Math.Max(1.0, Math.Min(_descriptor.Width, _viewLeft + _viewWidth) - Math.Max(0, _viewLeft));
+            var visibleHeight = Math.Max(1.0, Math.Min(_descriptor.Height, _viewTop + _viewHeight) - Math.Max(0, _viewTop));
+            var textureLimit = GetEffectiveMaxTextureSize();
+            sampleStep = Math.Max(sampleStep, (int)Math.Ceiling(visibleWidth / textureLimit));
+            sampleStep = Math.Max(sampleStep, (int)Math.Ceiling(visibleHeight / textureLimit));
+            return sampleStep;
+        }
+
+        private int GetEffectiveMaxTextureSize()
+        {
+            return _maxTextureSize > 0 ? _maxTextureSize : FallbackMaxTextureSize;
         }
 
         private bool IsTileVisible(TextureTile tile)
@@ -1154,6 +1242,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var right = (int)Math.Ceiling(Math.Min(_descriptor.Width, visibleRight + marginX));
             var bottom = (int)Math.Ceiling(Math.Min(_descriptor.Height, visibleBottom + marginY));
             var sampleStep = GetProgressiveSampleStep();
+            var maxSourceSpan = (long)GetEffectiveMaxTextureSize() * sampleStep;
+            LimitProgressiveFrameSpan(ref left, ref right, visibleLeft, visibleRight, _descriptor.Width, maxSourceSpan);
+            LimitProgressiveFrameSpan(ref top, ref bottom, visibleTop, visibleBottom, _descriptor.Height, maxSourceSpan);
             if (_tiles.Count == 0 && _pendingProgressiveUpload == null)
             {
                 sampleStep = MultiplySampleStep(sampleStep, InitialProgressiveSampleMultiplier);
@@ -1174,6 +1265,30 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 Math.Max(1, right - left),
                 Math.Max(1, bottom - top),
                 sampleStep);
+        }
+
+        private static void LimitProgressiveFrameSpan(
+            ref int start,
+            ref int end,
+            double visibleStart,
+            double visibleEnd,
+            int imageLength,
+            long maxSourceSpan)
+        {
+            var maxLength = (int)Math.Min(imageLength, Math.Max(1, maxSourceSpan));
+            if (end - start <= maxLength)
+            {
+                return;
+            }
+
+            var center = (visibleStart + visibleEnd) / 2.0;
+            var limitedStart = (int)Math.Floor(center - (maxLength / 2.0));
+            var minimumStart = (int)Math.Ceiling(visibleEnd - maxLength);
+            var maximumStart = (int)Math.Floor(visibleStart);
+            limitedStart = Math.Max(minimumStart, Math.Min(maximumStart, limitedStart));
+            limitedStart = Math.Max(0, Math.Min(imageLength - maxLength, limitedStart));
+            start = limitedStart;
+            end = limitedStart + maxLength;
         }
 
         private bool CurrentProgressiveFrameSatisfiesView(int desiredSampleStep)

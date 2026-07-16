@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the GitHub Release from tag `v1.0.43` using [github-release-1.0.43.md](github-release-1.0.43.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+Create the GitHub Release from tag `v1.0.44` using [github-release-1.0.44.md](github-release-1.0.44.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -274,7 +274,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.43
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.44
 ```
 
 GitHub setup:
@@ -296,12 +296,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.43.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.44.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.43.md](marketplace-release-notes-1.0.43.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.44.md](marketplace-release-notes-1.0.44.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
