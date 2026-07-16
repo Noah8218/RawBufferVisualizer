@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the GitHub Release from tag `v1.0.44` using [github-release-1.0.44.md](github-release-1.0.44.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+Create the GitHub Release from tag `v1.0.45` using [github-release-1.0.45.md](github-release-1.0.45.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -172,6 +172,20 @@ Failed values remain visible as error rows, so unsupported formats or invalid bu
 
 The viewer uses file-backed tiled rendering for large raw payloads. Dense Mono8 payloads at `100000 x 100000` and `200000 x 200000` were exercised without loading the complete payload into managed memory.
 
+## Large Image Performance
+
+The same-machine automated viewer benchmark below used the same dense `5000 x 5000 Mono8` input before and after the progressive viewport update. Lower values are better.
+
+| Metric | Before update | Current (`1.0.45`) | Improvement |
+| --- | ---: | ---: | ---: |
+| Initial open path | `179.818 ms` | `115.369 ms` | `35.8%` lower |
+| Zoom average frame | `16.684 ms` | `13.765 ms` | `17.5%` lower |
+| Zoom maximum frame | `49.397 ms` | `36.527 ms` | `26.1%` lower |
+| Pan maximum frame | `21.951 ms` | `17.056 ms` | `22.3%` lower |
+| Pan average tile upload | `20.410 ms` | `15.211 ms` | `25.5%` lower |
+
+An installed-VSIX check in Visual Studio 2022 `17.14` also exercised a dense file-backed `24000 x 24000 Mono8` image with `87` wheel and `269` drag events. Input handling averaged `0.095 ms` for wheel and `0.033 ms` for drag; rendered frames averaged `6.515 ms` with a `13.642 ms` maximum. Results vary with image format, storage, GPU driver, debugger state, and docked-window size.
+
 ## Known Limits
 
 - A collection visualization processes the first 256 entries.
@@ -274,7 +288,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.44
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.45
 ```
 
 GitHub setup:
@@ -296,12 +310,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.44.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.45.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.44.md](marketplace-release-notes-1.0.44.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.45.md](marketplace-release-notes-1.0.45.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
