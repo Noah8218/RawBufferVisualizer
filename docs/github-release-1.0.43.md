@@ -20,6 +20,7 @@ Raw Buffer Visualizer is an Image Watch style debugger tool for C# machine-visio
 
 - Actual Visual Studio 2022 installed-VSIX smoke opens `8192 x 8192` OpenCvSharp and Emgu CV Mats, verifies pixel values, and confirms that terminating the debuggee does not raise an unhandled process-memory dialog.
 - Dense non-sparse `100000 x 100000` and `200000 x 200000` Mono8 payloads display through file-backed sampling while process working set remains below 100 MB in the local release gate.
+- A 240-iteration docked `2048 x 2048` Mono8 accumulation and cleanup soak passes with both selected-item Delete and Clear, no positive managed/private/working-set growth, no GDI/USER growth, and no owned temporary-directory residue.
 - Standalone interaction smoke covers pixel/GV read, Fit, 1:1, slider and wheel zoom, PNG and snapshot export, tabs, and linked views.
 - Legacy compatibility smoke passes for Bitmap plus five OpenCvSharp and five Emgu CV package versions.
 - The full Release build, self-test suite, responsive-layout smoke, and Marketplace package dry-run pass.

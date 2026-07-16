@@ -49,6 +49,7 @@ dotnet restore C:\Git\RawBufferVisualizer\RawBufferVisualizer.sln
 dotnet build C:\Git\RawBufferVisualizer\RawBufferVisualizer.sln --configuration Release --no-restore
 dotnet run --project C:\Git\RawBufferVisualizer\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
 powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoZip
+powershell -STA -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\SmokeDockedMemorySoak.ps1 -Configuration Release -Framework net472 -NoBuild
 ```
 
 The VSIX to upload or smoke-test is:

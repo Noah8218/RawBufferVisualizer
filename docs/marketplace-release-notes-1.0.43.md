@@ -10,6 +10,7 @@ Validation:
 
 - Actual Visual Studio 2022 installed-VSIX smoke with `8192 x 8192` OpenCvSharp and Emgu CV Mats, pixel checks, bounded temporary storage, and debuggee-exit recovery.
 - Non-sparse dense `100000 x 100000` and `200000 x 200000` Mono8 payloads displayed through file-backed sampling without loading the complete payload into managed memory.
+- Repeated 240 docked `2048 x 2048` Mono8 opens completed through both selected-item Delete and Clear without positive managed/private/working-set growth, GDI/USER growth, or owned temporary-directory residue.
 - Full Release solution build, self-tests, standalone interaction smoke, responsive docked layouts, legacy Bitmap/OpenCvSharp/Emgu compatibility matrix, and Marketplace package validation.
 
 Large live debugger images are readable only while the debuggee is paused. After Continue or process exit, pause again and reopen the visualizer to refresh the image.
