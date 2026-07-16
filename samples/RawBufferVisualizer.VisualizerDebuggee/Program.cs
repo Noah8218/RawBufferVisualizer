@@ -19,6 +19,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
         private static int Main(string[] args)
         {
+            if (Array.IndexOf(args, "--large-mat-debug") >= 0)
+            {
+                return RunLargeMatDebug(args);
+            }
+
             if (TryGetArgument(args, "--emgu-tiff-smoke", out var tiffPath))
             {
                 return RunEmguTiffSmoke(tiffPath);
@@ -386,6 +391,88 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
             value = string.Empty;
             return false;
+        }
+
+        private static int RunLargeMatDebug(string[] args)
+        {
+            var width = GetPositiveIntArgument(args, "--width", 8192);
+            var height = GetPositiveIntArgument(args, "--height", 8192);
+            var shouldBreak = Array.IndexOf(args, "--no-break") < 0;
+            TryGetArgument(args, "--ready-file", out var readyPath);
+
+            using (var largeOpenCvMat = new Mat(height, width, MatType.CV_8UC1))
+            using (var largeEmguMat = new Emgu.CV.Mat(height, width, Emgu.CV.CvEnum.DepthType.Cv8U, 1))
+            {
+                largeOpenCvMat.SetTo(new Scalar(37));
+                largeEmguMat.SetTo(new Emgu.CV.Structure.MCvScalar(173));
+
+                var openCvView = OpenCvSharpMatVisualizerTransfer.CreateView(largeOpenCvMat, nameof(largeOpenCvMat));
+                var openCvMetadata = OpenCvSharpMatVisualizerTransfer.CreateMetadata(openCvView);
+                var emguView = EmguCvMatVisualizerTransfer.CreateView(largeEmguMat, nameof(largeEmguMat));
+                var emguMetadata = EmguCvMatVisualizerTransfer.CreateMetadata(emguView);
+                if (!openCvMetadata.SupportsDirectMemory || !emguMetadata.SupportsDirectMemory)
+                {
+                    throw new InvalidOperationException("Large Mat metadata must support direct debugger memory.");
+                }
+
+                if (!string.IsNullOrWhiteSpace(readyPath))
+                {
+                    var directory = Path.GetDirectoryName(Path.GetFullPath(readyPath));
+                    if (!string.IsNullOrWhiteSpace(directory))
+                    {
+                        Directory.CreateDirectory(directory);
+                    }
+
+                    File.WriteAllLines(
+                        readyPath,
+                        new[]
+                        {
+                            "processId=" + Process.GetCurrentProcess().Id.ToString(),
+                            "width=" + width.ToString(),
+                            "height=" + height.ToString(),
+                            "openCvBytes=" + openCvMetadata.BufferLength.ToString(),
+                            "emguBytes=" + emguMetadata.BufferLength.ToString(),
+                            "openCvValue=37",
+                            "emguValue=173"
+                        });
+                }
+
+                Console.WriteLine(
+                    "Large Mat debugger smoke ready: " + width.ToString() + " x " + height.ToString() +
+                    ", OpenCvSharp " + openCvMetadata.BufferLength.ToString() + " bytes" +
+                    ", Emgu " + emguMetadata.BufferLength.ToString() + " bytes.");
+                BreakForLargeMats(largeOpenCvMat, largeEmguMat, shouldBreak);
+                return 0;
+            }
+        }
+
+        private static void BreakForLargeMats(
+            Mat largeOpenCvMat,
+            Emgu.CV.Mat largeEmguMat,
+            bool shouldBreak)
+        {
+            if (shouldBreak)
+            {
+                Debugger.Break();
+            }
+
+            GC.KeepAlive(largeOpenCvMat);
+            GC.KeepAlive(largeEmguMat);
+        }
+
+        private static int GetPositiveIntArgument(string[] args, string name, int defaultValue)
+        {
+            if (!TryGetArgument(args, name, out var value))
+            {
+                return defaultValue;
+            }
+
+            if (!int.TryParse(value, out var parsed) || parsed <= 0)
+            {
+                throw new ArgumentOutOfRangeException(name, "A positive integer is required.");
+            }
+
+            return parsed;
         }
 
         private static int RunEmguTiffSmoke(string path)

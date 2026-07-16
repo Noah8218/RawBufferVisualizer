@@ -1,4 +1,5 @@
 using System;
+using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.OpenGlCanvas
 {
@@ -11,6 +12,16 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             X = x;
             Y = y;
+        }
+    }
+
+    public sealed class RawOpenGlSourceUnavailableEventArgs : EventArgs
+    {
+        public RawImageSourceUnavailableException Exception { get; private set; }
+
+        public RawOpenGlSourceUnavailableEventArgs(RawImageSourceUnavailableException exception)
+        {
+            Exception = exception ?? throw new ArgumentNullException("exception");
         }
     }
 

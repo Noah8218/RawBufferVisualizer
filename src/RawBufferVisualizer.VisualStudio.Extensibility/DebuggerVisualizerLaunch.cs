@@ -16,6 +16,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
     internal static class DebuggerVisualizerLaunch
     {
         private static readonly TimeSpan HandoffAcknowledgementTimeout = TimeSpan.FromSeconds(30);
+        private const long PreviewFirstThreshold = 64L * 1024L * 1024L;
 
         public static async Task<IRemoteUserControl> CreateControlAsync(
             VisualizerTarget visualizerTarget,
@@ -27,7 +28,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             var sourceType = displayName;
             var closeWhenLoaded = false;
             string? snapshotDirectory = null;
-            string? requestPath = null;
+            var snapshotOwnedByDockedWindow = false;
+            var previewForwarded = false;
+            var handoffId = Guid.NewGuid().ToString("N");
             try
             {
                 visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
@@ -42,29 +45,69 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 displayName = metadata.DisplayName;
                 sourceType = metadata.SourceType;
                 snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
-                EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
-                var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
-                var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
-                await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, rawPath, cancellationToken);
-
-                requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
-                    visualStudioProcessId,
-                    metadataPath,
-                    metadata.DisplayName,
-                    metadata.SourceType);
-                if (await TryCompleteHandoffAsync(visualStudioProcessId, new[] { requestPath }, cancellationToken))
+                if (ShouldForwardPreview(metadata))
                 {
-                    session.ReportForwarded(metadata);
-                    closeWhenLoaded = true;
+                    var preview = await TryRequestPreviewAsync(
+                        visualizerTarget.ObjectSource,
+                        metadata,
+                        cancellationToken);
+                    if (preview != null)
+                    {
+                        var previewMetadataPath = SavePreviewSnapshot(snapshotDirectory, metadata.DisplayName, preview);
+                        var previewRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                            visualStudioProcessId,
+                            previewMetadataPath,
+                            metadata.DisplayName,
+                            FormatPreviewSourceType(metadata),
+                            handoffId,
+                            isPreview: true);
+                        snapshotOwnedByDockedWindow = await TryCompleteHandoffAsync(
+                            visualStudioProcessId,
+                            new[] { previewRequestPath },
+                            cancellationToken);
+                        previewForwarded = snapshotOwnedByDockedWindow;
+                    }
+                }
+
+                string requestPath;
+                if (ShouldUseDirectMemory(metadata))
+                {
+                    requestPath = WriteLiveMemoryRequest(visualStudioProcessId, metadata, handoffId);
                 }
                 else
                 {
+                    EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
+                    var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
+                    var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
+                    await WriteRawChunksAsync(visualizerTarget.ObjectSource, metadata, rawPath, cancellationToken);
+                    requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                        visualStudioProcessId,
+                        metadataPath,
+                        metadata.DisplayName,
+                        metadata.SourceType,
+                        handoffId);
+                }
+
+                if (!await TryCompleteHandoffAsync(visualStudioProcessId, new[] { requestPath }, cancellationToken))
+                {
                     session.ReportFailure("The docked Raw Buffer Visualizer did not acknowledge the image handoff.");
+                }
+                else
+                {
+                    if (ShouldUseDirectMemory(metadata) && !previewForwarded && snapshotDirectory != null)
+                    {
+                        VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
+                        snapshotDirectory = null;
+                    }
+
+                    snapshotOwnedByDockedWindow = previewForwarded || !ShouldUseDirectMemory(metadata);
+                    session.ReportForwarded(metadata);
+                    closeWhenLoaded = true;
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                if (requestPath == null && snapshotDirectory != null)
+                if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
                 {
                     VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                 }
@@ -73,7 +116,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
-                if (snapshotDirectory != null && requestPath == null)
+                if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
                 {
                     VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                 }
@@ -85,7 +128,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     ex.Message,
                     cancellationToken,
                     errorType: ex.GetType().FullName,
-                    errorDetails: ex.ToString());
+                    errorDetails: ex.ToString(),
+                    handoffId: handoffId);
                 if (!closeWhenLoaded)
                 {
                     session.ReportFailure(ex.Message);
@@ -148,30 +192,71 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     }
 
                     string? snapshotDirectory = null;
+                    var snapshotOwnedByDockedWindow = false;
+                    var previewForwarded = false;
+                    var handoffId = Guid.NewGuid().ToString("N");
                     try
                     {
                         var metadata = item.Metadata;
                         snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
-                        EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
-                        var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
-                        var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
-                        await WriteCollectionRawChunksAsync(
-                            visualizerTarget.ObjectSource,
-                            index,
-                            metadata,
-                            rawPath,
-                            cancellationToken);
+                        if (ShouldForwardPreview(metadata))
+                        {
+                            var preview = await TryRequestCollectionPreviewAsync(
+                                visualizerTarget.ObjectSource,
+                                index,
+                                metadata,
+                                cancellationToken);
+                            if (preview != null)
+                            {
+                                var previewMetadataPath = SavePreviewSnapshot(snapshotDirectory, metadata.DisplayName, preview);
+                                var previewRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                                    visualStudioProcessId,
+                                    previewMetadataPath,
+                                    metadata.DisplayName,
+                                    FormatPreviewSourceType(metadata),
+                                    handoffId,
+                                    isPreview: true);
+                                snapshotOwnedByDockedWindow = await TryCompleteHandoffAsync(
+                                    visualStudioProcessId,
+                                    new[] { previewRequestPath },
+                                    cancellationToken);
+                                previewForwarded = snapshotOwnedByDockedWindow;
+                            }
+                        }
 
-                        requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
-                            visualStudioProcessId,
-                            metadataPath,
-                            metadata.DisplayName,
-                            metadata.SourceType));
+                        if (ShouldUseDirectMemory(metadata))
+                        {
+                            requestPaths.Add(WriteLiveMemoryRequest(visualStudioProcessId, metadata, handoffId));
+                            if (!previewForwarded && snapshotDirectory != null)
+                            {
+                                VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
+                                snapshotDirectory = null;
+                            }
+                        }
+                        else
+                        {
+                            EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
+                            var metadataPath = Path.Combine(snapshotDirectory, GetSnapshotName(metadata.DisplayName) + ".rbuf.json");
+                            var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
+                            await WriteCollectionRawChunksAsync(
+                                visualizerTarget.ObjectSource,
+                                index,
+                                metadata,
+                                rawPath,
+                                cancellationToken);
+
+                            requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
+                                visualStudioProcessId,
+                                metadataPath,
+                                metadata.DisplayName,
+                                metadata.SourceType,
+                                handoffId));
+                        }
                         forwarded++;
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
-                        if (snapshotDirectory != null)
+                        if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
                         {
                             VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                         }
@@ -179,7 +264,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     }
                     catch (Exception ex)
                     {
-                        if (snapshotDirectory != null)
+                        if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
                         {
                             VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                         }
@@ -191,7 +276,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             summary.SourceType,
                             ex.Message,
                             ex.GetType().FullName,
-                            ex.ToString()));
+                            ex.ToString(),
+                            handoffId));
                     }
                 }
 
@@ -246,7 +332,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             CancellationToken cancellationToken,
             List<string>? requestPaths = null,
             string? errorType = null,
-            string? errorDetails = null)
+            string? errorDetails = null,
+            string? handoffId = null)
         {
             if (visualStudioProcessId <= 0)
             {
@@ -262,7 +349,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     sourceType,
                     errorMessage,
                     errorType,
-                    errorDetails));
+                    errorDetails,
+                    handoffId));
                 if (!await TryCompleteHandoffAsync(visualStudioProcessId, requestPaths, cancellationToken))
                 {
                     return false;
@@ -278,6 +366,134 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             {
                 return false;
             }
+        }
+
+        private static bool ShouldForwardPreview(VisualizerSnapshotMetadata metadata)
+        {
+            return metadata.BufferLength >= PreviewFirstThreshold;
+        }
+
+        private static bool ShouldUseDirectMemory(VisualizerSnapshotMetadata metadata)
+        {
+            return metadata.BufferLength >= PreviewFirstThreshold
+                && metadata.SupportsDirectMemory
+                && metadata.ProcessId > 0
+                && metadata.BufferAddress != 0;
+        }
+
+        private static string WriteLiveMemoryRequest(
+            int visualStudioProcessId,
+            VisualizerSnapshotMetadata metadata,
+            string handoffId)
+        {
+            return VisualizerHandoffInbox.WriteLiveMemoryRequest(
+                visualStudioProcessId,
+                metadata.ProcessId,
+                metadata.BufferAddress,
+                metadata.BufferLength,
+                metadata.Descriptor,
+                metadata.DisplayName,
+                metadata.SourceType,
+                handoffId);
+        }
+
+        private static async Task<VisualizerSnapshotTransfer?> TryRequestPreviewAsync(
+            VisualizerObjectSourceClient objectSource,
+            VisualizerSnapshotMetadata metadata,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var preview = await objectSource.RequestDataAsync<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer>(
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
+                        MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
+                    },
+                    jsonSerializer: null,
+                    cancellationToken);
+                ValidatePreview(preview);
+                return preview;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static async Task<VisualizerSnapshotTransfer?> TryRequestCollectionPreviewAsync(
+            VisualizerObjectSourceClient objectSource,
+            int index,
+            VisualizerSnapshotMetadata metadata,
+            CancellationToken cancellationToken)
+        {
+            try
+            {
+                var preview = await objectSource.RequestDataAsync<VisualizerCollectionItemRequest, VisualizerSnapshotTransfer>(
+                    new VisualizerCollectionItemRequest
+                    {
+                        Operation = VisualizerCollectionOperation.Preview,
+                        Index = index,
+                        MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
+                        MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
+                    },
+                    jsonSerializer: null,
+                    cancellationToken);
+                ValidatePreview(preview);
+                return preview;
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static void ValidatePreview(VisualizerSnapshotTransfer? preview)
+        {
+            if (preview == null || preview.Descriptor == null || preview.Buffer == null)
+            {
+                throw new InvalidDataException("Visualizer object source returned no sampled preview.");
+            }
+
+            if (preview.Descriptor.Width <= 0
+                || preview.Descriptor.Height <= 0
+                || preview.Buffer.LongLength < preview.Descriptor.GetRequiredByteCount())
+            {
+                throw new InvalidDataException("Visualizer object source returned an invalid sampled preview.");
+            }
+        }
+
+        private static string SavePreviewSnapshot(
+            string snapshotDirectory,
+            string displayName,
+            VisualizerSnapshotTransfer preview)
+        {
+            var metadataPath = Path.Combine(
+                snapshotDirectory,
+                GetSnapshotName(displayName) + ".preview.rbuf.json");
+            var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, preview.Descriptor);
+            File.WriteAllBytes(rawPath, preview.Buffer);
+            return metadataPath;
+        }
+
+        private static string FormatPreviewSourceType(VisualizerSnapshotMetadata metadata)
+        {
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} (sampled preview of {1}x{2} {3})",
+                string.IsNullOrWhiteSpace(metadata.SourceType) ? "Debugger image" : metadata.SourceType,
+                metadata.Descriptor.Width,
+                metadata.Descriptor.Height,
+                metadata.Descriptor.PixelFormat);
         }
 
         private static async Task<bool> TryCompleteHandoffAsync(

@@ -31,6 +31,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new InvalidDataException("Chunk request is required.");
             }
 
+            if (request.Operation == VisualizerSnapshotOperation.Preview)
+            {
+                SerializeAsJson(outgoingData, RawBufferViewVisualizerTransfer.CreatePreview(view, request));
+                return;
+            }
+
             SerializeAsJson(outgoingData, RawBufferViewVisualizerTransfer.CreateChunk(view, request));
         }
     }
@@ -44,9 +50,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(view));
             }
 
-            return VisualizerChunkedTransfer.CreateMetadata(
+            return VisualizerChunkedTransfer.CreatePointerMetadata(
                 view.ToDescriptor(),
                 view.GetBufferLength(),
+                view.Buffer,
                 typeof(RawBufferView).FullName ?? nameof(RawBufferView),
                 view.Name);
         }
@@ -94,6 +101,25 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 TotalLength = totalLength,
                 IsLastChunk = request.Offset + length >= totalLength
             };
+        }
+
+        public static VisualizerSnapshotTransfer CreatePreview(
+            RawBufferView view,
+            VisualizerSnapshotChunkRequest request)
+        {
+            if (view == null)
+            {
+                throw new ArgumentNullException(nameof(view));
+            }
+
+            return VisualizerSampledPreview.Create(
+                view.Buffer,
+                view.GetBufferLength(),
+                view.ToDescriptor(),
+                typeof(RawBufferView).FullName ?? nameof(RawBufferView),
+                null,
+                request.MaximumWidth,
+                request.MaximumHeight);
         }
 
         private static IntPtr Add(IntPtr pointer, long offset)

@@ -10,6 +10,9 @@ param(
     [int]$MaxCommandMs = 100,
     [int]$MaxFrameMs = 500,
     [int]$MaxUploadMs = 500,
+    [int]$MaxFirstVisibleMs = 10000,
+    [int]$SettleAfterInteractionMs = 2000,
+    [string]$InputMetadataPath = "",
     [string]$OutputDir = "artifacts\perf\opengl-viewer",
     [switch]$NoBuild
 )
@@ -44,9 +47,17 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne "STA") {
         $MaxFrameMs,
         "-MaxUploadMs",
         $MaxUploadMs,
+        "-MaxFirstVisibleMs",
+        $MaxFirstVisibleMs,
+        "-SettleAfterInteractionMs",
+        $SettleAfterInteractionMs,
         "-OutputDir",
         $OutputDir
     )
+
+    if (-not [string]::IsNullOrWhiteSpace($InputMetadataPath)) {
+        $arguments += @("-InputMetadataPath", $InputMetadataPath)
+    }
 
     if ($NoBuild) {
         $arguments += "-NoBuild"
@@ -150,19 +161,91 @@ function New-Mono8Raw([string]$path, [int]$width, [int]$height, [int]$stride, [i
     }
 }
 
-New-Mono8Raw $rawPath $Width $Height $stride $rawLength $materializeLimit
-$metadata = [ordered]@{
-    rawFile = "$sampleName.raw"
-    width = $Width
-    height = $Height
-    stride = $stride
-    pixelFormat = "Mono8"
-    validBits = 8
-    byteOrder = "LittleEndian"
-} | ConvertTo-Json
-Set-Content -LiteralPath $metadataPath -Encoding UTF8 -Value $metadata
+if ([string]::IsNullOrWhiteSpace($InputMetadataPath)) {
+    New-Mono8Raw $rawPath $Width $Height $stride $rawLength $materializeLimit
+    $metadata = [ordered]@{
+        rawFile = "$sampleName.raw"
+        width = $Width
+        height = $Height
+        stride = $stride
+        pixelFormat = "Mono8"
+        validBits = 8
+        byteOrder = "LittleEndian"
+    } | ConvertTo-Json
+    Set-Content -LiteralPath $metadataPath -Encoding UTF8 -Value $metadata
+}
+else {
+    $metadataPath = (Resolve-Path -LiteralPath $InputMetadataPath).Path
+    $metadataObject = Get-Content -LiteralPath $metadataPath -Raw | ConvertFrom-Json
+    $Width = [int]$metadataObject.width
+    $Height = [int]$metadataObject.height
+    $stride = [int]$metadataObject.stride
+    $rawPath = Join-Path (Split-Path -Parent $metadataPath) ([string]$metadataObject.rawFile)
+    $rawLength = (Get-Item -LiteralPath $rawPath).Length
+    $sampleName = [IO.Path]::GetFileNameWithoutExtension([IO.Path]::GetFileNameWithoutExtension($metadataPath))
+}
 
 Add-Type -AssemblyName PresentationFramework,PresentationCore,WindowsBase,System.Xaml,WindowsFormsIntegration,System.Windows.Forms,System.Drawing
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class OpenGlSmokeCaptureNative
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Rect
+    {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    public static extern uint GetWindowThreadProcessId(IntPtr hWnd, IntPtr processId);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetActiveWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr SetFocus(IntPtr hWnd);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    public static extern bool GetWindowRect(IntPtr hWnd, out Rect rect);
+
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmGetWindowAttribute(
+        IntPtr hWnd,
+        int attribute,
+        out Rect value,
+        int valueSize);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetWindowPos(
+        IntPtr hWnd,
+        IntPtr hWndInsertAfter,
+        int x,
+        int y,
+        int width,
+        int height,
+        uint flags);
+}
+'@
 
 $vsPublicAssemblies = @(
     (Join-Path $env:ProgramFiles "Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies"),
@@ -206,9 +289,20 @@ if ($null -eq $control) {
 }
 
 function Capture-Window([Windows.Window]$window, [string]$path) {
-    $source = $window.PointToScreen([Windows.Point]::new(0, 0))
-    $width = [int]$window.ActualWidth
-    $height = [int]$window.ActualHeight
+    $handle = ([Windows.Interop.WindowInteropHelper]::new($window)).Handle
+    if ($handle -eq [IntPtr]::Zero) {
+        throw "The smoke window handle is not available."
+    }
+
+    $rect = New-Object OpenGlSmokeCaptureNative+Rect
+    $rectSize = [Runtime.InteropServices.Marshal]::SizeOf($rect)
+    $dwmResult = [OpenGlSmokeCaptureNative]::DwmGetWindowAttribute($handle, 9, [ref]$rect, $rectSize)
+    if ($dwmResult -ne 0 -and -not [OpenGlSmokeCaptureNative]::GetWindowRect($handle, [ref]$rect)) {
+        throw "The smoke window bounds are not available. DWM error: $dwmResult; Win32 error: $([Runtime.InteropServices.Marshal]::GetLastWin32Error())."
+    }
+
+    $width = $rect.Right - $rect.Left
+    $height = $rect.Bottom - $rect.Top
     if ($width -le 0 -or $height -le 0) {
         throw "Invalid window bounds: $width x $height"
     }
@@ -216,10 +310,39 @@ function Capture-Window([Windows.Window]$window, [string]$path) {
     $bitmap = New-Object Drawing.Bitmap $width, $height
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     try {
-        $graphics.CopyFromScreen([int]$source.X, [int]$source.Y, 0, 0, [Drawing.Size]::new($width, $height))
+        $noMoveOrResize = 0x0001 -bor 0x0002 -bor 0x0040
+        [OpenGlSmokeCaptureNative]::SetWindowPos($handle, [IntPtr](-1), 0, 0, 0, 0, $noMoveOrResize) | Out-Null
+        $foregroundHandle = [OpenGlSmokeCaptureNative]::GetForegroundWindow()
+        $foregroundThread = [OpenGlSmokeCaptureNative]::GetWindowThreadProcessId($foregroundHandle, [IntPtr]::Zero)
+        $currentThread = [OpenGlSmokeCaptureNative]::GetCurrentThreadId()
+        $attached = $false
+        try {
+            if ($foregroundThread -ne 0 -and $foregroundThread -ne $currentThread) {
+                $attached = [OpenGlSmokeCaptureNative]::AttachThreadInput($currentThread, $foregroundThread, $true)
+            }
+
+            [OpenGlSmokeCaptureNative]::BringWindowToTop($handle) | Out-Null
+            [OpenGlSmokeCaptureNative]::SetActiveWindow($handle) | Out-Null
+            [OpenGlSmokeCaptureNative]::SetForegroundWindow($handle) | Out-Null
+            [OpenGlSmokeCaptureNative]::SetFocus($handle) | Out-Null
+        }
+        finally {
+            if ($attached) {
+                [OpenGlSmokeCaptureNative]::AttachThreadInput($currentThread, $foregroundThread, $false) | Out-Null
+            }
+        }
+
+        Start-Sleep -Milliseconds 300
+        $foregroundHandle = [OpenGlSmokeCaptureNative]::GetForegroundWindow()
+        if ($foregroundHandle -ne $handle) {
+            throw "The smoke window lost foreground focus before capture. Expected HWND=$handle; actual HWND=$foregroundHandle."
+        }
+
+        $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, [Drawing.Size]::new($width, $height))
         $bitmap.Save($path, [Drawing.Imaging.ImageFormat]::Png)
     }
     finally {
+        [OpenGlSmokeCaptureNative]::SetWindowPos($handle, [IntPtr](-2), 0, 0, 0, 0, $noMoveOrResize) | Out-Null
         $graphics.Dispose()
         $bitmap.Dispose()
     }
@@ -230,6 +353,7 @@ function Measure-Capture([string]$path) {
     try {
         $nonDark = 0
         $samples = 0
+        $colors = New-Object 'System.Collections.Generic.HashSet[int]'
         for ($y = 80; $y -lt ($bitmap.Height - 40); $y += 10) {
             for ($x = 320; $x -lt ($bitmap.Width - 300); $x += 10) {
                 $color = $bitmap.GetPixel($x, $y)
@@ -238,11 +362,15 @@ function Measure-Capture([string]$path) {
                     $nonDark++
                 }
 
+                $colors.Add($color.ToArgb()) | Out-Null
                 $samples++
             }
         }
 
-        [Math]::Round($nonDark / [double][Math]::Max($samples, 1), 4)
+        [pscustomobject]@{
+            NonDarkRatio = [Math]::Round($nonDark / [double][Math]::Max($samples, 1), 4)
+            UniqueSampledColors = $colors.Count
+        }
     }
     finally {
         $bitmap.Dispose()
@@ -272,7 +400,7 @@ $window.Content = $control
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromMilliseconds(45)
 
-$script:phase = "settleAfterOpen"
+$script:phase = "waitForInitialFrame"
 $script:tickCount = 0
 $script:zoomIndex = 0
 $script:panIndex = 0
@@ -283,18 +411,26 @@ $script:zoomStats = $null
 $script:panStats = $null
 $script:canvas = $null
 $script:failure = $null
+$script:firstVisibleMs = 0.0
+$script:firstVisibleWatch = $null
 $script:screenshotPath = Join-Path $outputRoot "open-gl-viewer-performance.png"
 $script:metricsPath = Join-Path $outputRoot "open-gl-viewer-performance.json"
 $zoomScales = @(0.12, 0.18, 0.25, 0.5, 1.0, 1.5, 2.0, 1.0, 0.35, 0.16)
 
 $timer.add_Tick({
     try {
-        if ($script:phase -eq "settleAfterOpen") {
-            $script:tickCount++
-            if ($script:tickCount -lt 12) {
+        if ($script:phase -eq "waitForInitialFrame") {
+            $initialStats = $script:canvas.GetRenderStatsSnapshot()
+            if ($initialStats.TextureUploadCount -le 0) {
+                if ($script:firstVisibleWatch.Elapsed.TotalMilliseconds -gt $MaxFirstVisibleMs) {
+                    throw "No visible texture was uploaded within $MaxFirstVisibleMs ms."
+                }
+
                 return
             }
 
+            $script:firstVisibleWatch.Stop()
+            $script:firstVisibleMs = $script:firstVisibleWatch.Elapsed.TotalMilliseconds
             $script:canvas.ResetRenderStats()
             $script:phase = "zoom"
             return
@@ -330,6 +466,18 @@ $timer.add_Tick({
                 return
             }
 
+            $script:canvas.FitToImage()
+            $script:tickCount = 0
+            $script:phase = "settleAfterInteraction"
+            return
+        }
+
+        if ($script:phase -eq "settleAfterInteraction") {
+            $script:tickCount++
+            if (($script:tickCount * $timer.Interval.TotalMilliseconds) -lt $SettleAfterInteractionMs) {
+                return
+            }
+
             $script:panStats = $script:canvas.GetRenderStatsSnapshot()
             $timer.Stop()
             Capture-Window $window $script:screenshotPath
@@ -356,6 +504,7 @@ $window.add_Loaded({
         }
 
         $script:canvas.ResetRenderStats()
+        $script:firstVisibleWatch = [Diagnostics.Stopwatch]::StartNew()
         $timer.Start()
     }
     catch {
@@ -370,7 +519,7 @@ if ($script:failure) {
     throw $script:failure
 }
 
-$nonDarkRatio = Measure-Capture $script:screenshotPath
+$captureContent = Measure-Capture $script:screenshotPath
 $result = [ordered]@{
     sample = [ordered]@{
         width = $Width
@@ -381,12 +530,14 @@ $result = [ordered]@{
         metadataPath = $metadataPath
     }
     openPathMs = [Math]::Round($script:openPathMs, 3)
+    firstVisibleMs = [Math]::Round($script:firstVisibleMs, 3)
     maxZoomCommandMs = [Math]::Round($script:maxZoomCommandMs, 3)
     maxPanCommandMs = [Math]::Round($script:maxPanCommandMs, 3)
     zoom = Convert-Stats $script:zoomStats
     pan = Convert-Stats $script:panStats
     screenshotPath = $script:screenshotPath
-    nonDarkRatio = $nonDarkRatio
+    nonDarkRatio = $captureContent.NonDarkRatio
+    uniqueSampledColors = $captureContent.UniqueSampledColors
     thresholds = [ordered]@{
         maxOpenPathMs = $MaxOpenPathMs
         maxCommandMs = $MaxCommandMs
@@ -426,8 +577,12 @@ foreach ($entry in $statEntries) {
     }
 }
 
-if ($nonDarkRatio -le 0.02) {
-    $failures.Add("Capture appears blank: NonDarkRatio $nonDarkRatio")
+if ($captureContent.NonDarkRatio -le 0.02) {
+    $failures.Add("Capture appears dark: NonDarkRatio $($captureContent.NonDarkRatio)")
+}
+
+if ($captureContent.UniqueSampledColors -lt 8) {
+    $failures.Add("Capture appears blank or uniform: UniqueSampledColors $($captureContent.UniqueSampledColors)")
 }
 
 Get-Content -LiteralPath $script:metricsPath
