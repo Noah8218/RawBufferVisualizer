@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Threading;
 
 namespace RawBufferVisualizer.Core
 {
@@ -37,13 +38,30 @@ namespace RawBufferVisualizer.Core
 
         public override RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
         {
+            return RenderTileSampled(x, y, width, height, sampleStep, options, CancellationToken.None);
+        }
+
+        public override RenderedImage RenderTileSampled(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            RawRenderOptions? options,
+            CancellationToken cancellationToken)
+        {
             var aOptions = _a.CreateRenderOptions();
             var bOptions = _b.CreateRenderOptions();
-            var left = _a.RenderTileSampled(x, y, width, height, sampleStep, aOptions);
-            var right = _b.RenderTileSampled(x, y, width, height, sampleStep, bOptions);
+            var left = _a.RenderTileSampled(x, y, width, height, sampleStep, aOptions, cancellationToken);
+            var right = _b.RenderTileSampled(x, y, width, height, sampleStep, bOptions, cancellationToken);
             var diff = new byte[left.Bgra32.Length];
             for (var i = 0; i < diff.Length; i += 4)
             {
+                if ((i & 0x3FFF) == 0)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
                 diff[i] = AbsByte(left.Bgra32[i], right.Bgra32[i]);
                 diff[i + 1] = AbsByte(left.Bgra32[i + 1], right.Bgra32[i + 1]);
                 diff[i + 2] = AbsByte(left.Bgra32[i + 2], right.Bgra32[i + 2]);

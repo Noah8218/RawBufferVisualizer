@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -7,6 +8,7 @@ using System.Reflection;
 using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using OpenCvSharp;
 using RawBufferVisualizer.BitmapAdapter;
 using RawBufferVisualizer.Core;
@@ -38,6 +40,9 @@ namespace RawBufferVisualizer.Tests
                 TilePlannerHandles200kImage();
                 TileRenderMatchesFullRender();
                 FileBackedSourceRendersLikeMemory();
+                ProcessMemorySourceRendersLikeMemory();
+                ProcessMemorySourceReportsUnavailableAfterProcessExit();
+                FileBackedSampledRenderHonorsCancellation();
                 SampledMemorySourceMatchesFileBackedSourceForAllFormats();
                 FileBackedPackedSourceRendersLikeMemory();
                 FileBackedSourceHandles100kSampledTile();
@@ -53,6 +58,7 @@ namespace RawBufferVisualizer.Tests
                 SnapshotReferenceLoadsUtf8BomPrettyMetadata();
                 VisualizerTransferRoundTrips();
                 VisualizerChunkedTransferCreatesChunks();
+                VisualizerSampledPreviewSamplesByteAndPointerSources();
                 VisualizerSnapshotStoreWritesChunkedSnapshot();
                 VisualizerSnapshotStoreWritesCollection();
                 RawBufferViewCreatesDescriptorAndChunks();
@@ -314,6 +320,138 @@ namespace RawBufferVisualizer.Tests
                 {
                     Directory.Delete(directory, true);
                 }
+            }
+        }
+
+        private static void FileBackedSampledRenderHonorsCancellation()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var rawPath = Path.Combine(directory, "cancel.raw");
+                var descriptor = CreateDescriptor(16, 16, 16, RawPixelFormat.Mono8, 8);
+                File.WriteAllBytes(rawPath, new byte[descriptor.GetRequiredByteCount()]);
+
+                using (var source = RawImageSource.FromFile(rawPath, descriptor))
+                using (var cancellation = new CancellationTokenSource())
+                {
+                    cancellation.Cancel();
+                    var canceled = false;
+                    try
+                    {
+                        source.RenderTileSampled(0, 0, 16, 16, 2, null, cancellation.Token);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        canceled = true;
+                    }
+
+                    Assert(canceled, "File-backed sampled render did not honor cancellation.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void ProcessMemorySourceRendersLikeMemory()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var descriptor = CreateDescriptor(4, 3, 14, RawPixelFormat.BGR24, 8);
+            var buffer = new byte[descriptor.GetRequiredByteCount()];
+            for (var y = 0; y < descriptor.Height; y++)
+            {
+                var row = y * descriptor.Stride;
+                for (var x = 0; x < descriptor.Width; x++)
+                {
+                    var offset = row + (x * 3);
+                    buffer[offset] = (byte)(x + 10);
+                    buffer[offset + 1] = (byte)(y + 20);
+                    buffer[offset + 2] = (byte)(x + y + 30);
+                }
+            }
+
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var copiedPath = Path.Combine(directory, "live-copy.raw");
+                using (var memorySource = RawImageSource.FromMemory(buffer, descriptor))
+                using (var processSource = RawImageSource.FromProcessMemory(
+                    Process.GetCurrentProcess().Id,
+                    handle.AddrOfPinnedObject().ToInt64(),
+                    buffer.LongLength,
+                    descriptor))
+                {
+                    Assert(processSource.IsLiveProcessBacked, "Process source should report live debugger memory.");
+                    var memoryTile = memorySource.RenderTile(1, 1, 2, 2, null);
+                    var processTile = processSource.RenderTile(1, 1, 2, 2, null);
+                    AssertBytesEqual(memoryTile.Bgra32, processTile.Bgra32, "Process-memory tile render should match memory render.");
+
+                    var memorySampled = memorySource.RenderTileSampled(0, 0, 4, 3, 2, null);
+                    var processSampled = processSource.RenderTileSampled(0, 0, 4, 3, 2, null);
+                    AssertBytesEqual(memorySampled.Bgra32, processSampled.Bgra32, "Process-memory sampled render should match memory render.");
+
+                    var pixel = processSource.DescribePixel(2, 1);
+                    Assert(pixel.Contains("X=2, Y=1") && pixel.Contains("B=12") && pixel.Contains("G=21") && pixel.Contains("R=33"), "Process-memory pixel inspector failed.");
+
+                    processSource.CopyRawTo(copiedPath);
+                    AssertBytesEqual(buffer, File.ReadAllBytes(copiedPath), "Process-memory raw export failed.");
+                }
+            }
+            finally
+            {
+                handle.Free();
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void ProcessMemorySourceReportsUnavailableAfterProcessExit()
+        {
+            var commandProcessor = Environment.GetEnvironmentVariable("ComSpec");
+            if (string.IsNullOrWhiteSpace(commandProcessor))
+            {
+                throw new InvalidOperationException("ComSpec is unavailable for the process-memory lifetime test.");
+            }
+
+            int processId;
+            using (var process = Process.Start(new ProcessStartInfo
+            {
+                FileName = commandProcessor,
+                Arguments = "/c exit 0",
+                CreateNoWindow = true,
+                UseShellExecute = false
+            }) ?? throw new InvalidOperationException("Lifetime-test process could not be started."))
+            {
+                processId = process.Id;
+                process.WaitForExit();
+            }
+
+            var descriptor = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
+            using (var source = RawImageSource.FromProcessMemory(processId, 1, 1, descriptor))
+            {
+                RawImageSourceUnavailableException? failure = null;
+                try
+                {
+                    source.RenderTile(0, 0, 1, 1, null);
+                }
+                catch (RawImageSourceUnavailableException ex)
+                {
+                    failure = ex;
+                }
+
+                Assert(failure != null, "Exited process memory should report a source-unavailable failure.");
+                Assert(
+                    failure!.Message.IndexOf("debuggee", StringComparison.OrdinalIgnoreCase) >= 0,
+                    "Source-unavailable failure should identify the debuggee source.");
             }
         }
 
@@ -748,6 +886,57 @@ namespace RawBufferVisualizer.Tests
             Assert(!chunk.IsLastChunk, "Chunk last flag failed.");
         }
 
+        private static void VisualizerSampledPreviewSamplesByteAndPointerSources()
+        {
+            var descriptor = CreateDescriptor(4, 2, 4, RawPixelFormat.Mono8, 8);
+            var buffer = new byte[]
+            {
+                10, 20, 30, 40,
+                50, 60, 70, 80
+            };
+            var preview = VisualizerSampledPreview.Create(
+                buffer,
+                descriptor,
+                "Test.Mono8",
+                "preview",
+                2,
+                1);
+
+            Assert(preview.Descriptor.Width == 2 && preview.Descriptor.Height == 1, "Sampled byte preview dimensions failed.");
+            Assert(preview.Descriptor.PixelFormat == RawPixelFormat.BGRA32, "Sampled byte preview format failed.");
+            Assert(preview.Buffer[0] == 10 && preview.Buffer[4] == 30, "Sampled byte preview pixels failed.");
+
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var pointerPreview = VisualizerSampledPreview.Create(
+                    handle.AddrOfPinnedObject(),
+                    buffer.LongLength,
+                    descriptor,
+                    "Test.Pointer",
+                    "pointer",
+                    2,
+                    1);
+                Assert(pointerPreview.Buffer.Length == preview.Buffer.Length, "Sampled pointer preview length failed.");
+                Assert(pointerPreview.Buffer[0] == 10 && pointerPreview.Buffer[4] == 30, "Sampled pointer preview pixels failed.");
+            }
+            finally
+            {
+                handle.Free();
+            }
+
+            var packedDescriptor = CreateDescriptor(2, 1, 3, RawPixelFormat.Mono12PackedLsb, 12);
+            var packed = PackLsb(new[] { 0, 4095 }, 12);
+            var packedPreview = VisualizerSampledPreview.Create(
+                packed,
+                packedDescriptor,
+                "Test.Packed",
+                "packed",
+                2,
+                1);
+            Assert(packedPreview.Buffer[0] == 0 && packedPreview.Buffer[4] == 255, "Sampled packed preview scaling failed.");
+        }
+
         private static void VisualizerSnapshotStoreWritesChunkedSnapshot()
         {
             var buffer = new byte[] { 1, 2, 3, 4, 5, 6 };
@@ -880,6 +1069,9 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.DisplayName == "camera0", "RawBufferView display name failed.");
                 Assert(metadata.BufferLength == 6, "RawBufferView buffer length failed.");
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "RawBufferView pixel format failed.");
+                Assert(metadata.SupportsDirectMemory, "RawBufferView should advertise direct debugger memory.");
+                Assert(metadata.ProcessId == Process.GetCurrentProcess().Id, "RawBufferView direct-memory process ID failed.");
+                Assert(metadata.BufferAddress == view.Buffer.ToInt64(), "RawBufferView direct-memory address failed.");
 
                 var chunk = RawBufferViewVisualizerTransfer.CreateChunk(
                     view,
@@ -917,8 +1109,28 @@ namespace RawBufferVisualizer.Tests
                 bitmap.SetPixel(0, 0, Color.FromArgb(10, 20, 30));
                 bitmap.SetPixel(1, 0, Color.FromArgb(40, 50, 60));
 
+                var view = BitmapVisualizerTransfer.CreateView((object)bitmap, "bitmap-view");
+                var metadata = BitmapVisualizerTransfer.CreateMetadata(view);
+                var preview = BitmapVisualizerTransfer.CreatePreview(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 2,
+                        MaximumHeight = 1
+                    });
+                var chunk = BitmapVisualizerTransfer.CreateChunk(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Offset = 0,
+                        Count = 6
+                    });
                 var transfer = BitmapVisualizerTransfer.CreateTransfer((object)bitmap, "bitmap0");
 
+                Assert(metadata.BufferLength >= 6, "Bitmap visualizer lazy metadata length failed.");
+                Assert(preview.Buffer[0] == 30 && preview.Buffer[1] == 20 && preview.Buffer[2] == 10, "Bitmap sampled preview channel order failed.");
+                Assert(chunk.Buffer[0] == 30 && chunk.Buffer[1] == 20 && chunk.Buffer[2] == 10, "Bitmap lazy chunk channel order failed.");
                 Assert(transfer.DisplayName == "bitmap0", "Bitmap visualizer display name failed.");
                 Assert(transfer.SourceType == typeof(Bitmap).FullName, "Bitmap visualizer source type failed.");
                 Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Bitmap visualizer dimensions failed.");
@@ -958,6 +1170,10 @@ namespace RawBufferVisualizer.Tests
 
                 var metadata = (VisualizerSnapshotMetadata)InvokeStatic(transferType, "CreateMetadata", view);
                 Assert(metadata.SourceType == typeof(ImagePtrLike).FullName, "ImagePtr metadata source type failed.");
+                Assert(metadata.SupportsDirectMemory
+                    && metadata.ProcessId == Process.GetCurrentProcess().Id
+                    && metadata.BufferAddress == handle.AddrOfPinnedObject().ToInt64(),
+                    "ImagePtr direct-memory metadata failed.");
 
                 var chunk = (VisualizerSnapshotChunk)InvokeStatic(
                     transferType,
@@ -969,7 +1185,19 @@ namespace RawBufferVisualizer.Tests
                         Count = 3
                     });
 
+                var preview = (VisualizerSnapshotTransfer)InvokeStatic(
+                    transferType,
+                    "CreatePreview",
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 2,
+                        MaximumHeight = 1
+                    });
+
                 Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 2 && chunk.Buffer[2] == 6, "ImagePtr chunk failed.");
+                Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "ImagePtr sampled preview failed.");
             }
             finally
             {
@@ -1012,6 +1240,14 @@ namespace RawBufferVisualizer.Tests
                         Offset = 1,
                         Count = 4
                     });
+                var preview = OpenCvSharpMatVisualizerTransfer.CreatePreview(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 2,
+                        MaximumHeight = 1
+                    });
 
                 Assert(metadata.DisplayName == "mat0", "Mat visualizer display name failed.");
                 Assert(metadata.SourceType == typeof(Mat).FullName, "Mat visualizer source type failed.");
@@ -1019,6 +1255,7 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat visualizer pixel format failed.");
                 Assert(metadata.BufferLength >= 6, "Mat visualizer buffer length failed.");
                 Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2, "Mat visualizer chunk failed.");
+                Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "Mat sampled preview failed.");
             }
         }
 
@@ -1190,6 +1427,14 @@ namespace RawBufferVisualizer.Tests
                         Offset = 2,
                         Count = 3
                     });
+                var preview = EmguCvMatVisualizerTransfer.CreatePreview(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 2,
+                        MaximumHeight = 1
+                    });
 
                 Assert(metadata.DisplayName == "emgu0", "Emgu Mat visualizer display name failed.");
                 Assert(metadata.SourceType == "Emgu.CV.Mat", "Emgu Mat visualizer source type failed.");
@@ -1197,6 +1442,7 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu Mat visualizer pixel format failed.");
                 Assert(metadata.BufferLength == 6, "Emgu Mat visualizer buffer length failed.");
                 Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 1 && chunk.Buffer[2] == 5, "Emgu Mat visualizer chunk failed.");
+                Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "Emgu Mat sampled preview failed.");
             }
         }
 
@@ -1249,6 +1495,15 @@ namespace RawBufferVisualizer.Tests
                 var openCvListView = ImageCollectionVisualizerTransfer.CreateView(new List<Mat> { openCvMat });
                 Assert(openCvListView.Summary.TotalCount == 1, "Typed OpenCvSharp list count failed.");
                 Assert(openCvListView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed OpenCvSharp list transfer failed.");
+                var openCvPreview = openCvListView.GetPreview(
+                    0,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 2,
+                        MaximumHeight = 1
+                    });
+                Assert(openCvPreview.Buffer[0] == 3 && openCvPreview.Buffer[2] == 1, "Typed OpenCvSharp list preview failed.");
 
                 var emguListView = ImageCollectionVisualizerTransfer.CreateView(new List<Emgu.CV.Mat> { emguMat });
                 Assert(emguListView.Summary.TotalCount == 1, "Typed Emgu CV list count failed.");
@@ -1459,7 +1714,9 @@ namespace RawBufferVisualizer.Tests
                     secondVisualStudioProcessId,
                     metadataPath,
                     "bitmapBgr24",
-                    "System.Drawing.Bitmap");
+                    "System.Drawing.Bitmap",
+                    "handoff-42",
+                    isPreview: true);
                 var typedRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(typedRequestPath);
                 var errorRequestPath = VisualizerHandoffInbox.WriteErrorRequest(
                     secondVisualStudioProcessId,
@@ -1467,8 +1724,20 @@ namespace RawBufferVisualizer.Tests
                     "OpenCvSharp.Mat",
                     "The matrix format is not supported.",
                     "System.NotSupportedException",
-                    "System.NotSupportedException: The matrix format is not supported.");
+                    "System.NotSupportedException: The matrix format is not supported.",
+                    "handoff-error");
                 var errorRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(errorRequestPath);
+                var liveDescriptor = CreateDescriptor(8, 4, 8, RawPixelFormat.Mono8, 8);
+                var liveRequestPath = VisualizerHandoffInbox.WriteLiveMemoryRequest(
+                    secondVisualStudioProcessId,
+                    4242,
+                    0x12345678,
+                    32,
+                    liveDescriptor,
+                    "cameraLive",
+                    "OpenCvSharp.Mat",
+                    "handoff-live");
+                var liveRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(liveRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
                 Assert(Path.GetDirectoryName(requestPath) == firstInbox, "Handoff request was not routed to the first Visual Studio inbox.");
@@ -1478,6 +1747,7 @@ namespace RawBufferVisualizer.Tests
                 Assert(request.MetadataPath == Path.GetFullPath(metadataPath), "Handoff request info metadata path failed.");
                 Assert(typedRequest.DisplayName == "bitmapBgr24", "Handoff display name roundtrip failed.");
                 Assert(typedRequest.SourceType == "System.Drawing.Bitmap", "Handoff source type roundtrip failed.");
+                Assert(typedRequest.HandoffId == "handoff-42" && typedRequest.IsPreview, "Preview handoff identity roundtrip failed.");
                 Assert(Path.GetDirectoryName(errorRequestPath) == secondInbox, "Error handoff was not routed to the target Visual Studio inbox.");
                 Assert(errorRequest.IsError, "Error handoff was not identified as an error.");
                 Assert(errorRequest.MetadataPath == string.Empty, "Error handoff should not contain a metadata path.");
@@ -1486,7 +1756,19 @@ namespace RawBufferVisualizer.Tests
                 Assert(errorRequest.ErrorMessage == "The matrix format is not supported.", "Error handoff message roundtrip failed.");
                 Assert(errorRequest.ErrorType == "System.NotSupportedException", "Error handoff type roundtrip failed.");
                 Assert(errorRequest.ErrorDetails.StartsWith("System.NotSupportedException:", StringComparison.Ordinal), "Error handoff details roundtrip failed.");
+                Assert(errorRequest.HandoffId == "handoff-error" && !errorRequest.IsPreview, "Error handoff identity roundtrip failed.");
+                Assert(liveRequest.IsLiveMemory && !liveRequest.IsError, "Live-memory handoff type roundtrip failed.");
+                Assert(liveRequest.MetadataPath == string.Empty, "Live-memory handoff should not contain a metadata path.");
+                Assert(liveRequest.LiveProcessId == 4242, "Live-memory process ID roundtrip failed.");
+                Assert(liveRequest.LiveBufferAddress == 0x12345678 && liveRequest.LiveBufferLength == 32, "Live-memory buffer roundtrip failed.");
+                Assert(liveRequest.LiveDescriptor != null
+                    && liveRequest.LiveDescriptor.Width == 8
+                    && liveRequest.LiveDescriptor.Height == 4
+                    && liveRequest.LiveDescriptor.PixelFormat == RawPixelFormat.Mono8,
+                    "Live-memory descriptor roundtrip failed.");
+                Assert(liveRequest.HandoffId == "handoff-live" && liveRequest.DisplayName == "cameraLive", "Live-memory identity roundtrip failed.");
                 VisualizerHandoffInbox.TryDeleteRequest(errorRequestPath);
+                VisualizerHandoffInbox.TryDeleteRequest(liveRequestPath);
                 Assert(!File.Exists(errorRequestPath), "Handled error handoff request was not deleted.");
             }
             finally

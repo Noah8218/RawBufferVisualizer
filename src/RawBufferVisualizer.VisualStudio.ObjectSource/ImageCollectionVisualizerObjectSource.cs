@@ -48,6 +48,21 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
+            if (request.Operation == VisualizerCollectionOperation.Preview)
+            {
+                SerializeAsJson(
+                    outgoingData,
+                    view.GetPreview(
+                        request.Index,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Operation = VisualizerSnapshotOperation.Preview,
+                            MaximumWidth = request.MaximumWidth,
+                            MaximumHeight = request.MaximumHeight
+                        }));
+                return;
+            }
+
             throw new InvalidDataException("Unsupported collection request operation.");
         }
 
@@ -66,7 +81,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     public enum VisualizerCollectionOperation
     {
         Metadata = 0,
-        Chunk = 1
+        Chunk = 1,
+        Preview = 2
     }
 
     public sealed class VisualizerCollectionItemRequest
@@ -75,6 +91,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public int Index { get; set; }
         public long Offset { get; set; }
         public int Count { get; set; }
+        public int MaximumWidth { get; set; }
+        public int MaximumHeight { get; set; }
     }
 
     public sealed class VisualizerCollectionSummary
@@ -133,6 +151,18 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             return chunk;
+        }
+
+        public VisualizerSnapshotTransfer GetPreview(int index, VisualizerSnapshotChunkRequest request)
+        {
+            var item = GetItem(index);
+            item.EnsureTransfer();
+            if (item.Transfer == null)
+            {
+                throw new NotSupportedException(item.Error);
+            }
+
+            return item.Transfer.CreatePreview(request);
         }
 
         private ImageCollectionItem GetItem(int index)
@@ -213,42 +243,53 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     displayName);
                 return new ImageCollectionItemTransfer(
                     metadata,
-                    request => VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request));
+                    request => VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request),
+                    request => VisualizerChunkedTransfer.CreatePreview(
+                        snapshot.Buffer,
+                        snapshot.Descriptor,
+                        metadata.SourceType,
+                        displayName,
+                        request));
             }
 
             var rawView = value as RawBufferView;
             if (rawView != null)
             {
-                var metadata = VisualizerChunkedTransfer.CreateMetadata(
+                var metadata = VisualizerChunkedTransfer.CreatePointerMetadata(
                     rawView.ToDescriptor(),
                     rawView.GetBufferLength(),
+                    rawView.Buffer,
                     typeof(RawBufferView).FullName ?? nameof(RawBufferView),
                     displayName);
                 return new ImageCollectionItemTransfer(
                     metadata,
-                    request => RawBufferViewVisualizerTransfer.CreateChunk(rawView, request));
+                    request => RawBufferViewVisualizerTransfer.CreateChunk(rawView, request),
+                    request => RawBufferViewVisualizerTransfer.CreatePreview(rawView, request));
             }
 
             var type = value.GetType();
             switch (type.FullName)
             {
                 case "System.Drawing.Bitmap":
-                    var bitmapTransfer = BitmapVisualizerTransfer.CreateTransfer(value, displayName);
+                    var bitmapView = BitmapVisualizerTransfer.CreateView(value, displayName);
                     return new ImageCollectionItemTransfer(
-                        VisualizerChunkedTransfer.CreateMetadata(bitmapTransfer),
-                        request => VisualizerChunkedTransfer.CreateChunk(bitmapTransfer, request));
+                        BitmapVisualizerTransfer.CreateMetadata(bitmapView),
+                        request => BitmapVisualizerTransfer.CreateChunk(bitmapView, request),
+                        request => BitmapVisualizerTransfer.CreatePreview(bitmapView, request));
 
                 case "OpenCvSharp.Mat":
                     var openCvView = OpenCvSharpMatVisualizerTransfer.CreateView(value, displayName);
                     return new ImageCollectionItemTransfer(
                         OpenCvSharpMatVisualizerTransfer.CreateMetadata(openCvView),
-                        request => OpenCvSharpMatVisualizerTransfer.CreateChunk(openCvView, request));
+                        request => OpenCvSharpMatVisualizerTransfer.CreateChunk(openCvView, request),
+                        request => OpenCvSharpMatVisualizerTransfer.CreatePreview(openCvView, request));
 
                 case "Emgu.CV.Mat":
                     var emguView = EmguCvMatVisualizerTransfer.CreateView(value, displayName);
                     return new ImageCollectionItemTransfer(
                         EmguCvMatVisualizerTransfer.CreateMetadata(emguView),
-                        request => EmguCvMatVisualizerTransfer.CreateChunk(emguView, request));
+                        request => EmguCvMatVisualizerTransfer.CreateChunk(emguView, request),
+                        request => EmguCvMatVisualizerTransfer.CreatePreview(emguView, request));
             }
 
             if (LooksLikeImagePointer(type))
@@ -257,7 +298,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 pointerView.DisplayName = displayName;
                 return new ImageCollectionItemTransfer(
                     ImagePtrVisualizerTransfer.CreateMetadata(pointerView),
-                    request => ImagePtrVisualizerTransfer.CreateChunk(pointerView, request));
+                    request => ImagePtrVisualizerTransfer.CreateChunk(pointerView, request),
+                    request => ImagePtrVisualizerTransfer.CreatePreview(pointerView, request));
             }
 
             throw new NotSupportedException("Unsupported collection image type: " + (type.FullName ?? type.Name));
@@ -334,13 +376,16 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     internal sealed class ImageCollectionItemTransfer
     {
         private readonly Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> _createChunk;
+        private readonly Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> _createPreview;
 
         public ImageCollectionItemTransfer(
             VisualizerSnapshotMetadata metadata,
-            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> createChunk)
+            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> createChunk,
+            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> createPreview)
         {
             Metadata = metadata;
             _createChunk = createChunk;
+            _createPreview = createPreview;
         }
 
         public VisualizerSnapshotMetadata Metadata { get; }
@@ -348,6 +393,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public VisualizerSnapshotChunk CreateChunk(VisualizerSnapshotChunkRequest request)
         {
             return _createChunk(request);
+        }
+
+        public VisualizerSnapshotTransfer CreatePreview(VisualizerSnapshotChunkRequest request)
+        {
+            return _createPreview(request);
         }
     }
 }

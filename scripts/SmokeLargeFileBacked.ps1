@@ -10,6 +10,11 @@ param(
     [string]$CaptureFileName = "",
     [switch]$Dense,
     [int]$DenseBlockRows = 64,
+    [switch]$ReuseExisting,
+    [int]$MaxFirstVisibleMs = 5000,
+    [double]$MinNonDarkRatio = 0.1,
+    [string]$ViewerExePath = "",
+    [int]$WaitTimeoutSeconds = 120,
     [switch]$NoBuild
 )
 
@@ -270,24 +275,41 @@ function Get-ElementName([System.Windows.Automation.AutomationElement]$root, [st
     $element.Current.Name
 }
 
-if ($Dense) {
+if ($ReuseExisting) {
+    if (-not (Test-Path -LiteralPath $rawPath)) {
+        throw "Existing raw payload not found: $rawPath"
+    }
+
+    $expectedLength = [int64]$stride * [int64]$Height
+    $actualLength = (Get-Item -LiteralPath $rawPath).Length
+    if ($actualLength -ne $expectedLength) {
+        throw "Existing raw payload length mismatch. Expected $expectedLength, actual $actualLength."
+    }
+}
+elseif ($Dense) {
     New-DensePatternRaw $rawPath $Width $Height $stride $PixelFormat $DenseBlockRows
 }
 else {
     New-SparsePatternRaw $rawPath $Width $Height $stride $PixelFormat
 }
 
-$viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
+$viewerExe = if ([string]::IsNullOrWhiteSpace($ViewerExePath)) {
+    Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
+}
+else {
+    (Resolve-Path -LiteralPath $ViewerExePath).Path
+}
 if (-not (Test-Path $viewerExe)) {
     throw "Viewer exe not found: $viewerExe"
 }
 
+$launchWatch = [Diagnostics.Stopwatch]::StartNew()
 $process = Start-Process -FilePath $viewerExe -ArgumentList @($metadataPath) -PassThru
 try {
     $hwnd = Wait-Until "viewer window" {
         $process.Refresh()
         if ($process.MainWindowHandle -ne 0) { $process.MainWindowHandle } else { $null }
-    }
+    } $WaitTimeoutSeconds
 
     Minimize-OtherWindows $process.Id
     [RawBufferLargeFileBackedNative]::ShowWindow($hwnd, 9) | Out-Null
@@ -300,20 +322,29 @@ try {
         $status = Get-ElementName (Get-Root $hwnd) "StatusText"
         $normalizedStatus = $status -replace ",", ""
         $normalizedStatus -match "$Width x $Height $PixelFormat" -and $normalizedStatus -match "tiles $expectedTiles"
-    } | Out-Null
+    } $WaitTimeoutSeconds | Out-Null
 
     $capturePath = Join-Path $outputRoot $CaptureFileName
-    Wait-Until "nonblank large-image capture" {
+    $firstVisibleRatio = Wait-Until "nonblank large-image capture" {
         Start-Sleep -Milliseconds 500
         Capture-Window $hwnd $capturePath
         $ratio = Measure-Capture $capturePath
-        if ($ratio -gt 0.02) { $ratio } else { $null }
-    } | Out-Null
+        if ($ratio -gt $MinNonDarkRatio) { $ratio } else { $null }
+    } $WaitTimeoutSeconds
+    $firstVisibleMs = $launchWatch.Elapsed.TotalMilliseconds
+    if ($firstVisibleMs -gt $MaxFirstVisibleMs) {
+        throw "First visible frame took $([Math]::Round($firstVisibleMs, 1)) ms; limit is $MaxFirstVisibleMs ms."
+    }
+
+    $process.Refresh()
 
     [pscustomobject]@{
         Status = Get-ElementName (Get-Root $hwnd) "StatusText"
         Capture = $capturePath
-        NonDarkRatio = Measure-Capture $capturePath
+        NonDarkRatio = $firstVisibleRatio
+        FirstVisibleMs = [Math]::Round($firstVisibleMs, 1)
+        WorkingSetMB = [Math]::Round($process.WorkingSet64 / 1MB, 1)
+        PrivateMemoryMB = [Math]::Round($process.PrivateMemorySize64 / 1MB, 1)
         RawLength = (Get-Item -LiteralPath $rawPath).Length
     } | Format-List
 }

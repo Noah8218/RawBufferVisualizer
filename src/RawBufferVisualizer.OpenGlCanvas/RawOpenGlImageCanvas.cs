@@ -6,6 +6,8 @@ using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Forms.Integration;
@@ -22,6 +24,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
     {
         private const int DisplayTileSize = 1024;
         private const int MaxCachedTextures = 96;
+        private const double ProgressiveFrameMargin = 0.25;
+        private const int InitialProgressiveSampleMultiplier = 4;
         private const double PixelOverlayMinZoom = 8.0;
         private const double PixelGridOverlayMinCellSize = 42.0;
         private const int MaxPixelGridOverlayCells = 600;
@@ -33,9 +37,15 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private readonly Forms.Label _pixelOverlayLabel;
         private readonly List<TextureTile> _tiles = new List<TextureTile>();
         private readonly RawOpenGlRenderStats _renderStats = new RawOpenGlRenderStats();
+        private readonly object _progressiveRenderGate = new object();
         private RawImageDescriptor? _descriptor;
         private RawImageSource? _imageSource;
         private RawRenderOptions? _renderOptions;
+        private ProgressiveRenderRequest? _pendingProgressiveRequest;
+        private ProgressiveRenderRequest? _activeProgressiveRequest;
+        private CancellationTokenSource? _activeProgressiveCancellation;
+        private ProgressiveRenderResult? _pendingProgressiveUpload;
+        private TextureTile? _progressiveOverviewTile;
         private double _viewLeft;
         private double _viewTop;
         private double _viewWidth = 1;
@@ -56,16 +66,22 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private Point? _hoverPixel;
         private bool _selectionOverlayEnabled = true;
         private long _imageGeneration;
+        private long _renderOptionsGeneration;
         private bool _initialFitPending;
+        private bool _progressiveWorkerRunning;
+        private bool _useProgressiveViewportRendering;
+        private bool _sourceUnavailable;
+        private int _logicalTileCount;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelPinned;
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelSelected;
         public event EventHandler? ViewChanged;
+        public event EventHandler<RawOpenGlSourceUnavailableEventArgs>? SourceUnavailable;
 
         public int TileCount
         {
-            get { return _tiles.Count; }
+            get { return _logicalTileCount; }
         }
 
         public double ZoomScale
@@ -344,10 +360,15 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _imageSource = imageSource;
             _descriptor = imageSource.Descriptor;
             _renderOptions = imageSource.CreateRenderOptions();
+            _logicalTileCount = CalculateLogicalTileCount(_descriptor.Width, _descriptor.Height);
+            _useProgressiveViewportRendering = imageSource.IsFileBacked && _logicalTileCount > MaxCachedTextures;
 
-            foreach (var tile in RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height, DisplayTileSize))
+            if (!_useProgressiveViewportRendering)
             {
-                _tiles.Add(new TextureTile(tile.X, tile.Y, tile.Width, tile.Height));
+                foreach (var tile in RawImageTilePlanner.CreateTiles(_descriptor.Width, _descriptor.Height, DisplayTileSize))
+                {
+                    _tiles.Add(new TextureTile(tile.X, tile.Y, tile.Width, tile.Height));
+                }
             }
 
             ScheduleInitialFit();
@@ -356,19 +377,24 @@ namespace RawBufferVisualizer.OpenGlCanvas
         public void ClearImage()
         {
             _imageGeneration++;
+            _renderOptionsGeneration++;
             _initialFitPending = false;
+            ResetProgressiveRenderState();
             DeleteTextures();
             _tiles.Clear();
             _imageSource = null;
             _descriptor = null;
             _renderOptions = null;
+            _logicalTileCount = 0;
+            _useProgressiveViewportRendering = false;
+            _sourceUnavailable = false;
             _pinnedMarker = null;
             _selectedPixel = null;
             _hoverPixel = null;
             HidePixelOverlay();
-            PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
-            PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
-            PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            InvokePixelEvent(PixelHovered, new RawOpenGlPixelEventArgs(-1, -1));
+            InvokePixelEvent(PixelSelected, new RawOpenGlPixelEventArgs(-1, -1));
+            InvokePixelEvent(PixelPinned, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
 
@@ -424,7 +450,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
 
             _pinnedMarker = new Point(x, y);
-            PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+            InvokePixelEvent(PixelPinned, new RawOpenGlPixelEventArgs(x, y));
             RequestRender();
             return true;
         }
@@ -437,7 +463,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
 
             _selectedPixel = new Point(x, y);
-            PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+            InvokePixelEvent(PixelSelected, new RawOpenGlPixelEventArgs(x, y));
             RequestRender();
             return true;
         }
@@ -459,14 +485,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
         public void ClearSelectedPixel()
         {
             _selectedPixel = null;
-            PixelSelected?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            InvokePixelEvent(PixelSelected, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
 
         public void ClearPinnedMarker()
         {
             _pinnedMarker = null;
-            PixelPinned?.Invoke(this, new RawOpenGlPixelEventArgs(-1, -1));
+            InvokePixelEvent(PixelPinned, new RawOpenGlPixelEventArgs(-1, -1));
             RequestRender();
         }
 
@@ -642,13 +668,53 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 gl.Viewport(0, 0, Math.Max(_openGlControl.ClientSize.Width, 1), Math.Max(_openGlControl.ClientSize.Height, 1));
                 gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
 
-                if (_tiles.Count == 0)
+                if (_tiles.Count == 0 && !_useProgressiveViewportRendering)
                 {
                     return;
                 }
 
                 _frameSerial++;
                 ConfigureFixedPipelineView(gl);
+
+                if (_useProgressiveViewportRendering)
+                {
+                    ApplyPendingProgressiveUpload(gl);
+                    if (!_sourceUnavailable)
+                    {
+                        QueueProgressiveViewportRender();
+                    }
+                    if (_progressiveOverviewTile != null
+                        && _progressiveOverviewTile.ActiveTextureId != 0
+                        && !_tiles.Any(tile => ReferenceEquals(tile, _progressiveOverviewTile))
+                        && IsTileVisible(_progressiveOverviewTile))
+                    {
+                        _progressiveOverviewTile.LastUsedFrame = _frameSerial;
+                        DrawTile(gl, _progressiveOverviewTile);
+                    }
+
+                    for (var i = 0; i < _tiles.Count; i++)
+                    {
+                        var tile = _tiles[i];
+                        if (tile.ActiveTextureId == 0 || !IsTileVisible(tile))
+                        {
+                            continue;
+                        }
+
+                        tile.LastUsedFrame = _frameSerial;
+                        DrawTile(gl, tile);
+                    }
+
+                    if (!_sourceUnavailable)
+                    {
+                        DrawPixelGridOverlay(gl);
+                    }
+                    DrawSelectionOverlay(gl);
+                    DrawPinnedMarker(gl);
+                    gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
+                    gl.Disable(OpenGL.GL_TEXTURE_2D);
+                    gl.Flush();
+                    return;
+                }
 
                 var desiredSampleStep = GetTextureSampleStep();
                 for (var i = 0; i < _tiles.Count; i++)
@@ -662,6 +728,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
                     if (!tile.TryUseTexture(desiredSampleStep))
                     {
+                        if (_sourceUnavailable)
+                        {
+                            continue;
+                        }
+
                         UploadTile(gl, tile, desiredSampleStep);
                     }
 
@@ -669,13 +740,20 @@ namespace RawBufferVisualizer.OpenGlCanvas
                     DrawTile(gl, tile);
                 }
 
-                DrawPixelGridOverlay(gl);
+                if (!_sourceUnavailable)
+                {
+                    DrawPixelGridOverlay(gl);
+                }
                 DrawSelectionOverlay(gl);
                 DrawPinnedMarker(gl);
                 TrimTextureCache(gl);
                 gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
                 gl.Disable(OpenGL.GL_TEXTURE_2D);
                 gl.Flush();
+            }
+            catch (RawImageSourceUnavailableException ex)
+            {
+                MarkSourceUnavailable(ex);
             }
             finally
             {
@@ -898,21 +976,20 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private static TextureUpload CreateTexture(OpenGL gl, int width, int height, byte[] bgra)
         {
+            if (width <= 0 || height <= 0 || bgra == null || bgra.Length != checked(width * height * 4))
+            {
+                throw new ArgumentException("Texture dimensions do not match the BGRA buffer.", nameof(bgra));
+            }
+
             var textureWidth = NextPowerOfTwo(width);
             var textureHeight = NextPowerOfTwo(height);
-            var rgba = new byte[textureWidth * textureHeight * 4];
-            for (var y = 0; y < height; y++)
+            var uploadPixels = bgra;
+            if (textureWidth != width || textureHeight != height)
             {
-                var sourceOffset = y * width * 4;
-                var destinationOffset = y * textureWidth * 4;
-                for (var x = 0; x < width; x++)
+                uploadPixels = new byte[checked(textureWidth * textureHeight * 4)];
+                for (var y = 0; y < height; y++)
                 {
-                    var sourceIndex = sourceOffset + (x * 4);
-                    var destinationIndex = destinationOffset + (x * 4);
-                    rgba[destinationIndex] = bgra[sourceIndex + 2];
-                    rgba[destinationIndex + 1] = bgra[sourceIndex + 1];
-                    rgba[destinationIndex + 2] = bgra[sourceIndex];
-                    rgba[destinationIndex + 3] = bgra[sourceIndex + 3];
+                    Buffer.BlockCopy(bgra, y * width * 4, uploadPixels, y * textureWidth * 4, width * 4);
                 }
             }
 
@@ -925,7 +1002,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_S, OpenGL.GL_CLAMP);
             gl.TexParameter(OpenGL.GL_TEXTURE_2D, OpenGL.GL_TEXTURE_WRAP_T, OpenGL.GL_CLAMP);
 
-            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, textureWidth, textureHeight, 0, OpenGL.GL_RGBA, OpenGL.GL_UNSIGNED_BYTE, rgba);
+            gl.TexImage2D(OpenGL.GL_TEXTURE_2D, 0, OpenGL.GL_RGBA, textureWidth, textureHeight, 0, OpenGL.GL_BGRA, OpenGL.GL_UNSIGNED_BYTE, uploadPixels);
 
             return new TextureUpload(ids[0], width / (float)textureWidth, height / (float)textureHeight);
         }
@@ -975,11 +1052,374 @@ namespace RawBufferVisualizer.OpenGlCanvas
             return step;
         }
 
+        private int GetProgressiveSampleStep()
+        {
+            var width = ViewportWidth;
+            var height = ViewportHeight;
+            if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            {
+                return 1;
+            }
+
+            var horizontalPixelsPerScreenPixel = _viewWidth / width;
+            var verticalPixelsPerScreenPixel = _viewHeight / height;
+            var imagePixelsPerScreenPixel = Math.Max(horizontalPixelsPerScreenPixel, verticalPixelsPerScreenPixel);
+            if (imagePixelsPerScreenPixel <= 1)
+            {
+                return 1;
+            }
+
+            var exponent = (int)Math.Round(Math.Log(imagePixelsPerScreenPixel, 2.0));
+            exponent = Math.Max(0, Math.Min(exponent, 30));
+            return 1 << exponent;
+        }
+
         private bool IsTileVisible(TextureTile tile)
         {
             var viewRight = _viewLeft + _viewWidth;
             var viewBottom = _viewTop + _viewHeight;
             return tile.Right >= _viewLeft && tile.X <= viewRight && tile.Bottom >= _viewTop && tile.Y <= viewBottom;
+        }
+
+        private static int CalculateLogicalTileCount(int width, int height)
+        {
+            var columns = ((long)width + DisplayTileSize - 1) / DisplayTileSize;
+            var rows = ((long)height + DisplayTileSize - 1) / DisplayTileSize;
+            return (int)Math.Min(columns * rows, int.MaxValue);
+        }
+
+        private void QueueProgressiveViewportRender()
+        {
+            if (_sourceUnavailable)
+            {
+                return;
+            }
+
+            var request = CreateProgressiveRenderRequest();
+            if (request == null)
+            {
+                return;
+            }
+
+            if (CurrentProgressiveFrameSatisfiesView(request.SampleStep))
+            {
+                lock (_progressiveRenderGate)
+                {
+                    _pendingProgressiveRequest = null;
+                    _activeProgressiveCancellation?.Cancel();
+                }
+                return;
+            }
+
+            lock (_progressiveRenderGate)
+            {
+                if ((_activeProgressiveRequest != null && _activeProgressiveRequest.Matches(request))
+                    || (_pendingProgressiveRequest != null && _pendingProgressiveRequest.Matches(request)))
+                {
+                    return;
+                }
+
+                _pendingProgressiveRequest = request;
+                _activeProgressiveCancellation?.Cancel();
+                if (_progressiveWorkerRunning)
+                {
+                    return;
+                }
+
+                _progressiveWorkerRunning = true;
+                _ = Task.Run(ProcessProgressiveRenderQueue);
+            }
+        }
+
+        private ProgressiveRenderRequest? CreateProgressiveRenderRequest()
+        {
+            if (_sourceUnavailable || _imageSource == null || _descriptor == null || _renderOptions == null)
+            {
+                return null;
+            }
+
+            var visibleLeft = Math.Max(0, _viewLeft);
+            var visibleTop = Math.Max(0, _viewTop);
+            var visibleRight = Math.Min(_descriptor.Width, _viewLeft + _viewWidth);
+            var visibleBottom = Math.Min(_descriptor.Height, _viewTop + _viewHeight);
+            if (visibleRight <= visibleLeft || visibleBottom <= visibleTop)
+            {
+                return null;
+            }
+
+            var marginX = Math.Max(0, _viewWidth * ProgressiveFrameMargin);
+            var marginY = Math.Max(0, _viewHeight * ProgressiveFrameMargin);
+            var left = (int)Math.Floor(Math.Max(0, visibleLeft - marginX));
+            var top = (int)Math.Floor(Math.Max(0, visibleTop - marginY));
+            var right = (int)Math.Ceiling(Math.Min(_descriptor.Width, visibleRight + marginX));
+            var bottom = (int)Math.Ceiling(Math.Min(_descriptor.Height, visibleBottom + marginY));
+            var sampleStep = GetProgressiveSampleStep();
+            if (_tiles.Count == 0 && _pendingProgressiveUpload == null)
+            {
+                sampleStep = MultiplySampleStep(sampleStep, InitialProgressiveSampleMultiplier);
+            }
+
+            return new ProgressiveRenderRequest(
+                _imageSource,
+                new RawRenderOptions
+                {
+                    AutoScale = _renderOptions.AutoScale,
+                    BlackLevel = _renderOptions.BlackLevel,
+                    WhiteLevel = _renderOptions.WhiteLevel
+                },
+                _imageGeneration,
+                _renderOptionsGeneration,
+                left,
+                top,
+                Math.Max(1, right - left),
+                Math.Max(1, bottom - top),
+                sampleStep);
+        }
+
+        private bool CurrentProgressiveFrameSatisfiesView(int desiredSampleStep)
+        {
+            if (_tiles.Count == 1)
+            {
+                var activeTile = _tiles[0];
+                if (activeTile.ActiveTextureId != 0
+                    && FrameSatisfiesCurrentView(
+                        activeTile.X,
+                        activeTile.Y,
+                        activeTile.Width,
+                        activeTile.Height,
+                        activeTile.ActiveSampleStep,
+                        desiredSampleStep))
+                {
+                    return true;
+                }
+            }
+
+            var overview = _progressiveOverviewTile;
+            return overview != null
+                && overview.ActiveTextureId != 0
+                && FrameSatisfiesCurrentView(
+                    overview.X,
+                    overview.Y,
+                    overview.Width,
+                    overview.Height,
+                    overview.ActiveSampleStep,
+                    desiredSampleStep);
+        }
+
+        private bool FrameSatisfiesCurrentView(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            int desiredSampleStep,
+            bool allowCoarserSample = false)
+        {
+            if (_descriptor == null || sampleStep <= 0 || (!allowCoarserSample && sampleStep > desiredSampleStep))
+            {
+                return false;
+            }
+
+            var visibleLeft = Math.Max(0, _viewLeft);
+            var visibleTop = Math.Max(0, _viewTop);
+            var visibleRight = Math.Min(_descriptor.Width, _viewLeft + _viewWidth);
+            var visibleBottom = Math.Min(_descriptor.Height, _viewTop + _viewHeight);
+            if (visibleRight <= visibleLeft || visibleBottom <= visibleTop)
+            {
+                return false;
+            }
+
+            return x <= visibleLeft
+                && y <= visibleTop
+                && x + width >= visibleRight
+                && y + height >= visibleBottom;
+        }
+
+        private static int MultiplySampleStep(int sampleStep, int multiplier)
+        {
+            return (int)Math.Min((long)sampleStep * Math.Max(1, multiplier), 1L << 30);
+        }
+
+        private void ProcessProgressiveRenderQueue()
+        {
+            while (true)
+            {
+                ProgressiveRenderRequest? request;
+                CancellationTokenSource cancellation;
+                lock (_progressiveRenderGate)
+                {
+                    request = _pendingProgressiveRequest;
+                    _pendingProgressiveRequest = null;
+                    if (request == null)
+                    {
+                        _activeProgressiveRequest = null;
+                        _activeProgressiveCancellation = null;
+                        _progressiveWorkerRunning = false;
+                        return;
+                    }
+
+                    _activeProgressiveRequest = request;
+                    cancellation = new CancellationTokenSource();
+                    _activeProgressiveCancellation = cancellation;
+                }
+
+                ProgressiveRenderResult? result = null;
+                try
+                {
+                    var image = request.Source.RenderTileSampled(
+                        request.X,
+                        request.Y,
+                        request.Width,
+                        request.Height,
+                        request.SampleStep,
+                        request.Options,
+                        cancellation.Token);
+                    result = new ProgressiveRenderResult(request, image, null);
+                }
+                catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+                {
+                }
+                catch (Exception ex)
+                {
+                    result = new ProgressiveRenderResult(request, null, ex);
+                }
+
+                lock (_progressiveRenderGate)
+                {
+                    if (ReferenceEquals(_activeProgressiveRequest, request))
+                    {
+                        _activeProgressiveRequest = null;
+                        _activeProgressiveCancellation = null;
+                    }
+                }
+                cancellation.Dispose();
+
+                if (result == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    Dispatcher.BeginInvoke(
+                        DispatcherPriority.Render,
+                        new Action(() => CompleteProgressiveRender(result)));
+                }
+                catch (InvalidOperationException)
+                {
+                    lock (_progressiveRenderGate)
+                    {
+                        _pendingProgressiveRequest = null;
+                        _activeProgressiveRequest = null;
+                        _activeProgressiveCancellation = null;
+                        _progressiveWorkerRunning = false;
+                    }
+
+                    return;
+                }
+            }
+        }
+
+        private void CompleteProgressiveRender(ProgressiveRenderResult result)
+        {
+            var request = result.Request;
+            if (request.ImageGeneration != _imageGeneration
+                || request.RenderOptionsGeneration != _renderOptionsGeneration
+                || !_useProgressiveViewportRendering)
+            {
+                return;
+            }
+
+            if (result.Error != null)
+            {
+                if (result.Error is RawImageSourceUnavailableException sourceUnavailable)
+                {
+                    MarkSourceUnavailable(sourceUnavailable);
+                    return;
+                }
+
+                Debug.WriteLine("Raw Buffer Visualizer progressive render failed: " + result.Error);
+                return;
+            }
+
+            if (result.Image == null
+                || !FrameSatisfiesCurrentView(
+                    request.X,
+                    request.Y,
+                    request.Width,
+                    request.Height,
+                    request.SampleStep,
+                    GetProgressiveSampleStep(),
+                    allowCoarserSample: _tiles.Count == 0))
+            {
+                RequestRender();
+                return;
+            }
+
+            _pendingProgressiveUpload = result;
+            RequestRender();
+        }
+
+        private void ApplyPendingProgressiveUpload(OpenGL gl)
+        {
+            var result = _pendingProgressiveUpload;
+            _pendingProgressiveUpload = null;
+            if (result == null || result.Image == null)
+            {
+                return;
+            }
+
+            var request = result.Request;
+            if (request.ImageGeneration != _imageGeneration
+                || request.RenderOptionsGeneration != _renderOptionsGeneration
+                || !FrameSatisfiesCurrentView(
+                    request.X,
+                    request.Y,
+                    request.Width,
+                    request.Height,
+                    request.SampleStep,
+                    GetProgressiveSampleStep(),
+                    allowCoarserSample: _tiles.Count == 0))
+            {
+                return;
+            }
+
+            var uploadWatch = Stopwatch.StartNew();
+            try
+            {
+                var texture = CreateTexture(gl, result.Image.Width, result.Image.Height, result.Image.Bgra32);
+                DeleteActiveProgressiveTextures(gl, preserveOverview: true);
+                _tiles.Clear();
+                var tile = new TextureTile(request.X, request.Y, request.Width, request.Height);
+                tile.SetTexture(request.SampleStep, texture);
+                if (IsWholeImageFrame(request))
+                {
+                    if (_progressiveOverviewTile != null)
+                    {
+                        DeleteTextures(gl, _progressiveOverviewTile);
+                    }
+
+                    _progressiveOverviewTile = tile;
+                }
+
+                _tiles.Add(tile);
+            }
+            finally
+            {
+                uploadWatch.Stop();
+                RecordTextureUpload(uploadWatch.Elapsed.TotalMilliseconds);
+            }
+        }
+
+        private void ResetProgressiveRenderState()
+        {
+            lock (_progressiveRenderGate)
+            {
+                _pendingProgressiveRequest = null;
+                _activeProgressiveCancellation?.Cancel();
+            }
+
+            _pendingProgressiveUpload = null;
         }
 
         private void ConfigureFixedPipelineView(OpenGL gl)
@@ -1011,25 +1451,63 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void DeleteTextures()
         {
-            if (_tiles.Count == 0 || _openGlControl.OpenGL == null)
+            if ((_tiles.Count == 0 && _progressiveOverviewTile == null) || _openGlControl.OpenGL == null)
             {
                 return;
             }
 
-            var ids = new List<uint>();
+            var ids = new HashSet<uint>();
             for (var i = 0; i < _tiles.Count; i++)
             {
-                ids.AddRange(_tiles[i].TextureIds);
+                foreach (var id in _tiles[i].TextureIds)
+                {
+                    ids.Add(id);
+                }
+            }
+
+            if (_progressiveOverviewTile != null)
+            {
+                foreach (var id in _progressiveOverviewTile.TextureIds)
+                {
+                    ids.Add(id);
+                }
             }
 
             if (ids.Count > 0)
             {
                 _openGlControl.OpenGL.DeleteTextures(ids.Count, ids.ToArray());
             }
+
+            _progressiveOverviewTile = null;
+        }
+
+        private void DeleteActiveProgressiveTextures(OpenGL gl, bool preserveOverview)
+        {
+            for (var index = 0; index < _tiles.Count; index++)
+            {
+                var tile = _tiles[index];
+                if (preserveOverview && ReferenceEquals(tile, _progressiveOverviewTile))
+                {
+                    continue;
+                }
+
+                DeleteTextures(gl, tile);
+            }
+        }
+
+        private bool IsWholeImageFrame(ProgressiveRenderRequest request)
+        {
+            return _descriptor != null
+                && request.X == 0
+                && request.Y == 0
+                && request.Width == _descriptor.Width
+                && request.Height == _descriptor.Height;
         }
 
         private void InvalidateTextureCache()
         {
+            _renderOptionsGeneration++;
+            ResetProgressiveRenderState();
             if (_tiles.Count == 0 || _openGlControl.OpenGL == null)
             {
                 return;
@@ -1039,6 +1517,19 @@ namespace RawBufferVisualizer.OpenGlCanvas
             for (var i = 0; i < _tiles.Count; i++)
             {
                 DeleteTextures(gl, _tiles[i]);
+            }
+
+            if (_progressiveOverviewTile != null
+                && !_tiles.Any(tile => ReferenceEquals(tile, _progressiveOverviewTile)))
+            {
+                DeleteTextures(gl, _progressiveOverviewTile);
+            }
+
+            _progressiveOverviewTile = null;
+
+            if (_useProgressiveViewportRendering)
+            {
+                _tiles.Clear();
             }
         }
 
@@ -1092,6 +1583,40 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             _renderQueued = true;
             Dispatcher.BeginInvoke(DispatcherPriority.Render, new Action(RenderQueuedFrame));
+        }
+
+        private void InvokePixelEvent(
+            EventHandler<RawOpenGlPixelEventArgs>? handler,
+            RawOpenGlPixelEventArgs args)
+        {
+            if (handler == null)
+            {
+                return;
+            }
+
+            try
+            {
+                handler(this, args);
+            }
+            catch (RawImageSourceUnavailableException ex)
+            {
+                MarkSourceUnavailable(ex);
+            }
+        }
+
+        private void MarkSourceUnavailable(RawImageSourceUnavailableException exception)
+        {
+            if (_sourceUnavailable)
+            {
+                return;
+            }
+
+            _sourceUnavailable = true;
+            ResetProgressiveRenderState();
+            HidePixelOverlay();
+            Debug.WriteLine("Raw Buffer Visualizer live source unavailable: " + exception);
+            SourceUnavailable?.Invoke(this, new RawOpenGlSourceUnavailableEventArgs(exception));
+            RequestRender();
         }
 
         private void RenderQueuedFrame()
@@ -1161,7 +1686,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
 
             UpdatePixelOverlay(position, force);
-            PixelHovered?.Invoke(this, new RawOpenGlPixelEventArgs(x, y));
+            InvokePixelEvent(PixelHovered, new RawOpenGlPixelEventArgs(x, y));
             if (_selectionOverlayEnabled && !_selectedPixel.HasValue)
             {
                 RequestRender();
@@ -1186,7 +1711,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void UpdatePixelOverlay(Point position, bool force)
         {
-            if (_descriptor == null || _imageSource == null || ZoomScale < PixelOverlayMinZoom)
+            if (_sourceUnavailable || _descriptor == null || _imageSource == null || ZoomScale < PixelOverlayMinZoom)
             {
                 HidePixelOverlay();
                 return;
@@ -1207,7 +1732,17 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return;
             }
 
-            var text = BuildPixelOverlayText(x, y);
+            string text;
+            try
+            {
+                text = BuildPixelOverlayText(x, y);
+            }
+            catch (RawImageSourceUnavailableException ex)
+            {
+                MarkSourceUnavailable(ex);
+                return;
+            }
+
             if (!force && string.Equals(_pixelOverlayText, text, StringComparison.Ordinal))
             {
                 return;
@@ -1535,6 +2070,68 @@ namespace RawBufferVisualizer.OpenGlCanvas
             return power;
         }
 
+        private sealed class ProgressiveRenderRequest
+        {
+            public ProgressiveRenderRequest(
+                RawImageSource source,
+                RawRenderOptions options,
+                long imageGeneration,
+                long renderOptionsGeneration,
+                int x,
+                int y,
+                int width,
+                int height,
+                int sampleStep)
+            {
+                Source = source;
+                Options = options;
+                ImageGeneration = imageGeneration;
+                RenderOptionsGeneration = renderOptionsGeneration;
+                X = x;
+                Y = y;
+                Width = width;
+                Height = height;
+                SampleStep = sampleStep;
+            }
+
+            public RawImageSource Source { get; }
+            public RawRenderOptions Options { get; }
+            public long ImageGeneration { get; }
+            public long RenderOptionsGeneration { get; }
+            public int X { get; }
+            public int Y { get; }
+            public int Width { get; }
+            public int Height { get; }
+            public int SampleStep { get; }
+
+            public bool Matches(ProgressiveRenderRequest other)
+            {
+                return other != null
+                    && ReferenceEquals(Source, other.Source)
+                    && ImageGeneration == other.ImageGeneration
+                    && RenderOptionsGeneration == other.RenderOptionsGeneration
+                    && X == other.X
+                    && Y == other.Y
+                    && Width == other.Width
+                    && Height == other.Height
+                    && SampleStep == other.SampleStep;
+            }
+        }
+
+        private sealed class ProgressiveRenderResult
+        {
+            public ProgressiveRenderResult(ProgressiveRenderRequest request, RenderedImage? image, Exception? error)
+            {
+                Request = request;
+                Image = image;
+                Error = error;
+            }
+
+            public ProgressiveRenderRequest Request { get; }
+            public RenderedImage? Image { get; }
+            public Exception? Error { get; }
+        }
+
         private sealed class TextureUpload
         {
             public TextureUpload(uint id, float u, float v)
@@ -1556,6 +2153,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             public uint ActiveTextureId { get; private set; }
             public float ActiveTextureU { get; private set; }
             public float ActiveTextureV { get; private set; }
+            public int ActiveSampleStep { get; private set; }
             public int X { get; private set; }
             public int Y { get; private set; }
             public int Width { get; private set; }
@@ -1609,12 +2207,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
                     ActiveTextureId = 0;
                     ActiveTextureU = 1.0f;
                     ActiveTextureV = 1.0f;
+                    ActiveSampleStep = 0;
                     return false;
                 }
 
                 ActiveTextureId = texture.Id;
                 ActiveTextureU = texture.U;
                 ActiveTextureV = texture.V;
+                ActiveSampleStep = sampleStep;
                 return true;
             }
 
@@ -1624,6 +2224,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 ActiveTextureId = texture.Id;
                 ActiveTextureU = texture.U;
                 ActiveTextureV = texture.V;
+                ActiveSampleStep = sampleStep;
             }
 
             public void ClearTextures()
@@ -1632,6 +2233,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 ActiveTextureId = 0;
                 ActiveTextureU = 1.0f;
                 ActiveTextureV = 1.0f;
+                ActiveSampleStep = 0;
             }
 
             public override string ToString()

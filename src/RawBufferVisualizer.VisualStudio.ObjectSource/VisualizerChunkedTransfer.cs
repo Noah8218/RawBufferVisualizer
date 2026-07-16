@@ -10,12 +10,24 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public int ChunkSize { get; set; }
         public string SourceType { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
+        public bool SupportsDirectMemory { get; set; }
+        public int ProcessId { get; set; }
+        public long BufferAddress { get; set; }
     }
 
     public sealed class VisualizerSnapshotChunkRequest
     {
+        public VisualizerSnapshotOperation Operation { get; set; }
         public long Offset { get; set; }
         public int Count { get; set; }
+        public int MaximumWidth { get; set; }
+        public int MaximumHeight { get; set; }
+    }
+
+    public enum VisualizerSnapshotOperation
+    {
+        Chunk = 0,
+        Preview = 1
     }
 
     public sealed class VisualizerSnapshotChunk
@@ -50,6 +62,47 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             string sourceType,
             string? displayName = null)
         {
+            return CreateMetadataCore(
+                descriptor,
+                bufferLength,
+                sourceType,
+                displayName,
+                false,
+                0,
+                0);
+        }
+
+        public static VisualizerSnapshotMetadata CreatePointerMetadata(
+            RawImageDescriptor descriptor,
+            long bufferLength,
+            IntPtr bufferAddress,
+            string sourceType,
+            string? displayName = null)
+        {
+            if (bufferAddress == IntPtr.Zero)
+            {
+                throw new ArgumentException("Buffer address is required.", nameof(bufferAddress));
+            }
+
+            return CreateMetadataCore(
+                descriptor,
+                bufferLength,
+                sourceType,
+                displayName,
+                true,
+                System.Diagnostics.Process.GetCurrentProcess().Id,
+                bufferAddress.ToInt64());
+        }
+
+        private static VisualizerSnapshotMetadata CreateMetadataCore(
+            RawImageDescriptor descriptor,
+            long bufferLength,
+            string sourceType,
+            string? displayName,
+            bool supportsDirectMemory,
+            int processId,
+            long bufferAddress)
+        {
             if (descriptor == null)
             {
                 throw new ArgumentNullException(nameof(descriptor));
@@ -66,7 +119,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 BufferLength = bufferLength,
                 ChunkSize = DefaultChunkSize,
                 SourceType = sourceType ?? string.Empty,
-                DisplayName = displayName ?? string.Empty
+                DisplayName = displayName ?? string.Empty,
+                SupportsDirectMemory = supportsDirectMemory,
+                ProcessId = processId,
+                BufferAddress = bufferAddress
             };
         }
 
@@ -114,6 +170,49 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 TotalLength = buffer.LongLength,
                 IsLastChunk = request.Offset + length >= buffer.LongLength
             };
+        }
+
+        public static VisualizerSnapshotTransfer CreatePreview(
+            VisualizerSnapshotTransfer transfer,
+            VisualizerSnapshotChunkRequest request)
+        {
+            if (transfer == null)
+            {
+                throw new ArgumentNullException(nameof(transfer));
+            }
+
+            return CreatePreview(
+                transfer.Buffer,
+                transfer.Descriptor,
+                transfer.SourceType,
+                transfer.DisplayName,
+                request);
+        }
+
+        public static VisualizerSnapshotTransfer CreatePreview(
+            byte[] buffer,
+            RawImageDescriptor descriptor,
+            string sourceType,
+            string? displayName,
+            VisualizerSnapshotChunkRequest request)
+        {
+            if (request == null)
+            {
+                throw new ArgumentNullException(nameof(request));
+            }
+
+            if (request.Operation != VisualizerSnapshotOperation.Preview)
+            {
+                throw new InvalidOperationException("A preview request is required.");
+            }
+
+            return VisualizerSampledPreview.Create(
+                buffer,
+                descriptor,
+                sourceType,
+                displayName,
+                request.MaximumWidth,
+                request.MaximumHeight);
         }
     }
 }

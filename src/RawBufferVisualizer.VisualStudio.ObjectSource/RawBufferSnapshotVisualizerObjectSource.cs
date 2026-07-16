@@ -35,6 +35,19 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new InvalidDataException("Chunk request is required.");
             }
 
+            if (request.Operation == VisualizerSnapshotOperation.Preview)
+            {
+                SerializeAsJson(
+                    outgoingData,
+                    VisualizerChunkedTransfer.CreatePreview(
+                        snapshot.Buffer,
+                        snapshot.Descriptor,
+                        typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot),
+                        null,
+                        request));
+                return;
+            }
+
             SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request));
         }
     }

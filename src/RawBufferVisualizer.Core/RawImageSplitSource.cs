@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Threading;
 
 namespace RawBufferVisualizer.Core
 {
@@ -37,15 +38,28 @@ namespace RawBufferVisualizer.Core
 
         public override RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
         {
+            return RenderTileSampled(x, y, width, height, sampleStep, options, CancellationToken.None);
+        }
+
+        public override RenderedImage RenderTileSampled(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            RawRenderOptions? options,
+            CancellationToken cancellationToken)
+        {
             var aOptions = _a.CreateRenderOptions();
             var bOptions = _b.CreateRenderOptions();
-            var left = _a.RenderTileSampled(x, y, width, height, sampleStep, aOptions);
-            var right = _b.RenderTileSampled(x, y, width, height, sampleStep, bOptions);
+            var left = _a.RenderTileSampled(x, y, width, height, sampleStep, aOptions, cancellationToken);
+            var right = _b.RenderTileSampled(x, y, width, height, sampleStep, bOptions, cancellationToken);
             var split = SourceDescriptor.Width / 2;
             var output = new byte[left.Bgra32.Length];
 
             for (var row = 0; row < left.Height; row++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 for (var column = 0; column < left.Width; column++)
                 {
                     var sourceX = x + (column * Math.Max(1, sampleStep));

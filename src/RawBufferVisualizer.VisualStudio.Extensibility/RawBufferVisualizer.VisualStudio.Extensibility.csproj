@@ -4,9 +4,9 @@
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
     <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
-    <AssemblyVersion>1.0.42.0</AssemblyVersion>
-    <FileVersion>1.0.42.0</FileVersion>
-    <Version>1.0.42</Version>
+    <AssemblyVersion>1.0.43.0</AssemblyVersion>
+    <FileVersion>1.0.43.0</FileVersion>
+    <Version>1.0.43</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" PrivateAssets="all" />
@@ -51,14 +51,6 @@
       <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.dll" Link="netstandard2.0\%(Filename)%(Extension)">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.deps.json" Link="netstandard2.0\%(Filename)%(Extension)">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Vssdk.dll" Link="RawBufferVisualizer.VisualStudio.Vssdk.dll">
       <Visible>false</Visible>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
@@ -84,5 +76,21 @@
     <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj"
              Targets="Build;GeneratePkgDef"
              Properties="Configuration=$(Configuration);TargetFramework=net472" />
+  </Target>
+  <Target Name="BuildObjectSourceForVsix" BeforeTargets="AssignTargetPaths">
+    <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj"
+             Targets="Build"
+             Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
+    <Error Condition="!Exists('..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll')"
+           Text="The netstandard2.0 debugger object source was not built for the VSIX." />
+    <ItemGroup>
+      <_ObjectSourceVsixPayload Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.dll" />
+      <_ObjectSourceVsixPayload Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.deps.json" />
+      <Content Include="@(_ObjectSourceVsixPayload)">
+        <Link>netstandard2.0\%(_ObjectSourceVsixPayload.Filename)%(_ObjectSourceVsixPayload.Extension)</Link>
+        <Visible>false</Visible>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
   </Target>
 </Project>

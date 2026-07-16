@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace RawBufferVisualizer.Core
 {
@@ -22,6 +24,10 @@ namespace RawBufferVisualizer.Core
         public long Length { get; private set; }
         public string? RawPath { get; private set; }
         public abstract bool IsFileBacked { get; }
+        public virtual bool IsLiveProcessBacked
+        {
+            get { return false; }
+        }
 
         protected RawImageSource(RawImageDescriptor descriptor, long length, string? rawPath)
         {
@@ -50,6 +56,15 @@ namespace RawBufferVisualizer.Core
             return new FileRawImageSource(rawPath, descriptor);
         }
 
+        public static RawImageSource FromProcessMemory(
+            int processId,
+            long bufferAddress,
+            long bufferLength,
+            RawImageDescriptor descriptor)
+        {
+            return new ProcessMemoryRawImageSource(processId, bufferAddress, bufferLength, descriptor);
+        }
+
         public static bool CanStreamFormat(RawPixelFormat pixelFormat)
         {
             return true;
@@ -76,6 +91,19 @@ namespace RawBufferVisualizer.Core
             }
 
             return Downsample(rendered, sampleStep);
+        }
+
+        public virtual RenderedImage RenderTileSampled(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            RawRenderOptions? options,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return RenderTileSampled(x, y, width, height, sampleStep, options);
         }
 
         public virtual void Dispose()
@@ -179,6 +207,19 @@ namespace RawBufferVisualizer.Core
 
         public override RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
         {
+            return RenderTileSampled(x, y, width, height, sampleStep, options, CancellationToken.None);
+        }
+
+        public override RenderedImage RenderTileSampled(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            RawRenderOptions? options,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (sampleStep <= 1)
             {
                 return RenderTile(x, y, width, height, options);
@@ -193,6 +234,7 @@ namespace RawBufferVisualizer.Core
 
             for (var sampledY = 0; sampledY < sampledHeight; sampledY++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var sourceY = y + (sampledY * sampleStep);
                 var targetRow = sampledY * sampledWidth * 4;
                 for (var sampledX = 0; sampledX < sampledWidth; sampledX++)
@@ -299,24 +341,14 @@ namespace RawBufferVisualizer.Core
         }
     }
 
-    internal sealed class FileRawImageSource : RawImageSource
+    internal abstract class RandomAccessRawImageSource : RawImageSource
     {
-        private readonly string _rawPath;
-
-        public override bool IsFileBacked
+        protected RandomAccessRawImageSource(
+            RawImageDescriptor descriptor,
+            long length,
+            string? rawPath)
+            : base(descriptor, length, rawPath)
         {
-            get { return true; }
-        }
-
-        public FileRawImageSource(string rawPath, RawImageDescriptor descriptor)
-            : base(descriptor, GetFileLength(rawPath), Path.GetFullPath(rawPath))
-        {
-            _rawPath = Path.GetFullPath(rawPath);
-        }
-
-        public override RawImageSource WithDescriptor(RawImageDescriptor descriptor)
-        {
-            return new FileRawImageSource(_rawPath, descriptor);
         }
 
         public override RawRenderOptions CreateRenderOptions()
@@ -349,6 +381,19 @@ namespace RawBufferVisualizer.Core
 
         public override RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
         {
+            return RenderTileSampled(x, y, width, height, sampleStep, options, CancellationToken.None);
+        }
+
+        public override RenderedImage RenderTileSampled(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            RawRenderOptions? options,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
             if (sampleStep <= 1)
             {
                 return RenderTile(x, y, width, height, options);
@@ -359,7 +404,7 @@ namespace RawBufferVisualizer.Core
 
             if (IsPackedMono(SourceDescriptor.PixelFormat))
             {
-                return RenderPackedTileSampled(x, y, width, height, sampleStep, options);
+                return RenderPackedTileSampled(x, y, width, height, sampleStep, options, cancellationToken);
             }
 
             var bytesPerPixel = GetStreamableBytesPerPixel(SourceDescriptor.PixelFormat);
@@ -373,6 +418,7 @@ namespace RawBufferVisualizer.Core
             {
                 for (var sampledY = 0; sampledY < sampledHeight; sampledY++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var globalY = y + (sampledY * sampleStep);
                     ReadRowSpan(stream, globalY, x, rowByteCount, rowBuffer);
                     var targetRow = sampledY * sampledWidth * 4;
@@ -425,19 +471,24 @@ namespace RawBufferVisualizer.Core
                 throw new InvalidOperationException("The raw payload is too large to read into a single byte array.");
             }
 
-            return File.ReadAllBytes(_rawPath);
+            var buffer = new byte[(int)Length];
+            using (var stream = OpenRawReadStream())
+            {
+                ReadExactly(stream, buffer, 0, buffer.Length);
+            }
+
+            return buffer;
         }
 
         public override void CopyRawTo(string rawPath)
         {
             var fullPath = Path.GetFullPath(rawPath);
-            if (string.Equals(fullPath, _rawPath, StringComparison.OrdinalIgnoreCase))
-            {
-                return;
-            }
-
             EnsureParentDirectory(fullPath);
-            File.Copy(_rawPath, fullPath, true);
+            using (var source = OpenRawReadStream())
+            using (var target = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                source.CopyTo(target);
+            }
         }
 
         private byte[] ReadTileWindow(int x, int y, int width, int height, bool includeBayerHalo, out RawImageDescriptor tileDescriptor, out int localX, out int localY)
@@ -533,7 +584,14 @@ namespace RawBufferVisualizer.Core
             return buffer;
         }
 
-        private RenderedImage RenderPackedTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions options)
+        private RenderedImage RenderPackedTileSampled(
+            int x,
+            int y,
+            int width,
+            int height,
+            int sampleStep,
+            RawRenderOptions options,
+            CancellationToken cancellationToken)
         {
             var bitsPerPixel = GetPackedBitsPerPixel(SourceDescriptor.PixelFormat);
             var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
@@ -544,6 +602,7 @@ namespace RawBufferVisualizer.Core
             {
                 for (var sampledY = 0; sampledY < sampledHeight; sampledY++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     var sourceY = y + (sampledY * sampleStep);
                     var sourceRow = ReadPackedRowWindow(stream, sourceY, x, width, bitsPerPixel, out var firstBitOffset);
                     var targetRow = sampledY * sampledWidth * 4;
@@ -624,12 +683,12 @@ namespace RawBufferVisualizer.Core
             WriteBgra(pixels, targetOffset, b, g, r, 255);
         }
 
-        private void ReadRowSpan(FileStream stream, int y, int x, int byteCount, byte[] target)
+        private void ReadRowSpan(Stream stream, int y, int x, int byteCount, byte[] target)
         {
             ReadRowSpan(stream, y, x, byteCount, target, 0);
         }
 
-        private void ReadRowSpan(FileStream stream, int y, int x, int byteCount, byte[] target, int targetOffset)
+        private void ReadRowSpan(Stream stream, int y, int x, int byteCount, byte[] target, int targetOffset)
         {
             var bytesPerPixel = GetStreamableBytesPerPixel(SourceDescriptor.PixelFormat);
             var sourceOffset = checked(((long)y * SourceDescriptor.Stride) + ((long)x * bytesPerPixel));
@@ -637,7 +696,7 @@ namespace RawBufferVisualizer.Core
             ReadExactly(stream, target, targetOffset, byteCount);
         }
 
-        private byte[] ReadPackedRowWindow(FileStream stream, int y, int x, int width, int bitsPerPixel, out int firstBitOffset)
+        private byte[] ReadPackedRowWindow(Stream stream, int y, int x, int width, int bitsPerPixel, out int firstBitOffset)
         {
             var startBit = checked(x * bitsPerPixel);
             var endBit = checked((x + width) * bitsPerPixel);
@@ -660,10 +719,7 @@ namespace RawBufferVisualizer.Core
             }
         }
 
-        private FileStream OpenRawReadStream()
-        {
-            return new FileStream(_rawPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-        }
+        protected abstract Stream OpenRawReadStream();
 
         private static void ReadExactly(Stream stream, byte[] buffer, int offset, int count)
         {
@@ -680,16 +736,6 @@ namespace RawBufferVisualizer.Core
                 currentOffset += read;
                 remaining -= read;
             }
-        }
-
-        private static long GetFileLength(string rawPath)
-        {
-            if (string.IsNullOrWhiteSpace(rawPath))
-            {
-                throw new ArgumentException("Raw path is required.", "rawPath");
-            }
-
-            return new FileInfo(Path.GetFullPath(rawPath)).Length;
         }
 
         private static int GetStreamableBytesPerPixel(RawPixelFormat format)
@@ -798,6 +844,294 @@ namespace RawBufferVisualizer.Core
             var bits = validBits > 0 && validBits <= fallbackBits ? validBits : fallbackBits;
             return (1 << bits) - 1;
         }
+    }
 
+    internal sealed class FileRawImageSource : RandomAccessRawImageSource
+    {
+        private readonly string _rawPath;
+
+        public override bool IsFileBacked
+        {
+            get { return true; }
+        }
+
+        public FileRawImageSource(string rawPath, RawImageDescriptor descriptor)
+            : base(descriptor, GetFileLength(rawPath), Path.GetFullPath(rawPath))
+        {
+            _rawPath = Path.GetFullPath(rawPath);
+        }
+
+        public override RawImageSource WithDescriptor(RawImageDescriptor descriptor)
+        {
+            return new FileRawImageSource(_rawPath, descriptor);
+        }
+
+        public override void CopyRawTo(string rawPath)
+        {
+            var fullPath = Path.GetFullPath(rawPath);
+            if (string.Equals(fullPath, _rawPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            EnsureParentDirectory(fullPath);
+            File.Copy(_rawPath, fullPath, true);
+        }
+
+        protected override Stream OpenRawReadStream()
+        {
+            return new FileStream(_rawPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.RandomAccess);
+        }
+
+        private static long GetFileLength(string rawPath)
+        {
+            if (string.IsNullOrWhiteSpace(rawPath))
+            {
+                throw new ArgumentException("Raw path is required.", "rawPath");
+            }
+
+            return new FileInfo(Path.GetFullPath(rawPath)).Length;
+        }
+    }
+
+    internal sealed class ProcessMemoryRawImageSource : RandomAccessRawImageSource
+    {
+        private readonly int _processId;
+        private readonly long _bufferAddress;
+
+        public override bool IsFileBacked
+        {
+            get { return true; }
+        }
+
+        public override bool IsLiveProcessBacked
+        {
+            get { return true; }
+        }
+
+        public ProcessMemoryRawImageSource(
+            int processId,
+            long bufferAddress,
+            long bufferLength,
+            RawImageDescriptor descriptor)
+            : base(descriptor, ValidateBufferLength(bufferAddress, bufferLength, descriptor), null)
+        {
+            if (processId <= 0)
+            {
+                throw new ArgumentOutOfRangeException("processId");
+            }
+
+            _processId = processId;
+            _bufferAddress = bufferAddress;
+        }
+
+        public override RawImageSource WithDescriptor(RawImageDescriptor descriptor)
+        {
+            return new ProcessMemoryRawImageSource(_processId, _bufferAddress, Length, descriptor);
+        }
+
+        protected override Stream OpenRawReadStream()
+        {
+            return new ProcessMemoryReadStream(_processId, _bufferAddress, Length);
+        }
+
+        private static long ValidateBufferLength(
+            long bufferAddress,
+            long bufferLength,
+            RawImageDescriptor descriptor)
+        {
+            if (bufferAddress == 0)
+            {
+                throw new ArgumentException("Debuggee buffer address is empty.", "bufferAddress");
+            }
+
+            if (descriptor == null)
+            {
+                throw new ArgumentNullException("descriptor");
+            }
+
+            if (bufferLength < descriptor.GetRequiredByteCount())
+            {
+                throw new ArgumentException("Debuggee buffer is smaller than descriptor requires.", "bufferLength");
+            }
+
+            return bufferLength;
+        }
+    }
+
+    internal sealed class ProcessMemoryReadStream : Stream
+    {
+        private const int ProcessVmRead = 0x0010;
+        private const int ProcessQueryLimitedInformation = 0x1000;
+
+        private readonly IntPtr _processHandle;
+        private readonly long _bufferAddress;
+        private readonly long _length;
+        private long _position;
+        private bool _disposed;
+
+        public ProcessMemoryReadStream(int processId, long bufferAddress, long length)
+        {
+            _processHandle = OpenProcess(ProcessVmRead | ProcessQueryLimitedInformation, false, processId);
+            if (_processHandle == IntPtr.Zero)
+            {
+                throw CreateWin32Exception("Unable to open the paused debuggee for image reads.");
+            }
+
+            _bufferAddress = bufferAddress;
+            _length = length;
+        }
+
+        public override bool CanRead { get { return !_disposed; } }
+        public override bool CanSeek { get { return !_disposed; } }
+        public override bool CanWrite { get { return false; } }
+        public override long Length { get { ThrowIfDisposed(); return _length; } }
+
+        public override long Position
+        {
+            get { ThrowIfDisposed(); return _position; }
+            set
+            {
+                ThrowIfDisposed();
+                if (value < 0 || value > _length)
+                {
+                    throw new ArgumentOutOfRangeException("value");
+                }
+
+                _position = value;
+            }
+        }
+
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            ThrowIfDisposed();
+            if (buffer == null)
+            {
+                throw new ArgumentNullException("buffer");
+            }
+
+            if (offset < 0 || count < 0 || offset + count > buffer.Length)
+            {
+                throw new ArgumentOutOfRangeException("offset");
+            }
+
+            if (count == 0 || _position >= _length)
+            {
+                return 0;
+            }
+
+            var requested = (int)Math.Min(count, _length - _position);
+            var pin = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var target = new IntPtr(checked(pin.AddrOfPinnedObject().ToInt64() + offset));
+                var source = new IntPtr(checked(_bufferAddress + _position));
+                UIntPtr bytesRead;
+                var succeeded = ReadProcessMemory(
+                    _processHandle,
+                    source,
+                    target,
+                    new UIntPtr((uint)requested),
+                    out bytesRead);
+                var read = checked((int)bytesRead.ToUInt64());
+                if (!succeeded || read <= 0)
+                {
+                    throw CreateWin32Exception(
+                        "Debuggee image memory is no longer readable. Pause the debuggee and open the visualizer again.");
+                }
+
+                _position += read;
+                return read;
+            }
+            finally
+            {
+                pin.Free();
+            }
+        }
+
+        public override long Seek(long offset, SeekOrigin origin)
+        {
+            ThrowIfDisposed();
+            long next;
+            switch (origin)
+            {
+                case SeekOrigin.Begin:
+                    next = offset;
+                    break;
+                case SeekOrigin.Current:
+                    next = checked(_position + offset);
+                    break;
+                case SeekOrigin.End:
+                    next = checked(_length + offset);
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException("origin");
+            }
+
+            Position = next;
+            return _position;
+        }
+
+        public override void Flush()
+        {
+            ThrowIfDisposed();
+        }
+
+        public override void SetLength(long value)
+        {
+            throw new NotSupportedException();
+        }
+
+        public override void Write(byte[] buffer, int offset, int count)
+        {
+            throw new NotSupportedException();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                CloseHandle(_processHandle);
+            }
+
+            base.Dispose(disposing);
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+            {
+                throw new ObjectDisposedException(nameof(ProcessMemoryReadStream));
+            }
+        }
+
+        private static RawImageSourceUnavailableException CreateWin32Exception(string message)
+        {
+            var errorCode = Marshal.GetLastWin32Error();
+            return new RawImageSourceUnavailableException(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0} Win32 error {1}.",
+                    message,
+                    errorCode),
+                errorCode);
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr OpenProcess(int desiredAccess, bool inheritHandle, int processId);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool ReadProcessMemory(
+            IntPtr processHandle,
+            IntPtr baseAddress,
+            IntPtr buffer,
+            UIntPtr size,
+            out UIntPtr numberOfBytesRead);
+
+        [DllImport("kernel32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
     }
 }

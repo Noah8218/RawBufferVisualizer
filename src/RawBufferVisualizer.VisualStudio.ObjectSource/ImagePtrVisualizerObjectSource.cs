@@ -26,6 +26,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new InvalidDataException("Chunk request is required.");
             }
 
+            if (request.Operation == VisualizerSnapshotOperation.Preview)
+            {
+                SerializeAsJson(outgoingData, ImagePtrVisualizerTransfer.CreatePreview(GetView(target), request));
+                return;
+            }
+
             SerializeAsJson(outgoingData, ImagePtrVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
@@ -118,9 +124,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(view));
             }
 
-            return VisualizerChunkedTransfer.CreateMetadata(
+            return VisualizerChunkedTransfer.CreatePointerMetadata(
                 view.Descriptor,
                 view.BufferLength,
+                view.Buffer,
                 view.SourceType,
                 view.DisplayName);
         }
@@ -167,6 +174,25 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 TotalLength = view.BufferLength,
                 IsLastChunk = request.Offset + length >= view.BufferLength
             };
+        }
+
+        public static VisualizerSnapshotTransfer CreatePreview(
+            ImagePtrView view,
+            VisualizerSnapshotChunkRequest request)
+        {
+            if (view == null)
+            {
+                throw new ArgumentNullException(nameof(view));
+            }
+
+            return VisualizerSampledPreview.Create(
+                view.Buffer,
+                view.BufferLength,
+                view.Descriptor,
+                view.SourceType,
+                view.DisplayName,
+                request.MaximumWidth,
+                request.MaximumHeight);
         }
 
         private static RawPixelFormat InferPixelFormat(int bpp, int channels, int bitDepth)

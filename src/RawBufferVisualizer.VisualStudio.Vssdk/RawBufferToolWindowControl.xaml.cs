@@ -67,6 +67,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             OpenGlImageView.PixelPinned += OpenGlImageView_PixelPinned;
             OpenGlImageView.PixelSelected += OpenGlImageView_PixelSelected;
             OpenGlImageView.ViewChanged += OpenGlImageView_ViewChanged;
+            OpenGlImageView.SourceUnavailable += OpenGlImageView_SourceUnavailable;
             OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
             InterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
             InterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
@@ -111,9 +112,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         request.ErrorMessage,
                         request.ErrorDetails);
                 }
+                else if (request.IsLiveMemory)
+                {
+                    OpenLiveMemory(request);
+                }
                 else
                 {
-                    OpenPath(request.MetadataPath, request.DisplayName, request.SourceType);
+                    OpenPath(
+                        request.MetadataPath,
+                        request.DisplayName,
+                        request.SourceType,
+                        request.HandoffId,
+                        request.IsPreview);
                 }
             }
             catch (Exception ex)
@@ -135,14 +145,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public void OpenPath(string path)
         {
-            OpenPath(path, null, null);
+            OpenPath(path, null, null, null, false);
         }
 
-        private void OpenPath(string path, string? title, string? sourceType)
+        private void OpenPath(
+            string path,
+            string? title,
+            string? sourceType,
+            string? handoffId,
+            bool isPreview)
         {
             if (!Dispatcher.CheckAccess())
             {
-                Dispatcher.Invoke(() => OpenPath(path, title, sourceType));
+                Dispatcher.Invoke(() => OpenPath(path, title, sourceType, handoffId, isPreview));
                 return;
             }
 
@@ -155,13 +170,51 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var reference = RawBufferSnapshot.LoadReference(fullPath);
                 var source = CreateImageSource(reference.RawPath, reference.Descriptor, reference.RawByteLength);
                 var resolvedSourceType = string.IsNullOrWhiteSpace(sourceType) ? "Raw snapshot" : sourceType!;
+                var existingDocument = FindHandoffDocument(handoffId);
+                if (existingDocument != null)
+                {
+                    var wasActive = ReferenceEquals(_activeDocument, existingDocument);
+                    existingDocument.ReplaceSource(
+                        fullPath,
+                        source,
+                        reference.Descriptor,
+                        title,
+                        resolvedSourceType,
+                        isPreview);
+                    ImageList.Items.Refresh();
+                    if (wasActive)
+                    {
+                        DescriptorText.Text = FormatDescriptor(existingDocument);
+                        UpdateInterpretationControls(existingDocument.Descriptor);
+                        _switchingDocument = true;
+                        try
+                        {
+                            RenderActiveDocument();
+                        }
+                        finally
+                        {
+                            _switchingDocument = false;
+                        }
+                    }
+
+                    if (!isPreview)
+                    {
+                        DiagnosticsList.Items.Insert(0, "Info: full-resolution debugger transfer completed.");
+                    }
+                    _lastOpenPathMilliseconds = openWatch.Elapsed.TotalMilliseconds;
+                    ScheduleAutomationProbeIfRequested(fullPath);
+                    return;
+                }
+
                 var document = new ImageDocument(
                     fullPath,
                     source,
                     reference.Descriptor,
                     title,
                     resolvedSourceType,
-                    ShouldDeleteSnapshotDirectoryOnDispose(fullPath));
+                    ShouldDeleteSnapshotDirectoryOnDispose(fullPath),
+                    handoffId,
+                    isPreview);
                 _documents.Add(document);
                 ActivateDocument(document);
                 DiagnosticsList.Items.Insert(0, string.Format(
@@ -395,10 +448,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            if (_activeDocument.IsSourceUnavailable)
+            {
+                OpenGlImageView.ClearImage();
+                DiagnosticsList.Items.Add("Warning: " + _activeDocument.SourceUnavailableMessage);
+                UpdatePerformanceText();
+                UpdateStatus();
+                return;
+            }
+
             var diagnostics = _activeDocument.Source.Analyze();
             foreach (var diagnostic in diagnostics)
             {
                 DiagnosticsList.Items.Add(diagnostic.ToString());
+            }
+
+            if (_activeDocument.IsPreview)
+            {
+                DiagnosticsList.Items.Insert(0, "Info: sampled preview is visible while full-resolution transfer continues.");
             }
 
             if (RawBufferDiagnostics.HasErrors(diagnostics))
@@ -417,6 +484,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ApplyRestoredView(viewState);
                 UpdatePerformanceText();
             }
+            catch (RawImageSourceUnavailableException ex)
+            {
+                OpenGlImageView_SourceUnavailable(
+                    OpenGlImageView,
+                    new RawOpenGlSourceUnavailableEventArgs(ex));
+                return;
+            }
             catch (Exception ex)
             {
                 OpenGlImageView.ClearImage();
@@ -426,7 +500,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            DrawHistogramIfReasonable(_activeDocument);
+            try
+            {
+                DrawHistogramIfReasonable(_activeDocument);
+            }
+            catch (RawImageSourceUnavailableException ex)
+            {
+                OpenGlImageView_SourceUnavailable(
+                    OpenGlImageView,
+                    new RawOpenGlSourceUnavailableEventArgs(ex));
+            }
             UpdateStatus();
         }
 
@@ -482,6 +565,92 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 DiagnosticsList.Items.Insert(0, "Error: support report copy failed. " + ex.Message);
                 SetTransientStatus("Report copy failed");
             }
+        }
+
+        private void OpenLiveMemory(VisualizerHandoffRequest request)
+        {
+            if (!request.IsLiveMemory || request.LiveDescriptor == null)
+            {
+                throw new InvalidDataException("Live debugger image metadata is incomplete.");
+            }
+
+            var openWatch = Stopwatch.StartNew();
+            var displayPath = string.Format(
+                CultureInfo.InvariantCulture,
+                "debuggee-{0}-0x{1:X}",
+                request.LiveProcessId,
+                request.LiveBufferAddress);
+            var source = RawImageSource.FromProcessMemory(
+                request.LiveProcessId,
+                request.LiveBufferAddress,
+                request.LiveBufferLength,
+                request.LiveDescriptor);
+            var resolvedSourceType = string.IsNullOrWhiteSpace(request.SourceType)
+                ? "Debugger live memory"
+                : request.SourceType;
+            var existingDocument = FindHandoffDocument(request.HandoffId);
+            if (existingDocument != null)
+            {
+                var wasActive = ReferenceEquals(_activeDocument, existingDocument);
+                existingDocument.ReplaceSource(
+                    displayPath,
+                    source,
+                    request.LiveDescriptor,
+                    request.DisplayName,
+                    resolvedSourceType,
+                    false);
+                ImageList.Items.Refresh();
+                if (wasActive)
+                {
+                    DescriptorText.Text = FormatDescriptor(existingDocument);
+                    UpdateInterpretationControls(existingDocument.Descriptor);
+                    _switchingDocument = true;
+                    try
+                    {
+                        RenderActiveDocument();
+                    }
+                    finally
+                    {
+                        _switchingDocument = false;
+                    }
+                }
+            }
+            else
+            {
+                var document = new ImageDocument(
+                    displayPath,
+                    source,
+                    request.LiveDescriptor,
+                    request.DisplayName,
+                    resolvedSourceType,
+                    false,
+                    request.HandoffId,
+                    false);
+                _documents.Add(document);
+                ActivateDocument(document);
+            }
+
+            openWatch.Stop();
+            _lastOpenPathMilliseconds = openWatch.Elapsed.TotalMilliseconds;
+            DiagnosticsList.Items.Insert(0, string.Format(
+                CultureInfo.InvariantCulture,
+                "Info: live debugger tiles ready, {0}, open {1:0.0} ms. Reopen after Continue.",
+                FormatByteCount(request.LiveBufferLength),
+                openWatch.Elapsed.TotalMilliseconds));
+            UpdateTempUsageStatus();
+        }
+
+        private ImageDocument? FindHandoffDocument(string? handoffId)
+        {
+            if (string.IsNullOrWhiteSpace(handoffId))
+            {
+                return null;
+            }
+
+            return _documents.FirstOrDefault(document => string.Equals(
+                document.HandoffId,
+                handoffId,
+                StringComparison.Ordinal));
         }
 
         private void OpenSupportLogs_Click(object sender, RoutedEventArgs e)
@@ -1064,6 +1233,31 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 UpdateInspectorPixel(_activeDocument, e.X, e.Y);
             }
+        }
+
+        private void OpenGlImageView_SourceUnavailable(object? sender, RawOpenGlSourceUnavailableEventArgs e)
+        {
+            var document = _activeDocument;
+            if (document == null || !document.MarkSourceUnavailable(e.Exception.Message))
+            {
+                return;
+            }
+
+            ImageList.Items.Refresh();
+            DiagnosticsList.Items.Insert(
+                0,
+                "Warning: live debugger memory is unavailable. The last rendered image remains visible; pause at a valid breakpoint and open the visualizer again. "
+                + e.Exception.Message);
+            _lastHoverX = -1;
+            _lastHoverY = -1;
+            _pinnedInspectorX = -1;
+            _pinnedInspectorY = -1;
+            SetInspectorPinnedState(false);
+            SetMarkerText(string.Empty);
+            SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
+            ClearPixelStatus();
+            UpdatePerformanceText();
+            UpdateStatus();
         }
 
         private void OpenGlImageView_PixelSelected(object? sender, RawOpenGlPixelEventArgs e)
@@ -1897,9 +2091,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            if (_activeDocument.IsSourceUnavailable)
+            {
+                StatusText.Text = "Live source unavailable";
+                WriteSessionStateIfRequested();
+                return;
+            }
+
             StatusText.Text = string.Format(
                 CultureInfo.InvariantCulture,
-                "{0}x{1} {2} {3} {4} tiles",
+                "{0}{1}x{2} {3} {4} {5} tiles",
+                _activeDocument.IsPreview ? "Preview " : string.Empty,
                 _activeDocument.Descriptor.Width,
                 _activeDocument.Descriptor.Height,
                 _activeDocument.Descriptor.PixelFormat,
@@ -1931,7 +2133,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static string GetSourceMode(RawImageSource source)
         {
-            return source.IsFileBacked ? "file" : "mem";
+            return source.IsLiveProcessBacked ? "live" : source.IsFileBacked ? "file" : "mem";
         }
 
         private static string FormatByteCount(long byteCount)
@@ -1982,6 +2184,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "activeTitle", _activeDocument == null ? string.Empty : _activeDocument.Title, true);
                 AppendJsonProperty(builder, "status", StatusText.Text, true);
                 AppendJsonProperty(builder, "activeErrorId", _activeDocument == null ? string.Empty : _activeDocument.ErrorId, true);
+                AppendJsonProperty(builder, "activeSourceUnavailable", _activeDocument != null && _activeDocument.IsSourceUnavailable, true);
                 AppendJsonProperty(builder, "errorPanelVisible", ErrorPanel != null && ErrorPanel.Visibility == Visibility.Visible, true);
                 AppendJsonProperty(builder, "supportReportAvailable", _activeDocument != null && _activeDocument.IsError, true);
                 builder.AppendLine("  \"documents\": [");
@@ -1998,6 +2201,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     AppendJsonProperty(builder, "pixelFormat", document.Descriptor.PixelFormat.ToString(), true, 6);
                     AppendJsonProperty(builder, "sourceMode", GetSourceMode(document.Source), true, 6);
                     AppendJsonProperty(builder, "isError", document.IsError, true, 6);
+                    AppendJsonProperty(builder, "isSourceUnavailable", document.IsSourceUnavailable, true, 6);
                     AppendJsonProperty(builder, "hasThumbnail", document.Thumbnail != null, true, 6);
                     AppendJsonProperty(builder, "errorId", document.ErrorId, true, 6);
                     AppendJsonProperty(builder, "errorType", document.ErrorType, true, 6);
@@ -2593,12 +2797,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string ErrorDetails { get; private set; }
             public string ErrorId { get; private set; }
             public DateTime ErrorOccurredUtc { get; private set; }
+            public string HandoffId { get; private set; }
+            public bool IsPreview { get; private set; }
+            public string SourceUnavailableMessage { get; private set; }
             private readonly string? _ownedSnapshotDirectory;
             private bool _disposed;
 
             public bool IsError
             {
                 get { return !string.IsNullOrWhiteSpace(ErrorMessage); }
+            }
+
+            public bool IsSourceUnavailable
+            {
+                get { return !string.IsNullOrWhiteSpace(SourceUnavailableMessage); }
             }
 
             public string Summary
@@ -2612,7 +2824,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                     return string.Format(
                         CultureInfo.InvariantCulture,
-                        "{0} x {1}  {2}  stride {3}  {4}",
+                        "{0}{1}{2} x {3}  {4}  stride {5}  {6}",
+                        IsSourceUnavailable ? "Unavailable  " : string.Empty,
+                        IsPreview ? "Preview  " : string.Empty,
                         Descriptor.Width,
                         Descriptor.Height,
                         Descriptor.PixelFormat,
@@ -2627,7 +2841,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 RawImageDescriptor descriptor,
                 string? title,
                 string sourceType,
-                bool deleteSnapshotDirectoryOnDispose = false)
+                bool deleteSnapshotDirectoryOnDispose = false,
+                string? handoffId = null,
+                bool isPreview = false)
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = string.IsNullOrWhiteSpace(title) ? CreateTitle(DisplayPath) : title!.Trim();
@@ -2640,6 +2856,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ErrorDetails = string.Empty;
                 ErrorId = string.Empty;
                 ErrorOccurredUtc = DateTime.MinValue;
+                HandoffId = handoffId ?? string.Empty;
+                IsPreview = isPreview;
+                SourceUnavailableMessage = string.Empty;
                 _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
@@ -2670,6 +2889,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ErrorDetails = errorDetails ?? string.Empty;
                 ErrorOccurredUtc = DateTime.UtcNow;
                 ErrorId = CreateSupportId("ERROR", ErrorOccurredUtc);
+                HandoffId = string.Empty;
+                IsPreview = false;
+                SourceUnavailableMessage = string.Empty;
                 _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
@@ -2692,19 +2914,54 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)
             {
+                ReplaceSource(DisplayPath, source, descriptor, Title, SourceType, false);
+            }
+
+            public void ReplaceSource(
+                string displayPath,
+                RawImageSource source,
+                RawImageDescriptor descriptor,
+                string? title,
+                string sourceType,
+                bool isPreview)
+            {
                 if (source == null)
                 {
                     throw new ArgumentNullException("source");
                 }
 
+                var previousSource = Source;
+                DisplayPath = GetDisplayPath(displayPath);
+                Title = string.IsNullOrWhiteSpace(title) ? CreateTitle(DisplayPath) : title!.Trim();
+                SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Source = source;
                 Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
                 Thumbnail = CreateThumbnailSource(Source, Descriptor);
+                ViewState = null;
+                IsPreview = isPreview;
                 ErrorMessage = string.Empty;
                 ErrorType = string.Empty;
                 ErrorDetails = string.Empty;
                 ErrorId = string.Empty;
                 ErrorOccurredUtc = DateTime.MinValue;
+                SourceUnavailableMessage = string.Empty;
+                if (!ReferenceEquals(previousSource, source))
+                {
+                    previousSource.Dispose();
+                }
+            }
+
+            public bool MarkSourceUnavailable(string message)
+            {
+                if (IsSourceUnavailable)
+                {
+                    return false;
+                }
+
+                SourceUnavailableMessage = string.IsNullOrWhiteSpace(message)
+                    ? "Live debugger image memory is no longer readable."
+                    : message;
+                return true;
             }
 
             public void Dispose()
