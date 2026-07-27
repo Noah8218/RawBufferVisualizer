@@ -17,11 +17,12 @@ After those four documents, read only the task-specific references below.
 | --- | --- |
 | Build, install, or debug the Visual Studio extension | [visual-studio-integration.md](visual-studio-integration.md), [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md) |
 | Prepare or publish a Marketplace update | [release-runbook.md](release-runbook.md), [marketplace-checklist.md](marketplace-checklist.md) |
+| Review the qualified 1.0.47 artifact and release evidence | [release-qualification-1.0.47.md](release-qualification-1.0.47.md) |
 | Validate or generate very large images | [large-image-samples.md](large-image-samples.md) |
 | Research, qualify, or add a camera/frame-grabber integration | [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md), [sdk-adapter-roadmap.md](sdk-adapter-roadmap.md) |
 | Review Image Watch-inspired UX | [image-watch-ux-analysis.md](image-watch-ux-analysis.md) |
 | Prepare a short demo | [demo-recording-guide.md](demo-recording-guide.md) |
-| Check the current release text | [github-release-1.0.45.md](github-release-1.0.45.md), [marketplace-release-notes-1.0.45.md](marketplace-release-notes-1.0.45.md) |
+| Check the current release text | [marketplace-overview-1.0.47.md](marketplace-overview-1.0.47.md), [marketplace-release-notes-1.0.47.md](marketplace-release-notes-1.0.47.md) |
 | Work on buffer interpretation diagnosis | [buffer-doctor-design.md](buffer-doctor-design.md) |
 | Work on user type mapping | [smart-type-mapper-design.md](smart-type-mapper-design.md) |
 | Work on automatic discovery of unregistered image types | [automatic-vision-inspector.md](automatic-vision-inspector.md) |

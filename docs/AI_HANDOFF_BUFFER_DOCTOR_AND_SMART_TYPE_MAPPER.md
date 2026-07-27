@@ -1,6 +1,6 @@
 # AI Handoff: Buffer Doctor + Automatic Vision Inspector + Smart Type Mapper
 
-> 상태: Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper 자동 폴백은 installed-VSIX 검증 통과. 실제 SDK 객체 검증은 미완료
+> 상태: 1.0.47 Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper 자동 폴백과 등록형 Bitmap/Mat 혼합 시나리오는 installed-VSIX 검증 통과. Marketplace 공개와 실제 카메라 SDK/하드웨어 검증은 미완료
 > 작성일: 2026-07-27
 > 대상: 후속 AI 모델이 이어서 검증/수정/개선할 수 있도록 한 문서
 
@@ -165,14 +165,17 @@
 
 **구현/검증 문서**: `docs/automatic-vision-inspector.md`
 
-**2026-07-27 installed-VSIX 결과**:
-- VS2022 17.14에서 직접 포인터, `byte[]`(64 x 48), 1단계 중첩 포인터를 포함한 5개 Local을 오류 없이 자동 표시
-- `Scan Now`를 두 번 반복한 뒤에도 5개 행으로 유지되어 중복 없음
+**2026-07-28 installed-VSIX 결과**:
+- VS2022 17.14에서 함수 인자, 직접 포인터, `byte[]`(64 x 48), 1단계 중첩 포인터를 포함한 6개 이미지를 오류 없이 자동 표시
+- 별도의 `[Map]` 1개와 `[Failed]` 1개가 있어도 6개 성공 이미지가 유지되고, `Scan Now` 반복 뒤에도 중복 없음
 - 결과: `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-installed-vsix.json`
 - 화면: `artifacts/ui/installed-vsix-new-features/automatic-vision-inspector.png`
-- Smart Type Mapper 자동 폴백: 92% `MappingRequired` 후보 → `Mono12PackedLsb` 선택 → live-memory Preview → Save → 640 x 484, stride 960, 오류 0으로 자동 재열림
+- Smart Type Mapper 자동 폴백: 88% `MappingRequired` 후보 → `Mono12PackedLsb` 선택 → live-memory Preview → Save → 640 x 484, stride 960, 오류 0으로 자동 재열림
 - Smart Type Mapper 결과: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json`
 - Smart Type Mapper 화면: `smart-type-mapper-automatic-before-map.png`, `smart-type-mapper-dialog-preview.png`, `smart-type-mapper-automatic-after-reopen.png`
+- 실제 OpenCvSharp `Mat`, Emgu CV `Mat`, `System.Drawing.Bitmap`은 등록형 visualizer로 열리고 자동 후보에서 제외됨
+- `RawBufferSnapshot`/`RawBufferView`도 자동 후보에서 제외되며, 카메라형 래퍼 6개는 자동으로 열려 전체 9개 이미지/오류 0개
+- 혼합 결과: `artifacts/ui/installed-vsix-new-features/MultiLibraryHybrid-installed-vsix.json`
 
 ---
 
@@ -187,11 +190,13 @@
 | Open Variable (개별 변수 EnvDTE 진입점) | 완료 | `OpenVariableDialog.xaml/cs`, `RawBufferToolWindowControl.OpenVariableExpression()` |
 | Break Mode Locals 스캔 | 완료 | `ImageTypeRecognizer.cs`, `RawBufferToolWindowControl.ScanLocals()` |
 | Automatic Vision Inspector | 완료 | `AutomaticVisionInspector.cs`, `VisionMemberInference.cs`, `VisualStudioDebugFrameContext.cs`, ToolWindow Auto Inspect UI |
-| Automatic Vision Inspector installed-VSIX | 통과 | VS2022 17.14, 5개 자동 열기, 64x48 배열, 1단계 중첩, 반복 스캔 중복 없음 |
+| Automatic Vision Inspector installed-VSIX | 통과 | VS2022 17.14, 6개 자동 열기, 64x48 배열, 함수 인자, 1단계 중첩, 부분 실패 격리, 반복 스캔 중복 없음 |
 | Smart Type Mapper 자동 폴백 installed-VSIX | 통과 | VS2022 17.14, 모호 후보 → live Preview → Save → 640x484 Mono12PackedLsb 자동 재열림, 오류 0 |
-| Release 빌드 | 통과 | 2026-07-27, 경고 18개(VSTHRD010), 오류 0개 |
+| 등록형/자동 혼합 installed-VSIX | 통과 | 실제 OpenCvSharp/Emgu/Bitmap + 자동 래퍼 6개, 전체 이미지 9개, 오류 0개 |
+| Release 빌드 | 통과 | 2026-07-28, 경고 18개(VSTHRD010), 오류 0개 |
 | VSIX 재설치 | 완료 | `RawBufferVisualizer.VisualStudio.Extensibility.vsix` 설치됨 |
 | 단위 테스트 | 통과 (이전 회차) | `RawBufferVisualizer.Tests` 80+개 테스트 |
+| 1.0.47 로컬 출시 자격 | 완료 | `docs/release-qualification-1.0.47.md` |
 
 ---
 
@@ -249,7 +254,7 @@
 
 ### 4-3. 다양한 실제 포맷/라이브러리 검증
 
-현재 시뮬레이션 클래스로만 검증되었다. 다음 실제 라이브러리가 있다면 추가 테스트해야 한다.
+실제 OpenCvSharp/Emgu/Bitmap은 등록형 visualizer 경로로 검증되었다. 아래 포맷 목록은 호환성 매트릭스로도 확인됐지만, Automatic Inspector가 이 등록형 타입을 다시 추론하지 않는 것이 의도된 동작이다. 산업 카메라 SDK는 실제 런타임 객체가 확보될 때 추가 테스트해야 한다.
 
 **OpenCvSharp**:
 - `Mat` (CV_8UC1, CV_8UC3, CV_8UC4, CV_16UC1, CV_32FC1)
@@ -295,22 +300,20 @@
 
 ## 6. 다음 모델이 수행할 권장 작업 순서
 
-### 단계 1: 실제 라이브러리/SDK 객체 검증
+### 단계 1: 실제 산업 SDK 객체 검증
 
 Prerequisite: 정확한 패키지/SDK 버전, 재현 가능한 런타임 객체, 포인터 lifetime 규칙, 합법적으로 사용할 수 있는 샘플. 이 입력이 없으면 산업 SDK 검증에 모델 토큰을 쓰지 않는다.
 
-1. 저장소에 이미 포함된 실제 OpenCvSharp/Emgu/Bitmap 객체를 Automatic Vision Inspector 경로로 검증한다.
-2. 사용자가 실제 산업 SDK 객체를 제공하면 type/assembly/멤버/enum/lifetime을 기록하고 같은 경로를 검증한다.
-3. 시뮬레이션 객체 결과를 실제 SDK 지원 주장으로 확대하지 않는다.
+1. 사용자가 실제 산업 SDK 객체를 제공하면 type/assembly/멤버/enum/lifetime을 기록하고 동일한 Break Mode 경로를 검증한다.
+2. 시뮬레이션 객체 결과를 실제 SDK 지원 주장으로 확대하지 않는다.
 
 Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
-### 단계 2: 1.0.47 릴리즈 준비
+### 단계 2: 1.0.47 Marketplace 공개
 
-1. `README.md`와 Marketplace Overview/릴리즈 노트에 Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper를 추가한다.
-2. `scripts/Bump-VisualStudioExtensionVersion.ps1`로 `1.0.47.0` 이상으로 올린다.
-3. 전체 installed-extension matrix, 패키징 guard, VSIX SHA256을 다시 기록한다.
-4. 사용자의 명시적인 요청 없이는 publish/push하지 않는다.
+1. `docs/marketplace-overview-1.0.47.md`와 `docs/marketplace-release-notes-1.0.47.md`를 Marketplace에 반영한다.
+2. SHA256 `DAB2CE62007F77F11CFF828AF02EF2F2DAE26A3BB3238CF251679E4A69505174`인 최종 VSIX를 업로드한다.
+3. 공개 버전/Overview가 실제로 전파됐는지 확인한다.
 
 Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
@@ -348,19 +351,20 @@ Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 ## 8. 마지막으로 실행된 명령
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Git\RawBufferVisualizer\scripts\Install-VisualStudioExtension.ps1" -Configuration Release -Reinstall
+powershell -ExecutionPolicy Bypass -File "C:\Git\RawBufferVisualizer\scripts\Install-VisualStudioExtension.ps1" -Configuration Release -Framework net472 -ViewerFramework net472 -VisualStudioInstanceId 2c8402d8 -NoBuild -Reinstall
+powershell -ExecutionPolicy Bypass -File "C:\Git\RawBufferVisualizer\scripts\SmokeInstalledVsixNewFeatures.ps1" -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
 ```
 
 결과:
-- Release 빌드 성공 (경고 18개, 오류 0개)
-- VSIX 설치 완료
-- Visual Studio 재시작 필요
+- 1.0.47 최종 VSIX 설치 완료
+- 새 Visual Studio 세션에서 혼합 시나리오 통과
+- 등록형 3개 + 자동 6개 = 이미지 9개, 오류 0개
 
 ---
 
 ## 9. 주의사항
 
-- 이 문서는 구현 상태와 검증 계획을 담고 있다. 단위 테스트는 통과했지만, **실제 Visual Studio 디버거 환경에서의 검증은 아직 완료되지 않았다**.
+- 이 문서의 1.0.47 자동화 시나리오는 실제 Visual Studio 2022 디버거/installed-VSIX 환경에서 완료되었다. 실제 산업 카메라 SDK 런타임과 하드웨어는 별도 미검증 범위다.
 - "Open Variable"과 "Scan Locals"는 Break Mode에서만 의미 있다.
 - 매핑 파일은 `%APPDATA%\RawBufferVisualizer\type-mappings.json`에 저장된다. 이 파일을 수동으로 편집할 때는 JSON 형식과 `version: 1`을 유지해야 한다.
 - 새로운 SDK 포맷을 추가할 때는 반드시 실제 객체의 lifetime과 pointer validity를 고려해야 한다.

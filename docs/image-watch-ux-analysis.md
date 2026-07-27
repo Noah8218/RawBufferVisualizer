@@ -67,3 +67,54 @@ The OpenCV tutorial highlights the practical comparison workflow: zoom into a re
 ## Design Constraint
 
 Do not make the first version a heavy multi-document editor. The minimum useful version is a left list, a top tab strip, one viewer, and Link Views. Side-by-side and diff can come after the session model is stable.
+
+## 1.0.47 Positioning Evaluation (2026-07-27)
+
+### Current Sources And Evidence
+
+- Microsoft Learn describes Image Watch as a native C++ debugger window that combines Locals-style automatic current-frame discovery with a manual Watch list, thumbnails, validity state, pixel values, zoom, and pan:
+  https://learn.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2015/debugger/image-watch/image-watch?view=vs-2015
+- Microsoft Research describes the core value as seeing the image objects that exist at a given point and inspecting pixels without adding temporary save code:
+  https://www.microsoft.com/en-us/research/blog/image-debugging-for-visual-studio/
+- The current ImageWatchCSharp Marketplace listing emphasizes automatic OpenCvSharp `Mat` discovery, metadata, disposed state, pixel inspection, zoom, and pan:
+  https://marketplace.visualstudio.com/items?itemName=LingLuo.ImageWatchSharp
+- Raw Buffer Visualizer 1.0.47 installed-VSIX evidence is recorded in:
+  `artifacts/ui/installed-vsix-new-features/MultiLibraryHybrid-installed-vsix.json`
+  and `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-installed-vsix.json`.
+
+### Position By Capability
+
+| Area | Current position | Evidence-based assessment |
+| --- | --- | --- |
+| C# Image Watch workflow | Competitive | One docked list, thumbnails, selected viewer, pixel/raw values, zoom/pan, Fit, and persistent break-mode workflow are implemented. |
+| Supported managed image families | Strong | Real Bitmap, OpenCvSharp, and Emgu CV paths plus typed/mixed collections cover more than a Mat-only visualizer. |
+| Known `Mat` automatic discovery | Gap by design | Registered OpenCvSharp/Emgu values still use the debugger icon. Automatic Inspector targets unregistered safe pointer/array wrappers and does not duplicate registered rows. |
+| Company/camera wrapper discovery | Differentiator | Current-frame Locals + Arguments scanning, structural inference, validation, `[Map]` recovery, and saved mappings address types that cannot receive a runtime visualizer registration. |
+| Raw-buffer correctness diagnosis | Differentiator | Stride, valid bits, byte order, packed mono, raw bytes, and ranked Buffer Doctor interpretations go beyond a basic decoded Mat preview. |
+| Partial failure handling | Strong | One candidate failure does not block other images; recognized mapping and open failures remain visible and successful rows remain usable. |
+| Multiple-image comparison | Strong | Linked pan/zoom, A/B, split, absolute difference, and blink are already present. |
+| Native C++ Image Watch replacement | Out of scope | The product targets managed C# machine vision and should not claim to replace Microsoft's native C++ Image Watch. |
+| Vendor SDK certification | Not ready | Camera-shape fixtures prove inference contracts only. Basler, Spinnaker, Vimba, and other SDK/hardware claims require legal SDKs, real objects, and explicit buffer lifetime evidence. |
+| Ecosystem and field maturity | Gap | Public usage history and real industrial-team reports are still limited compared with long-established Image Watch workflows. |
+
+### Recommended Market Position
+
+Use:
+
+> Image Watch-style debugging for C# machine vision, with automatic discovery of accessible camera-frame wrappers and raw-buffer diagnosis.
+
+Do not use:
+
+> A universal Image Watch replacement for every camera SDK.
+
+The defensible niche is not merely “another OpenCvSharp viewer.” It is the combination of broad managed-image support, one docked multi-image session, safe recovery for unregistered wrappers, and raw-buffer interpretation tools. The product is a differentiated Marketplace Preview and a credible specialist tool for C# machine-vision developers, but it is not yet a vendor-certified industrial camera platform or the category leader by adoption.
+
+### Release Implication
+
+The 1.0.47 feature claim is ready when the installed package preserves the hybrid boundary:
+
+1. registered Bitmap/OpenCvSharp/Emgu types open through their debugger visualizers;
+2. accessible unregistered wrappers open or fail visibly through Automatic Inspector;
+3. Smart Type Mapper remains a recovery path rather than the headline workflow;
+4. Buffer Doctor remains explicitly non-semantic and exposes ambiguity;
+5. public text does not turn contract fixtures into real SDK certification.
