@@ -18,7 +18,7 @@ After those four documents, read only the task-specific references below.
 | Build, install, or debug the Visual Studio extension | [visual-studio-integration.md](visual-studio-integration.md), [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md) |
 | Prepare or publish a Marketplace update | [release-runbook.md](release-runbook.md), [marketplace-checklist.md](marketplace-checklist.md) |
 | Validate or generate very large images | [large-image-samples.md](large-image-samples.md) |
-| Add a camera/frame-grabber integration | [sdk-adapter-roadmap.md](sdk-adapter-roadmap.md) |
+| Research, qualify, or add a camera/frame-grabber integration | [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md), [sdk-adapter-roadmap.md](sdk-adapter-roadmap.md) |
 | Review Image Watch-inspired UX | [image-watch-ux-analysis.md](image-watch-ux-analysis.md) |
 | Prepare a short demo | [demo-recording-guide.md](demo-recording-guide.md) |
 | Check the current release text | [github-release-1.0.45.md](github-release-1.0.45.md), [marketplace-release-notes-1.0.45.md](marketplace-release-notes-1.0.45.md) |

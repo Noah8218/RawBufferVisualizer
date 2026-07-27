@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
@@ -10,6 +11,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public int ConfidenceScore { get; internal set; }
         public RawPixelFormat? PixelFormat { get; internal set; }
         public bool RequiresPixelFormatMapping { get; internal set; }
+        public bool RequiresExplicitLayout { get; internal set; }
         public List<string> MissingRoles { get; } = new List<string>();
         public List<string> Reasons { get; } = new List<string>();
 
@@ -30,6 +32,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return HasRequiredMembers
                     && PixelFormat.HasValue
                     && !RequiresPixelFormatMapping
+                    && !RequiresExplicitLayout
                     && ConfidenceScore >= 90;
             }
         }
@@ -39,7 +42,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         private static readonly string[] DataNames =
         {
-            "data", "buffer", "ptr", "pointer", "imageaddress", "datapointer", "pixeldata", "imagebuffer", "bytes"
+            "pixeldatapointer", "imagedata", "dataptr", "datapointer", "imageaddress", "bufferaddress",
+            "pixeldata", "imagebuffer", "buffer", "data", "pointer", "ptr", "bytes"
         };
 
         private static readonly string[] WidthNames =
@@ -64,7 +68,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private static readonly string[] BufferLengthNames =
         {
-            "bufferlength", "bytelength", "datasize", "imagesize", "payloadsize", "size", "length"
+            "bufferlength", "buffersize", "sizeinbytes", "payloadsize", "bytelength", "datasize", "imagesize", "size", "length"
+        };
+
+        private static readonly string[] RowPaddingNames =
+        {
+            "paddingx", "xpadding", "rowpadding", "linepadding"
         };
 
         private static readonly string[] ValidBitsNames =
@@ -93,6 +102,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var pixelFormat = FindBest(inventory, PixelFormatNames, null, false);
             var bufferLength = FindBest(inventory, BufferLengthNames, IsIntegerType, false);
             var validBits = FindBest(inventory, ValidBitsNames, IsIntegerType, false);
+            var rowPadding = FindBest(inventory, RowPaddingNames, IsIntegerType, false);
 
             result.Members.Data = NameOf(data);
             result.Members.Width = NameOf(width);
@@ -143,6 +153,16 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 result.Reasons.Add("Runtime type name is image/frame/buffer-like.");
             }
 
+            ApplyLayoutSafety(
+                result,
+                inventory,
+                data,
+                width,
+                height,
+                stride,
+                bufferLength,
+                rowPadding);
+
             result.ConfidenceScore = Math.Min(100, result.ConfidenceScore);
             return result;
         }
@@ -173,7 +193,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return true;
             }
 
-            var normalized = Normalize(text);
+            var normalized = RemoveKnownPixelFormatPrefixes(Normalize(text));
             switch (normalized)
             {
                 case "GRAY8":
@@ -188,6 +208,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case "MONO16":
                     pixelFormat = RawPixelFormat.Mono16;
                     return true;
+                case "MONO10P":
+                    pixelFormat = RawPixelFormat.Mono10PackedLsb;
+                    return true;
+                case "MONO12P":
+                    pixelFormat = RawPixelFormat.Mono12PackedLsb;
+                    return true;
                 case "FLOAT":
                 case "FLOAT32":
                 case "SINGLE":
@@ -196,11 +222,13 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case "BGR":
                 case "BGR8":
                 case "BGR24":
+                case "BGR8PACKED":
                     pixelFormat = RawPixelFormat.BGR24;
                     return true;
                 case "RGB":
                 case "RGB8":
                 case "RGB24":
+                case "RGB8PACKED":
                     pixelFormat = RawPixelFormat.RGB24;
                     return true;
                 case "BGRA":
@@ -208,9 +236,209 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case "BGRA32":
                     pixelFormat = RawPixelFormat.BGRA32;
                     return true;
+                case "BAYERRG8":
+                    pixelFormat = RawPixelFormat.BayerRGGB8;
+                    return true;
+                case "BAYERGR8":
+                    pixelFormat = RawPixelFormat.BayerGRBG8;
+                    return true;
+                case "BAYERGB8":
+                    pixelFormat = RawPixelFormat.BayerGBRG8;
+                    return true;
+                case "BAYERBG8":
+                    pixelFormat = RawPixelFormat.BayerBGGR8;
+                    return true;
                 default:
                     return false;
             }
+        }
+
+        private static void ApplyLayoutSafety(
+            VisionMemberInferenceResult result,
+            IReadOnlyList<VisualizerMemberInventoryItem> inventory,
+            VisualizerMemberInventoryItem? data,
+            VisualizerMemberInventoryItem? width,
+            VisualizerMemberInventoryItem? height,
+            VisualizerMemberInventoryItem? stride,
+            VisualizerMemberInventoryItem? bufferLength,
+            VisualizerMemberInventoryItem? rowPadding)
+        {
+            if (data != null && Normalize(GetLeafName(data.Name)) == "IMAGEDATA")
+            {
+                var baseBuffer = FindExactLeaf(inventory, "buffer", IsSupportedDataType);
+                long imageDataAddress;
+                long baseBufferAddress;
+                if (baseBuffer != null
+                    && (!TryParseIntegerSample(data.SampleValue, out imageDataAddress)
+                        || !TryParseIntegerSample(baseBuffer.SampleValue, out baseBufferAddress)
+                        || imageDataAddress != baseBufferAddress))
+                {
+                    AddLayoutRisk(
+                        result,
+                        "ImageData does not match the base Buffer address; a chunk prefix or image offset requires an explicit adapter.");
+                }
+            }
+
+            if (stride != null || !result.PixelFormat.HasValue)
+            {
+                return;
+            }
+
+            long padding;
+            if (rowPadding != null
+                && (!TryParseIntegerSample(rowPadding.SampleValue, out padding) || padding != 0))
+            {
+                AddLayoutRisk(
+                    result,
+                    "A row-padding member is nonzero or unreadable while no explicit stride is available.");
+            }
+
+            long parsedWidth;
+            long parsedHeight;
+            if (bufferLength == null
+                || !TryParseIntegerSample(width == null ? null : width.SampleValue, out parsedWidth)
+                || !TryParseIntegerSample(height == null ? null : height.SampleValue, out parsedHeight)
+                || parsedWidth <= 0
+                || parsedHeight <= 0)
+            {
+                return;
+            }
+
+            long expectedLength;
+            if (!TryGetContiguousByteCount(parsedWidth, parsedHeight, result.PixelFormat.Value, out expectedLength))
+            {
+                AddLayoutRisk(result, "The inferred contiguous image size exceeds the supported numeric range.");
+                return;
+            }
+
+            long parsedBufferLength;
+            if (!TryParseIntegerSample(bufferLength.SampleValue, out parsedBufferLength)
+                || parsedBufferLength != expectedLength)
+            {
+                AddLayoutRisk(
+                    result,
+                    "Buffer length does not exactly match a contiguous image and no explicit stride is available.");
+            }
+        }
+
+        private static VisualizerMemberInventoryItem? FindExactLeaf(
+            IReadOnlyList<VisualizerMemberInventoryItem> inventory,
+            string leafName,
+            Func<string?, bool> typePredicate)
+        {
+            var normalizedName = Normalize(leafName);
+            for (var i = 0; i < inventory.Count; i++)
+            {
+                var item = inventory[i];
+                if (Normalize(GetLeafName(item.Name)) == normalizedName && typePredicate(item.TypeName))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
+        private static void AddLayoutRisk(VisionMemberInferenceResult result, string reason)
+        {
+            result.RequiresExplicitLayout = true;
+            if (!result.Reasons.Contains(reason))
+            {
+                result.Reasons.Add(reason);
+            }
+        }
+
+        private static bool TryGetContiguousByteCount(
+            long width,
+            long height,
+            RawPixelFormat pixelFormat,
+            out long byteCount)
+        {
+            try
+            {
+                long rowBytes;
+                switch (pixelFormat)
+                {
+                    case RawPixelFormat.Mono10PackedLsb:
+                        rowBytes = checked((width * 10 + 7) / 8);
+                        break;
+                    case RawPixelFormat.Mono12PackedLsb:
+                        rowBytes = checked((width * 12 + 7) / 8);
+                        break;
+                    case RawPixelFormat.Mono16:
+                        rowBytes = checked(width * 2);
+                        break;
+                    case RawPixelFormat.RGB24:
+                    case RawPixelFormat.BGR24:
+                        rowBytes = checked(width * 3);
+                        break;
+                    case RawPixelFormat.BGRA32:
+                    case RawPixelFormat.Float32:
+                        rowBytes = checked(width * 4);
+                        break;
+                    default:
+                        rowBytes = width;
+                        break;
+                }
+
+                byteCount = checked(rowBytes * height);
+                return true;
+            }
+            catch (OverflowException)
+            {
+                byteCount = 0;
+                return false;
+            }
+        }
+
+        private static bool TryParseIntegerSample(string? value, out long parsed)
+        {
+            parsed = 0;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return false;
+            }
+
+            var text = value!.Trim();
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                ulong unsignedValue;
+                if (!ulong.TryParse(
+                    text.Substring(2),
+                    NumberStyles.AllowHexSpecifier,
+                    CultureInfo.InvariantCulture,
+                    out unsignedValue))
+                {
+                    return false;
+                }
+
+                parsed = unchecked((long)unsignedValue);
+                return true;
+            }
+
+            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed);
+        }
+
+        private static string RemoveKnownPixelFormatPrefixes(string normalized)
+        {
+            var prefixes = new[] { "PIXELFORMAT", "PIXELTYPE", "GVSP" };
+            var changed = true;
+            while (changed)
+            {
+                changed = false;
+                for (var i = 0; i < prefixes.Length; i++)
+                {
+                    if (normalized.StartsWith(prefixes[i], StringComparison.Ordinal)
+                        && normalized.Length > prefixes[i].Length)
+                    {
+                        normalized = normalized.Substring(prefixes[i].Length);
+                        changed = true;
+                        break;
+                    }
+                }
+            }
+
+            return normalized;
         }
 
         private static VisualizerMemberInventoryItem? FindBest(
@@ -398,6 +626,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             return typeName!.IndexOf("image", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("frame", StringComparison.OrdinalIgnoreCase) >= 0
+                || typeName.IndexOf("grab", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("bitmap", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("buffer", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("mat", StringComparison.OrdinalIgnoreCase) >= 0;
