@@ -128,14 +128,16 @@ For a richer industrial descriptor, expose `RawBufferView` with buffer address/l
 Automatic Vision Inspector complements provider registration; it does not change Visual Studio's registration rules.
 
 1. The package receives a Break Mode event and schedules the scan at WPF `DispatcherPriority.ContextIdle`.
-2. The scanner reads `Debugger.CurrentStackFrame.Locals`, skipping primitive, root-array, and root-collection values.
-3. Each remaining local contributes at most 128 direct members and 64 one-level nested members. Unlimited recursion is prohibited.
+2. The scanner merges `Debugger.CurrentStackFrame.Locals` and `.Arguments`, deduplicated by root expression, while skipping primitive, root-array, and root-collection values.
+3. Each remaining root contributes at most 128 direct members and 64 one-level nested members. Unlimited recursion is prohibited.
 4. `VisionMemberInference` assigns data/width/height/stride/format roles and a structural confidence score.
 5. A saved type mapping takes precedence. Otherwise only complete, unambiguous inference at 90% or higher is eligible to open automatically.
 6. Pointer-backed shapes reuse paused-process memory. Managed-array shapes use the current VSSDK frame/property child enumerator; the EnvDTE element fallback is bounded to 256 items.
 7. The constructed descriptor and current buffer are validated before an image row is accepted.
-8. Ambiguous/incomplete results at 40% or higher become visible mapping candidates; lower-scoring objects are hidden.
-9. Automatic rows are replaced by stable root-expression key on refresh, while manual/provider-handoff rows are preserved.
+8. Ambiguous/incomplete results at 40% or higher become visible `[Map]` candidates; lower-scoring objects are hidden. A recognized shape whose current pointer/array read fails becomes `[Failed]`, not a misleading mapping request.
+9. Every root is processed behind an exception boundary, so a failed candidate cannot block successful images. A successful row is selected in preference to an error row.
+10. Automatic rows are replaced by stable root-expression key on refresh, while manual/provider-handoff rows are preserved.
+11. **Auto Inspect on Break** is a versioned per-user preference. It defaults on after the user opens the Tool Window, persists across Visual Studio restarts, and never forces the Tool Window to open or steal focus. **Scan Now** is independent of the preference.
 
 The scanner reads debugger-visible fields and property getters. It does not call arbitrary vendor methods, load SDK assemblies dynamically, decode private native layouts, or control an acquisition device. See [automatic-vision-inspector.md](automatic-vision-inspector.md) for the detailed confidence/UX contract and current evidence.
 

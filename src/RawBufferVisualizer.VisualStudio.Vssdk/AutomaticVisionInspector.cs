@@ -9,6 +9,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     internal sealed class AutomaticVisionScanResult
     {
         public string FrameDisplayName { get; set; } = string.Empty;
+        public int LocalExpressionCount { get; set; }
+        public int ArgumentExpressionCount { get; set; }
+        public int DuplicateExpressionCount { get; set; }
         public List<AutomaticVisionInspection> Inspections { get; } = new List<AutomaticVisionInspection>();
     }
 
@@ -130,42 +133,76 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             result.FrameDisplayName = GetFrameDisplayName(frame);
-            EnvDTE.Expressions? locals;
+            var seenExpressions = new HashSet<string>(StringComparer.Ordinal);
+            EnvDTE.Expressions? locals = null;
             try
             {
                 locals = frame.Locals;
             }
             catch
             {
-                return result;
+                // A debugger engine may temporarily withhold one expression collection.
             }
 
-            if (locals == null)
+            if (locals != null)
             {
-                return result;
+                result.LocalExpressionCount = GetExpressionCount(locals);
+                ScanExpressions(result, locals, result.LocalExpressionCount, seenExpressions);
             }
 
-            for (var i = 1; i <= locals.Count; i++)
+            EnvDTE.Expressions? arguments = null;
+            try
             {
-                EnvDTE.Expression local;
+                arguments = frame.Arguments;
+            }
+            catch
+            {
+                // Locals can still be useful when argument enumeration is unavailable.
+            }
+
+            if (arguments != null)
+            {
+                result.ArgumentExpressionCount = GetExpressionCount(arguments);
+                ScanExpressions(result, arguments, result.ArgumentExpressionCount, seenExpressions);
+            }
+
+            return result;
+        }
+
+        private static void ScanExpressions(
+            AutomaticVisionScanResult result,
+            EnvDTE.Expressions expressions,
+            int expressionCount,
+            HashSet<string> seenExpressions)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            for (var i = 1; i <= expressionCount; i++)
+            {
+                EnvDTE.Expression expression;
                 try
                 {
-                    local = locals.Item(i);
+                    expression = expressions.Item(i);
                 }
                 catch
                 {
                     continue;
                 }
 
-                if (local == null || !IsValid(local))
+                if (expression == null || !IsValid(expression))
                 {
                     continue;
                 }
 
-                var rootExpression = ReadExpressionName(local);
-                var runtimeTypeName = ReadExpressionType(local);
+                var rootExpression = ReadExpressionName(expression);
+                var runtimeTypeName = ReadExpressionType(expression);
                 if (string.IsNullOrWhiteSpace(rootExpression) || string.IsNullOrWhiteSpace(runtimeTypeName))
                 {
+                    continue;
+                }
+
+                if (!seenExpressions.Add(rootExpression))
+                {
+                    result.DuplicateExpressionCount++;
                     continue;
                 }
 
@@ -176,7 +213,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 RawBufferVisualizerPackage.WriteAutomationLog(
                     "Automatic scan inspecting " + rootExpression + " (" + runtimeTypeName + ")");
-                var inventory = BuildInventory(local);
+                var inventory = BuildInventory(expression);
                 var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(runtimeTypeName);
                 var inference = VisionMemberInference.Infer(inventory, runtimeTypeName);
                 if (mapping == null && inference.ConfidenceScore < 40)
@@ -194,8 +231,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     UsesSavedMapping = mapping != null
                 });
             }
+        }
 
-            return result;
+        private static int GetExpressionCount(EnvDTE.Expressions expressions)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                return Math.Max(0, expressions.Count);
+            }
+            catch
+            {
+                return 0;
+            }
         }
 
         private static bool ShouldSkipRootType(string runtimeTypeName)

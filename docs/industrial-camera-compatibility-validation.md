@@ -83,7 +83,7 @@ Results:
 - Release build: passed, 0 errors; 18 known unique `VSTHRD010` warnings in `ImageTypeRecognizer.cs`.
 - Full self-test executable: passed.
 - IDS peak ICV assembly contract: passed for assembly version `1.4.0.0`, SHA-256 `6BB00D10B20EF0B139F93FA02137D1DCB71FBB4759330B0402B5AD04D9EDFCB6`.
-- Installed VSIX Automatic Vision Inspector: passed in VS2022 `17.14.37314.3`, five rows, zero errors, managed array opened, repeated scan remained duplicate-free.
+- Installed VSIX Automatic Vision Inspector: passed in VS2022 `17.14.37314.3`; a function argument and five valid locals opened, one incomplete fixture remained `[Map]`, one invalid-pointer fixture remained `[Failed]`, and repeated scans remained duplicate-free.
 - Multi-library installed-VSIX UI smoke: incomplete. The debuggee reached the intended breakpoint and DTE saw the expected locals, but Visual Studio UI Automation timed out while resolving the docked tool-window controls. This is not counted as a product pass.
 
 Evidence:

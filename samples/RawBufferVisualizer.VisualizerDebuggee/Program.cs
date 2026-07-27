@@ -433,6 +433,23 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
         private static int RunSmartTypeMapperDebug()
         {
+            var parameterOwner = new PinnedRawBufferView(
+                "parameter-mono8",
+                CreateMono8Buffer(Width, Height, Width),
+                CreateDescriptor(Width, Height, Width, RawPixelFormat.Mono8, 8),
+                1);
+            try
+            {
+                return RunSmartTypeMapperDebug(new ParameterCompanyFrame(parameterOwner));
+            }
+            finally
+            {
+                parameterOwner.Dispose();
+            }
+        }
+
+        private static int RunSmartTypeMapperDebug(ParameterCompanyFrame parameterFrame)
+        {
             const int width = Width;
             const int height = Height;
             var caseNumber = 1;
@@ -466,14 +483,21 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 arrayWidth,
                 CompanyPixelType.Mono8);
             var nestedCompanyFrame = new NestedCompanyFrame(mono8Owner);
+            var incompleteAutomaticFrame = new IncompleteAutomaticFrame(mono8Owner);
+            var invalidAutomaticFrame = new InvalidAutomaticFrame(width, height);
 
-            PrintCase(ref caseNumber, "companyFrame, companyArrayFrame, nestedCompanyFrame / Automatic Vision Inspector");
+            PrintCase(
+                ref caseNumber,
+                "locals + parameterFrame + mapping-required/open-failed rows / Automatic Vision Inspector");
             Debugger.Break();
 
             GC.KeepAlive(companyFrameList);
             GC.KeepAlive(companyFrame);
             GC.KeepAlive(companyArrayFrame);
             GC.KeepAlive(nestedCompanyFrame);
+            GC.KeepAlive(incompleteAutomaticFrame);
+            GC.KeepAlive(invalidAutomaticFrame);
+            GC.KeepAlive(parameterFrame);
             GC.KeepAlive(mono8Owner);
             GC.KeepAlive(bgr24Owner);
             return 0;
@@ -1120,6 +1144,64 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 default:
                     return CompanyPixelType.Mono8;
             }
+        }
+    }
+
+    internal sealed class ParameterCompanyFrame
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr ImageAddress { get; private set; }
+        public int SizeX { get; private set; }
+        public int SizeY { get; private set; }
+        public int LinePitch { get; private set; }
+        public CompanyPixelType PixelType { get; private set; }
+
+        public ParameterCompanyFrame(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            ImageAddress = owner.View.Buffer;
+            SizeX = owner.View.Width;
+            SizeY = owner.View.Height;
+            LinePitch = owner.View.Stride;
+            PixelType = CompanyPixelType.Mono8;
+        }
+    }
+
+    internal sealed class IncompleteAutomaticFrame
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr ImageAddress { get; private set; }
+        public int SizeX { get; private set; }
+        public int SizeY { get; private set; }
+        public int LinePitch { get; private set; }
+
+        public IncompleteAutomaticFrame(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            ImageAddress = owner.View.Buffer;
+            SizeX = owner.View.Width;
+            SizeY = owner.View.Height;
+            LinePitch = owner.View.Stride;
+        }
+    }
+
+    internal sealed class InvalidAutomaticFrame
+    {
+        public IntPtr ImageAddress { get; private set; }
+        public int SizeX { get; private set; }
+        public int SizeY { get; private set; }
+        public int LinePitch { get; private set; }
+        public CompanyPixelType PixelType { get; private set; }
+
+        public InvalidAutomaticFrame(int width, int height)
+        {
+            ImageAddress = IntPtr.Zero;
+            SizeX = width;
+            SizeY = height;
+            LinePitch = width;
+            PixelType = CompanyPixelType.Mono8;
         }
     }
 
