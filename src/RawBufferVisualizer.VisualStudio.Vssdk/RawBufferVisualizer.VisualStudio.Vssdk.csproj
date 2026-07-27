@@ -47,6 +47,10 @@
       <HintPath>$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Interop.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="Microsoft.VisualStudio.Debugger.InteropA">
+      <HintPath>$(VisualStudioPublicAssemblies)Microsoft.VisualStudio.Debugger.InteropA.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.15.0">
       <HintPath>$(VssdkToolsPath)Microsoft.VisualStudio.Shell.15.0.dll</HintPath>
       <Private>false</Private>

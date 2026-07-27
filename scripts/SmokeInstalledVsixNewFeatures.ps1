@@ -1,0 +1,1098 @@
+[CmdletBinding()]
+param(
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "OpenVariable", "AutomaticVisionInspector")]
+    [string]$Scenario = "BufferDoctor",
+    [ValidateSet("Debug", "Release")]
+    [string]$Configuration = "Release",
+    [string]$VisualStudioInstanceId = "",
+    [switch]$NoBuild,
+    [switch]$NoInstall,
+    [switch]$KeepVisualStudio
+)
+
+$ErrorActionPreference = "Stop"
+
+$repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
+Set-Location $repoRoot
+
+$outputRoot = Join-Path $repoRoot "artifacts\ui\installed-vsix-new-features"
+New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
+$sessionPath = Join-Path $outputRoot "$Scenario-session.json"
+$resultPath = Join-Path $outputRoot "$Scenario-installed-vsix.json"
+$failureScreenshotPath = Join-Path $outputRoot "$Scenario-failure.png"
+$activityLogPath = Join-Path $outputRoot "$Scenario-activity-log.xml"
+$userMappingPath = Join-Path $env:APPDATA "RawBufferVisualizer\type-mappings.json"
+$userMappingBackupPath = Join-Path $outputRoot ("SmartTypeMapper-user-mapping-backup-" + $PID + ".json")
+Remove-Item -LiteralPath $sessionPath, $resultPath, $failureScreenshotPath, $activityLogPath -ErrorAction SilentlyContinue
+
+function Assert-InteractiveDesktop {
+    $sessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
+    $lockScreen = Get-Process -Name LogonUI -ErrorAction SilentlyContinue |
+        Where-Object { $_.SessionId -eq $sessionId } |
+        Select-Object -First 1
+    if ($lockScreen) {
+        throw "The Windows desktop is locked. Unlock the interactive session before running the installed VSIX UI smoke test."
+    }
+}
+
+function Find-VisualStudioInstance {
+    $vswhere = @(
+        (Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"),
+        (Join-Path $env:ProgramFiles "Microsoft Visual Studio\Installer\vswhere.exe")
+    ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $vswhere) {
+        throw "vswhere.exe was not found."
+    }
+
+    $json = & $vswhere -all -format json
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($json)) {
+        throw "vswhere.exe failed."
+    }
+
+    $parsedInstances = ($json -join [Environment]::NewLine) | ConvertFrom-Json
+    $instances = @($parsedInstances | ForEach-Object { $_ })
+    if (-not [string]::IsNullOrWhiteSpace($VisualStudioInstanceId)) {
+        $selected = $instances | Where-Object { $_.instanceId -eq $VisualStudioInstanceId } | Select-Object -First 1
+        if (-not $selected) {
+            throw "Visual Studio instance was not found: $VisualStudioInstanceId"
+        }
+
+        return $selected
+    }
+
+    $selected = $instances |
+        Where-Object { $_.installationVersion -like "17.*" -and $_.isLaunchable -eq $true } |
+        Select-Object -First 1
+    if (-not $selected) {
+        throw "A launchable Visual Studio 2022 instance was not found."
+    }
+
+    $selected
+}
+
+function Wait-Until([string]$Description, [scriptblock]$Condition, [int]$TimeoutSeconds = 120, [int]$PollMilliseconds = 500) {
+    $deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    $lastError = $null
+    do {
+        try {
+            $value = & $Condition
+            if ($null -ne $value -and $value -ne $false) {
+                return $value
+            }
+        }
+        catch {
+            $lastError = $_.Exception.Message
+        }
+
+        Start-Sleep -Milliseconds $PollMilliseconds
+    } while ([DateTime]::UtcNow -lt $deadline)
+
+    if ($lastError) {
+        throw "$Description timed out. Last error: $lastError"
+    }
+
+    throw "$Description timed out."
+}
+
+if (-not ("RawBufferInstalledVsixNative" -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class RawBufferInstalledVsixNative {
+    [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, int data, UIntPtr extraInfo);
+    [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+
+    public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+    public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const uint ES_CONTINUOUS = 0x80000000;
+    public const uint ES_SYSTEM_REQUIRED = 0x00000001;
+    public const uint ES_DISPLAY_REQUIRED = 0x00000002;
+}
+'@
+}
+
+if (-not ("RawBufferInstalledVsixRot" -as [type])) {
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+
+public static class RawBufferInstalledVsixRot {
+    [DllImport("ole32.dll")]
+    private static extern int GetRunningObjectTable(int reserved, out IRunningObjectTable table);
+
+    [DllImport("ole32.dll")]
+    private static extern int CreateBindCtx(int reserved, out IBindCtx bindContext);
+
+    public static object GetDte(int processId) {
+        IRunningObjectTable table;
+        IBindCtx bindContext;
+        if (GetRunningObjectTable(0, out table) != 0 || table == null ||
+            CreateBindCtx(0, out bindContext) != 0 || bindContext == null) {
+            return null;
+        }
+
+        IEnumMoniker enumerator;
+        table.EnumRunning(out enumerator);
+        IMoniker[] monikers = new IMoniker[1];
+        while (enumerator.Next(1, monikers, IntPtr.Zero) == 0) {
+            string displayName;
+            try {
+                monikers[0].GetDisplayName(bindContext, null, out displayName);
+            }
+            catch {
+                continue;
+            }
+
+            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+                object dte;
+                table.GetObject(monikers[0], out dte);
+                return dte;
+            }
+        }
+
+        return null;
+    }
+}
+
+[ComImport]
+[Guid("00000016-0000-0000-C000-000000000046")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IRawBufferInstalledVsixMessageFilter {
+    [PreserveSig] int HandleInComingCall(int callType, IntPtr caller, int tickCount, IntPtr interfaceInfo);
+    [PreserveSig] int RetryRejectedCall(IntPtr callee, int tickCount, int rejectType);
+    [PreserveSig] int MessagePending(IntPtr callee, int tickCount, int pendingType);
+}
+
+public sealed class RawBufferInstalledVsixMessageFilter : IRawBufferInstalledVsixMessageFilter, IDisposable {
+    private IRawBufferInstalledVsixMessageFilter previous;
+
+    [DllImport("ole32.dll")]
+    private static extern int CoRegisterMessageFilter(IRawBufferInstalledVsixMessageFilter next, out IRawBufferInstalledVsixMessageFilter previous);
+
+    public static RawBufferInstalledVsixMessageFilter Register() {
+        var filter = new RawBufferInstalledVsixMessageFilter();
+        IRawBufferInstalledVsixMessageFilter previous;
+        CoRegisterMessageFilter(filter, out previous);
+        filter.previous = previous;
+        return filter;
+    }
+
+    public void Dispose() {
+        IRawBufferInstalledVsixMessageFilter ignored;
+        CoRegisterMessageFilter(previous, out ignored);
+    }
+
+    public int HandleInComingCall(int callType, IntPtr caller, int tickCount, IntPtr interfaceInfo) { return 0; }
+    public int RetryRejectedCall(IntPtr callee, int tickCount, int rejectType) { return tickCount < 30000 ? 250 : -1; }
+    public int MessagePending(IntPtr callee, int tickCount, int pendingType) { return 2; }
+}
+'@
+}
+
+Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+
+function Focus-Window([IntPtr]$Handle, [int]$Width = 1920, [int]$Height = 1040) {
+    [RawBufferInstalledVsixNative]::ShowWindow($Handle, 9) | Out-Null
+    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_TOPMOST, 20, 20, $Width, $Height, 0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::BringWindowToTop($Handle) | Out-Null
+    [RawBufferInstalledVsixNative]::SetForegroundWindow($Handle) | Out-Null
+    Start-Sleep -Milliseconds 250
+    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_NOTOPMOST, 20, 20, $Width, $Height, 0x0040) | Out-Null
+}
+
+function Capture-Window([IntPtr]$Handle, [string]$Path) {
+    Focus-Window $Handle
+    $rect = New-Object RawBufferInstalledVsixNative+RECT
+    [RawBufferInstalledVsixNative]::GetWindowRect($Handle, [ref]$rect) | Out-Null
+    $width = $rect.Right - $rect.Left
+    $height = $rect.Bottom - $rect.Top
+    if ($width -le 0 -or $height -le 0) {
+        throw "Invalid window bounds: $width x $height"
+    }
+
+    Capture-ScreenRegion -X $rect.Left -Y $rect.Top -Width $width -Height $height -Path $Path
+}
+
+function Capture-ScreenRegion([int]$X, [int]$Y, [int]$Width, [int]$Height, [string]$Path) {
+    if ($Width -le 0 -or $Height -le 0) {
+        throw "Invalid screen region: $Width x $Height"
+    }
+
+    $bitmap = New-Object Drawing.Bitmap $Width, $Height
+    $graphics = [Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CopyFromScreen($X, $Y, 0, 0, [Drawing.Size]::new($Width, $Height))
+        $bitmap.Save($Path, [Drawing.Imaging.ImageFormat]::Png)
+    }
+    finally {
+        $graphics.Dispose()
+        $bitmap.Dispose()
+    }
+}
+
+function Get-AutomationRoot([IntPtr]$Handle) {
+    $root = [System.Windows.Automation.AutomationElement]::FromHandle($Handle)
+    if (-not $root) {
+        throw "Visual Studio UI Automation root was not found."
+    }
+
+    $root
+}
+
+function Find-ElementByAutomationId([System.Windows.Automation.AutomationElement]$Root, [string]$AutomationId) {
+    $condition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+        $AutomationId)
+    $Root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $condition)
+}
+
+function Get-ElementsByControlType([System.Windows.Automation.AutomationElement]$Root, [System.Windows.Automation.ControlType]$ControlType) {
+    $condition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        $ControlType)
+    $collection = $Root.FindAll([System.Windows.Automation.TreeScope]::Descendants, $condition)
+    $elements = @()
+    for ($index = 0; $index -lt $collection.Count; $index++) {
+        $elements += $collection.Item($index)
+    }
+
+    $elements
+}
+
+function Find-TreeItem([System.Windows.Automation.AutomationElement]$Root, [string]$Name) {
+    foreach ($element in Get-ElementsByControlType $Root ([System.Windows.Automation.ControlType]::TreeItem)) {
+        if ([string]::Equals($element.Current.Name, $Name, [StringComparison]::Ordinal)) {
+            return $element
+        }
+    }
+
+    $null
+}
+
+function Get-ImageListItems([System.Windows.Automation.AutomationElement]$Root) {
+    $imageList = Find-ElementByAutomationId $Root "ImageList"
+    if (-not $imageList) {
+        return @()
+    }
+
+    Get-ElementsByControlType $imageList ([System.Windows.Automation.ControlType]::ListItem)
+}
+
+function Select-AutomationItem([System.Windows.Automation.AutomationElement]$Element) {
+    $pattern = $null
+    if ($Element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) {
+        ([System.Windows.Automation.SelectionItemPattern]$pattern).Select()
+        return
+    }
+
+    $rect = $Element.Current.BoundingRectangle
+    [RawBufferInstalledVsixNative]::SetCursorPos([int]($rect.Left + $rect.Width / 2), [int]($rect.Top + $rect.Height / 2)) | Out-Null
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+}
+
+function Select-ComboBoxItem(
+    [System.Windows.Automation.AutomationElement]$ComboBox,
+    [string]$ItemName) {
+    $expandPattern = $null
+    if (-not $ComboBox.TryGetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern, [ref]$expandPattern)) {
+        throw "Combo box '$($ComboBox.Current.AutomationId)' does not support ExpandCollapsePattern."
+    }
+
+    ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Expand()
+    $item = Wait-Until "combo-box item '$ItemName'" {
+        Get-ElementsByControlType ([System.Windows.Automation.AutomationElement]::RootElement) ([System.Windows.Automation.ControlType]::ListItem) |
+            Where-Object {
+                [string]$_.Current.Name -eq $ItemName -and
+                -not [bool]$_.Current.IsOffscreen
+            } |
+            Select-Object -First 1
+    } 10
+
+    Select-AutomationItem $item
+    Start-Sleep -Milliseconds 250
+    ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Collapse()
+}
+
+function Click-VisualizerGlyph([System.Windows.Automation.AutomationElement]$TreeItem) {
+    $rect = $TreeItem.Current.BoundingRectangle
+    if ($rect.Width -lt 80 -or $rect.Height -lt 8) {
+        throw "Variable row has invalid bounds: $($rect.Width) x $($rect.Height)"
+    }
+
+    Select-AutomationItem $TreeItem
+    $x = [int][Math]::Max($rect.Left + 20, $rect.Right - 30)
+    $y = [int]($rect.Top + $rect.Height / 2)
+    $logPath = Join-Path $outputRoot "click-visualizer-glyph.log"
+    "name=$($TreeItem.Current.Name) rect=$($rect) x=$x y=$y" | Set-Content -LiteralPath $logPath -Encoding UTF8
+    [RawBufferInstalledVsixNative]::SetCursorPos($x, $y) | Out-Null
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+}
+
+function Dismiss-DebuggerEvaluationWarning {
+    $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+    $localizedOk = [string]([char]0xD655) + [string]([char]0xC778)
+    $elements = $desktop.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    for ($index = 0; $index -lt $elements.Count; $index++) {
+        $messageElement = $elements.Item($index)
+        $name = [string]$messageElement.Current.Name
+        if ($name.IndexOf("ClrCustomVisualizerDebuggeeHost", [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
+            $name.IndexOf("DebuggerVisualizers.DebuggeeSide", [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+            continue
+        }
+
+        $window = $messageElement
+        while ($window -and $window.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
+            $window = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($window)
+        }
+
+        if ($window) {
+            foreach ($button in Get-ElementsByControlType $window ([System.Windows.Automation.ControlType]::Button)) {
+                if (@("OK", $localizedOk) -contains [string]$button.Current.Name) {
+                    $pattern = $null
+                    if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+                        ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+                    }
+                    else {
+                        $rect = $button.Current.BoundingRectangle
+                        [RawBufferInstalledVsixNative]::SetCursorPos([int]($rect.Left + $rect.Width / 2), [int]($rect.Top + $rect.Height / 2)) | Out-Null
+                        [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+                        [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+                    }
+
+                    Start-Sleep -Milliseconds 300
+                    return $true
+                }
+            }
+        }
+
+        [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+        Start-Sleep -Milliseconds 300
+        return $true
+    }
+
+    $false
+}
+
+function Invoke-Dte([int]$ProcessId, [scriptblock]$Action) {
+    $dte = Wait-Until "Visual Studio DTE" { [RawBufferInstalledVsixRot]::GetDte($ProcessId) } 120
+    $filter = [RawBufferInstalledVsixMessageFilter]::Register()
+    try {
+        & $Action $dte
+    }
+    finally {
+        $filter.Dispose()
+    }
+}
+
+function Show-RawBufferToolWindow([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $commands = $dte.GetType().InvokeMember("Commands", [Reflection.BindingFlags]::GetProperty, $null, $dte, @())
+        $commands.GetType().InvokeMember(
+            "Raise",
+            [Reflection.BindingFlags]::InvokeMethod,
+            $null,
+            $commands,
+            @("{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}", 0x0100, $null, $null)) | Out-Null
+    }
+}
+
+function Find-RawBufferToolWindowElement([IntPtr]$MainHandle) {
+    $root = Get-AutomationRoot $MainHandle
+    $elements = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
+    for ($i = 0; $i -lt $elements.Count; $i++) {
+        $e = $elements.Item($i)
+        if ($e.Current.ControlType -eq [System.Windows.Automation.ControlType]::Pane) {
+            $children = $e.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
+            for ($j = 0; $j -lt $children.Count; $j++) {
+                $c = $children.Item($j)
+                if ([string]$c.Current.Name -eq "Raw Buffer Visualizer") {
+                    return $e
+                }
+            }
+        }
+    }
+
+    return $null
+}
+
+function Show-LocalsWindow([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $dte.ExecuteCommand("Debug.Locals")
+    }
+}
+
+function Start-Debugging([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $dte.ExecuteCommand("Debug.Start")
+    }
+}
+
+function Stop-Debugging([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $dte.ExecuteCommand("Debug.StopDebugging")
+    }
+}
+
+function Close-DebugSolutionWithoutSaving([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $dte.Solution.Close($false)
+    }
+}
+
+function Invoke-BufferDoctorScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $treeItem = Wait-Until "badStrideSnapshot in Locals" { Find-TreeItem (Get-AutomationRoot $MainHandle) "badStrideSnapshot" } 60
+    Click-VisualizerGlyph $treeItem
+    Start-Sleep -Milliseconds 500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+
+    $toolRoot = Wait-Until "Raw Buffer Visualizer tool window element" { Find-RawBufferToolWindowElement $MainHandle } 30
+    if (-not $toolRoot) {
+        throw "Raw Buffer Visualizer tool window element was not found."
+    }
+
+    # Wait for the tool window to finish loading an image before looking for tabs.
+    Wait-Until "Raw Buffer Visualizer loaded" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        @(Get-ImageListItems $toolRoot).Count -gt 0
+    } 30 | Out-Null
+
+    # Prefer the compact inspector Interpret tab when the tool window is narrow.
+    $interpretTab = Wait-Until "Interpret tab" {
+        Get-ElementsByControlType $toolRoot ([System.Windows.Automation.ControlType]::TabItem) |
+            Where-Object { [string]$_.Current.Name -eq "Interpret" } |
+            Select-Object -First 1
+    } 30
+    if ($interpretTab) {
+        Select-AutomationItem $interpretTab
+        Start-Sleep -Milliseconds 300
+    }
+
+    $diagnoseButton = Wait-Until "Diagnose Buffer button" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        $byId = Find-ElementByAutomationId $toolRoot "CompactDiagnoseBufferButton"
+        if ($byId) { return $byId }
+        $byId = Find-ElementByAutomationId $toolRoot "DiagnoseBufferButton"
+        if ($byId) { return $byId }
+        Get-ElementsByControlType $toolRoot ([System.Windows.Automation.ControlType]::Button) |
+            Where-Object { [string]$_.Current.Name -eq "Diagnose" -or [string]$_.Current.Name -eq "Diagnose Buffer" } |
+            Select-Object -First 1
+    } 30
+    if (-not $diagnoseButton) {
+        throw "Diagnose Buffer button was not found by automation id or name."
+    }
+    $pattern = $null
+    if (-not $diagnoseButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+        throw "Diagnose Buffer button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+
+    function Capture-ToolWindow([string]$Path) {
+        $rect = $toolRoot.Current.BoundingRectangle
+        if ($rect.Width -le 0 -or $rect.Height -le 0) {
+            throw "Invalid tool window bounds for screen capture."
+        }
+        Capture-ScreenRegion -X $rect.Left -Y $rect.Top -Width $rect.Width -Height $rect.Height -Path $Path
+    }
+
+    $beforeCandidatesPath = Join-Path $outputRoot "buffer-doctor-before-candidates.png"
+    Start-Sleep -Milliseconds 1500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+    Capture-ToolWindow $beforeCandidatesPath
+
+    $candidateList = Wait-Until "Diagnosis candidate list" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        $byId = Find-ElementByAutomationId $toolRoot "CompactDiagnosisCandidateList"
+        if ($byId) { return $byId }
+        Find-ElementByAutomationId $toolRoot "DiagnosisCandidateList"
+    } 30
+    $items = Get-ElementsByControlType $candidateList ([System.Windows.Automation.ControlType]::ListItem)
+    if ($items.Count -eq 0) {
+        throw "No buffer diagnosis candidates were generated."
+    }
+
+    Select-AutomationItem $items[0]
+    Start-Sleep -Milliseconds 1500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+
+    $afterApplyPath = Join-Path $outputRoot "buffer-doctor-after-apply.png"
+    Capture-ToolWindow $afterApplyPath
+
+    $imageView = Find-ElementByAutomationId $toolRoot "RawBufferOpenGlImageView"
+    $bounds = $imageView.Current.BoundingRectangle
+    $centerX = [int]($bounds.Left + $bounds.Width / 2)
+    $centerY = [int]($bounds.Top + $bounds.Height / 2)
+    [RawBufferInstalledVsixNative]::SetCursorPos($centerX, $centerY) | Out-Null
+    Start-Sleep -Milliseconds 200
+
+    $pixelText = ""
+    $pixelElement = Find-ElementByAutomationId $toolRoot "PixelValueText"
+    if ($pixelElement) {
+        $pixelText = [string]$pixelElement.Current.Name
+    }
+
+    [ordered]@{
+        scenario = "BufferDoctor"
+        beforeCandidatesScreenshotPath = $beforeCandidatesPath
+        afterApplyScreenshotPath = $afterApplyPath
+        candidateCount = $items.Count
+        firstCandidateName = [string]$items[0].Current.Name
+        pixelValue = $pixelText
+    }
+}
+
+function Invoke-SmartTypeMapperScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $sourceType = "RawBufferVisualizer.VisualizerDebuggee.UnmappedCompanyFrame"
+    Show-RawBufferToolWindow $Process.Id
+    $toolRoot = Wait-Until "Raw Buffer Visualizer tool window after break" {
+        Find-RawBufferToolWindowElement $MainHandle
+    } 30
+    Focus-Window $MainHandle
+
+    $beforeState = Wait-Until "ambiguous automatic mapping candidate" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Encoding UTF8 -Raw | ConvertFrom-Json
+            $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+            if ($matches.Count -eq 1 -and
+                [bool]$matches[0].isError -and
+                [string]$matches[0].errorType -eq "MappingRequired" -and
+                [string]$matches[0].errorMessage -like "Pixel format needs one explicit mapping*" -and
+                [string]$state.activeTitle -like "*unmappedCompanyFrame*") {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 45
+
+    $candidateDocument = @($beforeState.documents | Where-Object { [string]$_.sourceType -eq $sourceType })[0]
+    $beforeMapPath = Join-Path $outputRoot "smart-type-mapper-automatic-before-map.png"
+    Capture-Window $MainHandle $beforeMapPath
+
+    $editMappingButton = Wait-Until "automatic candidate Map button" {
+        Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::Button) |
+            Where-Object {
+                [string]$_.Current.Name -eq "Map this detected image type" -and
+                -not [bool]$_.Current.IsOffscreen
+            } |
+            Select-Object -First 1
+    } 30
+    $invokePattern = $null
+    if (-not $editMappingButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Edit Mapping button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $dialog = Wait-Until "Confirm Pixel Format dialog" {
+        $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+        Get-ElementsByControlType $desktop ([System.Windows.Automation.ControlType]::Window) |
+            Where-Object { [string]$_.Current.Name -eq "Confirm Pixel Format" } |
+            Select-Object -First 1
+    } 30
+
+    $mono12MappingBox = Find-ElementByAutomationId $dialog "PixelFormatMapping_Mono12"
+    if (-not $mono12MappingBox) {
+        throw "Mono12 pixel-format mapping combo box was not found."
+    }
+    Select-ComboBoxItem $mono12MappingBox "Mono12PackedLsb"
+
+    $previewButton = Find-ElementByAutomationId $dialog "PreviewMappingButton"
+    if (-not $previewButton) {
+        throw "Preview button was not found in the mapping dialog."
+    }
+    $invokePattern = $null
+    if (-not $previewButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Preview button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $previewStatus = Wait-Until "live mapping preview" {
+        $statusElement = Find-ElementByAutomationId $dialog "MappingPreviewStatusText"
+        if ($statusElement -and [string]$statusElement.Current.Name -eq "Preview rendered from live debuggee memory.") {
+            return [string]$statusElement.Current.Name
+        }
+
+        $null
+    } 30
+
+    $dialogPath = Join-Path $outputRoot "smart-type-mapper-dialog-preview.png"
+    Capture-Window $dialog.Current.NativeWindowHandle $dialogPath
+
+    $saveButton = Find-ElementByAutomationId $dialog "SaveMappingButton"
+    if (-not $saveButton) {
+        throw "Save for This Type button was not found in the mapping dialog."
+    }
+
+    $invokePattern = $null
+    if (-not $saveButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Save button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $afterState = Wait-Until "mapped type automatic reopen" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Encoding UTF8 -Raw | ConvertFrom-Json
+            $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+            if ($matches.Count -eq 1 -and
+                -not [bool]$matches[0].isError -and
+                [string]$matches[0].pixelFormat -eq "Mono12PackedLsb" -and
+                [int]$matches[0].width -eq 640 -and
+                [int]$matches[0].height -eq 484 -and
+                [int]$matches[0].stride -eq 960 -and
+                [string]$matches[0].sourceMode -eq "live" -and
+                [bool]$matches[0].hasThumbnail) {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 45
+
+    if (-not (Test-Path -LiteralPath $userMappingPath)) {
+        throw "The user mapping file was not written."
+    }
+    $savedMapping = Get-Content -LiteralPath $userMappingPath -Encoding UTF8 -Raw
+    foreach ($expected in @("UnmappedCompanyFrame", "ImageAddress", "SizeX", "LinePitch", "PixelType", "Mono12PackedLsb")) {
+        if (-not $savedMapping.Contains($expected)) {
+            throw "Saved mapping file is missing '$expected'."
+        }
+    }
+
+    $afterMapPath = Join-Path $outputRoot "smart-type-mapper-automatic-after-reopen.png"
+    Capture-Window $MainHandle $afterMapPath
+
+    $mappedDocument = @($afterState.documents | Where-Object { [string]$_.sourceType -eq $sourceType })[0]
+    [ordered]@{
+        scenario = "SmartTypeMapper"
+        beforeMapScreenshotPath = $beforeMapPath
+        dialogScreenshotPath = $dialogPath
+        afterMapScreenshotPath = $afterMapPath
+        sourceType = $sourceType
+        candidateSummary = [string]$candidateDocument.summary
+        selectedPixelFormat = "Mono12PackedLsb"
+        previewStatus = $previewStatus
+        mappedRowName = [string]$mappedDocument.title
+        reopenedWidth = [int]$mappedDocument.width
+        reopenedHeight = [int]$mappedDocument.height
+        reopenedStride = [int]$mappedDocument.stride
+        reopenedSourceMode = [string]$mappedDocument.sourceMode
+        finalErrorCount = [int]$afterState.errorCount
+    }
+}
+
+function Invoke-AutomaticVisionInspectorScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $expectedSources = [ordered]@{
+        companyFrame = "RawBufferVisualizer.VisualizerDebuggee.CompanyFrame"
+        companyArrayFrame = "RawBufferVisualizer.VisualizerDebuggee.CompanyArrayFrame"
+        nestedCompanyFrame = "RawBufferVisualizer.VisualizerDebuggee.NestedCompanyFrame"
+    }
+
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 750
+    $scanButton = Wait-Until "Automatic Vision Inspector Scan Now button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+    } 30
+    $invokePattern = $null
+    if (-not $scanButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $beforeState = Wait-Until "Automatic Vision Inspector session state" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            foreach ($sourceType in $expectedSources.Values) {
+                $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+                if ($matches.Count -ne 1 -or [bool]$matches[0].isError) {
+                    return $null
+                }
+            }
+
+            $state
+        }
+        catch {
+            $null
+        }
+    } 60
+
+    $beforeNames = @($beforeState.documents | ForEach-Object { [string]$_.title })
+    $arrayDocument = @($beforeState.documents | Where-Object {
+        [string]$_.sourceType -eq $expectedSources.companyArrayFrame
+    })[0]
+    if ([string]$arrayDocument.sourceMode -ne "mem" -or
+        [int]$arrayDocument.width -ne 64 -or
+        [int]$arrayDocument.height -ne 48) {
+        throw "Managed array did not auto-open as the expected 64x48 in-memory image."
+    }
+
+    $beforeRepeatedScanStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    Start-Sleep -Milliseconds 1000
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $afterState = Wait-Until "Automatic Vision Inspector repeated-scan state" {
+        if (-not (Test-Path -LiteralPath $sessionPath) -or
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $beforeRepeatedScanStamp) {
+            return $null
+        }
+
+        try {
+            Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+        }
+        catch {
+            $null
+        }
+    } 30
+
+    foreach ($entry in $expectedSources.GetEnumerator()) {
+        $matches = @($afterState.documents | Where-Object { [string]$_.sourceType -eq [string]$entry.Value })
+        if ($matches.Count -ne 1) {
+            throw "Repeated scans accumulated or lost $($entry.Key). Expected 1 row, found $($matches.Count)."
+        }
+    }
+    $afterNames = @($afterState.documents | ForEach-Object { [string]$_.title })
+
+    $capturePath = Join-Path $outputRoot "automatic-vision-inspector.png"
+    Capture-Window $MainHandle $capturePath
+
+    [ordered]@{
+        scenario = "AutomaticVisionInspector"
+        screenshotPath = $capturePath
+        rowsBeforeRepeatedScan = $beforeNames
+        rowsAfterRepeatedScan = $afterNames
+        managedArrayOpened = $true
+        duplicateFree = $true
+    }
+}
+
+function Invoke-OpenVariableScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $treeItem = Wait-Until "companyFrameList in Locals" { Find-TreeItem (Get-AutomationRoot $MainHandle) "companyFrameList" } 60
+    Click-VisualizerGlyph $treeItem
+    Start-Sleep -Milliseconds 500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+
+    # Wait for the docked window to load the error row.
+    Wait-Until "unsupported type error row" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        $items = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
+        ($items | Where-Object { [string]$_.Current.Name -like "*CompanyFrame*" } | Select-Object -First 1) -ne $null
+    } 30 | Out-Null
+
+    # Open the context menu on the image list and select Open Variable.
+    $imageList = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ImageList"
+    Select-AutomationItem $imageList
+    Start-Sleep -Milliseconds 300
+    [System.Windows.Forms.SendKeys]::SendWait("+{F10}")
+    Start-Sleep -Milliseconds 500
+
+    $openVariableItem = $null
+    $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+    $openVariableItem = Get-ElementsByControlType $desktop ([System.Windows.Automation.ControlType]::MenuItem) |
+        Where-Object { [string]$_.Current.Name -eq "Open Variable..." } |
+        Select-Object -First 1
+
+    if (-not $openVariableItem) {
+        throw "Open Variable... menu item was not found."
+    }
+
+    $pattern = $null
+    if (-not $openVariableItem.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+        throw "Open Variable menu item does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+
+    $dialog = Wait-Until "Open Variable dialog" {
+        $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+        Get-ElementsByControlType $desktop ([System.Windows.Automation.ControlType]::Window) |
+            Where-Object { [string]$_.Current.Name -eq "Open Variable" } |
+            Select-Object -First 1
+    } 30
+
+    $expressionBox = Find-ElementByAutomationId $dialog "OpenVariableExpressionBox"
+    if (-not $expressionBox) {
+        $expressionBox = (Get-ElementsByControlType $dialog ([System.Windows.Automation.ControlType]::Edit) | Select-Object -First 1)
+    }
+
+    if (-not $expressionBox) {
+        throw "Expression box was not found in Open Variable dialog."
+    }
+
+    $expressionBox.SetFocus() | Out-Null
+    [System.Windows.Forms.SendKeys]::SendWait("companyFrame")
+    Start-Sleep -Milliseconds 200
+
+    $dialogPath = Join-Path $outputRoot "open-variable-dialog.png"
+    Capture-Window $dialog.Current.NativeWindowHandle $dialogPath
+
+    $openButton = Find-ElementByAutomationId $dialog "OpenVariableOpenButton"
+    if (-not $openButton) {
+        $openButton = (Get-ElementsByControlType $dialog ([System.Windows.Automation.ControlType]::Button) |
+            Where-Object { [string]$_.Current.Name -eq "Open" } |
+            Select-Object -First 1)
+    }
+
+    if (-not $openButton) {
+        throw "Open button was not found in Open Variable dialog."
+    }
+
+    $pattern = $null
+    if (-not $openButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+        throw "Open button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+
+    Start-Sleep -Milliseconds 1000
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+
+    $afterOpenPath = Join-Path $outputRoot "open-variable-after-open.png"
+    Capture-Window $MainHandle $afterOpenPath
+
+    [ordered]@{
+        scenario = "OpenVariable"
+        dialogScreenshotPath = $dialogPath
+        afterOpenScreenshotPath = $afterOpenPath
+    }
+}
+
+Assert-InteractiveDesktop
+$executionState = [RawBufferInstalledVsixNative]::ES_CONTINUOUS -bor
+    [RawBufferInstalledVsixNative]::ES_SYSTEM_REQUIRED -bor
+    [RawBufferInstalledVsixNative]::ES_DISPLAY_REQUIRED
+$vsInstance = Find-VisualStudioInstance
+$devenvCandidate = [string]$vsInstance.productPath
+if ([string]::IsNullOrWhiteSpace($devenvCandidate)) {
+    $devenvCandidate = Join-Path ([string]$vsInstance.installationPath) "Common7\IDE\devenv.exe"
+}
+if (-not (Test-Path -LiteralPath $devenvCandidate)) {
+    throw "Visual Studio executable was not found: $devenvCandidate"
+}
+$devenvPath = (Resolve-Path -LiteralPath $devenvCandidate).Path
+$sampleProject = Join-Path $repoRoot "samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj"
+$debuggeePath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualizerDebuggee\Debug\net472\RawBufferVisualizer.VisualizerDebuggee.exe"
+
+if (-not $NoInstall) {
+    $installArguments = @(
+        "-ExecutionPolicy", "Bypass",
+        "-File", (Join-Path $repoRoot "scripts\Install-VisualStudioExtension.ps1"),
+        "-Configuration", $Configuration,
+        "-Framework", "net472",
+        "-ViewerFramework", "net472",
+        "-VisualStudioInstanceId", [string]$vsInstance.instanceId,
+        "-Reinstall"
+    )
+    if ($NoBuild) {
+        $installArguments += "-NoBuild"
+    }
+
+    $install = Start-Process -FilePath "powershell" -ArgumentList $installArguments -Wait -PassThru -WindowStyle Hidden
+    if ($install.ExitCode -ne 0) {
+        throw "VSIX installation failed with exit code $($install.ExitCode)."
+    }
+}
+
+if (-not $NoBuild) {
+    & dotnet build $sampleProject -c Debug
+    if ($LASTEXITCODE -ne 0) {
+        throw "VisualizerDebuggee build failed with exit code $LASTEXITCODE."
+    }
+}
+
+if (-not (Test-Path -LiteralPath $debuggeePath)) {
+    throw "VisualizerDebuggee was not found: $debuggeePath"
+}
+$debuggeePath = (Resolve-Path -LiteralPath $debuggeePath).Path
+
+$testStartedUtc = [DateTime]::UtcNow
+$visualStudio = $null
+$mainHandle = [IntPtr]::Zero
+$completed = $false
+$executionStateActive = $false
+$debuggingStopped = $false
+$userMappingIsolated = $false
+$userMappingExisted = $false
+
+$scenarioArgument = switch ($Scenario) {
+    "BufferDoctor" { "--buffer-doctor-debug" }
+    "SmartTypeMapper" { "--smart-type-mapper-fallback-debug" }
+    "OpenVariable" { "--smart-type-mapper-debug" }
+    "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
+    default { "--buffer-doctor-debug" }
+}
+
+try {
+    if ($Scenario -eq "SmartTypeMapper") {
+        $userMappingIsolated = $true
+        $userMappingExisted = Test-Path -LiteralPath $userMappingPath
+        if ($userMappingExisted) {
+            Copy-Item -LiteralPath $userMappingPath -Destination $userMappingBackupPath -Force
+        }
+        Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
+    }
+
+    [RawBufferInstalledVsixNative]::SetThreadExecutionState($executionState) | Out-Null
+    $executionStateActive = $true
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $devenvPath
+    $psi.WorkingDirectory = Split-Path -Parent $debuggeePath
+    $psi.UseShellExecute = $false
+    $psi.EnvironmentVariables["RAWBUFFERVISUALIZER_DOCKED_SESSION_JSON"] = $sessionPath
+    $psi.Arguments = @(
+        "/NoSplash",
+        "/Log", "`"$activityLogPath`"",
+        "/debugexe", "`"$debuggeePath`"",
+        $scenarioArgument
+    ) -join " "
+    $visualStudio = [Diagnostics.Process]::Start($psi)
+
+    $mainHandle = Wait-Until "Visual Studio 2022 main window" {
+        $visualStudio.Refresh()
+        if ($visualStudio.HasExited) {
+            throw "Visual Studio exited with code $($visualStudio.ExitCode)."
+        }
+
+        if ($visualStudio.MainWindowHandle -ne 0 -and $visualStudio.MainWindowTitle -match "VisualizerDebuggee") {
+            $visualStudio.MainWindowHandle
+        }
+        else {
+            $null
+        }
+    } 180
+
+    Focus-Window $mainHandle 1920 1040
+    Show-RawBufferToolWindow $visualStudio.Id
+    Start-Sleep -Milliseconds 1500
+    $toolElement = Wait-Until "Raw Buffer Visualizer tool window element" { Find-RawBufferToolWindowElement $mainHandle } 30
+    if (-not $toolElement) {
+        throw "Raw Buffer Visualizer tool window element was not found."
+    }
+    Start-Debugging $visualStudio.Id
+
+    Wait-Until "debuggee break" {
+        $root = Get-AutomationRoot $mainHandle
+        if ($Scenario -eq "BufferDoctor") {
+            (Find-TreeItem $root "badStrideSnapshot") -ne $null
+        }
+        elseif ($Scenario -eq "SmartTypeMapper") {
+            (Find-TreeItem $root "unmappedCompanyFrame") -ne $null
+        }
+        else {
+            (Find-TreeItem $root "companyFrameList") -ne $null
+        }
+    } 90 | Out-Null
+
+    Show-LocalsWindow $visualStudio.Id
+
+    $scenarioResult = switch ($Scenario) {
+        "BufferDoctor" { Invoke-BufferDoctorScenario $visualStudio $mainHandle }
+        "SmartTypeMapper" { Invoke-SmartTypeMapperScenario $visualStudio $mainHandle }
+        "OpenVariable" { Invoke-OpenVariableScenario $visualStudio $mainHandle }
+        "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
+    }
+
+    Stop-Debugging $visualStudio.Id
+    $debuggingStopped = $true
+
+    $result = [ordered]@{
+        passed = $true
+        startedUtc = $testStartedUtc.ToString("o")
+        scenario = $Scenario
+        visualStudio = [ordered]@{
+            instanceId = [string]$vsInstance.instanceId
+            version = [string]$vsInstance.installationVersion
+            processId = $visualStudio.Id
+        }
+        result = $scenarioResult
+        resultPath = $resultPath
+    }
+    $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $resultPath -Encoding UTF8
+    $completed = $true
+    Get-Content -LiteralPath $resultPath
+}
+catch {
+    if ($mainHandle -ne [IntPtr]::Zero) {
+        try { Capture-Window $mainHandle $failureScreenshotPath } catch { }
+    }
+    throw
+}
+finally {
+    if (-not $KeepVisualStudio) {
+        if ($visualStudio -and -not $visualStudio.HasExited) {
+            if (-not $debuggingStopped) {
+                try { Stop-Debugging $visualStudio.Id } catch { }
+            }
+            try { Close-DebugSolutionWithoutSaving $visualStudio.Id } catch { }
+            try { $visualStudio.CloseMainWindow() | Out-Null } catch { }
+            if (-not $visualStudio.WaitForExit(15000)) {
+                Stop-Process -Id $visualStudio.Id -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    if ($executionStateActive) {
+        [RawBufferInstalledVsixNative]::SetThreadExecutionState([RawBufferInstalledVsixNative]::ES_CONTINUOUS) | Out-Null
+    }
+
+    if ($userMappingIsolated) {
+        if ($userMappingExisted -and (Test-Path -LiteralPath $userMappingBackupPath)) {
+            $mappingDirectory = Split-Path -Parent $userMappingPath
+            New-Item -ItemType Directory -Path $mappingDirectory -Force | Out-Null
+            Copy-Item -LiteralPath $userMappingBackupPath -Destination $userMappingPath -Force
+            Remove-Item -LiteralPath $userMappingBackupPath -Force
+        }
+        else {
+            Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+if (-not $completed) {
+    throw "Installed VSIX new-features smoke did not complete."
+}

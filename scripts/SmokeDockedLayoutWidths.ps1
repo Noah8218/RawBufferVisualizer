@@ -51,6 +51,17 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Drawing
 
+$interopCandidates = @(
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll",
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Professional\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll",
+    "${env:ProgramFiles}\Microsoft Visual Studio\2022\Community\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll"
+)
+$interopPath = $interopCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if ([string]::IsNullOrWhiteSpace($interopPath)) {
+    throw "Microsoft.VisualStudio.Interop.dll was not found."
+}
+[Reflection.Assembly]::LoadFrom($interopPath) | Out-Null
+
 if (-not ("RawBufferDockedLayoutNative" -as [type])) {
     Add-Type @'
 using System;

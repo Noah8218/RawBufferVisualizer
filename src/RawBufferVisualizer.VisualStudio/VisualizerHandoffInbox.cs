@@ -1,10 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
 using RawBufferVisualizer.Core;
+using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio
 {
@@ -56,7 +58,10 @@ namespace RawBufferVisualizer.VisualStudio
             string errorMessage,
             string? errorType = null,
             string? errorDetails = null,
-            string? handoffId = null)
+            string? handoffId = null,
+            List<VisualizerMemberInventoryItem>? memberInventory = null,
+            string? itemAssemblyName = null,
+            int debuggeeProcessId = 0)
         {
             if (string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -73,7 +78,14 @@ namespace RawBufferVisualizer.VisualStudio
                     errorType ?? string.Empty,
                     errorDetails ?? string.Empty,
                     handoffId ?? string.Empty,
-                    false));
+                    false,
+                    0,
+                    0,
+                    0,
+                    null,
+                    memberInventory,
+                    itemAssemblyName,
+                    debuggeeProcessId));
         }
 
         public static string WriteLiveMemoryRequest(
@@ -190,7 +202,10 @@ namespace RawBufferVisualizer.VisualStudio
                     loaded.LiveProcessId,
                     loaded.LiveBufferAddress,
                     loaded.LiveBufferLength,
-                    liveDescriptor);
+                    liveDescriptor,
+                    loaded.MemberInventory,
+                    loaded.ItemAssemblyName,
+                    loaded.DebuggeeProcessId);
             }
         }
 
@@ -243,7 +258,10 @@ namespace RawBufferVisualizer.VisualStudio
                 LiveStride = request.LiveDescriptor == null ? 0 : request.LiveDescriptor.Stride,
                 LivePixelFormat = request.LiveDescriptor == null ? 0 : (int)request.LiveDescriptor.PixelFormat,
                 LiveValidBits = request.LiveDescriptor == null ? 0 : request.LiveDescriptor.ValidBits,
-                LiveByteOrder = request.LiveDescriptor == null ? 0 : (int)request.LiveDescriptor.ByteOrder
+                LiveByteOrder = request.LiveDescriptor == null ? 0 : (int)request.LiveDescriptor.ByteOrder,
+                MemberInventory = request.MemberInventory,
+                ItemAssemblyName = request.ItemAssemblyName,
+                DebuggeeProcessId = request.DebuggeeProcessId
             };
 
             using (var stream = new MemoryStream())
@@ -269,6 +287,9 @@ namespace RawBufferVisualizer.VisualStudio
         public long LiveBufferAddress { get; private set; }
         public long LiveBufferLength { get; private set; }
         public RawImageDescriptor? LiveDescriptor { get; private set; }
+        public List<VisualizerMemberInventoryItem>? MemberInventory { get; private set; }
+        public string ItemAssemblyName { get; private set; }
+        public int DebuggeeProcessId { get; private set; }
 
         public bool IsError
         {
@@ -319,7 +340,10 @@ namespace RawBufferVisualizer.VisualStudio
             int liveProcessId = 0,
             long liveBufferAddress = 0,
             long liveBufferLength = 0,
-            RawImageDescriptor? liveDescriptor = null)
+            RawImageDescriptor? liveDescriptor = null,
+            List<VisualizerMemberInventoryItem>? memberInventory = null,
+            string? itemAssemblyName = null,
+            int debuggeeProcessId = 0)
         {
             var hasLiveMemory = liveProcessId > 0
                 && liveBufferAddress != 0
@@ -344,6 +368,9 @@ namespace RawBufferVisualizer.VisualStudio
             LiveBufferAddress = liveBufferAddress;
             LiveBufferLength = liveBufferLength;
             LiveDescriptor = liveDescriptor == null ? null : liveDescriptor.Clone();
+            MemberInventory = memberInventory;
+            ItemAssemblyName = itemAssemblyName ?? string.Empty;
+            DebuggeeProcessId = debuggeeProcessId;
         }
     }
 
@@ -400,5 +427,14 @@ namespace RawBufferVisualizer.VisualStudio
 
         [DataMember(Name = "liveByteOrder", EmitDefaultValue = false)]
         public int LiveByteOrder { get; set; }
+
+        [DataMember(Name = "memberInventory", EmitDefaultValue = false)]
+        public List<VisualizerMemberInventoryItem>? MemberInventory { get; set; }
+
+        [DataMember(Name = "itemAssemblyName", EmitDefaultValue = false)]
+        public string? ItemAssemblyName { get; set; }
+
+        [DataMember(Name = "debuggeeProcessId", EmitDefaultValue = false)]
+        public int DebuggeeProcessId { get; set; }
     }
 }

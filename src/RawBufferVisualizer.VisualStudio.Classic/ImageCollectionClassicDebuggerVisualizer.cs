@@ -76,7 +76,10 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                             visualStudioProcessId,
                             result.DisplayName,
                             result.SourceType,
-                            result.ErrorMessage);
+                            result.ErrorMessage,
+                            memberInventory: result.MemberInventory,
+                            itemAssemblyName: result.ItemAssemblyName,
+                            debuggeeProcessId: result.DebuggeeProcessId);
                         continue;
                     }
 

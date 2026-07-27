@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio;
+using Microsoft.VisualStudio.Debugger.Interop;
 using Microsoft.VisualStudio.Shell;
 using Microsoft.VisualStudio.Shell.Interop;
 using RawBufferVisualizer.VisualStudio;
@@ -28,11 +29,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         Width = 1000,
         Height = 700)]
     [Guid(PackageGuidString)]
-    public sealed class RawBufferVisualizerPackage : AsyncPackage
+    public sealed class RawBufferVisualizerPackage : AsyncPackage, IDebugEventCallback2
     {
         public const string PackageGuidString = "c15cc508-0fef-49bb-9478-4d2fdf9f87d2";
         public const string CommandSetGuidString = "8e7bc2db-12a4-4f45-8f5a-38c1846a0f26";
         public const int ShowToolWindowCommandId = 0x0100;
+        public const int ScanLocalsCommandId = 0x0101;
 
         private static readonly Guid CommandSetGuid = new Guid(CommandSetGuidString);
         private static readonly Guid RawBufferToolWindowGuid = new Guid(RawBufferToolWindow.WindowGuidString);
@@ -46,6 +48,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private Timer? _inboxPollTimer;
         private TimeSpan _inboxPollInterval = InboxPollMinInterval;
         private int _inboxPollActive;
+        private EnvDTE.DebuggerEvents? _debuggerEvents;
+        private IVsDebugger? _vsDebugger;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -70,14 +74,75 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 WriteAutomationLog("RegisterCommands error " + ex);
             }
 
+            try
+            {
+                var dte = await GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE80.DTE2;
+                if (dte != null)
+                {
+                    _debuggerEvents = dte.Events.DebuggerEvents;
+                    _debuggerEvents.OnEnterBreakMode += OnEnterBreakMode;
+                    _debuggerEvents.OnEnterRunMode += OnEnterRunMode;
+                    WriteAutomationLog("DebuggerEvents subscribed");
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("DebuggerEvents subscribe error " + ex);
+            }
+
+            try
+            {
+                _vsDebugger = await GetServiceAsync(typeof(SVsShellDebugger)) as IVsDebugger;
+                if (_vsDebugger != null)
+                {
+                    ErrorHandler.ThrowOnFailure(_vsDebugger.AdviseDebugEventCallback(this));
+                    WriteAutomationLog("Native debugger callback subscribed");
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("Native debugger callback subscribe error " + ex);
+            }
+
             ScheduleNextInboxPoll(ScanInbox());
             WriteAutomationLog("InitializeAsync end");
         }
 
         protected override void Dispose(bool disposing)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             if (disposing)
             {
+                if (_debuggerEvents != null)
+                {
+                    try
+                    {
+                        _debuggerEvents.OnEnterBreakMode -= OnEnterBreakMode;
+                        _debuggerEvents.OnEnterRunMode -= OnEnterRunMode;
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteAutomationLog("DebuggerEvents unsubscribe error " + ex);
+                    }
+
+                    _debuggerEvents = null;
+                }
+
+                if (_vsDebugger != null)
+                {
+                    try
+                    {
+                        _vsDebugger.UnadviseDebugEventCallback(this);
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteAutomationLog("Native debugger callback unsubscribe error " + ex);
+                    }
+
+                    _vsDebugger = null;
+                }
+
+                VisualStudioDebugFrameContext.SetCurrentThread(null);
                 _inboxPollTimer?.Dispose();
                 _inboxPollTimer = null;
                 _watcher?.Dispose();
@@ -113,7 +178,78 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             var commandId = new CommandID(CommandSetGuid, ShowToolWindowCommandId);
             commandService.AddCommand(new OleMenuCommand(ExecuteShowToolWindowCommand, commandId));
+
+            var scanCommandId = new CommandID(CommandSetGuid, ScanLocalsCommandId);
+            commandService.AddCommand(new OleMenuCommand(ExecuteScanLocalsCommand, scanCommandId));
             WriteAutomationLog("Command registered");
+        }
+
+        private void ExecuteScanLocalsCommand(object sender, EventArgs e)
+        {
+            _ = JoinableTaskFactory.RunAsync(async delegate
+            {
+                try
+                {
+                    WriteAutomationLog("ScanLocals command invoked");
+                    var window = await ShowRawBufferToolWindowAsync(DisposalToken);
+                    await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
+                    window.ScanLocals();
+                }
+                catch (Exception ex)
+                {
+                    WriteAutomationLog("ScanLocals command error " + ex);
+                }
+            });
+        }
+
+        private void OnEnterBreakMode(EnvDTE.dbgEventReason reason, ref EnvDTE.dbgExecutionAction executionAction)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                WriteAutomationLog("Break mode entered");
+                var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
+                if (window == null)
+                {
+                    WriteAutomationLog("Break mode scan skipped because the Tool Window has not been opened.");
+                    return;
+                }
+
+                if (!window.IsAutoInspectEnabled)
+                {
+                    WriteAutomationLog("Break mode scan skipped because Auto Inspect is paused.");
+                    return;
+                }
+
+                window.ScheduleAutomaticScan();
+                WriteAutomationLog("Break mode scan scheduled");
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("Break mode scan error " + ex);
+            }
+        }
+
+        private void OnEnterRunMode(EnvDTE.dbgEventReason reason)
+        {
+            VisualStudioDebugFrameContext.SetCurrentThread(null);
+        }
+
+        public int Event(
+            IDebugEngine2 engine,
+            IDebugProcess2 process,
+            IDebugProgram2 program,
+            IDebugThread2 thread,
+            IDebugEvent2 debugEvent,
+            ref Guid eventInterfaceGuid,
+            uint attributes)
+        {
+            if (thread != null)
+            {
+                VisualStudioDebugFrameContext.SetCurrentThread(thread);
+            }
+
+            return VSConstants.S_OK;
         }
 
         private void ExecuteShowToolWindowCommand(object sender, EventArgs e)
@@ -250,7 +386,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private static void WriteAutomationLog(string message)
+        internal static void WriteAutomationLog(string message)
         {
             var metricsPath = Environment.GetEnvironmentVariable("RAWBUFFERVISUALIZER_DOCKED_PERF_JSON");
             try

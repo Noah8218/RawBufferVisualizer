@@ -184,10 +184,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                             visualStudioProcessId,
                             item == null || string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName,
-                            summary.SourceType,
+                            item == null || string.IsNullOrWhiteSpace(item.ItemTypeName) ? summary.SourceType : item.ItemTypeName,
                             item == null || string.IsNullOrWhiteSpace(item.Error)
                                 ? "Collection item returned no metadata."
-                                : item.Error));
+                                : item.Error,
+                            memberInventory: item == null ? null : item.MemberInventory,
+                            itemAssemblyName: item == null ? summary.SourceType : item.ItemAssemblyName,
+                            debuggeeProcessId: item == null ? 0 : item.DebuggeeProcessId));
                         continue;
                     }
 

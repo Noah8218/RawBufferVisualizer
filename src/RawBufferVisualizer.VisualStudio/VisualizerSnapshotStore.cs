@@ -38,9 +38,10 @@ namespace RawBufferVisualizer.VisualStudio
             for (var index = 0; index < summary.ItemCount; index++)
             {
                 var displayName = "[" + index.ToString(CultureInfo.InvariantCulture) + "]";
+                VisualizerCollectionItemMetadata? item = null;
                 try
                 {
-                    var item = requestMetadata(index);
+                    item = requestMetadata(index);
                     if (item != null && !string.IsNullOrWhiteSpace(item.DisplayName))
                     {
                         displayName = item.DisplayName;
@@ -66,8 +67,11 @@ namespace RawBufferVisualizer.VisualStudio
                 {
                     results.Add(VisualizerStoredSnapshot.CreateError(
                         displayName,
-                        summary.SourceType,
-                        ex.Message));
+                        item == null || string.IsNullOrWhiteSpace(item.ItemTypeName) ? summary.SourceType : item.ItemTypeName,
+                        ex.Message,
+                        item == null ? null : item.MemberInventory,
+                        item == null ? string.Empty : item.ItemAssemblyName,
+                        item == null ? 0 : item.DebuggeeProcessId));
                 }
             }
 
@@ -199,18 +203,27 @@ namespace RawBufferVisualizer.VisualStudio
             string displayName,
             string sourceType,
             string metadataPath,
-            string errorMessage)
+            string errorMessage,
+            List<VisualizerMemberInventoryItem>? memberInventory,
+            string itemAssemblyName,
+            int debuggeeProcessId)
         {
             DisplayName = displayName ?? string.Empty;
             SourceType = sourceType ?? string.Empty;
             MetadataPath = metadataPath ?? string.Empty;
             ErrorMessage = errorMessage ?? string.Empty;
+            MemberInventory = memberInventory;
+            ItemAssemblyName = itemAssemblyName ?? string.Empty;
+            DebuggeeProcessId = debuggeeProcessId;
         }
 
         public string DisplayName { get; }
         public string SourceType { get; }
         public string MetadataPath { get; }
         public string ErrorMessage { get; }
+        public List<VisualizerMemberInventoryItem>? MemberInventory { get; }
+        public string ItemAssemblyName { get; }
+        public int DebuggeeProcessId { get; }
 
         public bool IsError
         {
@@ -222,15 +235,25 @@ namespace RawBufferVisualizer.VisualStudio
             string sourceType,
             string metadataPath)
         {
-            return new VisualizerStoredSnapshot(displayName, sourceType, metadataPath, string.Empty);
+            return new VisualizerStoredSnapshot(displayName, sourceType, metadataPath, string.Empty, null, string.Empty, 0);
         }
 
         public static VisualizerStoredSnapshot CreateError(
             string displayName,
             string sourceType,
-            string errorMessage)
+            string errorMessage,
+            List<VisualizerMemberInventoryItem>? memberInventory = null,
+            string? itemAssemblyName = null,
+            int debuggeeProcessId = 0)
         {
-            return new VisualizerStoredSnapshot(displayName, sourceType, string.Empty, errorMessage);
+            return new VisualizerStoredSnapshot(
+                displayName,
+                sourceType,
+                string.Empty,
+                errorMessage,
+                memberInventory,
+                itemAssemblyName ?? string.Empty,
+                debuggeeProcessId);
         }
     }
 }

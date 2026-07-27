@@ -16,11 +16,34 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             Caption = "Raw Buffer Visualizer";
             _control = new RawBufferToolWindowControl();
             Content = _control;
+
+            var dte = Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE80.DTE2;
+            if (dte != null)
+            {
+                _control.SetDte(dte);
+            }
         }
 
         public void OpenHandoffRequest(string requestPath)
         {
             _control.OpenHandoffRequest(requestPath);
+        }
+
+        public void ScanLocals()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _control.ScanLocals();
+        }
+
+        public void ScheduleAutomaticScan()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _control.ScheduleAutomaticScan();
+        }
+
+        public bool IsAutoInspectEnabled
+        {
+            get { return _control.IsAutoInspectEnabled; }
         }
     }
 }

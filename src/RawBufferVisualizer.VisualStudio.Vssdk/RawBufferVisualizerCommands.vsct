@@ -18,6 +18,12 @@
           <ButtonText>Raw Buffer Visualizer</ButtonText>
         </Strings>
       </Button>
+      <Button guid="RawBufferVisualizerCommandSet" id="ScanLocalsCommand" priority="0x0110" type="Button">
+        <Parent guid="RawBufferVisualizerCommandSet" id="RawBufferVisualizerGroup" />
+        <Strings>
+          <ButtonText>Raw Buffer Visualizer: Scan Current Frame</ButtonText>
+        </Strings>
+      </Button>
     </Buttons>
   </Commands>
 
@@ -26,6 +32,7 @@
     <GuidSymbol name="RawBufferVisualizerCommandSet" value="{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}">
       <IDSymbol name="RawBufferVisualizerGroup" value="0x1020" />
       <IDSymbol name="ShowToolWindowCommand" value="0x0100" />
+      <IDSymbol name="ScanLocalsCommand" value="0x0101" />
     </GuidSymbol>
   </Symbols>
 </CommandTable>

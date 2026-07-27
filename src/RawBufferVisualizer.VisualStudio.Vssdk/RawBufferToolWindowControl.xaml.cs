@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
@@ -6,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -13,10 +15,12 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Microsoft.Win32;
+using Microsoft.VisualStudio.Shell;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.OpenGlCanvas;
 using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio;
+using RawBufferVisualizer.VisualStudio.ObjectSource;
 using Line = System.Windows.Shapes.Line;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
@@ -25,6 +29,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     {
         private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
         private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
+        private const int MaxManagedArrayDebuggerElements = 256;
         private const int HistogramMaxSampleDimension = 1024;
 
         private enum LayoutMode
@@ -44,6 +49,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool _switchingDocument;
         private bool _applyingLinkedView;
         private bool _automationProbeRunning;
+        private bool _automaticScanPending;
+        private bool _automaticScanRunning;
         private RawOpenGlViewState? _linkedViewState;
         private ImageDocument? _compareA;
         private ImageDocument? _compareB;
@@ -58,6 +65,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private double _lastCompactInspectorHeight = 168;
         private string _lastFramebufferCapturePath = string.Empty;
         private string _lastFramebufferCaptureError = string.Empty;
+        private CancellationTokenSource? _diagnosisCancellation;
+        private readonly List<string> _recentExpressions = new List<string>();
+        private readonly AutomaticVisionInspector _automaticVisionInspector = new AutomaticVisionInspector();
+        private EnvDTE80.DTE2? _dte;
+
+        public void SetDte(EnvDTE80.DTE2 dte)
+        {
+            _dte = dte;
+        }
+
+        public bool IsAutoInspectEnabled
+        {
+            get { return AutoInspectBox == null || AutoInspectBox.IsChecked == true; }
+        }
 
         public RawBufferToolWindowControl()
         {
@@ -71,6 +92,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
             InterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
             InterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
+            CompactInterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
+            CompactInterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
             _performanceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _performanceTimer.Tick += delegate { UpdatePerformanceText(); };
             _performanceTimer.Start();
@@ -78,6 +101,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _blinkTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _blinkTimer.Tick += BlinkTimer_Tick;
             Unloaded += delegate { _blinkTimer.Stop(); };
+            Unloaded += delegate { CancelDiagnosis(); };
             ClearPixelStatus();
             UpdateZoomStatus();
             UpdatePerformanceText();
@@ -87,11 +111,291 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ApplyResponsiveLayout(ActualWidth);
         }
 
+        public void ScanLocals()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (_dte == null || _dte.Debugger == null)
+            {
+                SetAutomaticScanStatus("Break in the debugger to scan the current frame.");
+                return;
+            }
+
+            if (_dte.Debugger.CurrentMode != EnvDTE.dbgDebugMode.dbgBreakMode)
+            {
+                SetAutomaticScanStatus("Automatic inspection waits for Break Mode.");
+                return;
+            }
+
+            SetAutomaticScanStatus("Scanning current stack frame...");
+            AutomaticVisionScanResult scan;
+            try
+            {
+                scan = _automaticVisionInspector.Scan(_dte.Debugger);
+            }
+            catch (Exception ex)
+            {
+                SetAutomaticScanStatus("Scan failed: " + ex.Message);
+                return;
+            }
+
+            RawBufferVisualizerPackage.WriteAutomationLog(
+                "Automatic scan inferred " + scan.Inspections.Count.ToString(CultureInfo.InvariantCulture) + " candidate(s)");
+            RemoveAutomaticInspectionDocuments();
+            AutomaticFrameText.Text = string.IsNullOrWhiteSpace(scan.FrameDisplayName)
+                ? "Current stack frame"
+                : scan.FrameDisplayName;
+
+            var opened = 0;
+            var needsMapping = 0;
+            var hidden = 0;
+            _automaticScanRunning = true;
+            for (var i = 0; i < scan.Inspections.Count; i++)
+            {
+                var inspection = scan.Inspections[i];
+                var mapping = inspection.Mapping ?? inspection.CreateTransientMapping();
+                var dataTypeName = inspection.GetDataTypeName();
+                var isArrayBacked = dataTypeName.EndsWith("[]", StringComparison.Ordinal);
+                var canOpen = inspection.UsesSavedMapping || inspection.Inference.CanAutoOpen;
+                if (canOpen)
+                {
+                    RawBufferVisualizerPackage.WriteAutomationLog(
+                        "Automatic scan opening " + inspection.RootExpression);
+                    string openError;
+                    var openedSuccessfully = isArrayBacked
+                        ? TryOpenMappedArray(
+                            _dte.Debugger,
+                            scan.FrameDisplayName,
+                            inspection.RootExpression,
+                            mapping,
+                            inspection.RuntimeTypeName,
+                            dataTypeName,
+                            inspection.UsesSavedMapping ? (RawPixelFormat?)null : inspection.Inference.PixelFormat,
+                            out openError,
+                            inspection.StableKey)
+                        : TryOpenMappedVariable(
+                            _dte.Debugger,
+                            inspection.RootExpression,
+                            mapping,
+                            inspection.RuntimeTypeName,
+                            out openError,
+                            inspection.StableKey);
+                    if (openedSuccessfully)
+                    {
+                        RawBufferVisualizerPackage.WriteAutomationLog(
+                            "Automatic scan opened " + inspection.RootExpression);
+                        var document = FindHandoffDocument(inspection.StableKey);
+                        if (document != null)
+                        {
+                            document.SetAutomaticInspection(
+                                inspection.UsesSavedMapping ? 100 : inspection.Inference.ConfidenceScore,
+                                inspection.GetMembersSummary(),
+                                inspection.UsesSavedMapping
+                                    ? "Saved type mapping applied and live memory validated."
+                                    : "Member inference and live memory descriptor validation passed.",
+                                inspection.Inventory,
+                                inspection.AssemblyName,
+                                GetDebuggeeProcessId(_dte.Debugger),
+                                false,
+                                mapping.Members);
+                            ImageList.Items.Refresh();
+                            UpdateAutomaticInspectionPanel(document);
+                        }
+
+                        opened++;
+                        continue;
+                    }
+
+                    RawBufferVisualizerPackage.WriteAutomationLog(
+                        "Automatic scan needs mapping " + inspection.RootExpression + ": " + openError);
+                    AddAutomaticMappingCandidate(inspection, openError);
+                    needsMapping++;
+                    continue;
+                }
+
+                if (inspection.Inference.ConfidenceScore < 40)
+                {
+                    hidden++;
+                    continue;
+                }
+
+                var reason = isArrayBacked
+                    ? "Managed array buffer was recognized, but its debugger memory could not be read safely."
+                    : inspection.Inference.RequiresPixelFormatMapping
+                        ? "Pixel format needs one explicit mapping before this buffer can be opened."
+                        : "Required image metadata is incomplete or below the automatic-open confidence gate.";
+                AddAutomaticMappingCandidate(inspection, reason);
+                needsMapping++;
+            }
+
+            _automaticScanRunning = false;
+            var activeAutomaticDocument = _documents.LastOrDefault(document => document.IsAutomaticInspection);
+            if (activeAutomaticDocument != null)
+            {
+                ActivateDocument(activeAutomaticDocument);
+            }
+
+            if (scan.Inspections.Count == 0)
+            {
+                SetAutomaticScanStatus("No image-like locals met the 40% candidate threshold.");
+            }
+            else
+            {
+                SetAutomaticScanStatus(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0} opened, {1} need mapping{2}.",
+                    opened,
+                    needsMapping,
+                    hidden > 0 ? ", " + hidden + " hidden" : string.Empty));
+            }
+
+            UpdateStatus();
+        }
+
+        public void ScheduleAutomaticScan()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (_automaticScanPending)
+            {
+                return;
+            }
+
+            _automaticScanPending = true;
+#pragma warning disable VSTHRD001, VSTHRD110
+            // The debugger's Break event can arrive before the debug engine has released its
+            // transition locks. Scheduling at ContextIdle lets that event return before DTE
+            // expressions and paused-process memory are inspected. This control also runs in
+            // the standalone layout smoke host, where the VS JoinableTaskFactory is unavailable.
+            Dispatcher.BeginInvoke(
+                DispatcherPriority.ContextIdle,
+                new Action(() =>
+                {
+                    _automaticScanPending = false;
+                    RawBufferVisualizerPackage.WriteAutomationLog("Automatic scan started");
+                    try
+                    {
+                        ScanLocals();
+                        RawBufferVisualizerPackage.WriteAutomationLog("Automatic scan ended");
+                    }
+                    catch (Exception ex)
+                    {
+                        _automaticScanRunning = false;
+                        RawBufferVisualizerPackage.WriteAutomationLog("Automatic scan unhandled error " + ex);
+                        throw;
+                    }
+                }));
+#pragma warning restore VSTHRD001, VSTHRD110
+        }
+
+        private void AddAutomaticMappingCandidate(AutomaticVisionInspection inspection, string reason)
+        {
+            var details = inspection.Inference.Reasons.Count == 0
+                ? string.Empty
+                : string.Join(Environment.NewLine, inspection.Inference.Reasons);
+            var document = ImageDocument.CreateError(
+                inspection.RootExpression,
+                inspection.RuntimeTypeName,
+                "MappingRequired",
+                reason,
+                details,
+                false,
+                inspection.Inventory,
+                inspection.AssemblyName,
+                _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger));
+            document.SetAutomaticInspection(
+                inspection.UsesSavedMapping ? 100 : inspection.Inference.ConfidenceScore,
+                inspection.GetMembersSummary(),
+                reason,
+                inspection.Inventory,
+                inspection.AssemblyName,
+                _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger),
+                true,
+                inspection.Inference.Members);
+            _documents.Add(document);
+            if (!_automaticScanRunning)
+            {
+                ActivateDocument(document);
+            }
+        }
+
+        private void RemoveAutomaticInspectionDocuments()
+        {
+            for (var i = _documents.Count - 1; i >= 0; i--)
+            {
+                var document = _documents[i];
+                if (!document.IsAutomaticInspection)
+                {
+                    continue;
+                }
+
+                if (ReferenceEquals(_compareA, document))
+                {
+                    _compareA = null;
+                }
+
+                if (ReferenceEquals(_compareB, document))
+                {
+                    _compareB = null;
+                }
+
+                if (ReferenceEquals(_activeDocument, document))
+                {
+                    _activeDocument = null;
+                }
+
+                _documents.RemoveAt(i);
+                document.Dispose();
+            }
+
+            if (_activeDocument == null && _documents.Count > 0)
+            {
+                ActivateDocument(_documents[_documents.Count - 1]);
+            }
+            else if (_activeDocument == null)
+            {
+                UpdateAutomaticInspectionPanel(null);
+                OpenGlImageView.ClearImage();
+                DescriptorText.Text = string.Empty;
+            }
+        }
+
+        private void SetAutomaticScanStatus(string text)
+        {
+            if (AutomaticScanStatusText != null)
+            {
+                AutomaticScanStatusText.Text = text;
+            }
+        }
+
+        private void ScanNow_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            ScanLocals();
+        }
+
+        private void AutoInspectBox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (AutoInspectBox.IsChecked == true)
+            {
+                SetAutomaticScanStatus("Enabled. The next Break Mode event will refresh this list.");
+            }
+            else
+            {
+                SetAutomaticScanStatus("Paused. Scan Now remains available.");
+            }
+        }
+
         public void OpenHandoffRequest(string requestPath)
         {
             if (!Dispatcher.CheckAccess())
             {
+#pragma warning disable VSTHRD001
+                // VSTHRD001: Dispatcher.Invoke is intentional here. This WPF control is also
+                // hosted outside Visual Studio (layout smoke host), where JoinableTaskFactory
+                // and Shell assemblies are unavailable, so the vs-threading JTF pattern cannot
+                // be used. Callers hold no locks and the UI thread never waits on these
+                // background handoff threads, so the synchronous marshal cannot deadlock.
                 Dispatcher.Invoke(() => OpenHandoffRequest(requestPath));
+#pragma warning restore VSTHRD001
                 return;
             }
 
@@ -110,7 +414,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         request.SourceType,
                         request.ErrorType,
                         request.ErrorMessage,
-                        request.ErrorDetails);
+                        request.ErrorDetails,
+                        request.MemberInventory,
+                        request.ItemAssemblyName,
+                        request.DebuggeeProcessId);
                 }
                 else if (request.IsLiveMemory)
                 {
@@ -157,7 +464,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             if (!Dispatcher.CheckAccess())
             {
+#pragma warning disable VSTHRD001
+                // VSTHRD001: Dispatcher.Invoke is intentional here. This WPF control is also
+                // hosted outside Visual Studio (layout smoke host), where JoinableTaskFactory
+                // and Shell assemblies are unavailable, so the vs-threading JTF pattern cannot
+                // be used. Callers hold no locks and the UI thread never waits on these
+                // background handoff threads, so the synchronous marshal cannot deadlock.
                 Dispatcher.Invoke(() => OpenPath(path, title, sourceType, handoffId, isPreview));
+#pragma warning restore VSTHRD001
                 return;
             }
 
@@ -274,6 +588,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _compareA = null;
             _compareB = null;
             _blinkTimer.Stop();
+            CancelDiagnosis();
+            DiagnosisPanel.Visibility = Visibility.Collapsed;
+            CompactDiagnosisPanel.Visibility = Visibility.Collapsed;
             DescriptorText.Text = string.Empty;
             SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
             SetMarkerText(string.Empty);
@@ -314,6 +631,903 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 DiagnosticsList.Items.Add("Error: PNG export failed. " + ex.Message);
                 MessageBox.Show(ex.Message, "Save PNG failed", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private void ImageListContextMenu_Opening(object sender, RoutedEventArgs e)
+        {
+            UpdateMapThisTypeMenuItem();
+        }
+
+        private void UpdateMapThisTypeMenuItem()
+        {
+            var document = ImageList.SelectedItem as ImageDocument;
+            MapThisTypeMenuItem.Visibility = document != null && document.IsError && document.HasMemberInventory
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+        }
+
+        private void OpenVariable_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new OpenVariableDialog(_recentExpressions, EvaluateOpenVariable)
+            {
+                Owner = Window.GetWindow(this)
+            };
+            dialog.ShowDialog();
+        }
+
+        // Open Variable is always invoked from the UI thread (button click or dialog event handler).
+        // The analyzer cannot propagate the UI-thread assertion across the private helpers below.
+#pragma warning disable VSTHRD010
+        private string EvaluateOpenVariable(string expressionText)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            if (string.IsNullOrWhiteSpace(expressionText))
+            {
+                return "Enter an expression.";
+            }
+
+            EnvDTE.DTE? dte;
+            try
+            {
+                dte = TryGetDte();
+            }
+            catch
+            {
+                dte = null;
+            }
+
+            if (dte == null)
+            {
+                return "Open Variable is only available inside Visual Studio with an active debug session.";
+            }
+
+            try
+            {
+                var debugger = dte.Debugger;
+                if (debugger == null || debugger.CurrentMode != EnvDTE.dbgDebugMode.dbgBreakMode)
+                {
+                    return "No active debug session in break mode. Break in the debugger and try again.";
+                }
+
+                var expression = debugger.GetExpression(expressionText, true, 2000);
+                if (expression == null || !expression.IsValidValue)
+                {
+                    return "Expression could not be evaluated: " + expressionText;
+                }
+
+                var typeName = expression.Type ?? string.Empty;
+                var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(typeName);
+                if (mapping != null)
+                {
+                    string openError;
+                    if (!TryOpenMappedVariable(debugger, expressionText, mapping, typeName, out openError))
+                    {
+                        return openError;
+                    }
+
+                    RememberExpression(expressionText);
+                    return string.Empty;
+                }
+
+                var inventory = BuildEnvInventory(expression);
+                if (inventory.Count == 0)
+                {
+                    return "Expression has no readable data members: " + expressionText;
+                }
+
+                var mappingDialog = new TypeMappingDialog(inventory, typeName, string.Empty, GetDebuggeeProcessId(debugger))
+                {
+                    Owner = Window.GetWindow(this)
+                };
+                if (mappingDialog.ShowDialog() == true)
+                {
+                    RememberExpression(expressionText);
+                    DiagnosticsList.Items.Insert(0, "Info: type mapping saved for " + typeName + ". Open Variable again to apply it.");
+                    return string.Empty;
+                }
+
+                return "Mapping was not saved.";
+            }
+            catch (Exception ex)
+            {
+                return "Open Variable failed: " + ex.Message;
+            }
+        }
+
+        private bool TryOpenMappedVariable(
+            EnvDTE.Debugger debugger,
+            string baseExpression,
+            TypeMapping mapping,
+            string typeName,
+            out string error,
+            string? handoffId = null)
+        {
+            error = string.Empty;
+            var members = mapping.Members;
+            if (members == null)
+            {
+                error = "Type mapping is empty.";
+                return false;
+            }
+
+            var dataExpression = EvaluateChild(debugger, baseExpression, members.Data);
+            if (dataExpression == null)
+            {
+                error = "Mapped data member could not be evaluated: " + members.Data;
+                return false;
+            }
+
+            if ((dataExpression.Type ?? string.Empty).EndsWith("[]", StringComparison.Ordinal))
+            {
+                error = "Array-backed mapped types open via collections (wrap the variable in an array, for example new[]{ " + baseExpression + " }).";
+                return false;
+            }
+
+            long address;
+            if (!TryParsePointerValue(dataExpression.Value, out address) || address == 0)
+            {
+                error = "Mapped data member is not a readable pointer: " + members.Data;
+                return false;
+            }
+
+            RawImageDescriptor descriptor;
+            long bufferLength;
+            if (!TryBuildMappedDescriptor(
+                debugger,
+                baseExpression,
+                mapping,
+                out descriptor,
+                out bufferLength,
+                out error))
+            {
+                return false;
+            }
+
+            var processId = GetDebuggeeProcessId(debugger);
+            if (processId <= 0)
+            {
+                error = "No debugged process is available for live memory reads.";
+                return false;
+            }
+
+            try
+            {
+                OpenLiveMemory(new VisualizerHandoffRequest(
+                    string.Empty,
+                    baseExpression,
+                    typeName,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    handoffId ?? string.Empty,
+                    false,
+                    processId,
+                    address,
+                    bufferLength,
+                    descriptor));
+            }
+            catch (Exception ex)
+            {
+                error = "Live memory open failed: " + ex.Message;
+                return false;
+            }
+
+            return true;
+        }
+
+        private bool TryOpenMappedArray(
+            EnvDTE.Debugger debugger,
+            string frameFunctionName,
+            string baseExpression,
+            TypeMapping mapping,
+            string typeName,
+            string dataTypeName,
+            RawPixelFormat? inferredPixelFormat,
+            out string error,
+            string? handoffId = null)
+        {
+            error = string.Empty;
+            var members = mapping.Members;
+            if (members == null || string.IsNullOrWhiteSpace(members.Data))
+            {
+                error = "Type mapping does not name a managed array data member.";
+                return false;
+            }
+
+            var dataExpression = EvaluateChild(debugger, baseExpression, members.Data);
+            if (dataExpression == null || !(dataExpression.Type ?? string.Empty).EndsWith("[]", StringComparison.Ordinal))
+            {
+                error = "Mapped data member is not a readable managed array: " + members.Data;
+                return false;
+            }
+
+            RawImageDescriptor descriptor;
+            long mappedBufferLength;
+            if (!TryBuildMappedDescriptor(
+                debugger,
+                baseExpression,
+                mapping,
+                out descriptor,
+                out mappedBufferLength,
+                out error,
+                inferredPixelFormat))
+            {
+                return false;
+            }
+
+            var elementSize = GetManagedArrayElementSize(dataTypeName);
+            if (elementSize == 0)
+            {
+                error = "Managed array element type is not supported: " + dataTypeName;
+                return false;
+            }
+
+            long elementCount;
+            if (!TryReadOptionalChildLong(debugger, baseExpression, members.Data + ".Length", out elementCount)
+                || elementCount <= 0)
+            {
+                error = "Managed array length could not be evaluated without calling debuggee methods.";
+                return false;
+            }
+
+            var availableByteCount = elementCount * elementSize;
+            var requiredByteCount = descriptor.GetRequiredByteCount();
+            if (requiredByteCount <= 0 || requiredByteCount > MaxInMemorySourceBytes)
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Automatic managed-array open is limited to {0:N0} bytes; this descriptor requires {1:N0}.",
+                    MaxInMemorySourceBytes,
+                    requiredByteCount);
+                return false;
+            }
+
+            if (availableByteCount < requiredByteCount || mappedBufferLength < requiredByteCount)
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Managed array is too short for the inferred descriptor ({0:N0} available, {1:N0} required).",
+                    Math.Min(availableByteCount, mappedBufferLength),
+                    requiredByteCount);
+                return false;
+            }
+
+            byte[] buffer;
+            var firstElementExpression = "(" + baseExpression + "." + members.Data + ")[0]";
+            if (!VisualStudioDebugFrameContext.TryReadArrayBytes(
+                frameFunctionName,
+                baseExpression + "." + members.Data,
+                firstElementExpression,
+                dataTypeName,
+                checked((int)requiredByteCount),
+                out buffer,
+                out error))
+            {
+                var nativeReadError = error;
+                if (!TryCopyManagedArrayFromDebugger(
+                    dataExpression,
+                    dataTypeName,
+                    checked((int)requiredByteCount),
+                    out buffer,
+                    out error))
+                {
+                    error = nativeReadError + " " + error;
+                    return false;
+                }
+            }
+
+            try
+            {
+                OpenManagedArrayBuffer(
+                    buffer,
+                    descriptor,
+                    baseExpression,
+                    typeName,
+                    handoffId ?? string.Empty);
+            }
+            catch (Exception ex)
+            {
+                error = "Managed array open failed: " + ex.Message;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryCopyManagedArrayFromDebugger(
+            EnvDTE.Expression arrayExpression,
+            string dataTypeName,
+            int requiredByteCount,
+            out byte[] buffer,
+            out string error)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            buffer = Array.Empty<byte>();
+            error = string.Empty;
+
+            var elementSize = GetManagedArrayElementSize(dataTypeName);
+            if (elementSize <= 0 || requiredByteCount <= 0 || requiredByteCount % elementSize != 0)
+            {
+                error = "Managed array byte layout is not supported.";
+                return false;
+            }
+
+            var requiredElements = requiredByteCount / elementSize;
+            if (requiredElements > MaxManagedArrayDebuggerElements)
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "The debugger did not expose contiguous array memory. Safe element-copy fallback is limited to {0:N0} elements; this image needs {1:N0}.",
+                    MaxManagedArrayDebuggerElements,
+                    requiredElements);
+                return false;
+            }
+
+            EnvDTE.Expressions? elements;
+            try
+            {
+                elements = arrayExpression.DataMembers;
+            }
+            catch (Exception ex)
+            {
+                error = "Managed array elements could not be enumerated safely: " + ex.Message;
+                return false;
+            }
+
+            if (elements == null || elements.Count < requiredElements)
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Managed array element enumeration was incomplete ({0}/{1}).",
+                    elements == null ? 0 : elements.Count,
+                    requiredElements);
+                return false;
+            }
+
+            buffer = new byte[requiredByteCount];
+            for (var i = 0; i < requiredElements; i++)
+            {
+                EnvDTE.Expression element;
+                try
+                {
+                    element = elements.Item(i + 1);
+                }
+                catch (Exception ex)
+                {
+                    error = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Managed array element {0} could not be read: {1}",
+                        i,
+                        ex.Message);
+                    buffer = Array.Empty<byte>();
+                    return false;
+                }
+
+                var rawValue = element == null ? string.Empty : element.Value;
+                if (!TryWriteManagedArrayElement(buffer, i * elementSize, dataTypeName, rawValue))
+                {
+                    error = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Managed array element {0} has an unreadable value: {1}",
+                        i,
+                        rawValue);
+                    buffer = Array.Empty<byte>();
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool TryWriteManagedArrayElement(
+            byte[] destination,
+            int offset,
+            string dataTypeName,
+            string rawValue)
+        {
+            var value = (rawValue ?? string.Empty).Trim();
+            if (dataTypeName.EndsWith("Byte[]", StringComparison.OrdinalIgnoreCase))
+            {
+                byte parsed;
+                if (!TryParseDebuggerByte(value, out parsed))
+                {
+                    return false;
+                }
+
+                destination[offset] = parsed;
+                return true;
+            }
+
+            if (dataTypeName.EndsWith("UInt16[]", StringComparison.OrdinalIgnoreCase)
+                || dataTypeName.EndsWith("UShort[]", StringComparison.OrdinalIgnoreCase))
+            {
+                ushort parsed;
+                if (!TryParseDebuggerUInt16(value, out parsed))
+                {
+                    return false;
+                }
+
+                var bytes = BitConverter.GetBytes(parsed);
+                Buffer.BlockCopy(bytes, 0, destination, offset, bytes.Length);
+                return true;
+            }
+
+            if (dataTypeName.EndsWith("Single[]", StringComparison.OrdinalIgnoreCase)
+                || dataTypeName.EndsWith("Float[]", StringComparison.OrdinalIgnoreCase))
+            {
+                float parsed;
+                value = value.TrimEnd('f', 'F');
+                if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+                {
+                    return false;
+                }
+
+                var bytes = BitConverter.GetBytes(parsed);
+                Buffer.BlockCopy(bytes, 0, destination, offset, bytes.Length);
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool TryParseDebuggerByte(string value, out byte parsed)
+        {
+            if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return byte.TryParse(
+                    GetLeadingToken(value.Substring(2)),
+                    NumberStyles.AllowHexSpecifier,
+                    CultureInfo.InvariantCulture,
+                    out parsed);
+            }
+
+            return byte.TryParse(
+                GetLeadingToken(value),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out parsed);
+        }
+
+        private static bool TryParseDebuggerUInt16(string value, out ushort parsed)
+        {
+            if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return ushort.TryParse(
+                    GetLeadingToken(value.Substring(2)),
+                    NumberStyles.AllowHexSpecifier,
+                    CultureInfo.InvariantCulture,
+                    out parsed);
+            }
+
+            return ushort.TryParse(
+                GetLeadingToken(value),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out parsed);
+        }
+
+        private static string GetLeadingToken(string value)
+        {
+            var separator = value.IndexOfAny(new[] { ' ', '\t', '\r', '\n' });
+            return separator < 0 ? value : value.Substring(0, separator);
+        }
+
+        private static bool TryBuildMappedDescriptor(
+            EnvDTE.Debugger debugger,
+            string baseExpression,
+            TypeMapping mapping,
+            out RawImageDescriptor descriptor,
+            out long bufferLength,
+            out string error,
+            RawPixelFormat? inferredPixelFormat = null)
+        {
+            descriptor = new RawImageDescriptor();
+            bufferLength = 0;
+            error = string.Empty;
+            var members = mapping.Members;
+            if (members == null)
+            {
+                error = "Type mapping is empty.";
+                return false;
+            }
+
+            int width;
+            int height;
+            if (!TryReadChildInt(debugger, baseExpression, members.Width, "width", out width, out error)
+                || !TryReadChildInt(debugger, baseExpression, members.Height, "height", out height, out error))
+            {
+                return false;
+            }
+
+            var pixelFormat = inferredPixelFormat ?? RawPixelFormat.Mono8;
+            if (!string.IsNullOrWhiteSpace(members.PixelFormat))
+            {
+                var formatExpression = EvaluateChild(debugger, baseExpression, members.PixelFormat);
+                if (formatExpression == null)
+                {
+                    error = "Mapped pixel format member could not be evaluated: " + members.PixelFormat;
+                    return false;
+                }
+
+                var rawValue = (formatExpression.Value ?? string.Empty).Trim();
+                var normalized = rawValue.Contains(".")
+                    ? rawValue.Substring(rawValue.LastIndexOf('.') + 1)
+                    : rawValue;
+                var formatName = normalized;
+                string? mappedName;
+                if (mapping.PixelFormatMap != null
+                    && (mapping.PixelFormatMap.TryGetValue(rawValue, out mappedName)
+                        || mapping.PixelFormatMap.TryGetValue(normalized, out mappedName))
+                    && !string.IsNullOrWhiteSpace(mappedName))
+                {
+                    formatName = mappedName!;
+                }
+
+                if (!Enum.TryParse(formatName, true, out pixelFormat))
+                {
+                    error = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Mapped pixel format value '{0}' is not a known RawPixelFormat.",
+                        rawValue);
+                    return false;
+                }
+            }
+
+            RawByteOrder byteOrder;
+            if (!Enum.TryParse(mapping.ByteOrder, true, out byteOrder))
+            {
+                error = "Mapping byte order is not supported: " + mapping.ByteOrder;
+                return false;
+            }
+
+            descriptor = new RawImageDescriptor
+            {
+                Width = width,
+                Height = height,
+                PixelFormat = pixelFormat,
+                ByteOrder = byteOrder
+            };
+            int validBits;
+            descriptor.ValidBits = TryReadOptionalChildInt(debugger, baseExpression, members.ValidBits, out validBits)
+                ? validBits
+                : GetDefaultValidBitsForOpenVariable(pixelFormat);
+            int stride;
+            descriptor.Stride = TryReadOptionalChildInt(debugger, baseExpression, members.Stride, out stride) && stride > 0
+                ? stride
+                : descriptor.GetMinimumStride();
+
+            var requiredByteCount = descriptor.GetRequiredByteCount();
+            if (!TryReadOptionalChildLong(debugger, baseExpression, members.BufferLength, out bufferLength)
+                || bufferLength < requiredByteCount)
+            {
+                bufferLength = requiredByteCount;
+            }
+
+            var diagnostics = RawBufferDiagnostics.AnalyzeLength(bufferLength, descriptor);
+            if (RawBufferDiagnostics.HasErrors(diagnostics))
+            {
+                error = diagnostics.First(diagnostic => diagnostic.Severity == RawDiagnosticSeverity.Error).Message;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static int GetManagedArrayElementSize(string dataTypeName)
+        {
+            if (dataTypeName.EndsWith("Byte[]", StringComparison.OrdinalIgnoreCase))
+            {
+                return 1;
+            }
+
+            if (dataTypeName.EndsWith("UInt16[]", StringComparison.OrdinalIgnoreCase)
+                || dataTypeName.EndsWith("UShort[]", StringComparison.OrdinalIgnoreCase))
+            {
+                return 2;
+            }
+
+            if (dataTypeName.EndsWith("Single[]", StringComparison.OrdinalIgnoreCase)
+                || dataTypeName.EndsWith("Float[]", StringComparison.OrdinalIgnoreCase))
+            {
+                return 4;
+            }
+
+            return 0;
+        }
+
+        private void RememberExpression(string expressionText)
+        {
+            _recentExpressions.Remove(expressionText);
+            _recentExpressions.Insert(0, expressionText);
+            while (_recentExpressions.Count > 10)
+            {
+                _recentExpressions.RemoveAt(_recentExpressions.Count - 1);
+            }
+        }
+
+        private static EnvDTE.DTE? TryGetDte()
+        {
+            try
+            {
+                return Microsoft.VisualStudio.Shell.Package.GetGlobalService(typeof(EnvDTE.DTE)) as EnvDTE.DTE;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static EnvDTE.Expression? EvaluateChild(EnvDTE.Debugger debugger, string baseExpression, string? memberName)
+        {
+            if (string.IsNullOrWhiteSpace(memberName))
+            {
+                return null;
+            }
+
+            try
+            {
+                var expression = debugger.GetExpression(baseExpression + "." + memberName, true, 2000);
+                return expression != null && expression.IsValidValue ? expression : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static bool TryReadChildInt(
+            EnvDTE.Debugger debugger,
+            string baseExpression,
+            string? memberName,
+            string role,
+            out int value,
+            out string error)
+        {
+            value = 0;
+            error = string.Empty;
+            var expression = EvaluateChild(debugger, baseExpression, memberName);
+            if (expression == null)
+            {
+                error = "Mapped " + role + " member could not be evaluated: " + memberName;
+                return false;
+            }
+
+            if (!int.TryParse(expression.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) || value <= 0)
+            {
+                error = "Mapped " + role + " member is not a positive integer: " + memberName;
+                return false;
+            }
+
+            return true;
+        }
+
+        private static bool TryReadOptionalChildInt(EnvDTE.Debugger debugger, string baseExpression, string? memberName, out int value)
+        {
+            value = 0;
+            var expression = EvaluateChild(debugger, baseExpression, memberName);
+            return expression != null
+                && int.TryParse(expression.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static bool TryReadOptionalChildLong(EnvDTE.Debugger debugger, string baseExpression, string? memberName, out long value)
+        {
+            value = 0;
+            var expression = EvaluateChild(debugger, baseExpression, memberName);
+            return expression != null
+                && long.TryParse(expression.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out value);
+        }
+
+        private static int GetDebuggeeProcessId(EnvDTE.Debugger debugger)
+        {
+            try
+            {
+                var processes = debugger.DebuggedProcesses;
+                if (processes != null && processes.Count > 0)
+                {
+                    return processes.Item(1).ProcessID;
+                }
+            }
+            catch
+            {
+                return 0;
+            }
+
+            return 0;
+        }
+
+        private static List<VisualizerMemberInventoryItem> BuildEnvInventory(EnvDTE.Expression expression)
+        {
+            var inventory = new List<VisualizerMemberInventoryItem>();
+            EnvDTE.Expressions? members = null;
+            try
+            {
+                members = expression.DataMembers;
+            }
+            catch
+            {
+                return inventory;
+            }
+
+            if (members == null)
+            {
+                return inventory;
+            }
+
+            foreach (EnvDTE.Expression member in members)
+            {
+                string name;
+                try
+                {
+                    name = member.Name;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                string type;
+                try
+                {
+                    type = member.Type ?? string.Empty;
+                }
+                catch
+                {
+                    type = string.Empty;
+                }
+
+                string value;
+                try
+                {
+                    value = member.Value ?? string.Empty;
+                }
+                catch
+                {
+                    value = "<unreadable>";
+                }
+
+                if (value.Length > 64)
+                {
+                    value = value.Substring(0, 64) + "...";
+                }
+
+                inventory.Add(new VisualizerMemberInventoryItem
+                {
+                    Name = name,
+                    Kind = "Member",
+                    TypeName = ShortenEnvTypeName(type),
+                    SampleValue = value
+                });
+            }
+
+            return inventory;
+        }
+
+        private static string ShortenEnvTypeName(string typeName)
+        {
+            if (string.IsNullOrEmpty(typeName))
+            {
+                return string.Empty;
+            }
+
+            var arraySuffix = string.Empty;
+            var result = typeName;
+            if (result.EndsWith("[]", StringComparison.Ordinal))
+            {
+                arraySuffix = "[]";
+                result = result.Substring(0, result.Length - 2);
+            }
+
+            var dot = result.LastIndexOf('.');
+            if (dot >= 0 && dot + 1 < result.Length)
+            {
+                result = result.Substring(dot + 1);
+            }
+
+            return result + arraySuffix;
+        }
+
+        private static bool TryParsePointerValue(string text, out long address)
+        {
+            address = 0;
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return false;
+            }
+
+            text = text.Trim();
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                return long.TryParse(
+                    text.Substring(2),
+                    NumberStyles.HexNumber,
+                    CultureInfo.InvariantCulture,
+                    out address);
+            }
+
+            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out address);
+        }
+
+        private static int GetDefaultValidBitsForOpenVariable(RawPixelFormat pixelFormat)
+        {
+            switch (pixelFormat)
+            {
+                case RawPixelFormat.Mono16:
+                    return 16;
+                case RawPixelFormat.Float32:
+                    return 32;
+                case RawPixelFormat.Binary:
+                    return 1;
+                case RawPixelFormat.Mono10PackedLsb:
+                    return 10;
+                case RawPixelFormat.Mono12PackedLsb:
+                    return 12;
+                default:
+                    return 8;
+            }
+        }
+#pragma warning restore VSTHRD010
+
+        private void MapThisType_Click(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.VerifyAccess();
+            var document = ImageList.SelectedItem as ImageDocument;
+            if (document == null || !document.IsError || !document.HasMemberInventory)
+            {
+                return;
+            }
+
+            ShowTypeMappingDialog(document);
+        }
+
+        private void MapCandidate_Click(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.VerifyAccess();
+            var element = sender as FrameworkElement;
+            var document = element == null ? null : element.DataContext as ImageDocument;
+            if (document == null || !document.HasMemberInventory)
+            {
+                return;
+            }
+
+            ImageList.SelectedItem = document;
+            ShowTypeMappingDialog(document);
+            e.Handled = true;
+        }
+
+        private void EditAutomaticMapping_Click(object sender, RoutedEventArgs e)
+        {
+            Dispatcher.VerifyAccess();
+            if (_activeDocument != null && _activeDocument.IsAutomaticInspection && _activeDocument.HasMemberInventory)
+            {
+                ShowTypeMappingDialog(_activeDocument);
+            }
+        }
+
+        private void ShowTypeMappingDialog(ImageDocument document)
+        {
+            Dispatcher.VerifyAccess();
+            var dialog = new TypeMappingDialog(
+                document.MemberInventory!,
+                document.SourceType,
+                document.ItemAssemblyName,
+                document.DebuggeeProcessId,
+                document.SuggestedMappingMembers,
+                document.IsAutomaticInspection
+                    && document.ErrorMessage.StartsWith(
+                        "Pixel format needs one explicit mapping",
+                        StringComparison.Ordinal))
+            {
+                Owner = Window.GetWindow(this)
+            };
+            if (dialog.ShowDialog() == true)
+            {
+                DiagnosticsList.Items.Insert(0, "Info: type mapping saved for " + document.SourceType + ". Refreshing the current frame.");
+                if (_dte != null)
+                {
+                    ScanLocals();
+                }
             }
         }
 
@@ -393,6 +1607,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             SaveActiveDocumentView();
             _activeDocument = document;
+            UpdateAutomaticInspectionPanel(document);
+            CancelDiagnosis();
+            DiagnosisPanel.Visibility = Visibility.Collapsed;
+            CompactDiagnosisPanel.Visibility = Visibility.Collapsed;
 
             _syncingDocumentSelection = true;
             try
@@ -416,6 +1634,31 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 _switchingDocument = false;
             }
+        }
+
+        private void UpdateAutomaticInspectionPanel(ImageDocument? document)
+        {
+            if (AutomaticInspectionPanel == null)
+            {
+                return;
+            }
+
+            if (document == null || !document.IsAutomaticInspection)
+            {
+                AutomaticInspectionPanel.Visibility = Visibility.Collapsed;
+                AutomaticInspectionConfidenceText.Text = string.Empty;
+                AutomaticInspectionMembersText.Text = string.Empty;
+                AutomaticInspectionValidationText.Text = string.Empty;
+                return;
+            }
+
+            AutomaticInspectionPanel.Visibility = Visibility.Visible;
+            AutomaticInspectionConfidenceText.Text = document.AutomaticConfidenceText;
+            AutomaticInspectionMembersText.Text = document.AutomaticMembersSummary;
+            AutomaticInspectionValidationText.Text = document.AutomaticValidationSummary;
+            EditAutomaticMappingButton.Visibility = document.HasMemberInventory
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private void RenderActiveDocument()
@@ -518,7 +1761,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string sourceType,
             string errorType,
             string errorMessage,
-            string errorDetails)
+            string errorDetails,
+            List<VisualizerMemberInventoryItem>? memberInventory = null,
+            string? itemAssemblyName = null,
+            int debuggeeProcessId = 0)
         {
             var document = ImageDocument.CreateError(
                 displayPath,
@@ -526,7 +1772,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 errorType,
                 errorMessage,
                 errorDetails,
-                ShouldDeleteSnapshotDirectoryOnDispose(displayPath));
+                ShouldDeleteSnapshotDirectoryOnDispose(displayPath),
+                memberInventory,
+                itemAssemblyName,
+                debuggeeProcessId);
             _documents.Add(document);
             ActivateDocument(document);
         }
@@ -565,6 +1814,62 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 DiagnosticsList.Items.Insert(0, "Error: support report copy failed. " + ex.Message);
                 SetTransientStatus("Report copy failed");
             }
+        }
+
+        private void OpenManagedArrayBuffer(
+            byte[] buffer,
+            RawImageDescriptor descriptor,
+            string displayName,
+            string sourceType,
+            string handoffId)
+        {
+            var openWatch = Stopwatch.StartNew();
+            var displayPath = "managed-array:" + displayName;
+            var source = RawImageSource.FromMemory(buffer, descriptor);
+            var existingDocument = FindHandoffDocument(handoffId);
+            if (existingDocument != null)
+            {
+                var wasActive = ReferenceEquals(_activeDocument, existingDocument);
+                existingDocument.ReplaceSource(
+                    displayPath,
+                    source,
+                    descriptor,
+                    displayName,
+                    sourceType,
+                    false);
+                ImageList.Items.Refresh();
+                if (wasActive)
+                {
+                    DescriptorText.Text = FormatDescriptor(existingDocument);
+                    UpdateInterpretationControls(existingDocument.Descriptor);
+                    RenderActiveDocument();
+                }
+            }
+            else
+            {
+                var document = new ImageDocument(
+                    displayPath,
+                    source,
+                    descriptor,
+                    displayName,
+                    sourceType,
+                    false,
+                    handoffId,
+                    false);
+                _documents.Add(document);
+                if (!_automaticScanRunning)
+                {
+                    ActivateDocument(document);
+                }
+            }
+
+            openWatch.Stop();
+            _lastOpenPathMilliseconds = openWatch.Elapsed.TotalMilliseconds;
+            DiagnosticsList.Items.Insert(0, string.Format(
+                CultureInfo.InvariantCulture,
+                "Info: managed debugger array copied safely, {0}, open {1:0.0} ms.",
+                FormatByteCount(buffer.LongLength),
+                openWatch.Elapsed.TotalMilliseconds));
         }
 
         private void OpenLiveMemory(VisualizerHandoffRequest request)
@@ -627,7 +1932,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     request.HandoffId,
                     false);
                 _documents.Add(document);
-                ActivateDocument(document);
+                if (!_automaticScanRunning)
+                {
+                    ActivateDocument(document);
+                }
             }
 
             openWatch.Stop();
@@ -926,6 +2234,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ImageList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            UpdateMapThisTypeMenuItem();
             if (_syncingDocumentSelection)
             {
                 return;
@@ -1044,23 +2353,186 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            var useCompact = ReferenceEquals(sender, CompactApplyInterpretationButton);
+
             try
             {
                 var descriptor = _activeDocument.Descriptor.Clone();
-                descriptor.PixelFormat = (RawPixelFormat)InterpretPixelFormatBox.SelectedItem;
-                descriptor.ByteOrder = (RawByteOrder)InterpretByteOrderBox.SelectedItem;
-                descriptor.Stride = ParsePositiveInt(InterpretStrideTextBox.Text, "Stride");
-                descriptor.ValidBits = ParsePositiveInt(InterpretValidBitsTextBox.Text, "Valid bits");
-                var source = _activeDocument.Source.WithDescriptor(descriptor);
-                _activeDocument.ReplaceSource(source, descriptor);
-                ImageList.Items.Refresh();
-                DescriptorText.Text = FormatDescriptor(_activeDocument);
-                UpdateInterpretationControls(descriptor);
-                RenderActiveDocument();
+                descriptor.PixelFormat = (RawPixelFormat)(useCompact ? CompactInterpretPixelFormatBox.SelectedItem : InterpretPixelFormatBox.SelectedItem);
+                descriptor.ByteOrder = (RawByteOrder)(useCompact ? CompactInterpretByteOrderBox.SelectedItem : InterpretByteOrderBox.SelectedItem);
+                descriptor.Width = ParsePositiveInt(useCompact ? CompactInterpretWidthTextBox.Text : InterpretWidthTextBox.Text, "Width");
+                descriptor.Height = ParsePositiveInt(useCompact ? CompactInterpretHeightTextBox.Text : InterpretHeightTextBox.Text, "Height");
+                descriptor.Stride = ParsePositiveInt(useCompact ? CompactInterpretStrideTextBox.Text : InterpretStrideTextBox.Text, "Stride");
+                descriptor.ValidBits = ParsePositiveInt(useCompact ? CompactInterpretValidBitsTextBox.Text : InterpretValidBitsTextBox.Text, "Valid bits");
+                ApplyInterpretationDescriptor(descriptor);
             }
             catch (Exception ex)
             {
                 DiagnosticsList.Items.Add("Error: reinterpret failed. " + ex.Message);
+            }
+        }
+
+        private void ApplyInterpretationDescriptor(RawImageDescriptor descriptor)
+        {
+            if (_activeDocument == null)
+            {
+                return;
+            }
+
+            var source = _activeDocument.Source.WithDescriptor(descriptor);
+            _activeDocument.ReplaceSource(source, descriptor);
+            ImageList.Items.Refresh();
+            DescriptorText.Text = FormatDescriptor(_activeDocument);
+            UpdateInterpretationControls(descriptor);
+            RenderActiveDocument();
+        }
+
+        private void DiagnoseBuffer_Click(object sender, RoutedEventArgs e)
+        {
+            if (_activeDocument == null || _activeDocument.IsError)
+            {
+                return;
+            }
+
+            var document = _activeDocument;
+            CancelDiagnosis();
+            var cancellation = new CancellationTokenSource();
+            _diagnosisCancellation = cancellation;
+
+            var useCompact = ReferenceEquals(sender, CompactDiagnoseBufferButton);
+            if (useCompact)
+            {
+                CompactDiagnosisPanel.Visibility = Visibility.Visible;
+                CompactDiagnosisStatusText.Text = "Diagnosing buffer interpretations...";
+                CompactDiagnosisCandidateList.ItemsSource = null;
+            }
+            else
+            {
+                DiagnosisPanel.Visibility = Visibility.Visible;
+                DiagnosisStatusText.Text = "Diagnosing buffer interpretations...";
+                DiagnosisCandidateList.ItemsSource = null;
+            }
+
+            var source = document.Source;
+#pragma warning disable VSTHRD110
+            // VSTHRD110: the ContinueWith continuation observes every completion state
+            // (RanToCompletion/Canceled/Faulted) on the UI thread scheduler, so no
+            // awaitable result is dropped. This control is also hosted outside
+            // Visual Studio, where JoinableTaskFactory is unavailable.
+            Task.Run(
+                delegate
+                {
+                    var diagnosed = BufferDoctor.Diagnose(source, cancellation.Token);
+                    var rows = new List<DiagnosisCandidateItem>(diagnosed.Candidates.Count);
+                    for (var i = 0; i < diagnosed.Candidates.Count; i++)
+                    {
+                        cancellation.Token.ThrowIfCancellationRequested();
+                        rows.Add(new DiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i])));
+                    }
+
+                    return new KeyValuePair<BufferDiagnosisResult, List<DiagnosisCandidateItem>>(diagnosed, rows);
+                },
+                cancellation.Token).ContinueWith(
+                task => CompleteDiagnosis(task, document, cancellation),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.FromCurrentSynchronizationContext());
+#pragma warning restore VSTHRD110
+        }
+
+        private void CompleteDiagnosis(
+            Task<KeyValuePair<BufferDiagnosisResult, List<DiagnosisCandidateItem>>> task,
+            ImageDocument document,
+            CancellationTokenSource cancellation)
+        {
+            if (task.IsCanceled || cancellation.IsCancellationRequested || !ReferenceEquals(_activeDocument, document))
+            {
+                return;
+            }
+
+            if (task.IsFaulted)
+            {
+                var failure = task.Exception == null ? null : task.Exception.GetBaseException();
+                var failureText = "Diagnosis failed: " + (failure == null ? "unknown error." : failure.Message);
+                DiagnosisStatusText.Text = failureText;
+                CompactDiagnosisStatusText.Text = failureText;
+                return;
+            }
+
+#pragma warning disable VSTHRD002
+            // VSTHRD002: this continuation only runs after the task completed, so
+            // reading task.Result cannot block the UI thread.
+            var result = task.Result.Key;
+            var items = task.Result.Value;
+#pragma warning restore VSTHRD002
+            DiagnosisCandidateList.ItemsSource = items;
+            CompactDiagnosisCandidateList.ItemsSource = items;
+            var errorNotes = 0;
+            for (var i = 0; i < result.Notes.Count; i++)
+            {
+                if (result.Notes[i].Severity == RawDiagnosticSeverity.Error)
+                {
+                    errorNotes++;
+                }
+            }
+
+            var statusText = string.Format(
+                CultureInfo.InvariantCulture,
+                "Suggests {0} ranked candidate interpretation(s); it cannot detect the correct format automatically.{1} Select a row to apply it.",
+                items.Count,
+                errorNotes > 0 ? " Buffer diagnostics report " + errorNotes + " error(s)." : string.Empty);
+            DiagnosisStatusText.Text = statusText;
+            CompactDiagnosisStatusText.Text = statusText;
+        }
+
+        private void DiagnosisCandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            var listBox = sender as ListBox;
+            var item = listBox == null ? null : listBox.SelectedItem as DiagnosisCandidateItem;
+            if (item == null || _activeDocument == null || _activeDocument.IsError)
+            {
+                return;
+            }
+
+            try
+            {
+                ApplyInterpretationDescriptor(item.Candidate.Descriptor);
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Add("Error: candidate apply failed. " + ex.Message);
+            }
+        }
+
+        private void CloseDiagnosis_Click(object sender, RoutedEventArgs e)
+        {
+            CancelDiagnosis();
+            DiagnosisPanel.Visibility = Visibility.Collapsed;
+            CompactDiagnosisPanel.Visibility = Visibility.Collapsed;
+        }
+
+        private void CancelDiagnosis()
+        {
+            if (_diagnosisCancellation != null)
+            {
+                _diagnosisCancellation.Cancel();
+                _diagnosisCancellation.Dispose();
+                _diagnosisCancellation = null;
+            }
+        }
+
+        private static BitmapSource? CreateCandidateThumbnail(RawImageSource source, BufferInterpretationCandidate candidate)
+        {
+            try
+            {
+                using (var interpreted = source.WithDescriptor(candidate.Descriptor))
+                {
+                    return CreateThumbnailSource(interpreted, candidate.Descriptor);
+                }
+            }
+            catch
+            {
+                return null;
             }
         }
 
@@ -1442,8 +2914,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             InterpretPixelFormatBox.SelectedItem = descriptor.PixelFormat;
             InterpretByteOrderBox.SelectedItem = descriptor.ByteOrder;
+            InterpretWidthTextBox.Text = descriptor.Width.ToString(CultureInfo.InvariantCulture);
+            InterpretHeightTextBox.Text = descriptor.Height.ToString(CultureInfo.InvariantCulture);
             InterpretStrideTextBox.Text = descriptor.Stride.ToString(CultureInfo.InvariantCulture);
             InterpretValidBitsTextBox.Text = descriptor.ValidBits.ToString(CultureInfo.InvariantCulture);
+
+            CompactInterpretPixelFormatBox.SelectedItem = descriptor.PixelFormat;
+            CompactInterpretByteOrderBox.SelectedItem = descriptor.ByteOrder;
+            CompactInterpretWidthTextBox.Text = descriptor.Width.ToString(CultureInfo.InvariantCulture);
+            CompactInterpretHeightTextBox.Text = descriptor.Height.ToString(CultureInfo.InvariantCulture);
+            CompactInterpretStrideTextBox.Text = descriptor.Stride.ToString(CultureInfo.InvariantCulture);
+            CompactInterpretValidBitsTextBox.Text = descriptor.ValidBits.ToString(CultureInfo.InvariantCulture);
         }
 
         private void UpdateCompareText(string? message = null)
@@ -2229,9 +3710,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             _automationProbeRunning = true;
+#pragma warning disable VSTHRD001, VSTHRD110
+            // VSTHRD001/VSTHRD110: fire-and-forget scheduling of the automation probe at
+            // ContextIdle priority is intentional. The probe is diagnostics-only, the returned
+            // DispatcherOperation has no result to observe, and JoinableTaskFactory cannot be
+            // used because this control is also hosted outside Visual Studio.
             Dispatcher.BeginInvoke(
                 DispatcherPriority.ContextIdle,
                 new Action(() => RunAutomationProbe(outputPath, metadataPath)));
+#pragma warning restore VSTHRD001, VSTHRD110
         }
 
         private void WriteAutomationProbeFailureIfRequested(string metadataPath, Exception exception)
@@ -2696,7 +4183,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return VisualStudioTempStore.TryGetOwnedSnapshotDirectory(metadataPath, out snapshotDirectory);
         }
 
-        private static BitmapSource? CreateThumbnailSource(RawImageSource source, RawImageDescriptor descriptor)
+        internal static BitmapSource? CreateThumbnailSource(RawImageSource source, RawImageDescriptor descriptor)
         {
             try
             {
@@ -2783,6 +4270,50 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 document.DisplayPath);
         }
 
+        private sealed class DiagnosisCandidateItem
+        {
+            public BufferInterpretationCandidate Candidate { get; private set; }
+            public BitmapSource? Thumbnail { get; private set; }
+            public string Title { get; private set; }
+            public string Summary { get; private set; }
+            public string ScoreText { get; private set; }
+            public string AmbiguityNote { get; private set; }
+            public string ReasonsText { get; private set; }
+
+            public Visibility AmbiguityVisibility
+            {
+                get { return string.IsNullOrEmpty(AmbiguityNote) ? Visibility.Collapsed : Visibility.Visible; }
+            }
+
+            public DiagnosisCandidateItem(BufferInterpretationCandidate candidate, BitmapSource? thumbnail)
+            {
+                Candidate = candidate;
+                Thumbnail = thumbnail;
+                var descriptor = candidate.Descriptor;
+                var padding = descriptor.Stride - descriptor.GetMinimumStride();
+                Title = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}  {1} x {2}",
+                    descriptor.PixelFormat,
+                    descriptor.Width,
+                    descriptor.Height);
+                Summary = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "stride {0}{1}, {2} bits, {3}",
+                    descriptor.Stride,
+                    padding > 0 ? " (+" + padding + " pad/row)" : string.Empty,
+                    descriptor.ValidBits,
+                    descriptor.ByteOrder == RawByteOrder.LittleEndian ? "LE" : "BE");
+                ScoreText = candidate.Score.ToString(CultureInfo.InvariantCulture);
+                AmbiguityNote = candidate.IsAmbiguousWithGroup
+                    ? "Tied group: cannot be distinguished from buffer content."
+                    : string.Empty;
+                ReasonsText = candidate.Reasons.Count == 0
+                    ? "No scoring reasons."
+                    : string.Join("\n", candidate.Reasons);
+            }
+        }
+
         private sealed class ImageDocument : IDisposable
         {
             public string DisplayPath { get; private set; }
@@ -2800,8 +4331,65 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string HandoffId { get; private set; }
             public bool IsPreview { get; private set; }
             public string SourceUnavailableMessage { get; private set; }
+            public List<VisualizerMemberInventoryItem>? MemberInventory { get; private set; }
+            public string ItemAssemblyName { get; private set; }
+            public int DebuggeeProcessId { get; private set; }
+            public bool IsAutomaticInspection { get; private set; }
+            public int AutomaticConfidence { get; private set; }
+            public string AutomaticMembersSummary { get; private set; }
+            public string AutomaticValidationSummary { get; private set; }
+            public TypeMappingMembers? SuggestedMappingMembers { get; private set; }
+
+            public Visibility MappingActionVisibility
+            {
+                get { return IsAutomaticInspection && IsError && HasMemberInventory ? Visibility.Visible : Visibility.Collapsed; }
+            }
+
+            public Visibility AutomaticInspectionVisibility
+            {
+                get { return IsAutomaticInspection ? Visibility.Visible : Visibility.Collapsed; }
+            }
+
+            public string AutomaticConfidenceText
+            {
+                get
+                {
+                    return IsAutomaticInspection
+                        ? "Confidence " + AutomaticConfidence.ToString(CultureInfo.InvariantCulture) + "%"
+                        : string.Empty;
+                }
+            }
+
+            public bool HasMemberInventory
+            {
+                get { return MemberInventory != null && MemberInventory.Count > 0; }
+            }
             private readonly string? _ownedSnapshotDirectory;
             private bool _disposed;
+
+            public void SetAutomaticInspection(
+                int confidence,
+                string membersSummary,
+                string validationSummary,
+                List<VisualizerMemberInventoryItem> memberInventory,
+                string itemAssemblyName,
+                int debuggeeProcessId,
+                bool mappingRequired,
+                TypeMappingMembers? suggestedMappingMembers = null)
+            {
+                IsAutomaticInspection = true;
+                AutomaticConfidence = Math.Max(0, Math.Min(100, confidence));
+                AutomaticMembersSummary = membersSummary ?? string.Empty;
+                AutomaticValidationSummary = validationSummary ?? string.Empty;
+                MemberInventory = memberInventory;
+                ItemAssemblyName = itemAssemblyName ?? string.Empty;
+                DebuggeeProcessId = debuggeeProcessId;
+                SuggestedMappingMembers = suggestedMappingMembers;
+                var cleanTitle = Title.StartsWith("Open failed: ", StringComparison.Ordinal)
+                    ? Title.Substring("Open failed: ".Length)
+                    : Title.TrimStart('✓', '?', ' ');
+                Title = (mappingRequired ? "? " : "✓ ") + cleanTitle;
+            }
 
             public bool IsError
             {
@@ -2819,12 +4407,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     if (IsError)
                     {
-                        return "Error  " + ErrorMessage;
+                        return IsAutomaticInspection
+                            ? AutomaticConfidenceText + "  " + ErrorMessage
+                            : "Error  " + ErrorMessage;
                     }
 
                     return string.Format(
                         CultureInfo.InvariantCulture,
-                        "{0}{1}{2} x {3}  {4}  stride {5}  {6}",
+                        "{0}{1}{2}{3} x {4}  {5}  stride {6}  {7}",
+                        IsAutomaticInspection ? AutomaticConfidenceText + "  " : string.Empty,
                         IsSourceUnavailable ? "Unavailable  " : string.Empty,
                         IsPreview ? "Preview  " : string.Empty,
                         Descriptor.Width,
@@ -2859,6 +4450,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 HandoffId = handoffId ?? string.Empty;
                 IsPreview = isPreview;
                 SourceUnavailableMessage = string.Empty;
+                MemberInventory = null;
+                ItemAssemblyName = string.Empty;
+                DebuggeeProcessId = 0;
+                IsAutomaticInspection = false;
+                AutomaticConfidence = 0;
+                AutomaticMembersSummary = string.Empty;
+                AutomaticValidationSummary = string.Empty;
+                SuggestedMappingMembers = null;
                 _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
@@ -2868,7 +4467,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 string errorType,
                 string errorMessage,
                 string errorDetails,
-                bool deleteSnapshotDirectoryOnDispose)
+                bool deleteSnapshotDirectoryOnDispose,
+                List<VisualizerMemberInventoryItem>? memberInventory,
+                string? itemAssemblyName,
+                int debuggeeProcessId)
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = "Open failed: " + CreateTitle(DisplayPath);
@@ -2892,6 +4494,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 HandoffId = string.Empty;
                 IsPreview = false;
                 SourceUnavailableMessage = string.Empty;
+                MemberInventory = memberInventory;
+                ItemAssemblyName = itemAssemblyName ?? string.Empty;
+                DebuggeeProcessId = debuggeeProcessId;
+                IsAutomaticInspection = false;
+                AutomaticConfidence = 0;
+                AutomaticMembersSummary = string.Empty;
+                AutomaticValidationSummary = string.Empty;
+                SuggestedMappingMembers = null;
                 _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
             }
 
@@ -2901,7 +4511,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 string errorType,
                 string errorMessage,
                 string errorDetails,
-                bool deleteSnapshotDirectoryOnDispose = false)
+                bool deleteSnapshotDirectoryOnDispose = false,
+                List<VisualizerMemberInventoryItem>? memberInventory = null,
+                string? itemAssemblyName = null,
+                int debuggeeProcessId = 0)
             {
                 return new ImageDocument(
                     displayPath,
@@ -2909,7 +4522,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     errorType,
                     errorMessage,
                     errorDetails,
-                    deleteSnapshotDirectoryOnDispose);
+                    deleteSnapshotDirectoryOnDispose,
+                    memberInventory,
+                    itemAssemblyName,
+                    debuggeeProcessId);
             }
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)

@@ -82,6 +82,11 @@ namespace RawBufferVisualizer.Core
         public abstract byte[] ReadAllBytes();
         public abstract void CopyRawTo(string rawPath);
 
+        public virtual bool TryReadRange(long offset, byte[] destination, int offsetInDestination, int count)
+        {
+            return false;
+        }
+
         public virtual RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
         {
             var rendered = RenderTile(x, y, width, height, options);
@@ -255,6 +260,22 @@ namespace RawBufferVisualizer.Core
         public override byte[] ReadAllBytes()
         {
             return (byte[])_buffer.Clone();
+        }
+
+        public override bool TryReadRange(long offset, byte[] destination, int offsetInDestination, int count)
+        {
+            if (destination == null
+                || offset < 0
+                || offsetInDestination < 0
+                || count < 0
+                || offsetInDestination + count > destination.Length
+                || offset + count > _buffer.Length)
+            {
+                return false;
+            }
+
+            Buffer.BlockCopy(_buffer, (int)offset, destination, offsetInDestination, count);
+            return true;
         }
 
         public override void CopyRawTo(string rawPath)
@@ -478,6 +499,59 @@ namespace RawBufferVisualizer.Core
             }
 
             return buffer;
+        }
+
+        public override bool TryReadRange(long offset, byte[] destination, int offsetInDestination, int count)
+        {
+            if (destination == null
+                || offset < 0
+                || offsetInDestination < 0
+                || count < 0
+                || offsetInDestination + count > destination.Length
+                || offset + count > Length)
+            {
+                return false;
+            }
+
+            if (count == 0)
+            {
+                return true;
+            }
+
+            try
+            {
+                using (var stream = OpenRawReadStream())
+                {
+                    stream.Position = offset;
+                    var remaining = count;
+                    var targetOffset = offsetInDestination;
+                    while (remaining > 0)
+                    {
+                        var read = stream.Read(destination, targetOffset, remaining);
+                        if (read <= 0)
+                        {
+                            return false;
+                        }
+
+                        targetOffset += read;
+                        remaining -= read;
+                    }
+                }
+
+                return true;
+            }
+            catch (IOException)
+            {
+                return false;
+            }
+            catch (ObjectDisposedException)
+            {
+                return false;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return false;
+            }
         }
 
         public override void CopyRawTo(string rawPath)
