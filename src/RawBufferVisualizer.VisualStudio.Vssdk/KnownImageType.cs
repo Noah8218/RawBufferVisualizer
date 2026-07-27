@@ -23,6 +23,39 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || typeName.IndexOf("BitmapSource", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
+        public static bool UsesRegisteredVisualizerPath(string typeName)
+        {
+            var runtimeTypeName = GetRuntimeTypeName(typeName);
+            if (runtimeTypeName.Length == 0)
+            {
+                return false;
+            }
+
+            return string.Equals(
+                    runtimeTypeName,
+                    "RawBufferVisualizer.Sdk.RawBufferSnapshot",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    runtimeTypeName,
+                    "RawBufferVisualizer.Sdk.RawBufferView",
+                    StringComparison.OrdinalIgnoreCase)
+                || string.Equals(runtimeTypeName, "OpenCvSharp.Mat", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(runtimeTypeName, "Emgu.CV.Mat", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(runtimeTypeName, "System.Drawing.Bitmap", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(
+                    runtimeTypeName,
+                    "Cressem.ImageModel.ImagePtr",
+                    StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static bool IsMetadataOnlyType(string typeName)
+        {
+            return string.Equals(
+                GetRuntimeTypeName(typeName),
+                "RawBufferVisualizer.Core.RawImageDescriptor",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
         public static bool IsSupportedCollection(string typeName)
         {
             if (string.IsNullOrEmpty(typeName))
@@ -33,6 +66,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return typeName.IndexOf("List", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("Array", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("IEnumerable", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static string GetRuntimeTypeName(string typeName)
+        {
+            if (string.IsNullOrWhiteSpace(typeName))
+            {
+                return string.Empty;
+            }
+
+            var normalized = typeName.Trim();
+            var assemblySeparator = normalized.IndexOf(',');
+            return assemblySeparator < 0
+                ? normalized
+                : normalized.Substring(0, assemblySeparator).Trim();
         }
     }
 }

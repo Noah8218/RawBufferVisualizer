@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This document describes the published `1.0.45` baseline plus the uncommitted `1.0.46` Buffer Doctor, Smart Type Mapper, and Automatic Vision Inspector worktree. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the published `1.0.45` baseline plus the locally qualified `1.0.47` Buffer Doctor, Smart Type Mapper, and Automatic Vision Inspector release candidate. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
@@ -385,13 +385,17 @@ Published implementation baseline `a23d8ad` / `1.0.45`:
 - public ImagePtr-style documentation is broader than the exact individual provider registration and must be corrected or implemented before the next support-matrix claim;
 - dense 100k/200k file-backed, installed 8192 Mat, docked 24k real-input, and 240-cycle memory soak evidence are recorded in [MAINTAINER_HANDOFF.md](MAINTAINER_HANDOFF.md).
 
-Uncommitted 1.0.46 feature worktree, rechecked 2026-07-27:
+Local 1.0.47 release candidate, rechecked 2026-07-28:
 
 - full Release solution build passed with 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` and zero errors;
 - `RawBufferVisualizer.Tests` passed;
 - Automatic Inspector layout, Buffer Doctor panel, docked layout widths, Preview-first handoff, and Smart Type Mapper UI smokes passed;
-- installed-VSIX Buffer Doctor and Automatic Vision Inspector scenarios passed in VS2022 17.14;
-- the installed-VSIX Smart Type Mapper fallback passed from a 92% `MappingRequired` candidate through live-memory preview, save, and automatic 640 x 484 `Mono12PackedLsb` reopen with zero final errors.
+- installed-VSIX Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper, and hybrid registered/automatic scenarios passed in VS2022 17.14;
+- the Smart Type Mapper fallback passed from an 88% `MappingRequired` candidate through live-memory preview, save, and automatic 640 x 484 `Mono12PackedLsb` reopen with zero final errors;
+- the hybrid scenario opened real OpenCvSharp, Emgu CV, and Bitmap values through registered visualizers plus six camera-shape fixtures through Automatic Inspector, for nine images and zero errors;
+- final artifact: 1,924,125 bytes, SHA256 `DAB2CE62007F77F11CFF828AF02EF2F2DAE26A3BB3238CF251679E4A69505174`.
+
+The reusable acceptance record and exact evidence paths are in [release-qualification-1.0.47.md](release-qualification-1.0.47.md).
 
 Do not reuse this evidence after a relevant source change. Re-run the smallest checks that cover the changed surface and update the baseline only when they pass.
 

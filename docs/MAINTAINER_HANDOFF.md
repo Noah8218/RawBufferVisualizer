@@ -6,14 +6,14 @@ This is the canonical continuation document for the next conversation. Read it a
 
 | Item | Verified state |
 | --- | --- |
-| Last verified | 2026-07-27 KST |
+| Last verified | 2026-07-28 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | `174707f` (`Harden industrial camera buffer inference`, pushed) plus the latest Automatic Inspector workflow-hardening commit on `main` |
-| Source and VSIX version | `1.0.46` / `1.0.46.0`; published Marketplace line remains `1.0.45.0` |
+| Implementation baseline | `5b68cb3` (`Improve automatic inspector breakpoint workflow`, pushed) plus the current `1.0.47` release-qualification change on `main` |
+| Source and VSIX version | `1.0.47` / `1.0.47.0`; published Marketplace line remains `1.0.45.0` |
 | Public Marketplace version | `1.0.45.0`; the public Overview was re-fetched on 2026-07-26 KST and now matches the local `1.0.45` copy, including the Large Image Performance section |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview; published line 1.0.45, source/install-test line 1.0.46. Automatic Vision Inspector is hardened for industrial buffer layout signals, but general vendor/hardware compatibility is not yet release-qualified |
+| Product stage | Public Marketplace Preview; published line 1.0.45, locally qualified line 1.0.47. Automatic Vision Inspector, Smart Type Mapper fallback, and Buffer Doctor are release-qualified on the local VS2022 matrix; general vendor/hardware compatibility is not certified |
 
 Public links:
 
@@ -135,8 +135,8 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 
 - Public README, Marketplace checklist/Overview source, install/update/repair guidance, release runbook, release notes, demo media, license, and third-party notices exist.
 - CI, Marketplace CD, and GitHub Release workflows exist.
-- `1.0.45.0` Release VSIX was generated and passed the packaging compatibility guard.
-- Public Marketplace remains `1.0.45.0`; current source and locally installed qualification VSIX are `1.0.46.0`.
+- `1.0.47.0` Release VSIX was generated, passed the packaging compatibility guard, reinstalled, and passed the final hybrid registered/automatic smoke.
+- Public Marketplace remains `1.0.45.0`; current source and locally installed qualification VSIX are `1.0.47.0`.
 
 ## Verified Evidence
 
@@ -144,8 +144,8 @@ These are recorded regression results, not performance promises for every PC.
 
 | Case | Evidence |
 | --- | --- |
-| Core/adapter tests | Release self-test passed for the `1.0.45` implementation baseline. |
-| Legacy libraries | Five OpenCvSharp versions, five Emgu versions, and .NET Framework Bitmap passed the compatibility matrix. |
+| Core/adapter tests | Release self-test passed for the `1.0.47` source on 2026-07-28. |
+| Legacy libraries | Five OpenCvSharp versions, five Emgu versions, and .NET Framework Bitmap passed the 2026-07-28 compatibility matrix. |
 | Installed VSIX large Mats | VS2022 17.14 opened real 8192 x 8192 OpenCvSharp and Emgu Mats; expected GV values were read; preview files stayed bounded; source-unavailable state after process exit was controlled. |
 | Dense file-backed 100k | 100000 x 100000 Mono8, 10 GB non-sparse payload, first visible in 1.73 s, about 88.0 MB working set. |
 | Dense file-backed 200k | 200000 x 200000 Mono8, 40 GB non-sparse payload, first visible in 1.94 s, about 87.5 MB working set. |
@@ -153,7 +153,7 @@ These are recorded regression results, not performance promises for every PC.
 | Memory soak | 240 repeated 2048 x 2048 opens with Delete/Clear; no positive managed/private/working-set or GDI/USER growth and no owned temp directories left. |
 | Current CI | `CI #71` completed successfully for `a23d8ad`. |
 | Handoff recheck | On 2026-07-17, restore + Release build passed with the four recorded VSTHRD warnings and zero errors; `RawBufferVisualizer.Tests` passed. |
-| 1.0.46 working-tree recheck | On 2026-07-27, the full Release solution build passed with 18 known `VSTHRD010` warnings in `ImageTypeRecognizer.cs` and zero errors; `RawBufferVisualizer.Tests` passed. Automatic Inspector layout, Buffer Doctor panel, docked layout widths, Preview-first handoff, and Smart Type Mapper UI smokes passed. `Publish-VisualStudioExtension.ps1` packaging guard previously passed for the 1.0.46 VSIX. |
+| 1.0.47 release qualification | On 2026-07-28, the full Release solution build passed with 18 known `VSTHRD010` warnings in `ImageTypeRecognizer.cs` and zero errors; `RawBufferVisualizer.Tests`, packaging, reinstall, and the final hybrid installed-VSIX smoke passed. Full criteria: `docs/release-qualification-1.0.47.md`. |
 | Buffer Doctor tests | 8 deterministic self-tests passed on the Core candidate generator/scorer (padded stride, diagonal shear, endianness, valid-bits, trailing-row fit, sampling cap, ambiguity group). |
 | Smart Type Mapper tests | 6 deterministic self-tests passed on mapping store, ObjectSource extraction, enum mapping, and failure inventory. |
 | Buffer Doctor UI smoke | `SmokeBufferDoctorPanel.ps1` passed: top candidate for a 2448x2048 padded Mono8 buffer is the correct `stride 2560` descriptor; applying it restores the image. Captures: `artifacts/ui/buffer-doctor/2026-07-26/`. |
@@ -162,9 +162,11 @@ These are recorded regression results, not performance promises for every PC.
 | Installed VSIX Buffer Doctor | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: five candidates appeared, the corrected interpretation was applied, and pixel inspection reported `GV 204`. Evidence: `artifacts/ui/installed-vsix-new-features/BufferDoctor-installed-vsix.json`. |
 | Automatic Vision Inspector tests | Five deterministic self-tests passed for confidence gates, direct/nested inference, ambiguous format handling, and nested mapping extraction. |
 | Automatic Vision Inspector layout | `SmokeAutomaticVisionInspectorLayout.ps1` and the focused inspector-panel smoke passed at 540/900/1160 px. Evidence: `artifacts/ui/automatic-vision-inspector/2026-07-27/`. |
-| Installed VSIX Automatic Vision Inspector | VS2022 17.14 installed-VSIX automation passed twice on 2026-07-27: a function argument plus five locals opened, one incomplete shape remained `[Map]`, and one null-pointer shape remained `[Failed]`; the six successful images stayed usable and repeated **Scan Now** did not duplicate rows. Disabling the option, closing VS, and starting a second VS session restored the disabled state; manual **Scan Now** still passed, then re-enable and the pre-test user setting were restored. Evidence: `artifacts/ui/automatic-inspector-workflow/2026-07-27/`. |
-| Installed VSIX Smart Type Mapper fallback | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: an unregistered `UnmappedCompanyFrame` remained a 92% `MappingRequired` candidate, `Mono12PackedLsb` rendered from live debuggee memory, Save wrote the inferred roles/value mapping, and automatic rescan reopened it as 640 x 484, stride 960, live source with zero final errors. The pre-existing user mapping SHA256 was restored unchanged. Evidence: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json` and the three `smart-type-mapper-*.png` captures. |
-| Industrial SDK contract hardening | Official contracts for PFNC, Basler, Spinnaker, Vimba X, IDS peak, Euresys, HIKROBOT, Sapera, Zebra, and Zivid were reviewed. Deterministic padding/payload/offset/PFNC tests passed. IDS peak ICV 1.4.0 assembly metadata passed. The rebuilt/reinstalled VSIX retained the five-row/zero-error Automatic Vision Inspector result. General vendor-runtime/hardware support is not proven. Evidence: `docs/industrial-camera-compatibility-validation.md` and `artifacts/validation/industrial-camera-sdk-contracts.json`. |
+| Installed VSIX Automatic Vision Inspector | VS2022 17.14 automation passed on 2026-07-28: a function argument plus five locals opened, one incomplete shape remained `[Map]`, and one null-pointer shape remained `[Failed]`; the six successful images stayed usable and repeated **Scan Now** did not duplicate rows. A second VS session restored the disabled preference, manual **Scan Now** still passed, and the pre-test user setting was restored. Evidence: `artifacts/ui/automatic-inspector-workflow/2026-07-28-final/`. |
+| Installed VSIX Smart Type Mapper fallback | VS2022 17.14 automation passed on 2026-07-28: an unregistered `UnmappedCompanyFrame` remained an 88% `MappingRequired` candidate, `Mono12PackedLsb` rendered from live debuggee memory, Save wrote the inferred roles/value mapping, and automatic rescan reopened it as 640 x 484, stride 960, live source with zero final errors. The pre-existing user mapping was restored. Evidence: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json` and the three `smart-type-mapper-*.png` captures. |
+| Installed VSIX registered/automatic hybrid | Real OpenCvSharp, Emgu CV, and Bitmap values opened through registered visualizers; `RawBufferSnapshot`/`RawBufferView` and all registered types were absent from automatic rows; six camera-shape fixtures opened automatically. Final state: nine images, zero errors. Evidence: `artifacts/ui/installed-vsix-new-features/MultiLibraryHybrid-installed-vsix.json`. |
+| Industrial SDK contract hardening | Official contracts for PFNC, Basler, Spinnaker, Vimba X, IDS peak, Euresys, HIKROBOT, Sapera, Zebra, and Zivid were reviewed. Deterministic padding/payload/offset/PFNC tests passed. IDS peak ICV 1.4.0 assembly metadata passed. Basler pylon, Spinnaker, and Vimba X were not installed. General vendor-runtime/hardware support is not proven. Evidence: `docs/industrial-camera-compatibility-validation.md` and `artifacts/validation/industrial-camera-sdk-contracts-20260728.json`. |
+| Responsive Inspector affordance | Fresh 540/900/1160 px captures passed. The top `Inspector` button appears only below 760 px; medium layout exposes the bottom Inspector and wide layout exposes the right Inspector. Evidence: `artifacts/ui/inspector-button-visibility/2026-07-28/before/`. |
 
 Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
@@ -178,19 +180,17 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
 ## Incomplete Or Unverified
 
-1. ~~Public documentation currently overstates ImagePtr support.~~ Addressed by Smart Type Mapper (working tree): users can map arbitrary image classes once and reopen them through collections or the Open Variable docked-window command. The exact `Cressem.ImageModel.ImagePtr` provider remains a compatibility exception. Public README/Marketplace wording still needs to be updated before the next release to describe mapper-based support accurately.
-2. ~~The public Marketplace Overview does not yet show the local `1.0.45` performance section.~~ Resolved 2026-07-26: the live Overview was re-fetched and contains the full `1.0.45` Large Image Performance table and installed-VSIX paragraph, matching the local copy in `marketplace-checklist.md`. Marketplace release-notes field content was not verifiable from the public page.
-3. A manual Marketplace update smoke for the public `1.0.45.0` package on a separate, previously installed PC is not recorded in this handoff. CI and local VSIX validation do not replace this check.
-4. Local tag `v1.0.45` exists on `a23d8ad` (2026-07-26) but is not pushed; there are no GitHub Releases. `docs/github-release-1.0.45.md` is a draft body only.
-5. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
-6. The four older `VSTHRD001`/`VSTHRD110` warnings in `RawBufferToolWindowControl.xaml.cs` are resolved/suppressed with documented standalone-host constraints. The current Release build still reports 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` for EnvDTE access. Installed-VSIX behavior is proven, but the warnings remain technical debt and must not be described as zero-warning output.
-7. Vendor-specific SDK adapters are not implemented. `RawBufferView` is the generic supported answer today; the current exact ImagePtr registration is a compatibility exception, not a generic adapter system.
+1. Marketplace still serves `1.0.45.0`; the locally qualified `1.0.47.0` VSIX and reviewed Overview/release notes have not been published.
+2. A manual Marketplace update/restart smoke on a separate PC that previously had `1.0.45.0` is not recorded. Local reinstall and CI do not replace this check.
+3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual `1.0.47` publication decision instead of presenting the historical draft as current.
+4. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
+5. The Release build still reports 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` for EnvDTE access. Installed-VSIX behavior is proven, but the warnings remain technical debt and must not be described as zero-warning output.
+6. Vendor-specific SDK adapters are not implemented. `RawBufferView` and safe structural discovery are the generic supported answers; the exact ImagePtr registration remains a compatibility exception.
+7. Basler pylon, Spinnaker, and Vimba X assemblies/live objects, drivers, emulators, cameras, and representative lifetime cases are missing. Fixture results are not vendor certification.
 8. Visual Studio 18/2026 and explicit .NET 9/10 runtime matrices are not current support claims. The Marketplace manifest targets Visual Studio 2022 `[17.9,18.0)` and the modern standalone target is .NET 8.
 9. Large 100k/200k evidence is file-backed raw-image evidence, not proof that a debuggee can safely allocate a fully decoded 100k/200k `Mat`.
-10. ~~The Smart Type Mapper mapping dialog/save/reopen flow lacked installed-VSIX evidence.~~ Resolved 2026-07-27: the isolated automatic fallback smoke passed from a 92% `MappingRequired` candidate through live preview, save, and valid automatic reopen; the prior failure artifact was replaced by the passing result and three current screenshots.
-11. Smart Type Mapper **Open Variable** (EnvDTE) has been compiled and smoke-tested for "no active debug session" graceful handling, but the real pointer-backed live-open path can only be verified inside a running Visual Studio debug session.
-12. Version bump decision: source still reports `1.0.46.0`. Buffer Doctor + Automatic Vision Inspector + Smart Type Mapper constitute a user-facing feature release; the next public binary should be `1.0.47.0` (or higher) with README/Marketplace copy updates.
-13. The industrial multi-library installed-VSIX UI smoke reaches the intended breakpoint and DTE locals, but current UI Automation times out resolving the docked controls for that heavier scenario. Do not count it as passed. Basler/Spinnaker/Vimba X SDK assemblies and all representative hardware/lifetime cases are still missing.
+10. Smart Type Mapper **Open Variable** handles the no-debug-session case, but its individual pointer-backed live-open path does not have the same installed-VSIX automation depth as the automatic fallback path.
+11. The top `Inspector` button is intentionally visible only in narrow layout. Medium and wide layouts expose the Inspector panel directly; a consistent always-present toggle would be a separate approved UX change, not a release-fix requirement.
 
 ## Known Limits
 
@@ -246,21 +246,21 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
 ## Next Priorities
 
-1. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
+1. Publish the qualified 1.0.47 package and listing | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-   Prerequisite: current Basler pylon, Spinnaker, and Vimba X SDK installations or legal qualification machines, plus representative camera/emulator objects and lifetime rules. Follow `docs/industrial-camera-compatibility-validation.md`; do not make vendor support claims from contract fixtures alone.
+   Prerequisite: Marketplace publisher access and the owner's explicit publication action. Upload the artifact recorded below, paste `docs/marketplace-overview-1.0.47.md` and `docs/marketplace-release-notes-1.0.47.md`, then verify the public version and copy.
 
-2. Prepare the 1.0.47 feature release | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+2. Post-publication smoke on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   State: bump to `1.0.47`, update README/Marketplace copy/Overview/release notes for Buffer Doctor, Automatic Vision Inspector, and Smart Type Mapper, run the full installed-extension matrix, package the VSIX, and record the artifact SHA256. Do not publish a binary without the matrix.
+   Prerequisite: a VS2022 machine with the prior Marketplace version installed. Test update, restart, registered Bitmap/Mat open, Automatic Inspector discovery, and absence of package-load popups.
 
-3. Post-publication smoke on a separate PC and release bookkeeping | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+3. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
-   Acceptance: test update/restart/open on a separate, previously installed VS2022 PC, inspect primary provider and automatic-discovery paths, confirm no package-load popup, and record the result.
+   Prerequisite: current Basler pylon, Spinnaker, and Vimba X SDK installations or legal qualification machines, representative camera/emulator objects, and lifetime rules. Follow `docs/industrial-camera-compatibility-validation.md`; do not make vendor support claims from fixtures alone.
 
-4. Push the local `v1.0.45` tag and create the historical GitHub Release only when the user requests publication | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+4. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Acceptance: immutable tag `v1.0.45` (already created locally on `a23d8ad`) is pushed to origin and the release body matches `docs/github-release-1.0.45.md`. Do not push without the user's explicit `PUSH` request.
+   Current evidence proves the button/panel switch is responsive behavior, not intermittent registration. Any change requires a written UI description, a text mockup, and explicit owner approval before implementation.
 
 Owner decision recorded 2026-07-26: the ImagePtr provider/public-contract mismatch (former priority 1) is intentionally left unchanged. The exact `Cressem.ImageModel.ImagePtr` registration is company-specific support and stays as is; the broader public wording question is deferred.
 
@@ -292,7 +292,7 @@ docs/ARCHITECTURE_AND_VALIDATION.md
 docs/automatic-vision-inspector.md
 ```
 
-Start with real supported OpenCvSharp/Emgu/Bitmap objects through Automatic Vision Inspector when reproducible package/runtime samples are available; an industrial SDK claim additionally requires a user-supplied real object, version, lifetime rule, and legal test sample. Otherwise prepare the 1.0.47 release copy/version/matrix. Do not reopen the completed Automatic Vision Inspector or Smart Type Mapper fallback scope unless its recorded acceptance criteria no longer pass. Any provider/source fix requires a new VSIX version and the installed-extension matrix.
+Start by checking whether Marketplace now serves `1.0.47.0`. If not, the next external gate is publication using the qualified artifact and copy. An industrial SDK claim requires a real object, version, lifetime rule, and legal test sample. Do not reopen the completed Automatic Vision Inspector, Smart Type Mapper fallback, Buffer Doctor, or local 1.0.47 qualification scope unless its recorded acceptance criteria no longer pass. Any provider/source fix requires a new VSIX version and the installed-extension matrix.
 
 ## Current Release Artifact
 
@@ -300,12 +300,12 @@ Start with real supported OpenCvSharp/Emgu/Bitmap objects through Automatic Visi
 C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
-Recorded properties (1.0.46 industrial-layout and Automatic Inspector workflow-hardened source, rebuilt, packaged, and reinstalled locally 2026-07-27):
+Recorded properties (1.0.47 source, rebuilt, packaged, reinstalled, and hybrid-smoked locally 2026-07-28):
 
 ```text
-Version: 1.0.46.0
-Size: 1,923,783 bytes
-SHA256: AFD9CD0377786CF0B1545B0BDD22E748F95E38E014D9DEAA984D1B42D5A34E25
+Version: 1.0.47.0
+Size: 1,924,125 bytes
+SHA256: DAB2CE62007F77F11CFF828AF02EF2F2DAE26A3BB3238CF251679E4A69505174
 ```
 
 This artifact is local/generated. Rebuild it after any source, packaging, dependency, or version change; do not assume the old artifact matches a new commit. The last Marketplace-published binary remains `1.0.45.0`.

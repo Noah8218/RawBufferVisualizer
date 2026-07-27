@@ -6,21 +6,48 @@
 [![Marketplace installs](https://img.shields.io/visual-studio-marketplace/i/openvisionlab.RawBufferVisualizer)](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 [![CI](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml/badge.svg)](https://github.com/Noah8218/RawBufferVisualizer/actions/workflows/ci.yml)
 
-**Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables directly while stopped at a breakpoint.**
+**Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables and diagnose raw-buffer mistakes directly at a breakpoint.**
 
-Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, and supported image collections in one docked Visual Studio window. It combines a C# image debugger, OpenCvSharp and Emgu CV visualizer, IntPtr image viewer, and raw image buffer inspector for machine-vision work.
+Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
+## New In 1.0.47
+
+The `1.0.47.0` package is locally qualified and prepared for the next Marketplace update. Until the Marketplace badge above reports `1.0.47`, the public install link still serves the earlier published line.
+
+### Automatic Vision Inspector
+
+Open the docked Tool Window once, leave `Auto Inspect on Break` enabled, and stop at a breakpoint. The inspector scans the selected stack frame's locals and arguments for objects that expose an accessible buffer pointer or managed array together with width, height, stride, and format information.
+
+- `[Auto]` means inference and the current buffer passed validation and the image opened.
+- `[Map]` means the object looks image-like but one or more roles are ambiguous. Smart Type Mapper lets you confirm the member or enum mapping once and reuses it later.
+- `[Failed]` means the object was recognized but its current pointer, array, or descriptor could not be opened.
+- One failed candidate does not prevent the remaining images from opening.
+- `Auto Inspect on Break` is a per-user preference that persists across Visual Studio restarts. `Scan Now` still works while automatic scanning is off.
+
+Registered OpenCvSharp, Emgu CV, and Bitmap types continue to use their reliable debugger-visualizer icon path and are excluded from automatic mapping candidates. Automatic discovery is for unregistered pointer/array-backed wrappers whose required members are visible to the debugger; it does not call arbitrary SDK methods or reverse-engineer private native layouts.
+
+![Automatic Vision Inspector finds safe image-like values in the current stack frame](docs/images/automatic-vision-inspector.png)
+
+### Vision Buffer Doctor
+
+When an image looks sheared, too dark, scrambled, or incorrectly packed, select `Interpret > Diagnose Buffer`. Buffer Doctor ranks plausible width, height, stride, pixel format, valid-bit, and byte-order interpretations from bounded samples. Selecting a candidate applies it immediately without another debugger round trip.
+
+Buffer Doctor is a buffer-layout assistant, not a semantic image detector. RGB/BGR and Bayer phase can remain inherently ambiguous, so the UI keeps tied candidates visible for the developer to confirm.
+
+![Vision Buffer Doctor ranks and applies plausible raw-buffer interpretations](docs/images/vision-buffer-doctor.png)
+
 ## One-Minute Quick Start
 
 1. Install the extension from [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer) and restart Visual Studio.
-2. Start debugging and stop where an image variable is alive.
-3. Open DataTip, Watch, Locals, or Autos and click the visualizer icon.
-4. Select the new thumbnail in the docked `Raw Buffer Visualizer` window.
-5. Use the mouse wheel and drag to zoom and pan, then inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
+2. Open `View > Other Windows > Raw Buffer Visualizer` once.
+3. Start debugging and stop where image variables or camera-frame wrappers are alive.
+4. Let `Auto Inspect on Break` open safe unregistered wrappers. For Bitmap, OpenCvSharp, Emgu CV, and registered collections, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
+5. Select a thumbnail, zoom or pan, and inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
+6. If a raw image looks wrong, run `Interpret > Diagnose Buffer` and select the most plausible candidate.
 
 The same workflow works for a single image, a typed `List<TImage>` or `Dictionary<TKey, TImage>`, a mixed object collection, or a supported image array.
 
@@ -31,6 +58,8 @@ The same workflow works for a single image, a typed `List<TImage>` or `Dictionar
 | OpenCvSharp `Mat` | Common | Supported |
 | Emgu CV `Mat` and `System.Drawing.Bitmap` | Varies | Supported |
 | `IntPtr` and raw image buffers | Limited | Supported through pointer shapes and `RawBufferView` |
+| Current-frame discovery for unregistered camera wrappers | Uncommon | Safe pointer/array-backed shapes in locals and arguments |
+| Ranked recovery for wrong stride/format/byte order | Uncommon | Vision Buffer Doctor |
 | Stride, byte order, valid bits, and raw-byte diagnostics | Limited | Supported |
 | `Mono10PackedLsb` and `Mono12PackedLsb` | Uncommon | Supported |
 | Multiple inspected images in one docked list | Varies | Supported |
@@ -41,6 +70,9 @@ Other debugger visualizers have different feature sets. This comparison describe
 
 ## Key Features
 
+- Automatic Vision Inspector for safe image-like locals and arguments, with isolated `[Auto]`, `[Map]`, and `[Failed]` outcomes.
+- Smart Type Mapper as the recovery path for ambiguous company-specific image wrappers.
+- Vision Buffer Doctor with ranked, immediately applicable raw-buffer interpretations.
 - Single docked Visual Studio window where inspected images accumulate in an `Images` list.
 - Open a typed or mixed image list, dictionary, or array once to append its image entries to that same list.
 - Image rows include variable/title, thumbnail, width x height, pixel format, stride, and source type.
@@ -72,7 +104,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-Version `1.0.45.0` packages and documents the current large-image performance line: preview-first debugger transfer, file-backed tiled sources, and progressive viewport reads that avoid decoding or uploading an entire large frame for every view change. The large-image zoom stability fixes, collections, pixel inspection, export, and comparison workflows remain available.
+The `1.0.47.0` feature line adds Automatic Vision Inspector and Vision Buffer Doctor while preserving the preview-first transfer, file-backed tiled display, collections, pixel inspection, export, and comparison workflows from the published `1.0.45.0` line.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -124,6 +156,15 @@ dotnet run --project .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.cspro
 
 ## Visual Studio Usage
 
+For unregistered image wrappers:
+
+1. Open `View > Other Windows > Raw Buffer Visualizer`.
+2. Keep `Auto Inspect on Break` enabled, or use `Scan Now` on demand.
+3. Stop at a breakpoint. The selected frame's locals and arguments are scanned without forcing the Tool Window to open or steal focus.
+4. Review automatic image rows. Use `Map` only for an ambiguous type; the saved mapping is reused on later breaks and Visual Studio sessions.
+
+For registered image types and collections:
+
 1. Install `Raw Buffer Visualizer` from Visual Studio Marketplace.
 2. Start debugging a C# project in Visual Studio.
 3. Stop at a breakpoint where a supported image variable is alive.
@@ -168,7 +209,8 @@ The docked layout adapts to the available width:
 | --- | --- | --- |
 | `RawBufferSnapshot` | Supported | SDK snapshot from `byte[]`, `ushort[]`, `float[]`, or `IntPtr`. |
 | `RawBufferView` | Supported | Pointer-backed wrapper for common camera/frame-grabber image shapes. |
-| `ImagePtr`-style objects | Supported | Reflection-based pointer shape with `Ptr`, `Length`, `Width`, `Height`, `Step`, and `Bpp`. |
+| Unregistered camera/frame wrappers | Conditional | Automatic Inspector supports debugger-visible pointer/array, width, height, stride, and pixel-format shapes. Ambiguous enum/member roles require one saved mapping. |
+| Exact ImagePtr compatibility target | Limited | The debugger icon is registered for the existing `Cressem.ImageModel.ImagePtr` contract. Other types should use `RawBufferView` or Automatic Inspector. |
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. |
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs instead of requiring the debuggee's OpenCvSharp package version. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
@@ -178,7 +220,7 @@ The docked layout adapts to the available width:
 
 OpenCvSharp compatibility was exercised with real `Mat` instances from `OpenCvSharp4` packages `4.0.0.20181225`, `4.2.0.20200208`, `4.5.5.20211231`, `4.8.0.20230708`, and `4.13.0.20260627`. Emgu CV compatibility was exercised with real `Mat` instances from packages `3.4.3.3016`, `4.2.0.3662`, `4.5.5.4823`, `4.8.1.5350`, and `4.13.0.5924`. These are tested compatibility points, not a guarantee for every package version between them. `System.Drawing.Bitmap` is handled through the stable .NET Framework drawing API and is tested in the `net472` debugger sample.
 
-Industrial camera and frame-grabber SDK objects are best supported through a common shape adapter first. If your object exposes buffer pointer, width, height, stride, channels, bit depth, and pixel format, inspect it through `RawBufferView` or an `ImagePtr`-style object.
+Industrial camera and frame-grabber SDK objects are best supported through a common shape adapter first. If your object exposes buffer pointer, width, height, stride, channels, bit depth, and pixel format, inspect it through `RawBufferView`. Automatic Inspector can also recognize many existing wrappers when those members are debugger-visible.
 
 ```csharp
 var view = new RawBufferView
@@ -360,6 +402,7 @@ Latest recorded release-gate smoke for the current runtime line:
 | Standalone viewer interactions | Passed open, pixel/GV read, Fit, 1:1, slider and wheel zoom, PNG/snapshot export, tabs, and linked views. |
 | VS2022 docked `5000 x 5000 Mono8` | Passed with `115.3 ms` open path, `1.24 ms` max wheel command, `0.77 ms` max drag command, and `33.94 ms` max frame. |
 | Installed VSIX, real `8192 x 8192` Mats | Passed in VS2022 17.14 with OpenCvSharp and Emgu CV, correct GV values, at most `1 MiB` per new preview file, and controlled `Unavailable` state after debuggee exit. |
+| Installed VSIX, hybrid current-frame session | Passed in VS2022 17.14 with real OpenCvSharp `4.13.0.20260627`, Emgu CV `4.13.0.5924`, and Bitmap values through registered visualizers plus six automatically opened pointer-backed camera-shape fixtures; 9 images, 0 errors, and no duplicate mapping rows for registered types. |
 | Dense file-backed `100000 x 100000 Mono8` | Passed with a non-sparse `10,000,000,000` byte payload, `1.73 s` first visible time, and `88.0 MB` working set. |
 | Dense file-backed `200000 x 200000 Mono8` | Passed with a non-sparse `40,000,000,000` byte payload, `1.94 s` first visible time, and `87.5 MB` working set. |
 | Docked accumulation and cleanup soak | Passed 240 repeated `2048 x 2048 Mono8` opens using both selected-item Delete and Clear, with no positive managed/private/working-set growth, no GDI/USER growth, and no owned temporary directories left behind. |
@@ -412,6 +455,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\SmokePreviewFirstHandoff.ps1 
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeSampledPreviewPerformance.ps1 -Configuration Release -Framework net472 -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixLargeMats.ps1 -Configuration Release -VisualStudioInstanceId <VS2022-instance-id> -NoBuild
 powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedMemorySoak.ps1 -Configuration Release -Framework net472 -NoBuild
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
 ```
 
 The installed-VSIX smoke opens real OpenCvSharp and Emgu CV `8192 x 8192` Mats in Visual Studio 2022, checks pixel values and bounded temporary storage, then terminates the debuggee and verifies that the last image remains visible without an unhandled dialog.
@@ -441,13 +485,16 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
 - Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, error rows, and support-report actions.
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and supported collections.
+- Automatic Inspector partial-result behavior, preference persistence, registered-type deduplication, and Smart Type Mapper recovery.
+- Buffer Doctor ranked candidates and immediate descriptor application.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
 - VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Vssdk.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace release text for this version: [1.0.45 release notes](docs/marketplace-release-notes-1.0.45.md).
+Marketplace Overview draft for this version: [1.0.47 Overview](docs/marketplace-overview-1.0.47.md).
+Marketplace release text for this version: [1.0.47 release notes](docs/marketplace-release-notes-1.0.47.md).
 GitHub Release body for this version: [1.0.45 GitHub Release draft](docs/github-release-1.0.45.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 

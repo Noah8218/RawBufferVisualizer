@@ -211,6 +211,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     continue;
                 }
 
+                if (KnownImageType.UsesRegisteredVisualizerPath(runtimeTypeName))
+                {
+                    RawBufferVisualizerPackage.WriteAutomationLog(
+                        "Automatic scan skipped registered visualizer type " + rootExpression + " (" + runtimeTypeName + ")");
+                    continue;
+                }
+
+                if (KnownImageType.IsMetadataOnlyType(runtimeTypeName))
+                {
+                    RawBufferVisualizerPackage.WriteAutomationLog(
+                        "Automatic scan skipped metadata-only type " + rootExpression + " (" + runtimeTypeName + ")");
+                    continue;
+                }
+
                 RawBufferVisualizerPackage.WriteAutomationLog(
                     "Automatic scan inspecting " + rootExpression + " (" + runtimeTypeName + ")");
                 var inventory = BuildInventory(expression);

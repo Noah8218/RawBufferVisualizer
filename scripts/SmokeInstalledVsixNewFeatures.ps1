@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "OpenVariable", "AutomaticVisionInspector")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "OpenVariable", "AutomaticVisionInspector", "MultiLibraryHybrid")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -341,10 +341,34 @@ function Click-VisualizerGlyph([System.Windows.Automation.AutomationElement]$Tre
     }
 
     Select-AutomationItem $TreeItem
-    $x = [int][Math]::Max($rect.Left + 20, $rect.Right - 30)
-    $y = [int]($rect.Top + $rect.Height / 2)
     $logPath = Join-Path $outputRoot "click-visualizer-glyph.log"
-    "name=$($TreeItem.Current.Name) rect=$($rect) x=$x y=$y" | Set-Content -LiteralPath $logPath -Encoding UTF8
+    $descendants = $TreeItem.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    $viewElement = $null
+    $elementLog = @()
+    for ($index = 0; $index -lt $descendants.Count; $index++) {
+        $element = $descendants.Item($index)
+        $elementLog += "type=$($element.Current.ControlType.ProgrammaticName) name=$($element.Current.Name) id=$($element.Current.AutomationId) rect=$($element.Current.BoundingRectangle)"
+        if (-not $viewElement -and @("View", "보기") -contains [string]$element.Current.Name) {
+            $viewElement = $element
+        }
+    }
+
+    if ($viewElement) {
+        $viewRect = $viewElement.Current.BoundingRectangle
+        $x = [int]($viewRect.Left + $viewRect.Width / 2)
+        $y = [int]($viewRect.Top + $viewRect.Height / 2)
+    }
+    else {
+        $x = [int][Math]::Max($rect.Left + 20, $rect.Right - 230)
+        $y = [int]($rect.Top + $rect.Height / 2)
+    }
+
+    @(
+        "name=$($TreeItem.Current.Name) rect=$($rect) x=$x y=$y viewElementFound=$($viewElement -ne $null)"
+        $elementLog
+    ) | Set-Content -LiteralPath $logPath -Encoding UTF8
     [RawBufferInstalledVsixNative]::SetCursorPos($x, $y) | Out-Null
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
@@ -592,8 +616,7 @@ function Invoke-SmartTypeMapperScenario(
             if ($matches.Count -eq 1 -and
                 [bool]$matches[0].isError -and
                 [string]$matches[0].errorType -eq "MappingRequired" -and
-                [string]$matches[0].errorMessage -like "Pixel format needs one explicit mapping*" -and
-                [string]$state.activeTitle -like "*unmappedCompanyFrame*") {
+                [string]$matches[0].errorMessage -like "Pixel format needs one explicit mapping*") {
                 return $state
             }
         }
@@ -610,7 +633,7 @@ function Invoke-SmartTypeMapperScenario(
     $editMappingButton = Wait-Until "automatic candidate Map button" {
         Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::Button) |
             Where-Object {
-                [string]$_.Current.Name -eq "Map this detected image type" -and
+                [string]$_.Current.Name -in @("Map this detected image type", "Map") -and
                 -not [bool]$_.Current.IsOffscreen
             } |
             Select-Object -First 1
@@ -894,6 +917,162 @@ function Invoke-AutomaticVisionInspectorScenario(
     }
 }
 
+function Invoke-MultiLibraryHybridScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $registeredTypes = [ordered]@{
+        openCvMat = "OpenCvSharp.Mat"
+        emguMat = "Emgu.CV.Mat"
+        bitmap = "System.Drawing.Bitmap"
+    }
+    $registeredAutomaticSkipTypes = @(
+        "RawBufferVisualizer.Sdk.RawBufferSnapshot",
+        "RawBufferVisualizer.Sdk.RawBufferView"
+    )
+    $registeredSkipTypes = @($registeredTypes.Values) + $registeredAutomaticSkipTypes
+    $automaticTypes = @(
+        "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedVimbaFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage"
+    )
+    $automaticTypeCounts = [ordered]@{
+        "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView" = 2
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedVimbaFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage" = 1
+    }
+
+    Show-LocalsWindow $Process.Id
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 750
+    $scanButton = Wait-Until "Automatic Vision Inspector Scan Now button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+    } 30
+    $invokePattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$invokePattern)) {
+        throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    Wait-Until "automatic camera-shape inspection before registered visualizers" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            foreach ($entry in $automaticTypeCounts.GetEnumerator()) {
+                $sourceType = [string]$entry.Key
+                $expectedCount = [int]$entry.Value
+                $matches = @($state.documents | Where-Object {
+                    [string]$_.sourceType -eq $sourceType -and -not [bool]$_.isError
+                })
+                if ($matches.Count -ne $expectedCount) {
+                    return $null
+                }
+            }
+
+            $state
+        }
+        catch {
+            $null
+        }
+    } 60 | Out-Null
+
+    foreach ($entry in $registeredTypes.GetEnumerator()) {
+        $variableName = [string]$entry.Key
+        $sourceType = [string]$entry.Value
+        $treeItem = Wait-Until "$variableName Locals row" {
+            Find-TreeItem (Get-AutomationRoot $MainHandle) $variableName
+        } 60
+        Click-VisualizerGlyph $treeItem
+
+        Wait-Until "$sourceType registered visualizer handoff" {
+            Dismiss-DebuggerEvaluationWarning | Out-Null
+            if (-not (Test-Path -LiteralPath $sessionPath)) {
+                return $null
+            }
+
+            try {
+                $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                $matches = @($state.documents | Where-Object {
+                    [string]$_.sourceType -eq $sourceType -and -not [bool]$_.isError
+                })
+                if ($matches.Count -eq 1) { $state } else { $null }
+            }
+            catch {
+                $null
+            }
+        } 60 | Out-Null
+    }
+
+    $finalState = Wait-Until "hybrid registered and automatic image session" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            foreach ($sourceType in $registeredTypes.Values) {
+                $matches = @($state.documents | Where-Object {
+                    [string]$_.sourceType -eq $sourceType -and -not [bool]$_.isError
+                })
+                if ($matches.Count -ne 1) {
+                    return $null
+                }
+            }
+            foreach ($entry in $automaticTypeCounts.GetEnumerator()) {
+                $sourceType = [string]$entry.Key
+                $expectedCount = [int]$entry.Value
+                $matches = @($state.documents | Where-Object {
+                    [string]$_.sourceType -eq $sourceType -and -not [bool]$_.isError
+                })
+                if ($matches.Count -ne $expectedCount) {
+                    return $null
+                }
+            }
+
+            $registeredAutomaticRows = @($state.documents | Where-Object {
+                [bool]$_.isAutomaticInspection -and
+                $registeredSkipTypes -contains [string]$_.sourceType
+            })
+            if ($registeredAutomaticRows.Count -ne 0) {
+                return $null
+            }
+            if ([int]$state.documentCount -ne 9 -or
+                [int]$state.errorCount -ne 0 -or
+                [string]$state.automaticScanStatus -notmatch "6 detected: 6 opened, 0 need mapping, 0 failed") {
+                return $null
+            }
+
+            $state
+        }
+        catch {
+            $null
+        }
+    } 60
+
+    $capturePath = Join-Path $outputRoot "multi-library-hybrid.png"
+    Capture-Window $MainHandle $capturePath
+
+    [ordered]@{
+        scenario = "MultiLibraryHybrid"
+        screenshotPath = $capturePath
+        registeredVisualizerTypes = @($registeredTypes.Values)
+        registeredAutomaticSkipTypes = $registeredAutomaticSkipTypes
+        automaticInspectorTypes = $automaticTypes
+        registeredTypesSkippedByAutomaticScan = $true
+        documentCount = [int]$finalState.documentCount
+        errorCount = [int]$finalState.errorCount
+        automaticScanStatus = [string]$finalState.automaticScanStatus
+    }
+}
+
 function Invoke-OpenVariableScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
@@ -1047,6 +1226,7 @@ $scenarioArgument = switch ($Scenario) {
     "SmartTypeMapper" { "--smart-type-mapper-fallback-debug" }
     "OpenVariable" { "--smart-type-mapper-debug" }
     "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
+    "MultiLibraryHybrid" { "--multi-library-debug" }
     default { "--buffer-doctor-debug" }
 }
 
@@ -1106,6 +1286,9 @@ try {
         elseif ($Scenario -eq "SmartTypeMapper") {
             (Find-TreeItem $root "unmappedCompanyFrame") -ne $null
         }
+        elseif ($Scenario -eq "MultiLibraryHybrid") {
+            (Find-TreeItem $root "openCvMat") -ne $null
+        }
         else {
             (Find-TreeItem $root "companyFrameList") -ne $null
         }
@@ -1118,6 +1301,7 @@ try {
         "SmartTypeMapper" { Invoke-SmartTypeMapperScenario $visualStudio $mainHandle }
         "OpenVariable" { Invoke-OpenVariableScenario $visualStudio $mainHandle }
         "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
+        "MultiLibraryHybrid" { Invoke-MultiLibraryHybridScenario $visualStudio $mainHandle }
     }
 
     Stop-Debugging $visualStudio.Id

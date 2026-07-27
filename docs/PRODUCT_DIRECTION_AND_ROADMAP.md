@@ -154,16 +154,15 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Now: stabilize the public 1.0.45 line
+### Now: publish and observe the locally qualified 1.0.47 line
 
-1. Resolve the ImagePtr provider/public-documentation mismatch. `RawBufferView` is the generic pointer contract; an arbitrary duck-typed class cannot receive a debugger icon without target registration.
-2. Record real Marketplace update/install/restart smoke on another VS2022 machine.
-3. Synchronize the public Overview with reviewed local `1.0.45` copy.
-4. Watch team usage for repeated-open memory, temp storage, package-load, provider-icon, and live-source-unavailable issues.
-5. Remove VSSDK threading analyzer warnings with no behavior regression.
-6. Create the first Git tag/GitHub Release only after installed-package smoke is recorded.
+1. Upload the qualified `1.0.47.0` VSIX and reviewed Overview/release notes to Marketplace.
+2. Record real Marketplace update/install/restart smoke on another VS2022 machine that previously had `1.0.45.0`.
+3. Watch team usage for repeated-open memory, temp storage, package-load, provider-icon, automatic-scan false positives, and live-source-unavailable issues.
+4. Remove VSSDK threading analyzer warnings with no behavior regression.
+5. Create the first `1.0.47` Git tag/GitHub Release after the published package and update smoke agree.
 
-The uncommitted 1.0.46 worktree also contains Buffer Doctor, Smart Type Mapper, and Automatic Vision Inspector. All three now have current installed-VSIX evidence, including the intentionally ambiguous Smart Type Mapper fallback from mapping candidate through live preview, save, and automatic reopen. Public 1.0.47 preparation still requires release copy/version work and the full installed-extension matrix.
+The `1.0.47` source, package metadata, README, Marketplace copy, and local installed-VSIX feature matrix are qualified. Automatic Vision Inspector is the primary discovery path for safe unregistered wrappers, Smart Type Mapper is the explicit correction/persistence fallback, and Vision Buffer Doctor repairs plausible raw-layout mistakes. Public Marketplace publication, separate-PC update behavior, and live vendor hardware remain distinct gates.
 
 Exit criteria:
 
@@ -177,7 +176,7 @@ Exit criteria:
 ### Next: supportability and compatibility growth
 
 1. Convert real user failures into reproducible samples in `VisualizerDebuggee` or focused smoke scripts.
-2. Validate Automatic Vision Inspector with real supported OpenCvSharp/Emgu/Bitmap objects before extending its public compatibility claim.
+2. Convert only real vendor SDK/runtime evidence into new compatibility claims; registered OpenCvSharp/Emgu/Bitmap values already pass the 1.0.47 hybrid installed-VSIX scenario.
 3. Add only requested formats/types with an exact source type, assembly version, descriptor mapping, and lifetime rule.
 4. Extend long-session and multi-instance regression coverage when a real failure reveals a missing assertion.
 5. Evaluate Visual Studio 18 and newer .NET debuggee matrices after stable tooling is available.

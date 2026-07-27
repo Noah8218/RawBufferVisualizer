@@ -63,6 +63,10 @@ The docked window provides:
 - confidence, inferred-member summary, and validation reason on the selected row;
 - **Edit Mapping** for ambiguous or incorrect inference.
 
+Registered `RawBufferSnapshot`, `RawBufferView`, OpenCvSharp `Mat`, Emgu CV `Mat`, `System.Drawing.Bitmap`, and the exact ImagePtr compatibility target stay on their registered debugger-visualizer path. Automatic Inspector uses exact normalized runtime-type matching for this exclusion; similarly named company wrappers are not suppressed accidentally.
+
+The top `Inspector` button is a narrow-layout affordance rather than a permanently visible command. It is visible below 760 px, hidden from 760-1039 px while the compact bottom Inspector is present, and hidden at 1040 px or wider while the full right Inspector is present. The 540/900/1160 px states were rechecked on 2026-07-28. Changing this responsive contract requires the repository's UI mockup-and-approval gate.
+
 Automatic rows use a stable key derived from the root expression. Every scan removes and replaces the prior automatic rows, so repeated Break/Scan Now events do not accumulate duplicates. Manually opened or visualizer-handoff rows are not removed.
 
 ### Partial success and failure policy
@@ -130,6 +134,8 @@ Acceptance criteria:
 - disabling **Auto Inspect on Break**, closing Visual Studio, and starting a second Visual Studio session restores the disabled state; **Scan Now** still works -> passed;
 - re-enabling the option persists, and the pre-test user settings file is restored -> passed;
 - responsive Auto Inspect UI at 540/900/1160 px -> passed.
+- registered OpenCvSharp, Emgu CV, Bitmap, `RawBufferSnapshot`, and `RawBufferView` values do not create duplicate automatic rows -> passed in the hybrid installed-VSIX scenario;
+- top Inspector affordance matches narrow/medium/wide layout ownership at 540/900/1160 px -> passed.
 
 Verification:
 
@@ -139,6 +145,7 @@ dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests
 powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeAutomaticVisionInspectorLayout.ps1 -Configuration Release -Framework net472 -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticVisionInspector -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario SmartTypeMapper -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
 ```
 
 Evidence:
@@ -157,5 +164,7 @@ Evidence:
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-automatic-before-map.png`
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-dialog-preview.png`
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-automatic-after-reopen.png`
+- `artifacts/ui/installed-vsix-new-features/MultiLibraryHybrid-installed-vsix.json`
+- `artifacts/ui/inspector-button-visibility/2026-07-28/before/`
 
 Boundary / next dependency: The generic Automatic Vision Inspector scenario still passes in VS2022 17.14 after industrial-layout hardening, and IDS peak ICV 1.4.0 assembly metadata was verified. This does not prove live vendor runtime objects, buffer lifetime, drivers, emulators, or hardware. See `docs/industrial-camera-compatibility-validation.md`.

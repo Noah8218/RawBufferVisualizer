@@ -27,10 +27,10 @@ Suggested Marketplace fields:
 | --- | --- |
 | Display name | Raw Buffer Visualizer |
 | Publisher/author | Noah Choi |
-| Short description | Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, image collections, IntPtr, and raw buffers inside Visual Studio. |
+| Short description | Image Watch-style C# debugging with Bitmap/Mat inspection, automatic camera-frame discovery, and raw-buffer diagnosis. |
 | Type | Tools |
 | Categories | Debugging, Other Tools |
-| Tags | image-watch, csharp, opencvsharp, machine-vision, raw-buffer, emgucv |
+| Tags | image-watch, csharp, opencvsharp, machine-vision, raw-buffer, emgucv, image-debugger |
 | License | MIT |
 | Release stage | Preview for the first Marketplace upload |
 
@@ -41,7 +41,7 @@ Keep the product name stable and put the search-oriented positioning in the shor
 Recommended repository description:
 
 ```text
-Image Watch for C# machine vision: inspect OpenCvSharp Mat, Emgu CV Mat, Bitmap, IntPtr, and raw image buffers inside Visual Studio.
+Image Watch-style debugging for C# machine vision with Mat/Bitmap inspection, automatic camera-frame discovery, and raw-buffer diagnosis.
 ```
 
 Recommended repository homepage:
@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-Create the GitHub Release from tag `v1.0.45` using [github-release-1.0.45.md](github-release-1.0.45.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+For the 1.0.47 upload, use [marketplace-release-notes-1.0.47.md](marketplace-release-notes-1.0.47.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -88,7 +88,13 @@ Source: https://github.com/Noah8218/RawBufferVisualizer
 
 Lead with the debugger workflow, not the large-image benchmark. Publish only in C#, OpenCvSharp, computer-vision, or machine-vision communities whose self-promotion rules allow project posts.
 
-Overview copy:
+Current Overview copy:
+
+[Raw Buffer Visualizer 1.0.47 Marketplace Overview](marketplace-overview-1.0.47.md)
+
+The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for 1.0.47.
+
+Historical 1.0.45 Overview copy:
 
 ```markdown
 Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables directly while stopped at a breakpoint.
@@ -209,6 +215,8 @@ docs\images\viewer-vs-docked.png
 docs\images\viewer-vs-docked-overlay.png
 docs\images\viewer-vs-docked-error.png
 docs\images\raw-buffer-visualizer-demo.gif
+docs\images\automatic-vision-inspector.png
+docs\images\vision-buffer-doctor.png
 ```
 
 The first Marketplace media item must show the reviewed Visual Studio debugger workflow GIF, not the standalone viewer.
@@ -228,6 +236,10 @@ Run before uploading:
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --no-build
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLegacyImageCompatibility.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario BufferDoctor -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticVisionInspector -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario SmartTypeMapper -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 100000 -Height 100000 -Configuration Release -Framework net472 -Dense -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 200000 -Height 200000 -Configuration Release -Framework net472 -Dense -NoBuild
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -PixelFormat Mono16 -Width 640 -Height 484
@@ -288,7 +300,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.45
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.47
 ```
 
 GitHub setup:
@@ -310,12 +322,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.45.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.47.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.45.md](marketplace-release-notes-1.0.45.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.47.md](marketplace-release-notes-1.0.47.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
@@ -327,6 +339,10 @@ artifacts\perf\vs-docked\visual-studio-docked-session.json
 artifacts\perf\vs-docked\visual-studio-docked-session.png
 artifacts\perf\vs-docked\visual-studio-docked-framebuffer.png
 artifacts\ui\docked-layout-widths\layout-widths.json
+artifacts\ui\installed-vsix-new-features\AutomaticVisionInspector-installed-vsix.json
+artifacts\ui\installed-vsix-new-features\BufferDoctor-installed-vsix.json
+artifacts\ui\installed-vsix-new-features\SmartTypeMapper-installed-vsix.json
+artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
 ```
 
 ## Do Not Ship If
@@ -340,3 +356,5 @@ artifacts\ui\docked-layout-widths\layout-widths.json
 - The README or listing does not include the MIT license and third-party notice requirement.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` when inspecting an image on a VS 2022 17.9-17.13 machine.
+- README and the 1.0.47 Marketplace Overview disagree about Automatic Inspector's registered-type/manual-visualizer boundary.
+- Automatic scanning creates duplicate mapping rows for registered Bitmap, OpenCvSharp, Emgu CV, or RawBufferSnapshot values.

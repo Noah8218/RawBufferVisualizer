@@ -551,27 +551,41 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 CreateDescriptor(width, height, width * 3, RawPixelFormat.BGR24, 8),
                 3);
 
-            var openCvMat = new SimulatedOpenCvSharpMat(mono8Owner);
-            var emguMat = new SimulatedEmguCvMat(mono8Owner);
-            var baslerResult = new SimulatedBaslerGrabResult(mono8Owner);
-            var flirImage = new SimulatedFlirImagePtr(mono8Owner);
-            var vimbaFrame = new SimulatedVimbaFrame(mono8Owner);
-            var idsPeakImage = new SimulatedIdsPeakIcvImage(mono8Owner);
+            using (var openCvMat = new Mat(height, width, MatType.CV_8UC1))
+            using (var emguMat = new Emgu.CV.Mat(height, width, Emgu.CV.CvEnum.DepthType.Cv8U, 1))
+            using (var bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
+            {
+                openCvMat.SetTo(new Scalar(37));
+                emguMat.SetTo(new Emgu.CV.Structure.MCvScalar(173));
+                var rawBufferView = mono8Owner.View;
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    graphics.Clear(Color.FromArgb(17, 97, 201));
+                }
 
-            GC.KeepAlive(badStrideSnapshot);
-            GC.KeepAlive(openCvMat);
-            GC.KeepAlive(emguMat);
-            GC.KeepAlive(baslerResult);
-            GC.KeepAlive(flirImage);
-            GC.KeepAlive(vimbaFrame);
-            GC.KeepAlive(idsPeakImage);
-            GC.KeepAlive(mono8Owner);
-            GC.KeepAlive(bgr24Owner);
+                var baslerResult = new SimulatedBaslerGrabResult(mono8Owner);
+                var flirImage = new SimulatedFlirImagePtr(mono8Owner);
+                var vimbaFrame = new SimulatedVimbaFrame(mono8Owner);
+                var idsPeakImage = new SimulatedIdsPeakIcvImage(mono8Owner);
 
-            Debugger.Break();
-            Console.WriteLine("Multi-library debug scenario completed. Press Enter to exit.");
-            Console.ReadLine();
-            return 0;
+                Debugger.Break();
+
+                GC.KeepAlive(badStrideSnapshot);
+                GC.KeepAlive(rawBufferView);
+                GC.KeepAlive(openCvMat);
+                GC.KeepAlive(emguMat);
+                GC.KeepAlive(bitmap);
+                GC.KeepAlive(baslerResult);
+                GC.KeepAlive(flirImage);
+                GC.KeepAlive(vimbaFrame);
+                GC.KeepAlive(idsPeakImage);
+                GC.KeepAlive(mono8Owner);
+                GC.KeepAlive(bgr24Owner);
+
+                Console.WriteLine("Multi-library debug scenario completed. Press Enter to exit.");
+                Console.ReadLine();
+                return 0;
+            }
         }
 
         private static int RunLargeMatDebug(string[] args)

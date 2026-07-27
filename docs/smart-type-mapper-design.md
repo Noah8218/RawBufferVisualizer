@@ -164,7 +164,7 @@ Scope: Installed-VSIX automatic fallback for one unregistered pointer-backed typ
 
 Acceptance criteria:
 
-- the unregistered type remains a visible `MappingRequired` candidate instead of being guessed or hidden -> passed at 92% confidence;
+- the unregistered type remains a visible `MappingRequired` candidate instead of being guessed or hidden -> passed at 88% confidence;
 - selecting `Mono12PackedLsb` renders a preview from live debuggee memory -> passed;
 - saving writes the inferred member roles and enum value mapping -> passed;
 - the automatic scanner prefers the saved mapping and reopens the same value as 640 x 484, stride 960, `Mono12PackedLsb`, live source -> passed;
