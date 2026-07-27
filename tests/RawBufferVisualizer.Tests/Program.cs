@@ -97,6 +97,7 @@ namespace RawBufferVisualizer.Tests
                 VisionInferenceRequestsOnlyAmbiguousPixelFormat();
                 VisionInferenceHidesLowConfidenceShape();
                 TypeMappingReadsOneLevelNestedMemberPaths();
+                IndustrialCameraContractTests.RunAll();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;
             }

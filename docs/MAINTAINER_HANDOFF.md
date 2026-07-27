@@ -9,12 +9,11 @@ This is the canonical continuation document for the next conversation. Read it a
 | Last verified | 2026-07-27 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | `a23d8ad` (`Release 1.0.45 with performance benchmarks`) plus uncommitted 1.0.46 changes in the working tree |
-| Source and VSIX version | `1.0.46` / `1.0.46.0` (working tree, uncommitted; published Marketplace line remains `1.0.45.0`) |
+| Implementation baseline | `cbad230` (`Add automatic vision inspection and buffer recovery tools`, pushed) plus the latest industrial-buffer safety hardening commit on `main` |
+| Source and VSIX version | `1.0.46` / `1.0.46.0`; published Marketplace line remains `1.0.45.0` |
 | Public Marketplace version | `1.0.45.0`; the public Overview was re-fetched on 2026-07-26 KST and now matches the local `1.0.45` copy, including the Large Image Performance section |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Worktree before these handoff docs | Uncommitted: 1.0.46 version bump, Buffer Doctor, Smart Type Mapper, and Automatic Vision Inspector implementation (Core, ObjectSource, Vssdk UI/debugger integration, tests, smoke scripts), plus pre-existing docs additions |
-| Product stage | Public Marketplace Preview; the published line is 1.0.45, while the uncommitted 1.0.46 feature worktree has installed-VSIX evidence for Buffer Doctor, Automatic Vision Inspector, and Smart Type Mapper automatic fallback |
+| Product stage | Public Marketplace Preview; published line 1.0.45, source/install-test line 1.0.46. Automatic Vision Inspector is hardened for industrial buffer layout signals, but general vendor/hardware compatibility is not yet release-qualified |
 
 Public links:
 
@@ -103,7 +102,7 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 - Partial handoffs are cleaned up and stale temp sessions older than 24 hours are removed.
 - A docked accumulation/cleanup soak covers 240 repeated 2048 x 2048 opens.
 
-### Buffer Doctor (new in working tree)
+### Buffer Doctor
 
 - **Diagnose Buffer** panel in the Interpret section generates ranked interpretation candidates (pixel format, stride/row padding, width/height, endianness, valid bits) when an image looks broken.
 - Candidate generation and scoring are pure managed and sample-bounded (at most 64 rows / 4 MiB); full buffer scans are never required.
@@ -111,7 +110,7 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 - Phase 1 covers `Mono8`, `Mono16`, `Mono10/12PackedLsb`, `RGB24/BGR24`, `BGRA32`, `Float32`; RGB/BGR and Bayer variants are surfaced as ambiguous groups with an explicit "cannot be distinguished from content" notice.
 - Eight deterministic self-tests cover padded-stride detection, diagonal shear, endianness, valid-bits fit, trailing-row fit, sampling caps, and ambiguity grouping.
 
-### Smart Type Mapper (new in working tree)
+### Smart Type Mapper
 
 - Users can map unsupported image classes (e.g. a company SDK `CompanyFrame`) by selecting member roles in a dialog; mappings are saved per type in `%APPDATA%\RawBufferVisualizer\type-mappings.json` and, if present, a solution-local `.rawbuffervisualizer.json`.
 - Mapped types open automatically inside already-registered collections (`List<>`, `Dictionary<,>`, `object[]`, arrays) without code changes or extension rebuilds.
@@ -120,7 +119,7 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 - Mapping extraction reads only fields and property getters; methods are never invoked.
 - Six self-tests cover mapping file round-trip, solution-local priority, IntPtr/byte[]/ushort[] extraction, enum pixel-format mapping, failure inventory, and missing-member visible failure.
 
-### Automatic Vision Inspector (new in working tree)
+### Automatic Vision Inspector
 
 - **Auto Inspect** scans the current stack frame after each Break Mode transition; **Scan Now** refreshes it on demand.
 - The recognition order is saved mapping -> known shape -> runtime type hint -> member structure -> current-value/memory validation -> Smart Type Mapper fallback.
@@ -135,7 +134,7 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 - Public README, Marketplace checklist/Overview source, install/update/repair guidance, release runbook, release notes, demo media, license, and third-party notices exist.
 - CI, Marketplace CD, and GitHub Release workflows exist.
 - `1.0.45.0` Release VSIX was generated and passed the packaging compatibility guard.
-- Public Marketplace and source version are currently aligned at `1.0.45.0`.
+- Public Marketplace remains `1.0.45.0`; current source and locally installed qualification VSIX are `1.0.46.0`.
 
 ## Verified Evidence
 
@@ -163,6 +162,7 @@ These are recorded regression results, not performance promises for every PC.
 | Automatic Vision Inspector layout | `SmokeAutomaticVisionInspectorLayout.ps1` and the focused inspector-panel smoke passed at 540/900/1160 px. Evidence: `artifacts/ui/automatic-vision-inspector/2026-07-27/`. |
 | Installed VSIX Automatic Vision Inspector | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: five image-like locals opened with zero errors, including a 64 x 48 managed `byte[]` frame and a one-level nested pointer frame; two repeated **Scan Now** operations left the same five stable rows with no duplicates. Evidence: `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-installed-vsix.json`. |
 | Installed VSIX Smart Type Mapper fallback | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: an unregistered `UnmappedCompanyFrame` remained a 92% `MappingRequired` candidate, `Mono12PackedLsb` rendered from live debuggee memory, Save wrote the inferred roles/value mapping, and automatic rescan reopened it as 640 x 484, stride 960, live source with zero final errors. The pre-existing user mapping SHA256 was restored unchanged. Evidence: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json` and the three `smart-type-mapper-*.png` captures. |
+| Industrial SDK contract hardening | Official contracts for PFNC, Basler, Spinnaker, Vimba X, IDS peak, Euresys, HIKROBOT, Sapera, Zebra, and Zivid were reviewed. Deterministic padding/payload/offset/PFNC tests passed. IDS peak ICV 1.4.0 assembly metadata passed. The rebuilt/reinstalled VSIX retained the five-row/zero-error Automatic Vision Inspector result. General vendor-runtime/hardware support is not proven. Evidence: `docs/industrial-camera-compatibility-validation.md` and `artifacts/validation/industrial-camera-sdk-contracts.json`. |
 
 Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
@@ -187,7 +187,8 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 9. Large 100k/200k evidence is file-backed raw-image evidence, not proof that a debuggee can safely allocate a fully decoded 100k/200k `Mat`.
 10. ~~The Smart Type Mapper mapping dialog/save/reopen flow lacked installed-VSIX evidence.~~ Resolved 2026-07-27: the isolated automatic fallback smoke passed from a 92% `MappingRequired` candidate through live preview, save, and valid automatic reopen; the prior failure artifact was replaced by the passing result and three current screenshots.
 11. Smart Type Mapper **Open Variable** (EnvDTE) has been compiled and smoke-tested for "no active debug session" graceful handling, but the real pointer-backed live-open path can only be verified inside a running Visual Studio debug session.
-12. Version bump decision: the working tree still reports `1.0.46.0`. Buffer Doctor + Automatic Vision Inspector + Smart Type Mapper constitute a user-facing feature release; the next public binary should be `1.0.47.0` (or higher) with README/Marketplace copy updates.
+12. Version bump decision: source still reports `1.0.46.0`. Buffer Doctor + Automatic Vision Inspector + Smart Type Mapper constitute a user-facing feature release; the next public binary should be `1.0.47.0` (or higher) with README/Marketplace copy updates.
+13. The industrial multi-library installed-VSIX UI smoke reaches the intended breakpoint and DTE locals, but current UI Automation times out resolving the docked controls for that heavier scenario. Do not count it as passed. Basler/Spinnaker/Vimba X SDK assemblies and all representative hardware/lifetime cases are still missing.
 
 ## Known Limits
 
@@ -207,7 +208,7 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 - Automatic Vision Inspector scans the selected stack frame's locals only. It does not scan all threads, fields outside the bounded root/one-level inventory, or arbitrary collection contents.
 - Managed-array extraction prefers VSSDK child enumeration. Its EnvDTE fallback is capped at 256 elements, so a debugger engine that does not expose array children may require the existing collection path or a pointer-backed view.
 - Automatic confidence is structural evidence, not semantic proof. A plausible but wrong shape can still require **Edit Mapping**, and format ambiguities remain user decisions.
-- The new automatic path is proven with simulated company frames, not with real OpenCvSharp/Emgu/Bitmap or industrial-camera SDK objects.
+- The new automatic path is proven with simulated company frames and IDS peak assembly metadata only, not live industrial-camera SDK objects. Padded rows, extra payload, and `Buffer`/`ImageData` offsets now fail closed.
 
 ## Incident Lessons To Preserve
 
@@ -243,9 +244,9 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
 ## Next Priorities
 
-1. Validate real image-library and camera-SDK objects through the automatic path | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
+1. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
-   Prerequisite: exact runtime objects/packages, versions, lifetime rules, and reproducible debug samples. Do not spend model tokens on vendor-specific claims until these inputs are available. Start with real OpenCvSharp/Emgu/Bitmap objects already supported by the repository, then use an industrial SDK object supplied by the user.
+   Prerequisite: current Basler pylon, Spinnaker, and Vimba X SDK installations or legal qualification machines, plus representative camera/emulator objects and lifetime rules. Follow `docs/industrial-camera-compatibility-validation.md`; do not make vendor support claims from contract fixtures alone.
 
 2. Prepare the 1.0.47 feature release | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
@@ -297,12 +298,12 @@ Start with real supported OpenCvSharp/Emgu/Bitmap objects through Automatic Visi
 C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
-Recorded properties (uncommitted 1.0.46 working tree, rebuilt and published locally 2026-07-27; installed smoke used the same current source state before final repackaging):
+Recorded properties (1.0.46 industrial-layout-hardened source, rebuilt, packaged, and reinstalled locally 2026-07-27):
 
 ```text
 Version: 1.0.46.0
-Size: 1,916,006 bytes
-SHA256: 37E669317F067B8777577D1067423ABF446E52731252DE139B9100CC1002BF9E
+Size: 1,920,954 bytes
+SHA256: F19942F965C0701AA513754A38FF83805D0CDA73A5499913D9979DDEB7C42D60
 ```
 
 This artifact is local/generated. Rebuild it after any source, packaging, dependency, or version change; do not assume the old artifact matches a new commit. The last Marketplace-published binary remains `1.0.45.0`.

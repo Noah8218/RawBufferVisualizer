@@ -362,45 +362,62 @@ function Dismiss-OpenFileDialog {
 function Dismiss-DebuggerEvaluationWarning {
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
     $localizedOk = [string]([char]0xD655) + [string]([char]0xC778)
-    $elements = $desktop.FindAll(
-        [System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
-    for ($index = 0; $index -lt $elements.Count; $index++) {
-        $messageElement = $elements.Item($index)
-        $name = [string]$messageElement.Current.Name
-        if ($name.IndexOf("ClrCustomVisualizerDebuggeeHost", [StringComparison]::OrdinalIgnoreCase) -lt 0 -and
-            $name.IndexOf("DebuggerVisualizers.DebuggeeSide", [StringComparison]::OrdinalIgnoreCase) -lt 0) {
+    $localizedContinue = ([string]([char]0xB514) + [string]([char]0xBC84) + [string]([char]0xAE45) + " " +
+        [string]([char]0xACC4) + [string]([char]0xC18D))
+    $continueLabels = @("Continue Debugging", "Continue", $localizedContinue)
+    $windowCondition = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Window)
+    $windows = $desktop.FindAll([System.Windows.Automation.TreeScope]::Children, $windowCondition)
+    for ($windowIndex = 0; $windowIndex -lt $windows.Count; $windowIndex++) {
+        $window = $windows.Item($windowIndex)
+        $windowPattern = $null
+        if (-not $window.TryGetCurrentPattern(
+            [System.Windows.Automation.WindowPattern]::Pattern,
+            [ref]$windowPattern) -or
+            -not ([System.Windows.Automation.WindowPattern]$windowPattern).Current.IsModal) {
             continue
         }
 
-        $window = $messageElement
-        while ($window -and $window.Current.ControlType -ne [System.Windows.Automation.ControlType]::Window) {
-            $window = [System.Windows.Automation.TreeWalker]::ControlViewWalker.GetParent($window)
-        }
+        $buttons = @(Get-ElementsByControlType $window ([System.Windows.Automation.ControlType]::Button))
+        $targetButton = $buttons |
+            Where-Object { $continueLabels -contains [string]$_.Current.Name } |
+            Select-Object -First 1
 
-        if ($window) {
-            foreach ($button in Get-ElementsByControlType $window ([System.Windows.Automation.ControlType]::Button)) {
-                if (@("OK", $localizedOk) -contains [string]$button.Current.Name) {
-                    $pattern = $null
-                    if ($button.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
-                        ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+        if (-not $targetButton) {
+            $okButton = $buttons |
+                Where-Object { @("OK", $localizedOk) -contains [string]$_.Current.Name } |
+                Select-Object -First 1
+            if ($okButton) {
+                $dialogElements = $window.FindAll(
+                    [System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.Condition]::TrueCondition)
+                for ($elementIndex = 0; $elementIndex -lt $dialogElements.Count; $elementIndex++) {
+                    $elementName = [string]$dialogElements.Item($elementIndex).Current.Name
+                    if ($elementName.IndexOf("ClrCustomVisualizerDebuggeeHost", [StringComparison]::OrdinalIgnoreCase) -ge 0 -or
+                        $elementName.IndexOf("DebuggerVisualizers.DebuggeeSide", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                        $targetButton = $okButton
+                        break
                     }
-                    else {
-                        $rect = $button.Current.BoundingRectangle
-                        [RawBufferMultiLibraryNative]::SetCursorPos([int]($rect.Left + $rect.Width / 2), [int]($rect.Top + $rect.Height / 2)) | Out-Null
-                        [RawBufferMultiLibraryNative]::mouse_event([RawBufferMultiLibraryNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-                        [RawBufferMultiLibraryNative]::mouse_event([RawBufferMultiLibraryNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
-                    }
-
-                    Start-Sleep -Milliseconds 300
-                    return $true
                 }
             }
         }
 
-        [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-        Start-Sleep -Milliseconds 300
-        return $true
+        if ($targetButton) {
+            $pattern = $null
+            if ($targetButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+                ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+            }
+            else {
+                $rect = $targetButton.Current.BoundingRectangle
+                [RawBufferMultiLibraryNative]::SetCursorPos([int]($rect.Left + $rect.Width / 2), [int]($rect.Top + $rect.Height / 2)) | Out-Null
+                [RawBufferMultiLibraryNative]::mouse_event([RawBufferMultiLibraryNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+                [RawBufferMultiLibraryNative]::mouse_event([RawBufferMultiLibraryNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+            }
+
+            Start-Sleep -Milliseconds 300
+            return $true
+        }
     }
 
     $false
@@ -484,46 +501,62 @@ function Invoke-MultiLibraryScenario(
     $expectedVariables = @(
         @{ Name = "openCvMat"; Data = "openCvMat.Data"; Width = "openCvMat.Cols"; Height = "openCvMat.Rows"; Stride = "openCvMat.Step"; PixelFormat = "openCvMat.Type" },
         @{ Name = "emguMat"; Data = "emguMat.DataPointer"; Width = "emguMat.Cols"; Height = "emguMat.Rows"; Stride = "emguMat.Step"; PixelFormat = "emguMat.Depth" },
-        @{ Name = "baslerResult"; Data = "baslerResult.PixelData"; Width = "baslerResult.Width"; Height = "baslerResult.Height"; Stride = "baslerResult.Stride"; PixelFormat = "baslerResult.PixelType" },
-        @{ Name = "flirImage"; Data = "flirImage.Data"; Width = "flirImage.Width"; Height = "flirImage.Height"; Stride = "flirImage.Stride"; PixelFormat = "flirImage.PixelFormat" },
-        @{ Name = "avtFrame"; Data = "avtFrame.Buffer"; Width = "avtFrame.Width"; Height = "avtFrame.Height"; Stride = "avtFrame.Stride"; PixelFormat = "avtFrame.PixelFormat" },
-        @{ Name = "idsBuffer"; Data = "idsBuffer.Data"; Width = "idsBuffer.Width"; Height = "idsBuffer.Height"; Stride = "idsBuffer.Stride"; PixelFormat = $null },
+        @{ Name = "baslerResult"; Data = "baslerResult.PixelDataPointer"; Width = "baslerResult.Width"; Height = "baslerResult.Height"; Stride = $null; PixelFormat = "baslerResult.PixelTypeValue" },
+        @{ Name = "flirImage"; Data = "flirImage.DataPtr"; Width = "flirImage.Width"; Height = "flirImage.Height"; Stride = "flirImage.Stride"; PixelFormat = "flirImage.PixelFormat" },
+        @{ Name = "vimbaFrame"; Data = "vimbaFrame.ImageData"; Width = "vimbaFrame.Width"; Height = "vimbaFrame.Height"; Stride = $null; PixelFormat = "vimbaFrame.PixelFormat" },
+        @{ Name = "idsPeakImage"; Data = "idsPeakImage.Data"; Width = "idsPeakImage.Width"; Height = "idsPeakImage.Height"; Stride = $null; PixelFormat = "idsPeakImage.PixelFormat" },
         @{ Name = "badStrideSnapshot"; Data = $null; Width = $null; Height = $null; Stride = $null; PixelFormat = $null }
     )
 
-    # Wait for all expected variables to appear in Locals.
-    Wait-Until "all expected variables in Locals" {
+    # Locals is virtualized and a full Visual Studio UI Automation tree search
+    # can time out. Read the current frame through DTE and use UI Automation
+    # only for the extension surface that follows.
+    Wait-Until "multi-library breakpoint variables in current frame" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
-        $root = Get-AutomationRoot $MainHandle
-        $found = 0
-        foreach ($expected in $expectedVariables) {
-            if ((Find-TreeItem $root $expected.Name) -ne $null) {
-                $found++
+        Invoke-Dte $Process.Id {
+            param($dte)
+            $frame = $dte.Debugger.CurrentStackFrame
+            if (-not $frame -or -not $frame.Locals) {
+                return $false
             }
+
+            $foundOpenCv = $false
+            $foundBasler = $false
+            for ($index = 1; $index -le $frame.Locals.Count; $index++) {
+                $name = [string]$frame.Locals.Item($index).Name
+                if ($name -eq "openCvMat") {
+                    $foundOpenCv = $true
+                }
+                elseif ($name -eq "baslerResult") {
+                    $foundBasler = $true
+                }
+            }
+
+            $foundOpenCv -and $foundBasler
         }
-        $found -eq $expectedVariables.Count
     } 90 | Out-Null
 
-    Show-LocalsWindow $Process.Id
-    Start-Sleep -Milliseconds 500
-
     Show-RawBufferToolWindow $Process.Id
-    Start-Sleep -Milliseconds 1500
-    Dismiss-OpenFileDialog | Out-Null
-
-    $toolRoot = Wait-Until "Raw Buffer Visualizer tool window element" { Find-RawBufferToolWindowElement $MainHandle } 30
-    if (-not $toolRoot) {
-        throw "Raw Buffer Visualizer tool window element was not found."
+    Start-Sleep -Milliseconds 750
+    $scanButton = Wait-Until "Automatic Vision Inspector Scan Now button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+    } 30
+    $invokePattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$invokePattern)) {
+        throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
     }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
 
     # Wait for the image list to populate.
     $imageList = Wait-Until "image list with candidates" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
-        $items = @(Get-ImageListItems $toolRoot)
+        $items = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
         $items.Count -ge $expectedVariables.Count
     } 60
 
-    $items = @(Get-ImageListItems $toolRoot)
+    $items = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
     if ($items.Count -lt $expectedVariables.Count) {
         throw "Expected at least $($expectedVariables.Count) image candidates, but found $($items.Count)."
     }
@@ -664,6 +697,12 @@ try {
     } 180
 
     Focus-Window $mainHandle 1920 1040
+    Show-RawBufferToolWindow $visualStudio.Id
+    Start-Sleep -Milliseconds 1500
+    Dismiss-OpenFileDialog | Out-Null
+    $toolRoot = Wait-Until "Raw Buffer Visualizer tool window before debug" {
+        Find-RawBufferToolWindowElement $mainHandle
+    } 30
     Start-Debugging $visualStudio.Id
 
     $scenarioResult = Invoke-MultiLibraryScenario $visualStudio $mainHandle

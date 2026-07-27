@@ -531,16 +531,16 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             var emguMat = new SimulatedEmguCvMat(mono8Owner);
             var baslerResult = new SimulatedBaslerGrabResult(mono8Owner);
             var flirImage = new SimulatedFlirImagePtr(mono8Owner);
-            var avtFrame = new SimulatedAvtVimbaFrame(mono8Owner);
-            var idsBuffer = new SimulatedIdsUeyeMemoryBuffer(mono8Owner);
+            var vimbaFrame = new SimulatedVimbaFrame(mono8Owner);
+            var idsPeakImage = new SimulatedIdsPeakIcvImage(mono8Owner);
 
             GC.KeepAlive(badStrideSnapshot);
             GC.KeepAlive(openCvMat);
             GC.KeepAlive(emguMat);
             GC.KeepAlive(baslerResult);
             GC.KeepAlive(flirImage);
-            GC.KeepAlive(avtFrame);
-            GC.KeepAlive(idsBuffer);
+            GC.KeepAlive(vimbaFrame);
+            GC.KeepAlive(idsPeakImage);
             GC.KeepAlive(mono8Owner);
             GC.KeepAlive(bgr24Owner);
 
@@ -1310,20 +1310,22 @@ namespace RawBufferVisualizer.VisualizerDebuggee
     {
         private readonly PinnedRawBufferView _owner;
 
-        public IntPtr PixelData { get; private set; }
+        public IntPtr PixelDataPointer { get; private set; }
         public int Width { get; private set; }
         public int Height { get; private set; }
-        public int Stride { get; private set; }
-        public SimulatedBaslerPixelType PixelType { get; private set; }
+        public int PaddingX { get; private set; }
+        public long PayloadSize { get; private set; }
+        public SimulatedBaslerPixelType PixelTypeValue { get; private set; }
 
         public SimulatedBaslerGrabResult(PinnedRawBufferView owner)
         {
             _owner = owner;
-            PixelData = owner.View.Buffer;
+            PixelDataPointer = owner.View.Buffer;
             Width = owner.View.Width;
             Height = owner.View.Height;
-            Stride = owner.View.Stride;
-            PixelType = MapBaslerPixelType(owner.View.PixelFormat);
+            PaddingX = owner.View.Stride - owner.View.ToDescriptor().GetMinimumStride();
+            PayloadSize = owner.View.BufferLength;
+            PixelTypeValue = MapBaslerPixelType(owner.View.PixelFormat);
         }
 
         private static SimulatedBaslerPixelType MapBaslerPixelType(RawPixelFormat format)
@@ -1358,19 +1360,19 @@ namespace RawBufferVisualizer.VisualizerDebuggee
     {
         private readonly PinnedRawBufferView _owner;
 
-        public IntPtr Data { get; private set; }
-        public int Width { get; private set; }
-        public int Height { get; private set; }
-        public int Stride { get; private set; }
+        public IntPtr DataPtr { get; private set; }
+        public uint Width { get; private set; }
+        public uint Height { get; private set; }
+        public uint Stride { get; private set; }
         public SimulatedFlirPixelFormat PixelFormat { get; private set; }
 
         public SimulatedFlirImagePtr(PinnedRawBufferView owner)
         {
             _owner = owner;
-            Data = owner.View.Buffer;
-            Width = owner.View.Width;
-            Height = owner.View.Height;
-            Stride = owner.View.Stride;
+            DataPtr = owner.View.Buffer;
+            Width = (uint)owner.View.Width;
+            Height = (uint)owner.View.Height;
+            Stride = (uint)owner.View.Stride;
             PixelFormat = MapFlirPixelFormat(owner.View.PixelFormat);
         }
 
@@ -1391,8 +1393,8 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         }
     }
 
-    // Simulation of AVT Vimba Frame
-    internal enum SimulatedAvtPixelFormat
+    // Contract fixture modeled after Allied Vision Vimba X IFrame
+    internal enum SimulatedVimbaPixelFormat
     {
         Mono8,
         Mono10,
@@ -1402,60 +1404,90 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         Bgra8
     }
 
-    internal sealed class SimulatedAvtVimbaFrame
+    internal sealed class SimulatedVimbaFrame
     {
         private readonly PinnedRawBufferView _owner;
 
         public IntPtr Buffer { get; private set; }
-        public int Width { get; private set; }
-        public int Height { get; private set; }
-        public int Stride { get; private set; }
-        public SimulatedAvtPixelFormat PixelFormat { get; private set; }
+        public uint BufferSize { get; private set; }
+        public IntPtr ImageData { get; private set; }
+        public uint Width { get; private set; }
+        public uint Height { get; private set; }
+        public SimulatedVimbaPixelFormat PixelFormat { get; private set; }
 
-        public SimulatedAvtVimbaFrame(PinnedRawBufferView owner)
+        public SimulatedVimbaFrame(PinnedRawBufferView owner)
         {
             _owner = owner;
             Buffer = owner.View.Buffer;
-            Width = owner.View.Width;
-            Height = owner.View.Height;
-            Stride = owner.View.Stride;
-            PixelFormat = MapAvtPixelFormat(owner.View.PixelFormat);
+            BufferSize = (uint)owner.View.BufferLength;
+            ImageData = owner.View.Buffer;
+            Width = (uint)owner.View.Width;
+            Height = (uint)owner.View.Height;
+            PixelFormat = MapVimbaPixelFormat(owner.View.PixelFormat);
         }
 
-        private static SimulatedAvtPixelFormat MapAvtPixelFormat(RawPixelFormat format)
+        private static SimulatedVimbaPixelFormat MapVimbaPixelFormat(RawPixelFormat format)
         {
             switch (format)
             {
                 case RawPixelFormat.Mono16:
-                    return SimulatedAvtPixelFormat.Mono16;
+                    return SimulatedVimbaPixelFormat.Mono16;
                 case RawPixelFormat.BGR24:
-                    return SimulatedAvtPixelFormat.Bgr8;
+                    return SimulatedVimbaPixelFormat.Bgr8;
                 case RawPixelFormat.BGRA32:
-                    return SimulatedAvtPixelFormat.Bgra8;
+                    return SimulatedVimbaPixelFormat.Bgra8;
                 case RawPixelFormat.Mono8:
                 default:
-                    return SimulatedAvtPixelFormat.Mono8;
+                    return SimulatedVimbaPixelFormat.Mono8;
             }
         }
     }
 
-    // Simulation of IDS uEye MemoryBuffer
-    internal sealed class SimulatedIdsUeyeMemoryBuffer
+    // Contract fixture modeled after IDS peak ICV Types.Image
+    internal enum SimulatedIdsPeakPixelFormat
+    {
+        Mono8,
+        Mono10p,
+        Mono12p,
+        Mono16,
+        Bgr8,
+        Bgra8
+    }
+
+    internal sealed class SimulatedIdsPeakIcvImage
     {
         private readonly PinnedRawBufferView _owner;
 
         public IntPtr Data { get; private set; }
-        public int Width { get; private set; }
-        public int Height { get; private set; }
-        public int Stride { get; private set; }
+        public uint Width { get; private set; }
+        public uint Height { get; private set; }
+        public SimulatedIdsPeakPixelFormat PixelFormat { get; private set; }
+        public long SizeInBytes { get; private set; }
 
-        public SimulatedIdsUeyeMemoryBuffer(PinnedRawBufferView owner)
+        public SimulatedIdsPeakIcvImage(PinnedRawBufferView owner)
         {
             _owner = owner;
             Data = owner.View.Buffer;
-            Width = owner.View.Width;
-            Height = owner.View.Height;
-            Stride = owner.View.Stride;
+            Width = (uint)owner.View.Width;
+            Height = (uint)owner.View.Height;
+            PixelFormat = MapIdsPeakPixelFormat(owner.View.PixelFormat);
+            SizeInBytes = owner.View.BufferLength;
+        }
+
+        private static SimulatedIdsPeakPixelFormat MapIdsPeakPixelFormat(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono16:
+                    return SimulatedIdsPeakPixelFormat.Mono16;
+                case RawPixelFormat.BGR24:
+                    return SimulatedIdsPeakPixelFormat.Bgr8;
+                case RawPixelFormat.BGRA32:
+                    return SimulatedIdsPeakPixelFormat.Bgra8;
+                case RawPixelFormat.Mono8:
+                default:
+                    return SimulatedIdsPeakPixelFormat.Mono8;
+            }
         }
     }
 

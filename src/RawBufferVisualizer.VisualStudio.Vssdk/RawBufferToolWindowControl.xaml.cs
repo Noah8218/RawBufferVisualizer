@@ -220,7 +220,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 var reason = isArrayBacked
                     ? "Managed array buffer was recognized, but its debugger memory could not be read safely."
-                    : inspection.Inference.RequiresPixelFormatMapping
+                    : inspection.Inference.RequiresExplicitLayout
+                        ? "Padding, chunk data, or an image offset was detected; map an explicit stride or use an SDK adapter."
+                        : inspection.Inference.RequiresPixelFormatMapping
                         ? "Pixel format needs one explicit mapping before this buffer can be opened."
                         : "Required image metadata is incomplete or below the automatic-open confidence gate.";
                 AddAutomaticMappingCandidate(inspection, reason);
@@ -772,6 +774,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return false;
             }
 
+            if (!TryValidateMappedPointerLayout(debugger, baseExpression, members, address, out error))
+            {
+                return false;
+            }
+
             RawImageDescriptor descriptor;
             long bufferLength;
             if (!TryBuildMappedDescriptor(
@@ -1189,20 +1196,63 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 PixelFormat = pixelFormat,
                 ByteOrder = byteOrder
             };
-            int validBits;
-            descriptor.ValidBits = TryReadOptionalChildInt(debugger, baseExpression, members.ValidBits, out validBits)
+            var validBits = 0;
+            var hasValidBitsMember = !string.IsNullOrWhiteSpace(members.ValidBits);
+            if (hasValidBitsMember
+                && !TryReadOptionalChildInt(debugger, baseExpression, members.ValidBits, out validBits))
+            {
+                error = "Mapped valid-bits member could not be evaluated: " + members.ValidBits;
+                return false;
+            }
+            descriptor.ValidBits = hasValidBitsMember
                 ? validBits
                 : GetDefaultValidBitsForOpenVariable(pixelFormat);
-            int stride;
-            descriptor.Stride = TryReadOptionalChildInt(debugger, baseExpression, members.Stride, out stride) && stride > 0
-                ? stride
-                : descriptor.GetMinimumStride();
+            var stride = 0;
+            var hasStrideMember = !string.IsNullOrWhiteSpace(members.Stride);
+            var hasExplicitStride = hasStrideMember
+                && TryReadOptionalChildInt(debugger, baseExpression, members.Stride, out stride)
+                && stride > 0;
+            if (hasStrideMember && !hasExplicitStride)
+            {
+                error = "Mapped stride member could not be evaluated as a positive value: " + members.Stride;
+                return false;
+            }
+            descriptor.Stride = hasExplicitStride ? stride : descriptor.GetMinimumStride();
 
             var requiredByteCount = descriptor.GetRequiredByteCount();
-            if (!TryReadOptionalChildLong(debugger, baseExpression, members.BufferLength, out bufferLength)
-                || bufferLength < requiredByteCount)
+            var hasBufferLengthMember = !string.IsNullOrWhiteSpace(members.BufferLength);
+            var hasBufferLength = hasBufferLengthMember
+                && TryReadOptionalChildLong(
+                    debugger,
+                    baseExpression,
+                    members.BufferLength,
+                    out bufferLength);
+            if (hasBufferLengthMember && !hasBufferLength)
+            {
+                error = "Mapped buffer-length member could not be evaluated: " + members.BufferLength;
+                return false;
+            }
+            if (!hasBufferLengthMember)
             {
                 bufferLength = requiredByteCount;
+            }
+            else if (bufferLength < requiredByteCount)
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Mapped buffer length {0} is smaller than the required image size {1}.",
+                    bufferLength,
+                    requiredByteCount);
+                return false;
+            }
+            else if (!hasExplicitStride && bufferLength != requiredByteCount)
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Mapped buffer length {0} does not match the contiguous image size {1}; map an explicit stride or use an SDK adapter.",
+                    bufferLength,
+                    requiredByteCount);
+                return false;
             }
 
             var diagnostics = RawBufferDiagnostics.AnalyzeLength(bufferLength, descriptor);
@@ -1213,6 +1263,79 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             return true;
+        }
+
+        private static bool TryValidateMappedPointerLayout(
+            EnvDTE.Debugger debugger,
+            string baseExpression,
+            TypeMappingMembers members,
+            long dataAddress,
+            out string error)
+        {
+            error = string.Empty;
+            if (string.Equals(GetLeafMemberName(members.Data), "ImageData", StringComparison.OrdinalIgnoreCase))
+            {
+                var bufferExpression = EvaluateChild(debugger, baseExpression, "Buffer");
+                long bufferAddress;
+                if (bufferExpression != null
+                    && (!TryParsePointerValue(bufferExpression.Value, out bufferAddress)
+                        || bufferAddress != dataAddress))
+                {
+                    error = "Mapped ImageData is offset from Buffer; chunk-prefixed frames require an SDK adapter.";
+                    return false;
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(members.Stride))
+            {
+                return true;
+            }
+
+            var paddingNames = new[] { "PaddingX", "XPadding", "RowPadding", "LinePadding" };
+            for (var i = 0; i < paddingNames.Length; i++)
+            {
+                var paddingExpression = EvaluateChild(debugger, baseExpression, paddingNames[i]);
+                if (paddingExpression == null)
+                {
+                    continue;
+                }
+
+                long padding;
+                if (!long.TryParse(
+                    paddingExpression.Value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out padding))
+                {
+                    error = "Mapped row padding could not be validated: " + paddingNames[i];
+                    return false;
+                }
+
+                if (padding != 0)
+                {
+                    error = string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Mapped {0} is {1}, but no explicit stride was mapped.",
+                        paddingNames[i],
+                        padding);
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string GetLeafMemberName(string? memberPath)
+        {
+            if (string.IsNullOrWhiteSpace(memberPath))
+            {
+                return string.Empty;
+            }
+
+            var dot = memberPath!.LastIndexOf('.');
+            return dot >= 0 && dot + 1 < memberPath.Length
+                ? memberPath.Substring(dot + 1)
+                : memberPath;
         }
 
         private static int GetManagedArrayElementSize(string dataTypeName)

@@ -123,6 +123,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return null;
             }
 
+            if (!TryValidatePointerLayoutSignals(value, type, members, pointer, out error))
+            {
+                return null;
+            }
+
             long bufferLength;
             if (!string.IsNullOrWhiteSpace(members.BufferLength))
             {
@@ -134,6 +139,17 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             else
             {
                 bufferLength = descriptor.GetRequiredByteCount();
+            }
+
+            if (string.IsNullOrWhiteSpace(members.Stride)
+                && bufferLength != descriptor.GetRequiredByteCount())
+            {
+                error = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Mapped buffer length {0} does not match the contiguous image size {1}; map an explicit stride or use an SDK adapter.",
+                    bufferLength,
+                    descriptor.GetRequiredByteCount());
+                return null;
             }
 
             var diagnostics = RawBufferDiagnostics.AnalyzeLength(bufferLength, descriptor);
@@ -155,6 +171,97 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 ImagePtrVisualizerTransfer.CreateMetadata(view),
                 request => ImagePtrVisualizerTransfer.CreateChunk(view, request),
                 request => ImagePtrVisualizerTransfer.CreatePreview(view, request));
+        }
+
+        private static bool TryValidatePointerLayoutSignals(
+            object value,
+            Type type,
+            TypeMappingMembers members,
+            IntPtr dataPointer,
+            out string error)
+        {
+            error = string.Empty;
+            if (string.Equals(GetLeafName(members.Data), "ImageData", StringComparison.OrdinalIgnoreCase))
+            {
+                var bufferMember = ImagePtrVisualizerTransfer.FindMember(type, "Buffer");
+                if (bufferMember != null)
+                {
+                    try
+                    {
+                        var bufferValue = ImagePtrVisualizerTransfer.GetMemberValue(value, bufferMember);
+                        if (bufferValue is IntPtr || bufferValue is UIntPtr)
+                        {
+                            var bufferPointer = ImagePtrVisualizerTransfer.ConvertValue<IntPtr>(bufferValue);
+                            if (bufferPointer != dataPointer)
+                            {
+                                error = "Mapped ImageData is offset from Buffer; chunk-prefixed frames require an SDK adapter.";
+                                return false;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        error = "Mapped Buffer/ImageData relationship could not be validated: " + ex.Message;
+                        return false;
+                    }
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(members.Stride))
+            {
+                return true;
+            }
+
+            var paddingNames = new[] { "PaddingX", "XPadding", "RowPadding", "LinePadding" };
+            for (var i = 0; i < paddingNames.Length; i++)
+            {
+                var paddingMember = ImagePtrVisualizerTransfer.FindMember(type, paddingNames[i]);
+                if (paddingMember == null)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var paddingValue = ImagePtrVisualizerTransfer.GetMemberValue(value, paddingMember);
+                    if (paddingValue == null)
+                    {
+                        error = "Mapped row padding could not be validated: " + paddingNames[i] + " is null.";
+                        return false;
+                    }
+
+                    var padding = ImagePtrVisualizerTransfer.ConvertValue<long>(paddingValue);
+                    if (padding != 0)
+                    {
+                        error = string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Mapped {0} is {1}, but no explicit stride was mapped.",
+                            paddingNames[i],
+                            padding);
+                        return false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    error = "Mapped row padding could not be validated: " + ex.Message;
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static string GetLeafName(string? memberPath)
+        {
+            if (string.IsNullOrWhiteSpace(memberPath))
+            {
+                return string.Empty;
+            }
+
+            var dot = memberPath!.LastIndexOf('.');
+            return dot >= 0 && dot + 1 < memberPath.Length
+                ? memberPath.Substring(dot + 1)
+                : memberPath;
         }
 
         private static ImageCollectionItemTransfer? CreateArrayTransfer(

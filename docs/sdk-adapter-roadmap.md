@@ -32,16 +32,18 @@ Inspect `view` from Watch, Locals, Autos, or DataTip after the VSIX is installed
 
 ## Vendor Adapter Position
 
-Direct vendor adapters are possible, but should be added after the generic `RawBufferView` path is stable in real debugging sessions.
+Direct vendor adapters are possible, but should be added only when a public-property shape cannot safely express stride, image offset, or lifetime. The detailed evidence matrix is in `docs/industrial-camera-compatibility-validation.md`.
 
-| Vendor / SDK | Priority | Adapter Direction |
+| Vendor / SDK | Current automatic-contract position | Adapter direction |
 | --- | --- | --- |
-| Basler pylon .NET | High | Map `IGrabResult`/`IImage` width, height, pixel type, payload data, and buffer lifetime into `RawBufferView` or `RawBufferSnapshot`. |
-| HIKROBOT MVS SDK | High | Map frame output info width, height, pixel type, frame length, and data pointer into `RawBufferView`. |
-| Teledyne FLIR Spinnaker | High | Map image width, height, pixel format, data pointer, payload size, and stride/padding into `RawBufferView`. |
-| Euresys eGrabber | Very high | Map GenTL buffer metadata width, height, pixel format, and buffer pointer into `RawBufferView`. |
-| Teledyne DALSA Sapera LT | Very high | Map `SapBuffer` width, height, format, and virtual address into `RawBufferView`. |
-| Zebra Aurora / MIL | High | Map MIL/Aurora image buffer dimensions, bands/channels, depth/type, and host address into `RawBufferView`. |
+| Basler pylon .NET | `PixelDataPointer` is safe only with zero `PaddingX` and exact contiguous `PayloadSize`; `ComputeStride()` is a method and is not invoked | A small user-side wrapper can call `ComputeStride()` and expose `RawBufferView`; snapshot if grab-result ownership cannot span the paused read |
+| Teledyne FLIR Spinnaker | `DataPtr` + explicit `Stride` is structurally supported; runtime/lifetime unverified | Keep the managed image alive through the read or snapshot before release |
+| Allied Vision Vimba X | `ImageData` is preferred over `Buffer`; differing addresses are rejected as a chunk/image offset | Adapter must compute the image-data length after the offset and retain/requeue `IFrame` correctly |
+| IDS peak ICV | `Data`, width, height, pixel format, exact `SizeInBytes` contract tested; assembly metadata verified for ICV 1.4.0 | Expose explicit stride when runtime buffers are padded; retain the disposable image |
+| HIKROBOT MVS SDK | Exact current managed frame contract not verified | Map the documented frame output object only after a legal SDK/runtime sample is available |
+| Euresys eGrabber | Scoped buffer metadata is method-based and intentionally outside Automatic Vision Inspector | Adapter should call `GetInfo<T>()` while the scoped buffer is valid and expose/snapshot a `RawBufferView` |
+| Teledyne DALSA Sapera LT | Exact current C# contract not verified | Audit `SapBuffer` address/format/stride/lifetime from the installed SDK before implementation |
+| Zebra Aurora Imaging Library | Exact current buffer contract not verified | Audit bands, depth, packed/planar layout, host address, and lifetime before implementation |
 
 ## Pixel Format Mapping Rules
 
@@ -66,14 +68,20 @@ Vendor-specific adapters should fail clearly when an SDK reports unsupported pla
 - The adapter has no hard dependency in the core viewer unless the SDK is already installed by the target app.
 - The Visual Studio provider is registered only for exact SDK target types, not for every `object`.
 - The adapter captures width, height, stride, pixel format, valid bits, byte order, and buffer length.
+- The adapter distinguishes a whole transport/chunk buffer from the actual image-data pointer and length.
 - The adapter documents source buffer lifetime. If the SDK owns the memory only until the next grab callback, the adapter must snapshot immediately or keep the SDK buffer pinned/owned until transfer completes.
 - Tests cover descriptor mapping and at least one chunked pointer read path.
+- Installed-VSIX evidence uses a real SDK object or an official vendor emulator, not only a class with similar member names.
 
 ## References Checked
 
-- Emgu CV `Mat` exposes `DataPointer`, `Step`, `Rows`, `Cols`, `Depth`, and `NumberOfChannels`: https://www.emgu.com/wiki/files/4.5.5/document/html/P_Emgu_CV_Mat_DataPointer.htm
-- Basler pylon .NET `IGrabResult` derives from `IImage`; valid image data depends on pixel type, width, and height, and `PixelData` is provided unless a custom buffer factory changes the storage: https://ja.docs.baslerweb.com/pylonapi/net/T_Basler_Pylon_IGrabResult
-- Spinnaker image APIs expose width, height, pixel format, and raw data pointer access in the image model: https://softwareservices.flir.com/spinnaker/latest/class_spinnaker_1_1_image.html
-- Euresys eGrabber buffer metadata includes width, height, and pixel format through GenTL buffer info: https://documentation.euresys.com/Products/COAXLINK/COAXLINK_23_02/en-us/Content/IOdoc/egrabber.html
-- Sapera LT documentation describes acquisition width, height, and format being used to create compatible buffers: https://ftp.stemmer-imaging.com/webdavs/docmanager/164129-SaperaLT-User-Manual-V8.6.pdf
-- Zebra Aurora / MIL documentation describes buffers for mono integer, floating point, packed/planar RGB, and YUV images: https://cdn.graftek.com/wp-content/uploads/2023/03/10230141/Matrox-Imaging-Library-X.pdf
+- EMVA GenICam PFNC downloads: https://www.emva.org/standards-technology/genicam/genicam-downloads/
+- Basler pylon .NET `IGrabResult`: https://docs.baslerweb.com/pylonapi/net/T_Basler_Pylon_IGrabResult
+- Basler camera emulation: https://docs.baslerweb.com/camera-emulation
+- Spinnaker image API: https://softwareservices.flir.com/spinnaker/latest/class_spinnaker_1_1_image.html
+- Allied Vision Vimba X .NET manual: https://docs.alliedvision.com/dotNetAPIManual.html
+- IDS peak official examples: https://github.com/ids-imaging/ids-peak-examples
+- Euresys eGrabber guide: https://documentation.euresys.com/Products/eGrabber/eGrabber_25_12/00/en-us/Content/IOdoc/egrabber.html
+- HIKROBOT MVS product/download page: https://www.hikrobotics.com/en/machinevision/visionproduct/?id=44&typeId=78
+- Teledyne DALSA SDK downloads: https://www.teledynedalsa.com/en/support/downloads-center/software-development-kits/
+- Zebra Aurora Imaging Library: https://www.zebra.com/us/en/software/machine-vision-and-fixed-industrial-scanning-software/aurora-imaging-library.html

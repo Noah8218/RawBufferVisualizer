@@ -324,10 +324,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     return mappedTransfer;
                 }
 
-                if (!LooksLikeImagePointer(type))
-                {
-                    throw new NotSupportedException(mappedError + " (type mapping for " + (type.FullName ?? type.Name) + ")");
-                }
+                throw new NotSupportedException(mappedError + " (type mapping for " + (type.FullName ?? type.Name) + ")");
             }
 
             if (LooksLikeImagePointer(type))

@@ -28,6 +28,16 @@ Supported inferred data members:
 
 Required roles are data, width, and height. Stride, buffer length, valid bits, and pixel format increase confidence when present. Managed array element type can safely imply `Mono16` or `Float32`; other formats require a recognizable current enum/string value or an explicit mapping.
 
+Automatic opening is deliberately stricter for SDK-style pointer buffers:
+
+- `PixelDataPointer`, `ImageData`, and `DataPtr` are preferred over generic `Buffer`/`Data` names;
+- without a stride, a reported buffer length must exactly match the contiguous image byte count;
+- nonzero/unreadable row padding blocks automatic opening when stride is absent;
+- an `ImageData` address that differs from a base `Buffer` address is treated as a chunk/image offset and requires an adapter;
+- mapped pointer paths enforce the same rules and do not fall back to the legacy ImagePtr heuristic after a mapping failure.
+
+Safe GenICam PFNC aliases include `Mono10p`, `Mono12p`, Bayer RG/GR/GB/BG 8-bit, RGB8 packed, and BGR8 packed. Legacy `Mono10Packed`/`Mono12Packed`, YUV, planar, compressed, signed, and 3D coordinate formats remain explicit because their layouts cannot be inferred safely from a similar name.
+
 ## Confidence And UX
 
 | Confidence | Behavior |
@@ -69,7 +79,10 @@ Automatic rows use a stable key derived from the root expression. Every scan rem
 | `samples/RawBufferVisualizer.VisualizerDebuggee/Program.cs` | Pointer, array-backed, one-level nested, and intentionally ambiguous mapping-fallback installed-VSIX scenarios. |
 | `scripts/SmokeInstalledVsixNewFeatures.ps1` | Installed-VSIX automation and session-state assertions. |
 | `scripts/SmokeAutomaticVisionInspectorLayout.ps1` | Narrow/medium/wide layout assertions. |
-| `tests/RawBufferVisualizer.Tests/Program.cs` | Five deterministic inference and nested-mapping tests. |
+| `tests/RawBufferVisualizer.Tests/Program.cs` | Core inference and nested-mapping tests. |
+| `tests/RawBufferVisualizer.Tests/IndustrialCameraContractTests.cs` | Basler, Spinnaker, Vimba X, IDS peak, PFNC, method-only, padding, payload, and offset safety contracts. |
+| `scripts/Test-IndustrialCameraSdkContracts.ps1` | Optional reflection audit for installed/provided vendor SDK assemblies. |
+| `docs/industrial-camera-compatibility-validation.md` | Official-source matrix, evidence levels, remaining release gates, and durable result. |
 
 ## Verification Record
 
@@ -112,4 +125,4 @@ Evidence:
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-dialog-preview.png`
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-automatic-after-reopen.png`
 
-Boundary / next dependency: This proves the supplied simulated company-frame shapes in VS2022 17.14. It does not prove real OpenCvSharp/Emgu/Bitmap or industrial-camera SDK objects through the new automatic path. Those require exact runtime objects, versions, lifetime rules, and reproducible samples.
+Boundary / next dependency: The generic Automatic Vision Inspector scenario still passes in VS2022 17.14 after industrial-layout hardening, and IDS peak ICV 1.4.0 assembly metadata was verified. This does not prove live vendor runtime objects, buffer lifetime, drivers, emulators, or hardware. See `docs/industrial-camera-compatibility-validation.md`.
