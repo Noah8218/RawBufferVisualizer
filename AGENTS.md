@@ -2,6 +2,22 @@
 
 This repository is maintained with Codex assistance. Keep changes practical, verified, and focused on the Raw Buffer Visualizer user workflow.
 
+## New Session Orientation
+
+The canonical working repository is `C:\Git\RawBufferVisualizer`. Do not treat `C:\Documents\RawBufferVisualizer` or an attachment directory as the source of truth.
+
+Before implementation, release work, or documentation changes in a new conversation:
+
+1. Run `git status --short` and `git log --oneline -5` in `C:\Git\RawBufferVisualizer`.
+2. Read [docs/README.md](docs/README.md) for the document map.
+3. Read [docs/MAINTAINER_HANDOFF.md](docs/MAINTAINER_HANDOFF.md) for the current version, release state, completed work, known gaps, and next priority.
+4. Read [docs/PRODUCT_DIRECTION_AND_ROADMAP.md](docs/PRODUCT_DIRECTION_AND_ROADMAP.md) before changing product scope or UX.
+5. Read [docs/ARCHITECTURE_AND_VALIDATION.md](docs/ARCHITECTURE_AND_VALIDATION.md) before changing debugger transfer, viewer rendering, compatibility, packaging, or smoke tests.
+
+If repository evidence differs from the handoff, trust the repository and current external state, then update the handoff in the same change. Do not copy old version numbers forward without checking the VSIX manifest, public Marketplace version, and latest CI result.
+
+The product is an Image Watch-style C# machine-vision debugger visualizer centered on one docked Visual Studio window. Vision Replay Debugger, camera control, acquisition orchestration, PLC/I/O, and recipe execution are separate products and remain out of scope. Rendering implementation names are internal details and must not appear in user-facing copy.
+
 ## README Image Gate
 
 Images used in `README.md`, Marketplace copy, or any first-impression GitHub documentation must pass a visual review before being committed or pushed.
@@ -18,3 +34,13 @@ Checklist:
 
 For README-visible images, do not rely only on file existence or automated capture success. The image itself must be inspected.
 
+## UI Change Review Gate
+
+Before any UI, UX, layout, visible text, visual state, navigation, or workflow-affordance change, follow this gate. This gate is mandatory; do not implement a UI change without completing it.
+
+1. **Review**: Describe the UI element to change and why the change is needed. Do not start implementation.
+2. **Mock up**: Draw the target layout as an ASCII diagram or a simple sketch showing the new position, size, and relationship to existing controls. Do not write code.
+3. **Confirm**: Wait for explicit user approval. If the user rejects or revises the mockup, repeat from step 1.
+4. **Implement**: Only after approval, write the code exactly as approved.
+
+This gate supersedes any direct request to "just make the change". When the user asks for a UI change, respond with the review description and the mockup first, and stop.

@@ -24,6 +24,26 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 return RunLargeMatDebug(args);
             }
 
+            if (Array.IndexOf(args, "--buffer-doctor-debug") >= 0)
+            {
+                return RunBufferDoctorDebug();
+            }
+
+            if (Array.IndexOf(args, "--smart-type-mapper-debug") >= 0)
+            {
+                return RunSmartTypeMapperDebug();
+            }
+
+            if (Array.IndexOf(args, "--smart-type-mapper-fallback-debug") >= 0)
+            {
+                return RunSmartTypeMapperFallbackDebug();
+            }
+
+            if (Array.IndexOf(args, "--multi-library-debug") >= 0)
+            {
+                return RunMultiLibraryDebug();
+            }
+
             if (TryGetArgument(args, "--emgu-tiff-smoke", out var tiffPath))
             {
                 return RunEmguTiffSmoke(tiffPath);
@@ -391,6 +411,143 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
             value = string.Empty;
             return false;
+        }
+
+        private static int RunBufferDoctorDebug()
+        {
+            const int width = 2448;
+            const int height = 2048;
+            const int padding = 112;
+            const int stride = width + padding;
+            var caseNumber = 1;
+
+            var buffer = CreateMono8Buffer(width, height, stride);
+            // Descriptor intentionally reports the wrong stride to simulate a mis-described buffer.
+            var descriptor = CreateDescriptor(width, height, width, RawPixelFormat.Mono8, 8);
+            var badStrideSnapshot = RawBufferSnapshot.FromByteArray(buffer, descriptor);
+            PrintCase(ref caseNumber, "badStrideSnapshot as RawBufferSnapshot / mis-described Mono8 stride");
+            Debugger.Break();
+            GC.KeepAlive(badStrideSnapshot);
+            return 0;
+        }
+
+        private static int RunSmartTypeMapperDebug()
+        {
+            const int width = Width;
+            const int height = Height;
+            var caseNumber = 1;
+            var pinnedViews = new List<PinnedRawBufferView>();
+            var companyMono8Buffer = CreateMono8Buffer(width, height, width);
+
+            var mono8Owner = PinView(
+                pinnedViews,
+                "company-mono8",
+                companyMono8Buffer,
+                CreateDescriptor(width, height, width, RawPixelFormat.Mono8, 8),
+                1);
+            var bgr24Owner = PinView(
+                pinnedViews,
+                "company-bgr24",
+                CreateBgr24Buffer(width, height, width * 3),
+                CreateDescriptor(width, height, width * 3, RawPixelFormat.BGR24, 8),
+                3);
+            var companyFrameList = new List<CompanyFrame>
+            {
+                new CompanyFrame(mono8Owner),
+                new CompanyFrame(bgr24Owner)
+            };
+            var companyFrame = companyFrameList[0];
+            const int arrayWidth = 64;
+            const int arrayHeight = 48;
+            var companyArrayFrame = new CompanyArrayFrame(
+                CreateMono8Buffer(arrayWidth, arrayHeight, arrayWidth),
+                arrayWidth,
+                arrayHeight,
+                arrayWidth,
+                CompanyPixelType.Mono8);
+            var nestedCompanyFrame = new NestedCompanyFrame(mono8Owner);
+
+            PrintCase(ref caseNumber, "companyFrame, companyArrayFrame, nestedCompanyFrame / Automatic Vision Inspector");
+            Debugger.Break();
+
+            GC.KeepAlive(companyFrameList);
+            GC.KeepAlive(companyFrame);
+            GC.KeepAlive(companyArrayFrame);
+            GC.KeepAlive(nestedCompanyFrame);
+            GC.KeepAlive(mono8Owner);
+            GC.KeepAlive(bgr24Owner);
+            return 0;
+        }
+
+        private static int RunSmartTypeMapperFallbackDebug()
+        {
+            const int width = Width;
+            const int height = Height;
+            var caseNumber = 1;
+            var pinnedViews = new List<PinnedRawBufferView>();
+            var mono12Owner = PinView(
+                pinnedViews,
+                "company-mono12-packed",
+                CreatePackedMonoBuffer(width, height, 12),
+                CreateDescriptor(width, height, GetPackedStride(width, 12), RawPixelFormat.Mono12PackedLsb, 12),
+                1);
+            var unmappedCompanyFrame = new UnmappedCompanyFrame(mono12Owner);
+
+            PrintCase(ref caseNumber, "unmappedCompanyFrame / Smart Type Mapper automatic fallback");
+            Debugger.Break();
+
+            GC.KeepAlive(unmappedCompanyFrame);
+            GC.KeepAlive(mono12Owner);
+            return 0;
+        }
+
+        private static int RunMultiLibraryDebug()
+        {
+            const int width = Width;
+            const int height = Height;
+            const int padding = 112;
+            const int stride = width + padding;
+            var caseNumber = 1;
+
+            var buffer = CreateMono8Buffer(width, height, stride);
+            var descriptor = CreateDescriptor(width, height, width, RawPixelFormat.Mono8, 8);
+            var badStrideSnapshot = RawBufferSnapshot.FromByteArray(buffer, descriptor);
+            PrintCase(ref caseNumber, "badStrideSnapshot as RawBufferSnapshot / mis-described Mono8 stride");
+
+            var mono8Owner = PinView(
+                new List<PinnedRawBufferView>(),
+                "company-mono8",
+                CreateMono8Buffer(width, height, width),
+                CreateDescriptor(width, height, width, RawPixelFormat.Mono8, 8),
+                1);
+            var bgr24Owner = PinView(
+                new List<PinnedRawBufferView>(),
+                "company-bgr24",
+                CreateBgr24Buffer(width, height, width * 3),
+                CreateDescriptor(width, height, width * 3, RawPixelFormat.BGR24, 8),
+                3);
+
+            var openCvMat = new SimulatedOpenCvSharpMat(mono8Owner);
+            var emguMat = new SimulatedEmguCvMat(mono8Owner);
+            var baslerResult = new SimulatedBaslerGrabResult(mono8Owner);
+            var flirImage = new SimulatedFlirImagePtr(mono8Owner);
+            var avtFrame = new SimulatedAvtVimbaFrame(mono8Owner);
+            var idsBuffer = new SimulatedIdsUeyeMemoryBuffer(mono8Owner);
+
+            GC.KeepAlive(badStrideSnapshot);
+            GC.KeepAlive(openCvMat);
+            GC.KeepAlive(emguMat);
+            GC.KeepAlive(baslerResult);
+            GC.KeepAlive(flirImage);
+            GC.KeepAlive(avtFrame);
+            GC.KeepAlive(idsBuffer);
+            GC.KeepAlive(mono8Owner);
+            GC.KeepAlive(bgr24Owner);
+
+            Debugger.Break();
+            Console.WriteLine("Multi-library debug scenario completed. Press Enter to exit.");
+            Console.ReadLine();
+            return 0;
         }
 
         private static int RunLargeMatDebug(string[] args)
@@ -923,4 +1080,384 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             BitDepth = owner.View.BitDepth;
         }
     }
+
+    internal enum CompanyPixelType
+    {
+        Mono8,
+        Mono12,
+        Bgr
+    }
+
+    internal sealed class CompanyFrame
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr ImageAddress { get; private set; }
+        public int SizeX { get; private set; }
+        public int SizeY { get; private set; }
+        public int LinePitch { get; private set; }
+        public CompanyPixelType PixelType { get; private set; }
+
+        public CompanyFrame(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            ImageAddress = owner.View.Buffer;
+            SizeX = owner.View.Width;
+            SizeY = owner.View.Height;
+            LinePitch = owner.View.Stride;
+            PixelType = MapPixelFormat(owner.View.PixelFormat);
+        }
+
+        private static CompanyPixelType MapPixelFormat(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.BGR24:
+                    return CompanyPixelType.Bgr;
+                case RawPixelFormat.Mono12PackedLsb:
+                    return CompanyPixelType.Mono12;
+                case RawPixelFormat.Mono8:
+                default:
+                    return CompanyPixelType.Mono8;
+            }
+        }
+    }
+
+    internal sealed class UnmappedCompanyFrame
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr ImageAddress { get; private set; }
+        public int SizeX { get; private set; }
+        public int SizeY { get; private set; }
+        public int LinePitch { get; private set; }
+        public CompanyPixelType PixelType { get; private set; }
+
+        public UnmappedCompanyFrame(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            ImageAddress = owner.View.Buffer;
+            SizeX = owner.View.Width;
+            SizeY = owner.View.Height;
+            LinePitch = owner.View.Stride;
+            PixelType = CompanyPixelType.Mono12;
+        }
+    }
+
+    internal sealed class CompanyArrayFrame
+    {
+        public byte[] Pixels { get; private set; }
+        public int FrameWidth { get; private set; }
+        public int FrameHeight { get; private set; }
+        public int LinePitch { get; private set; }
+        public CompanyPixelType PixelType { get; private set; }
+
+        public CompanyArrayFrame(
+            byte[] pixels,
+            int frameWidth,
+            int frameHeight,
+            int linePitch,
+            CompanyPixelType pixelType)
+        {
+            Pixels = pixels;
+            FrameWidth = frameWidth;
+            FrameHeight = frameHeight;
+            LinePitch = linePitch;
+            PixelType = pixelType;
+        }
+    }
+
+    internal sealed class NestedCompanyFrame
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public NestedCompanyStorage Storage { get; private set; }
+        public NestedCompanyInfo Info { get; private set; }
+
+        public NestedCompanyFrame(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            Storage = new NestedCompanyStorage { ImageAddress = owner.View.Buffer };
+            Info = new NestedCompanyInfo
+            {
+                Width = owner.View.Width,
+                Height = owner.View.Height,
+                Stride = owner.View.Stride,
+                PixelType = CompanyPixelType.Mono8
+            };
+        }
+    }
+
+    internal sealed class NestedCompanyStorage
+    {
+        public IntPtr ImageAddress { get; set; }
+    }
+
+    internal sealed class NestedCompanyInfo
+    {
+        public int Width { get; set; }
+        public int Height { get; set; }
+        public int Stride { get; set; }
+        public CompanyPixelType PixelType { get; set; }
+    }
+
+    // Simulation of OpenCvSharp.Mat
+    internal enum SimulatedMatType
+    {
+        Mono8,
+        Mono16,
+        Bgr24,
+        Bgra32
+    }
+
+    internal sealed class SimulatedOpenCvSharpMat
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr Data { get; private set; }
+        public int Rows { get; private set; }
+        public int Cols { get; private set; }
+        public int Step { get; private set; }
+        public SimulatedMatType Type { get; private set; }
+
+        public SimulatedOpenCvSharpMat(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            Data = owner.View.Buffer;
+            Rows = owner.View.Height;
+            Cols = owner.View.Width;
+            Step = owner.View.Stride;
+            Type = MapMatType(owner.View.PixelFormat);
+        }
+
+        private static SimulatedMatType MapMatType(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono16:
+                    return SimulatedMatType.Mono16;
+                case RawPixelFormat.BGR24:
+                    return SimulatedMatType.Bgr24;
+                case RawPixelFormat.BGRA32:
+                    return SimulatedMatType.Bgra32;
+                case RawPixelFormat.Mono8:
+                default:
+                    return SimulatedMatType.Mono8;
+            }
+        }
+    }
+
+    // Simulation of Emgu.CV.Mat
+    internal enum SimulatedDepthType
+    {
+        Mono8,
+        Mono16,
+        Bgr24,
+        Bgra32
+    }
+
+    internal sealed class SimulatedEmguCvMat
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr DataPointer { get; private set; }
+        public int Rows { get; private set; }
+        public int Cols { get; private set; }
+        public int Step { get; private set; }
+        public SimulatedDepthType Depth { get; private set; }
+        public int Channels { get; private set; }
+
+        public SimulatedEmguCvMat(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            DataPointer = owner.View.Buffer;
+            Rows = owner.View.Height;
+            Cols = owner.View.Width;
+            Step = owner.View.Stride;
+            Depth = MapDepthType(owner.View.PixelFormat);
+            Channels = owner.View.Channels;
+        }
+
+        private static SimulatedDepthType MapDepthType(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono16:
+                    return SimulatedDepthType.Mono16;
+                case RawPixelFormat.BGR24:
+                    return SimulatedDepthType.Bgr24;
+                case RawPixelFormat.BGRA32:
+                    return SimulatedDepthType.Bgra32;
+                case RawPixelFormat.Mono8:
+                default:
+                    return SimulatedDepthType.Mono8;
+            }
+        }
+    }
+
+    // Simulation of Basler pylon IGrabResult
+    internal enum SimulatedBaslerPixelType
+    {
+        Mono8,
+        Mono10,
+        Mono12,
+        Mono16,
+        Bgr8,
+        Bgra8
+    }
+
+    internal sealed class SimulatedBaslerGrabResult
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr PixelData { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public int Stride { get; private set; }
+        public SimulatedBaslerPixelType PixelType { get; private set; }
+
+        public SimulatedBaslerGrabResult(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            PixelData = owner.View.Buffer;
+            Width = owner.View.Width;
+            Height = owner.View.Height;
+            Stride = owner.View.Stride;
+            PixelType = MapBaslerPixelType(owner.View.PixelFormat);
+        }
+
+        private static SimulatedBaslerPixelType MapBaslerPixelType(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono16:
+                    return SimulatedBaslerPixelType.Mono16;
+                case RawPixelFormat.BGR24:
+                    return SimulatedBaslerPixelType.Bgr8;
+                case RawPixelFormat.BGRA32:
+                    return SimulatedBaslerPixelType.Bgra8;
+                case RawPixelFormat.Mono8:
+                default:
+                    return SimulatedBaslerPixelType.Mono8;
+            }
+        }
+    }
+
+    // Simulation of FLIR Spinnaker ImagePtr
+    internal enum SimulatedFlirPixelFormat
+    {
+        Mono8,
+        Mono10p,
+        Mono12p,
+        Mono16,
+        Bgr8,
+        Bgra8
+    }
+
+    internal sealed class SimulatedFlirImagePtr
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr Data { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public int Stride { get; private set; }
+        public SimulatedFlirPixelFormat PixelFormat { get; private set; }
+
+        public SimulatedFlirImagePtr(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            Data = owner.View.Buffer;
+            Width = owner.View.Width;
+            Height = owner.View.Height;
+            Stride = owner.View.Stride;
+            PixelFormat = MapFlirPixelFormat(owner.View.PixelFormat);
+        }
+
+        private static SimulatedFlirPixelFormat MapFlirPixelFormat(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono16:
+                    return SimulatedFlirPixelFormat.Mono16;
+                case RawPixelFormat.BGR24:
+                    return SimulatedFlirPixelFormat.Bgr8;
+                case RawPixelFormat.BGRA32:
+                    return SimulatedFlirPixelFormat.Bgra8;
+                case RawPixelFormat.Mono8:
+                default:
+                    return SimulatedFlirPixelFormat.Mono8;
+            }
+        }
+    }
+
+    // Simulation of AVT Vimba Frame
+    internal enum SimulatedAvtPixelFormat
+    {
+        Mono8,
+        Mono10,
+        Mono12,
+        Mono16,
+        Bgr8,
+        Bgra8
+    }
+
+    internal sealed class SimulatedAvtVimbaFrame
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr Buffer { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public int Stride { get; private set; }
+        public SimulatedAvtPixelFormat PixelFormat { get; private set; }
+
+        public SimulatedAvtVimbaFrame(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            Buffer = owner.View.Buffer;
+            Width = owner.View.Width;
+            Height = owner.View.Height;
+            Stride = owner.View.Stride;
+            PixelFormat = MapAvtPixelFormat(owner.View.PixelFormat);
+        }
+
+        private static SimulatedAvtPixelFormat MapAvtPixelFormat(RawPixelFormat format)
+        {
+            switch (format)
+            {
+                case RawPixelFormat.Mono16:
+                    return SimulatedAvtPixelFormat.Mono16;
+                case RawPixelFormat.BGR24:
+                    return SimulatedAvtPixelFormat.Bgr8;
+                case RawPixelFormat.BGRA32:
+                    return SimulatedAvtPixelFormat.Bgra8;
+                case RawPixelFormat.Mono8:
+                default:
+                    return SimulatedAvtPixelFormat.Mono8;
+            }
+        }
+    }
+
+    // Simulation of IDS uEye MemoryBuffer
+    internal sealed class SimulatedIdsUeyeMemoryBuffer
+    {
+        private readonly PinnedRawBufferView _owner;
+
+        public IntPtr Data { get; private set; }
+        public int Width { get; private set; }
+        public int Height { get; private set; }
+        public int Stride { get; private set; }
+
+        public SimulatedIdsUeyeMemoryBuffer(PinnedRawBufferView owner)
+        {
+            _owner = owner;
+            Data = owner.View.Buffer;
+            Width = owner.View.Width;
+            Height = owner.View.Height;
+            Stride = owner.View.Stride;
+        }
+    }
+
+
 }

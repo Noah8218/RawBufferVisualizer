@@ -108,6 +108,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public string DisplayName { get; set; } = string.Empty;
         public VisualizerSnapshotMetadata? Metadata { get; set; }
         public string Error { get; set; } = string.Empty;
+        public List<VisualizerMemberInventoryItem>? MemberInventory { get; set; }
+        public string ItemTypeName { get; set; } = string.Empty;
+        public string ItemAssemblyName { get; set; } = string.Empty;
+        public int DebuggeeProcessId { get; set; }
     }
 
     public sealed class ImageCollectionVisualizerView
@@ -131,7 +135,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 Index = index,
                 DisplayName = item.DisplayName,
                 Metadata = item.Transfer?.Metadata,
-                Error = item.Error
+                Error = item.Error,
+                MemberInventory = item.MemberInventory,
+                ItemTypeName = item.ItemTypeName,
+                ItemAssemblyName = item.ItemAssemblyName,
+                DebuggeeProcessId = System.Diagnostics.Process.GetCurrentProcess().Id
             };
         }
 
@@ -182,6 +190,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public static ImageCollectionVisualizerView CreateView(object target)
         {
+            return CreateView(target, TypeMappingStore.Default);
+        }
+
+        public static ImageCollectionVisualizerView CreateView(object target, TypeMappingStore? mappingStore)
+        {
             if (target == null)
             {
                 throw new ArgumentNullException(nameof(target));
@@ -199,7 +212,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     var key = Convert.ToString(enumerator.Key, CultureInfo.InvariantCulture);
                     items.Add(new ImageCollectionItem(
                         enumerator.Value,
-                        "[" + (string.IsNullOrWhiteSpace(key) ? "null" : key) + "]"));
+                        "[" + (string.IsNullOrWhiteSpace(key) ? "null" : key) + "]",
+                        mappingStore));
                 }
             }
             else
@@ -216,7 +230,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 {
                     items.Add(new ImageCollectionItem(
                         list[index],
-                        "[" + index.ToString(CultureInfo.InvariantCulture) + "]"));
+                        "[" + index.ToString(CultureInfo.InvariantCulture) + "]",
+                        mappingStore));
                 }
             }
 
@@ -232,6 +247,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         }
 
         internal static ImageCollectionItemTransfer CreateItemTransfer(object value, string displayName)
+        {
+            return CreateItemTransfer(value, displayName, TypeMappingStore.Default);
+        }
+
+        internal static ImageCollectionItemTransfer CreateItemTransfer(object value, string displayName, TypeMappingStore? mappingStore)
         {
             var snapshot = value as RawBufferSnapshot;
             if (snapshot != null)
@@ -292,6 +312,24 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                         request => EmguCvMatVisualizerTransfer.CreatePreview(emguView, request));
             }
 
+            var mapping = mappingStore == null
+                ? null
+                : mappingStore.FindMapping(type.FullName ?? type.Name, type.Assembly.GetName().Name ?? string.Empty);
+            if (mapping != null)
+            {
+                string mappedError;
+                var mappedTransfer = MappedTypeVisualizerTransfer.TryCreateItemTransfer(value, displayName, mapping, out mappedError);
+                if (mappedTransfer != null)
+                {
+                    return mappedTransfer;
+                }
+
+                if (!LooksLikeImagePointer(type))
+                {
+                    throw new NotSupportedException(mappedError + " (type mapping for " + (type.FullName ?? type.Name) + ")");
+                }
+            }
+
             if (LooksLikeImagePointer(type))
             {
                 var pointerView = ImagePtrVisualizerTransfer.CreateView(value);
@@ -330,17 +368,38 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     internal sealed class ImageCollectionItem
     {
         private readonly object? _value;
+        private readonly TypeMappingStore? _mappingStore;
         private bool _initialized;
 
-        public ImageCollectionItem(object? value, string displayName)
+        public ImageCollectionItem(object? value, string displayName, TypeMappingStore? mappingStore = null)
         {
             _value = value;
             DisplayName = displayName;
+            _mappingStore = mappingStore;
         }
 
         public string DisplayName { get; }
         public ImageCollectionItemTransfer? Transfer { get; private set; }
         public string Error { get; private set; } = string.Empty;
+        public List<VisualizerMemberInventoryItem>? MemberInventory { get; private set; }
+
+        public string ItemTypeName
+        {
+            get
+            {
+                var type = _value == null ? null : _value.GetType();
+                return type == null ? string.Empty : type.FullName ?? type.Name;
+            }
+        }
+
+        public string ItemAssemblyName
+        {
+            get
+            {
+                var type = _value == null ? null : _value.GetType();
+                return type == null ? string.Empty : type.Assembly.GetName().Name ?? string.Empty;
+            }
+        }
 
         public void EnsureTransfer()
         {
@@ -358,11 +417,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             try
             {
-                Transfer = ImageCollectionVisualizerTransfer.CreateItemTransfer(_value, DisplayName);
+                Transfer = ImageCollectionVisualizerTransfer.CreateItemTransfer(_value, DisplayName, _mappingStore);
             }
             catch (Exception ex)
             {
                 Error = ex.Message;
+                MemberInventory = VisualizerMemberInventory.Create(_value);
             }
         }
 

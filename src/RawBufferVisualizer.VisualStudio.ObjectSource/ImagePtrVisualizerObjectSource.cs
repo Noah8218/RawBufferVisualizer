@@ -285,7 +285,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 1;
         }
 
-        private static int GetDefaultValidBits(RawPixelFormat pixelFormat)
+        internal static int GetDefaultValidBits(RawPixelFormat pixelFormat)
         {
             switch (pixelFormat)
             {
@@ -392,7 +392,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return false;
         }
 
-        private static MemberInfo? FindMember(Type type, string name)
+        internal static MemberInfo? FindMember(Type type, string name)
         {
             const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
             var property = type.GetProperty(name, flags);
@@ -404,7 +404,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return type.GetField(name, flags);
         }
 
-        private static object? GetMemberValue(object target, MemberInfo member)
+        internal static object? GetMemberValue(object target, MemberInfo member)
         {
             var property = member as PropertyInfo;
             if (property != null)
@@ -421,7 +421,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return null;
         }
 
-        private static T ConvertValue<T>(object value)
+        internal static T ConvertValue<T>(object value)
         {
             if (value is T typed)
             {

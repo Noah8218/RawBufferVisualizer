@@ -78,6 +78,25 @@ namespace RawBufferVisualizer.Tests
                 VisualStudioTempStoreReportsRootByteCount();
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
+                BufferDoctorFindsPaddedMono8Descriptor();
+                BufferDoctorCorrectStrideWinsOnRowContinuity();
+                BufferDoctorPrefersCorrectEndianness();
+                BufferDoctorPrefersMatchingValidBits();
+                BufferDoctorFindsPackedMono12Candidate();
+                BufferDoctorSamplingStaysWithinCaps();
+                BufferDoctorMarksRgbBgrAsAmbiguousTieGroup();
+                BufferDoctorAcceptsTrailingRowFit();
+                TypeMappingFileRoundTrips();
+                TypeMappingResolutionPrefersSolutionLocal();
+                TypeMappingExtractsMappedCompanyFrame();
+                TypeMappingAppliesEnumPixelFormatMap();
+                TypeMappingFailureIncludesMemberInventory();
+                TypeMappingMissingMemberFailsVisibly();
+                VisionInferenceAutoOpensDirectPointerShape();
+                VisionInferenceSupportsOneLevelNestedMembers();
+                VisionInferenceRequestsOnlyAmbiguousPixelFormat();
+                VisionInferenceHidesLowConfidenceShape();
+                TypeMappingReadsOneLevelNestedMemberPaths();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;
             }
@@ -1887,6 +1906,825 @@ namespace RawBufferVisualizer.Tests
                 Assert(snapshot.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat pixel format failed.");
                 Assert(snapshot.Buffer.Length >= 6, "Mat buffer length failed.");
             }
+        }
+
+        private static void BufferDoctorFindsPaddedMono8Descriptor()
+        {
+            var correct = CreateDescriptor(2448, 2048, 2560, RawPixelFormat.Mono8, 8);
+            var buffer = CreateNoisyMono8Buffer(2448, 2048, 2560, 12345);
+            using (var source = RawImageSource.FromMemory(buffer, correct))
+            {
+                var result = BufferDoctor.Diagnose(source, CancellationToken.None);
+                Assert(result.Candidates.Count > 0, "Buffer Doctor returned no candidates.");
+                var top = result.Candidates[0];
+                Assert(
+                    top.Descriptor.Width == 2448
+                        && top.Descriptor.Height == 2048
+                        && top.Descriptor.Stride == 2560
+                        && top.Descriptor.PixelFormat == RawPixelFormat.Mono8,
+                    "Buffer Doctor top candidate should be the true padded Mono8 descriptor.");
+
+                var wrong = CreateDescriptor(2448, 2048, 2448, RawPixelFormat.Mono8, 8);
+                var wrongCandidate = ScoreDraft(source, wrong);
+                Assert(wrongCandidate.Score < top.Score, "The current wrong descriptor (stride = width) should score lower than the diagnosis top candidate.");
+            }
+        }
+
+        private static void BufferDoctorCorrectStrideWinsOnRowContinuity()
+        {
+            var correct = CreateDescriptor(2448, 2048, 2560, RawPixelFormat.Mono8, 8);
+            var wrong = CreateDescriptor(2448, 2048, 2448, RawPixelFormat.Mono8, 8);
+            var buffer = CreateSmoothMono8Buffer(2448, 2048, 2560);
+            using (var source = RawImageSource.FromMemory(buffer, correct))
+            {
+                var correctCandidate = ScoreDraft(source, correct);
+                var wrongCandidate = ScoreDraft(source, wrong);
+                Assert(correctCandidate.ContentScore > wrongCandidate.ContentScore, "Row-continuity content score should favor the correct padded stride.");
+                Assert(correctCandidate.Score > wrongCandidate.Score, "Total score should favor the correct padded stride on a sheared interpretation.");
+            }
+        }
+
+        private static void BufferDoctorPrefersCorrectEndianness()
+        {
+            var bigEndianDescriptor = CreateDescriptor(640, 480, 1280, RawPixelFormat.Mono16, 16);
+            bigEndianDescriptor.ByteOrder = RawByteOrder.BigEndian;
+            var buffer = new byte[bigEndianDescriptor.Stride * bigEndianDescriptor.Height];
+            for (var y = 0; y < bigEndianDescriptor.Height; y++)
+            {
+                for (var x = 0; x < bigEndianDescriptor.Width; x++)
+                {
+                    var value = x + (2 * y);
+                    var offset = (y * bigEndianDescriptor.Stride) + (x * 2);
+                    buffer[offset] = (byte)(value >> 8);
+                    buffer[offset + 1] = (byte)(value & 0xFF);
+                }
+            }
+
+            using (var source = RawImageSource.FromMemory(buffer, bigEndianDescriptor))
+            {
+                var bigEndian = ScoreDraft(source, bigEndianDescriptor);
+                var littleEndian = ScoreDraft(source, CreateDescriptor(640, 480, 1280, RawPixelFormat.Mono16, 16));
+                Assert(bigEndian.Score > littleEndian.Score, "Big-endian interpretation should win on a big-endian smooth ramp.");
+            }
+        }
+
+        private static void BufferDoctorPrefersMatchingValidBits()
+        {
+            var twelveBitDescriptor = CreateDescriptor(640, 480, 1280, RawPixelFormat.Mono16, 12);
+            var buffer = new byte[twelveBitDescriptor.Stride * twelveBitDescriptor.Height];
+            for (var y = 0; y < twelveBitDescriptor.Height; y++)
+            {
+                for (var x = 0; x < twelveBitDescriptor.Width; x++)
+                {
+                    var value = (x + (y * twelveBitDescriptor.Width)) % 4096;
+                    var offset = (y * twelveBitDescriptor.Stride) + (x * 2);
+                    buffer[offset] = (byte)(value & 0xFF);
+                    buffer[offset + 1] = (byte)(value >> 8);
+                }
+            }
+
+            using (var source = RawImageSource.FromMemory(buffer, twelveBitDescriptor))
+            {
+                var twelveBit = ScoreDraft(source, twelveBitDescriptor);
+                var sixteenBit = ScoreDraft(source, CreateDescriptor(640, 480, 1280, RawPixelFormat.Mono16, 16));
+                Assert(twelveBit.Score > sixteenBit.Score, "ValidBits 12 should beat ValidBits 16 when all sampled values are below 4096.");
+            }
+        }
+
+        private static void BufferDoctorFindsPackedMono12Candidate()
+        {
+            var width = 640;
+            var height = 480;
+            var buffer = CreatePackedRows(width, height, 12, 4095);
+            var descriptor = CreateDescriptor(width, height, ((width * 12) + 7) / 8, RawPixelFormat.Mono12PackedLsb, 12);
+            using (var source = RawImageSource.FromMemory(buffer, descriptor))
+            {
+                var packed = ScoreDraft(source, descriptor);
+                Assert(packed.Descriptor.Stride == descriptor.Stride, "Packed Mono12 candidate stride mismatch.");
+                Assert(
+                    !RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(buffer.Length, packed.Descriptor)),
+                    "Packed Mono12 candidate should have clean length diagnostics.");
+            }
+        }
+
+        private static void BufferDoctorSamplingStaysWithinCaps()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var rawPath = Path.Combine(directory, "huge-100k-doctor.raw");
+                var descriptor = CreateDescriptor(100000, 100000, 100000, RawPixelFormat.Mono8, 8);
+                if (!CreateSparseFile(rawPath, descriptor.GetRequiredByteCount()))
+                {
+                    Console.WriteLine("Skipped Buffer Doctor sampling-cap test because this filesystem does not support sparse files.");
+                    return;
+                }
+
+                using (var source = RawImageSource.FromFile(rawPath, descriptor))
+                {
+                    var candidate = ScoreDraft(source, descriptor);
+                    Assert(candidate.SampledRowCount > 0, "Buffer Doctor sampling did not read any rows.");
+                    Assert(candidate.SampledRowCount <= 64, "Buffer Doctor sampling read more than 64 rows.");
+                    Assert(candidate.SampledByteCount <= 4L * 1024 * 1024, "Buffer Doctor sampling read more than 4 MiB.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void BufferDoctorMarksRgbBgrAsAmbiguousTieGroup()
+        {
+            var width = 640;
+            var height = 480;
+            var descriptor = CreateDescriptor(width, height, width * 3, RawPixelFormat.RGB24, 8);
+            var buffer = new byte[descriptor.Stride * height];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var offset = (y * descriptor.Stride) + (x * 3);
+                    buffer[offset] = (byte)(127 + (120 * Math.Sin((x * 0.2) + (y * 0.3))));
+                    buffer[offset + 1] = (byte)(127 + (120 * Math.Sin((x * 0.2) + (y * 0.3) + 1.0)));
+                    buffer[offset + 2] = (byte)(127 + (120 * Math.Sin((x * 0.2) + (y * 0.3) + 2.0)));
+                }
+            }
+
+            using (var source = RawImageSource.FromMemory(buffer, descriptor))
+            {
+                var result = BufferDoctor.Diagnose(source, CancellationToken.None);
+                var rgb = FindCandidate(result, width, height, width * 3, RawPixelFormat.RGB24);
+                var bgr = FindCandidate(result, width, height, width * 3, RawPixelFormat.BGR24);
+                Assert(rgb != null && bgr != null, "RGB24/BGR24 pair should be among the top candidates.");
+                Assert(rgb!.Score == bgr!.Score, "RGB24 and BGR24 should tie on score.");
+                Assert(rgb.IsAmbiguousWithGroup && bgr.IsAmbiguousWithGroup, "RGB24/BGR24 should be marked as an ambiguous tie group.");
+                Assert(HasReasonContaining(rgb, "cannot be distinguished") && HasReasonContaining(bgr, "cannot be distinguished"), "Ambiguous tie group should carry an explicit reason.");
+            }
+        }
+
+        private static void BufferDoctorAcceptsTrailingRowFit()
+        {
+            var width = 640;
+            var height = 480;
+            var stride = 768;
+            var descriptor = CreateDescriptor(width, height, stride, RawPixelFormat.Mono8, 8);
+            var buffer = CreateSmoothMono8Buffer(width, height, stride);
+            Assert(buffer.Length == (stride * (height - 1)) + width, "Trailing-row fixture length mismatch.");
+            using (var source = RawImageSource.FromMemory(buffer, descriptor))
+            {
+                var candidate = ScoreDraft(source, descriptor);
+                Assert(HasReasonContaining(candidate, "Trailing-row fit"), "Trailing-row fit should be reported as a reason.");
+
+                var result = BufferDoctor.Diagnose(source, CancellationToken.None);
+                Assert(result.Candidates.Count > 0, "Buffer Doctor returned no candidates for the trailing-row buffer.");
+                var top = result.Candidates[0];
+                Assert(
+                    top.Descriptor.Width == width
+                        && top.Descriptor.Height == height
+                        && top.Descriptor.Stride == stride
+                        && top.Descriptor.PixelFormat == RawPixelFormat.Mono8,
+                    "Trailing-row interpretation should be the top candidate.");
+            }
+        }
+
+        private static void TypeMappingFileRoundTrips()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var path = Path.Combine(directory, "type-mappings.json");
+                var typeName = typeof(CompanyFrame).FullName!;
+                var assemblyName = typeof(CompanyFrame).Assembly.GetName().Name!;
+
+                var store = new TypeMappingStore(null, path);
+                var file = new TypeMappingFile();
+                file.Mappings.Add(new TypeMapping
+                {
+                    TypeName = typeName,
+                    AssemblyName = assemblyName,
+                    Members = new TypeMappingMembers
+                    {
+                        Data = "ImageAddress",
+                        Width = "SizeX",
+                        Height = "SizeY",
+                        Stride = "LinePitch",
+                        PixelFormat = "PixelType"
+                    },
+                    PixelFormatMap = CompanyPixelFormatMap(),
+                    ByteOrder = "LittleEndian"
+                });
+                store.Save(file);
+
+                var reloaded = new TypeMappingStore(null, path);
+                var mapping = reloaded.FindMapping(typeName, assemblyName);
+                Assert(mapping != null, "Saved mapping was not found after reload.");
+                Assert(mapping!.Members.Data == "ImageAddress" && mapping.Members.Stride == "LinePitch", "Mapping members did not round-trip.");
+                Assert(
+                    mapping.PixelFormatMap != null && mapping.PixelFormatMap.Count == 4 && mapping.PixelFormatMap["Mono12"] == "Mono12PackedLsb",
+                    "pixelFormatMap did not round-trip as a JSON object map.");
+                Assert(reloaded.FindMapping(typeName, "Other.Assembly") == null, "Assembly name match must be exact.");
+                Assert(reloaded.FindMapping("Other.Type", assemblyName) == null, "Type name match must be exact.");
+
+                File.WriteAllText(path, "{\"version\":99,\"mappings\":[]}");
+                var versioned = new TypeMappingStore(null, path);
+                Assert(versioned.FindMapping(typeName, assemblyName) == null, "Unknown schema versions must be ignored.");
+                Assert(!string.IsNullOrEmpty(versioned.LastLoadError), "Version mismatch should be recorded as a load error.");
+
+                File.WriteAllText(path, "{ not json");
+                var malformed = new TypeMappingStore(null, path);
+                Assert(malformed.FindMapping(typeName, assemblyName) == null, "Malformed mapping files must be ignored without crashing.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void TypeMappingResolutionPrefersSolutionLocal()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                var solutionDirectory = Path.Combine(directory, "repo");
+                var nestedDirectory = Path.Combine(solutionDirectory, "src", "App", "bin");
+                Directory.CreateDirectory(nestedDirectory);
+                var userDirectory = Path.Combine(directory, "user");
+                Directory.CreateDirectory(userDirectory);
+
+                var typeName = typeof(CompanyFrame).FullName!;
+                var assemblyName = typeof(CompanyFrame).Assembly.GetName().Name!;
+
+                var solutionPath = Path.Combine(solutionDirectory, TypeMappingStore.SolutionLocalFileName);
+                var solutionStore = new TypeMappingStore(null, solutionPath);
+                var solutionFile = new TypeMappingFile();
+                solutionFile.Mappings.Add(new TypeMapping
+                {
+                    TypeName = typeName,
+                    AssemblyName = assemblyName,
+                    Members = new TypeMappingMembers { Data = "ImageAddress", Width = "SizeX", Height = "SizeY" },
+                    ByteOrder = "BigEndian"
+                });
+                solutionStore.Save(solutionFile);
+
+                var userPath = Path.Combine(userDirectory, "type-mappings.json");
+                var userStore = new TypeMappingStore(null, userPath);
+                var userFile = new TypeMappingFile();
+                userFile.Mappings.Add(new TypeMapping
+                {
+                    TypeName = typeName,
+                    AssemblyName = assemblyName,
+                    Members = new TypeMappingMembers { Data = "ImageAddress", Width = "SizeX", Height = "SizeY" },
+                    ByteOrder = "LittleEndian"
+                });
+                userStore.Save(userFile);
+
+                var discovered = TypeMappingStore.FindSolutionLocalMappingPath(nestedDirectory);
+                Assert(discovered == solutionPath, "Solution-local mapping file was not discovered by walking up directories.");
+                Assert(TypeMappingStore.FindSolutionLocalMappingPath(userDirectory) == null, "Unrelated directories should not discover a solution-local mapping.");
+
+                var store = new TypeMappingStore(discovered, userPath);
+                var mapping = store.FindMapping(typeName, assemblyName);
+                Assert(mapping != null && mapping!.ByteOrder == "BigEndian", "Solution-local mapping should win over the user mapping.");
+
+                var userOnly = new TypeMappingStore(null, userPath);
+                var fallback = userOnly.FindMapping(typeName, assemblyName);
+                Assert(fallback != null && fallback!.ByteOrder == "LittleEndian", "User mapping should apply when no solution-local mapping exists.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void TypeMappingExtractsMappedCompanyFrame()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var width = 8;
+            var height = 4;
+            var buffer = new byte[width * height];
+            for (var i = 0; i < buffer.Length; i++)
+            {
+                buffer[i] = (byte)(i * 3);
+            }
+
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var frame = new CompanyFrame
+                {
+                    ImageAddress = handle.AddrOfPinnedObject(),
+                    SizeX = width,
+                    SizeY = height,
+                    LinePitch = width,
+                    PixelType = CompanyPixelType.Mono8
+                };
+                var store = CreateMappingStore(
+                    directory,
+                    "pointer-mappings.json",
+                    typeof(CompanyFrame),
+                    new TypeMappingMembers { Data = "ImageAddress", Width = "SizeX", Height = "SizeY", Stride = "LinePitch", PixelFormat = "PixelType" });
+
+                var view = ImageCollectionVisualizerTransfer.CreateView(new object[] { frame }, store);
+                var metadata = view.GetMetadata(0);
+                Assert(string.IsNullOrEmpty(metadata.Error), "Mapped extraction failed: " + metadata.Error);
+                Assert(metadata.Metadata != null, "Mapped extraction produced no metadata.");
+                Assert(metadata.Metadata!.SupportsDirectMemory, "Pointer-backed mapping should use the direct-memory path.");
+                Assert(
+                    metadata.Metadata.Descriptor.Width == width && metadata.Metadata.Descriptor.Height == height && metadata.Metadata.Descriptor.Stride == width,
+                    "Mapped descriptor mismatch.");
+                Assert(metadata.Metadata.BufferAddress == handle.AddrOfPinnedObject().ToInt64(), "Mapped buffer address mismatch.");
+
+                var chunk = view.GetChunk(0, new VisualizerSnapshotChunkRequest { Offset = 0, Count = buffer.Length });
+                AssertBytesEqual(buffer, chunk.Buffer, "Mapped pointer chunk read failed.");
+
+                var arrayFrame = new CompanyArrayFrame
+                {
+                    Pixels = buffer,
+                    FrameWidth = width,
+                    FrameHeight = height,
+                    Format = CompanyPixelType.Mono8
+                };
+                var arrayStore = CreateMappingStore(
+                    directory,
+                    "array-mappings.json",
+                    typeof(CompanyArrayFrame),
+                    new TypeMappingMembers { Data = "Pixels", Width = "FrameWidth", Height = "FrameHeight", PixelFormat = "Format" });
+                var arrayView = ImageCollectionVisualizerTransfer.CreateView(new object[] { arrayFrame }, arrayStore);
+                var arrayMetadata = arrayView.GetMetadata(0);
+                Assert(string.IsNullOrEmpty(arrayMetadata.Error), "Array-backed mapped extraction failed: " + arrayMetadata.Error);
+                Assert(arrayMetadata.Metadata != null && !arrayMetadata.Metadata!.SupportsDirectMemory, "Array-backed mapping should use the chunked path.");
+                var arrayChunk = arrayView.GetChunk(0, new VisualizerSnapshotChunkRequest { Offset = 0, Count = buffer.Length });
+                AssertBytesEqual(buffer, arrayChunk.Buffer, "Mapped array chunk read failed.");
+
+                var ushorts = new ushort[width * height];
+                for (var i = 0; i < ushorts.Length; i++)
+                {
+                    ushorts[i] = (ushort)(i * 100);
+                }
+
+                var ushortFrame = new CompanyUshortFrame
+                {
+                    Samples = ushorts,
+                    FrameWidth = width,
+                    FrameHeight = height,
+                    Format = CompanyPixelType.Mono16
+                };
+                var ushortStore = CreateMappingStore(
+                    directory,
+                    "ushort-mappings.json",
+                    typeof(CompanyUshortFrame),
+                    new TypeMappingMembers { Data = "Samples", Width = "FrameWidth", Height = "FrameHeight", PixelFormat = "Format" });
+                var ushortView = ImageCollectionVisualizerTransfer.CreateView(new object[] { ushortFrame }, ushortStore);
+                var ushortMetadata = ushortView.GetMetadata(0);
+                Assert(string.IsNullOrEmpty(ushortMetadata.Error), "Ushort-backed mapped extraction failed: " + ushortMetadata.Error);
+                Assert(ushortMetadata.Metadata != null && ushortMetadata.Metadata!.Descriptor.PixelFormat == RawPixelFormat.Mono16, "Ushort mapping should produce a Mono16 descriptor.");
+                var ushortChunk = ushortView.GetChunk(0, new VisualizerSnapshotChunkRequest { Offset = 0, Count = ushorts.Length * 2 });
+                var expectedUshortBytes = RawBufferSnapshot.FromUInt16Array(ushorts, ushortMetadata.Metadata!.Descriptor).Buffer;
+                AssertBytesEqual(expectedUshortBytes, ushortChunk.Buffer, "Mapped ushort chunk read failed.");
+            }
+            finally
+            {
+                handle.Free();
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void TypeMappingAppliesEnumPixelFormatMap()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var width = 8;
+            var height = 4;
+            var stride = ((width * 12) + 7) / 8;
+            var buffer = new byte[stride * height];
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var frame = new CompanyFrame
+                {
+                    ImageAddress = handle.AddrOfPinnedObject(),
+                    SizeX = width,
+                    SizeY = height,
+                    LinePitch = stride,
+                    PixelType = CompanyPixelType.Mono12
+                };
+                var store = CreateMappingStore(
+                    directory,
+                    "enum-mappings.json",
+                    typeof(CompanyFrame),
+                    new TypeMappingMembers { Data = "ImageAddress", Width = "SizeX", Height = "SizeY", Stride = "LinePitch", PixelFormat = "PixelType" });
+
+                var view = ImageCollectionVisualizerTransfer.CreateView(new object[] { frame }, store);
+                var metadata = view.GetMetadata(0);
+                Assert(string.IsNullOrEmpty(metadata.Error), "Enum-mapped extraction failed: " + metadata.Error);
+                Assert(metadata.Metadata != null, "Enum-mapped extraction produced no metadata.");
+                Assert(
+                    metadata.Metadata!.Descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb,
+                    "pixelFormatMap should map Mono12 to Mono12PackedLsb.");
+                Assert(metadata.Metadata.Descriptor.ValidBits == 12, "Mono12PackedLsb should default to 12 valid bits.");
+            }
+            finally
+            {
+                handle.Free();
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void TypeMappingFailureIncludesMemberInventory()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var widget = new UnsupportedWidget
+                {
+                    Handle = new IntPtr(0x1234),
+                    Counter = 7,
+                    Mode = CompanyPixelType.Bgr
+                };
+                var store = new TypeMappingStore(null, Path.Combine(directory, "missing-mappings.json"));
+                var view = ImageCollectionVisualizerTransfer.CreateView(new object[] { widget }, store);
+                var metadata = view.GetMetadata(0);
+                Assert(metadata.Metadata == null, "Unsupported type should not produce metadata.");
+                Assert(!string.IsNullOrEmpty(metadata.Error), "Unsupported type should report an error row.");
+                Assert(metadata.MemberInventory != null && metadata.MemberInventory!.Count >= 3, "Failure should include the member inventory.");
+
+                var handle = FindInventoryItem(metadata.MemberInventory!, "Handle");
+                Assert(handle != null && handle!.Kind == "Field" && handle.TypeName == "IntPtr" && handle.SampleValue.Contains("0x"), "Inventory should describe the Handle field.");
+                var counter = FindInventoryItem(metadata.MemberInventory!, "Counter");
+                Assert(counter != null && counter!.SampleValue == "7", "Inventory should include sample values.");
+                var mode = FindInventoryItem(metadata.MemberInventory!, "Mode");
+                Assert(
+                    mode != null && mode!.Kind == "Property" && mode.EnumValues != null && mode.EnumValues.Contains("Mono12"),
+                    "Inventory should list enum values for enum members.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void TypeMappingMissingMemberFailsVisibly()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var frame = new CompanyFrame
+                {
+                    ImageAddress = new IntPtr(0x1234),
+                    SizeX = 8,
+                    SizeY = 4,
+                    LinePitch = 8,
+                    PixelType = CompanyPixelType.Mono8
+                };
+                var store = CreateMappingStore(
+                    directory,
+                    "renamed-mappings.json",
+                    typeof(CompanyFrame),
+                    new TypeMappingMembers { Data = "ImageAddress", Width = "RenamedWidth", Height = "SizeY" });
+
+                var view = ImageCollectionVisualizerTransfer.CreateView(new object[] { frame }, store);
+                var metadata = view.GetMetadata(0);
+                Assert(metadata.Metadata == null, "A mapping with a missing member must not produce metadata.");
+                Assert(metadata.Error.Contains("RenamedWidth"), "The failure reason should name the missing member.");
+                Assert(metadata.MemberInventory != null && metadata.MemberInventory!.Count > 0, "Mapped extraction failure should still include the member inventory.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void VisionInferenceAutoOpensDirectPointerShape()
+        {
+            var inventory = new List<VisualizerMemberInventoryItem>
+            {
+                InventoryItem("ImageAddress", "IntPtr", "0x1234"),
+                InventoryItem("SizeX", "Int32", "640"),
+                InventoryItem("SizeY", "Int32", "480"),
+                InventoryItem("LinePitch", "Int32", "1920"),
+                InventoryItem("PixelType", "CompanyPixelType", "Bgr")
+            };
+
+            var inference = VisionMemberInference.Infer(inventory, "Contoso.Camera.CompanyFrame");
+            Assert(inference.CanAutoOpen, "A complete pointer-backed company frame should pass the automatic-open gate.");
+            Assert(inference.ConfidenceScore >= 90, "Complete company frame confidence should be at least 90.");
+            Assert(inference.Members.Data == "ImageAddress", "Automatic inference selected the wrong data member.");
+            Assert(inference.Members.Width == "SizeX" && inference.Members.Height == "SizeY", "Automatic inference selected the wrong dimensions.");
+            Assert(inference.Members.Stride == "LinePitch", "Automatic inference selected the wrong stride.");
+            Assert(inference.PixelFormat == RawPixelFormat.BGR24, "Bgr should resolve to BGR24 without a full type mapping.");
+        }
+
+        private static void VisionInferenceSupportsOneLevelNestedMembers()
+        {
+            var inventory = new List<VisualizerMemberInventoryItem>
+            {
+                InventoryItem("Storage.Buffer", "UIntPtr", "0x1234"),
+                InventoryItem("Info.Width", "Int32", "320"),
+                InventoryItem("Info.Height", "Int32", "240"),
+                InventoryItem("Info.Stride", "Int32", "320"),
+                InventoryItem("Info.PixelFormat", "VendorFormat", "Mono8")
+            };
+
+            var inference = VisionMemberInference.Infer(inventory, "Vendor.NestedImageFrame");
+            Assert(inference.CanAutoOpen, "One-level nested image members should pass the automatic-open gate.");
+            Assert(inference.Members.Data == "Storage.Buffer", "Nested data path inference failed.");
+            Assert(inference.Members.Width == "Info.Width" && inference.Members.Height == "Info.Height", "Nested dimension path inference failed.");
+            Assert(inference.PixelFormat == RawPixelFormat.Mono8, "Nested pixel format inference failed.");
+        }
+
+        private static void VisionInferenceRequestsOnlyAmbiguousPixelFormat()
+        {
+            var inventory = new List<VisualizerMemberInventoryItem>
+            {
+                InventoryItem("Data", "IntPtr", "0x1234"),
+                InventoryItem("Width", "Int32", "128"),
+                InventoryItem("Height", "Int32", "64"),
+                InventoryItem("Stride", "Int32", "192"),
+                InventoryItem("PixelFormat", "VendorFormat", "Mono12")
+            };
+
+            var inference = VisionMemberInference.Infer(inventory, "Vendor.ImageFrame");
+            Assert(inference.HasRequiredMembers, "Ambiguous format should not discard otherwise complete member inference.");
+            Assert(inference.RequiresPixelFormatMapping, "Mono12 must remain explicit because packed and unpacked layouts differ.");
+            Assert(!inference.CanAutoOpen, "An ambiguous pixel format must not auto-open.");
+            Assert(inference.MissingRoles.Count == 0, "Pixel format ambiguity should not ask the user to remap data or dimensions.");
+        }
+
+        private static void VisionInferenceHidesLowConfidenceShape()
+        {
+            var inventory = new List<VisualizerMemberInventoryItem>
+            {
+                InventoryItem("Handle", "IntPtr", "0x1234"),
+                InventoryItem("Counter", "Int32", "7")
+            };
+
+            var inference = VisionMemberInference.Infer(inventory, "Vendor.Widget");
+            Assert(inference.ConfidenceScore < 40, "A pointer plus unrelated counter should remain below the visible-candidate threshold.");
+            Assert(!inference.CanAutoOpen, "A low-confidence object must never auto-open.");
+        }
+
+        private static void TypeMappingReadsOneLevelNestedMemberPaths()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var buffer = new byte[] { 1, 2, 3, 4 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var frame = new NestedCompanyFrame
+                {
+                    Storage = new NestedStorage { ImageAddress = handle.AddrOfPinnedObject() },
+                    Info = new NestedFrameInfo
+                    {
+                        Width = 2,
+                        Height = 2,
+                        Stride = 2,
+                        PixelType = CompanyPixelType.Mono8
+                    }
+                };
+                var store = CreateMappingStore(
+                    directory,
+                    "nested-mappings.json",
+                    typeof(NestedCompanyFrame),
+                    new TypeMappingMembers
+                    {
+                        Data = "Storage.ImageAddress",
+                        Width = "Info.Width",
+                        Height = "Info.Height",
+                        Stride = "Info.Stride",
+                        PixelFormat = "Info.PixelType"
+                    });
+
+                var view = ImageCollectionVisualizerTransfer.CreateView(new object[] { frame }, store);
+                var metadata = view.GetMetadata(0);
+                Assert(string.IsNullOrEmpty(metadata.Error), "One-level nested mapping failed: " + metadata.Error);
+                Assert(metadata.Metadata != null && metadata.Metadata.Descriptor.Width == 2, "Nested mapping descriptor failed.");
+                var chunk = view.GetChunk(0, new VisualizerSnapshotChunkRequest { Offset = 0, Count = buffer.Length });
+                AssertBytesEqual(buffer, chunk.Buffer, "Nested mapped pointer data failed.");
+            }
+            finally
+            {
+                handle.Free();
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static VisualizerMemberInventoryItem InventoryItem(string name, string typeName, string sampleValue)
+        {
+            return new VisualizerMemberInventoryItem
+            {
+                Name = name,
+                Kind = "Member",
+                TypeName = typeName,
+                SampleValue = sampleValue
+            };
+        }
+
+        private static TypeMappingStore CreateMappingStore(string directory, string fileName, Type mappedType, TypeMappingMembers members)
+        {
+            var path = Path.Combine(directory, fileName);
+            var store = new TypeMappingStore(null, path);
+            var file = new TypeMappingFile();
+            file.Mappings.Add(new TypeMapping
+            {
+                TypeName = mappedType.FullName!,
+                AssemblyName = mappedType.Assembly.GetName().Name!,
+                Members = members,
+                PixelFormatMap = CompanyPixelFormatMap(),
+                ByteOrder = "LittleEndian"
+            });
+            store.Save(file);
+            return new TypeMappingStore(null, path);
+        }
+
+        private static Dictionary<string, string> CompanyPixelFormatMap()
+        {
+            return new Dictionary<string, string>
+            {
+                { "Mono8", "Mono8" },
+                { "Mono12", "Mono12PackedLsb" },
+                { "Bgr", "BGR24" },
+                { "Mono16", "Mono16" }
+            };
+        }
+
+        private static VisualizerMemberInventoryItem? FindInventoryItem(List<VisualizerMemberInventoryItem> inventory, string name)
+        {
+            for (var i = 0; i < inventory.Count; i++)
+            {
+                if (inventory[i].Name == name)
+                {
+                    return inventory[i];
+                }
+            }
+
+            return null;
+        }
+
+        private enum CompanyPixelType
+        {
+            Mono8,
+            Mono12,
+            Bgr,
+            Mono16
+        }
+
+        private sealed class CompanyFrame
+        {
+            public IntPtr ImageAddress { get; set; }
+            public int SizeX { get; set; }
+            public int SizeY { get; set; }
+            public int LinePitch { get; set; }
+            public CompanyPixelType PixelType { get; set; }
+        }
+
+        private sealed class CompanyArrayFrame
+        {
+            public byte[]? Pixels;
+            public int FrameWidth;
+            public int FrameHeight;
+            public CompanyPixelType Format;
+        }
+
+        private sealed class CompanyUshortFrame
+        {
+            public ushort[]? Samples;
+            public int FrameWidth;
+            public int FrameHeight;
+            public CompanyPixelType Format;
+        }
+
+        private sealed class NestedCompanyFrame
+        {
+            public NestedStorage? Storage { get; set; }
+            public NestedFrameInfo? Info { get; set; }
+        }
+
+        private sealed class NestedStorage
+        {
+            public IntPtr ImageAddress { get; set; }
+        }
+
+        private sealed class NestedFrameInfo
+        {
+            public int Width { get; set; }
+            public int Height { get; set; }
+            public int Stride { get; set; }
+            public CompanyPixelType PixelType { get; set; }
+        }
+
+        private sealed class UnsupportedWidget
+        {
+            public IntPtr Handle;
+            public int Counter;
+            public CompanyPixelType Mode { get; set; }
+        }
+
+        private static BufferInterpretationCandidate ScoreDraft(RawImageSource source, RawImageDescriptor descriptor)
+        {
+            var drafts = BufferInterpretationCandidateGenerator.Generate(source.Length, descriptor);
+            for (var i = 0; i < drafts.Count; i++)
+            {
+                var draft = drafts[i].Descriptor;
+                if (draft.Width == descriptor.Width
+                    && draft.Height == descriptor.Height
+                    && draft.Stride == descriptor.Stride
+                    && draft.PixelFormat == descriptor.PixelFormat
+                    && draft.ByteOrder == descriptor.ByteOrder
+                    && draft.ValidBits == descriptor.ValidBits)
+                {
+                    return BufferInterpretationScorer.Score(source, drafts[i], CancellationToken.None);
+                }
+            }
+
+            throw new InvalidOperationException("Candidate generation did not include the requested descriptor.");
+        }
+
+        private static BufferInterpretationCandidate? FindCandidate(
+            BufferDiagnosisResult result,
+            int width,
+            int height,
+            int stride,
+            RawPixelFormat pixelFormat)
+        {
+            for (var i = 0; i < result.Candidates.Count; i++)
+            {
+                var descriptor = result.Candidates[i].Descriptor;
+                if (descriptor.Width == width
+                    && descriptor.Height == height
+                    && descriptor.Stride == stride
+                    && descriptor.PixelFormat == pixelFormat)
+                {
+                    return result.Candidates[i];
+                }
+            }
+
+            return null;
+        }
+
+        private static bool HasReasonContaining(BufferInterpretationCandidate candidate, string text)
+        {
+            for (var i = 0; i < candidate.Reasons.Count; i++)
+            {
+                if (candidate.Reasons[i].Contains(text))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static byte[] CreateNoisyMono8Buffer(int width, int height, int stride, int seed)
+        {
+            var buffer = new byte[(stride * (height - 1)) + width];
+            new Random(seed).NextBytes(buffer);
+            return buffer;
+        }
+
+        private static byte[] CreateSmoothMono8Buffer(int width, int height, int stride)
+        {
+            var buffer = new byte[(stride * (height - 1)) + width];
+            for (var y = 0; y < height; y++)
+            {
+                var row = y * stride;
+                for (var x = 0; x < width; x++)
+                {
+                    buffer[row + x] = (byte)(127 + (120 * Math.Sin((x * 0.2) + (y * 0.3))));
+                }
+            }
+
+            return buffer;
         }
 
         private static void Assert(bool condition, string message)

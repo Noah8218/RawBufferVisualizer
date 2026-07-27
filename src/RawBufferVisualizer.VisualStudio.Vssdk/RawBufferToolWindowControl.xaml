@@ -232,17 +232,51 @@
 
             <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
                 <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <DockPanel Grid.Row="0" Margin="10">
-                    <TextBlock DockPanel.Dock="Top" Text="Images" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
-                    <ListBox x:Name="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown">
+                <StackPanel Grid.Row="0" Margin="10,10,10,6">
+                    <TextBlock Text="Images" FontSize="16" FontWeight="SemiBold"/>
+                    <WrapPanel Margin="0,5,0,0">
+                        <CheckBox x:Name="AutoInspectBox"
+                                  Content="● Auto Inspect"
+                                  IsChecked="True"
+                                  Foreground="{StaticResource TextBrush}"
+                                  VerticalAlignment="Center"
+                                  ToolTip="Refresh image-like locals whenever the debugger enters Break Mode"
+                                  AutomationProperties.Name="Automatic Vision Inspector"
+                                  Checked="AutoInspectBox_Changed"
+                                  Unchecked="AutoInspectBox_Changed"/>
+                        <Button Content="Scan Now"
+                                Margin="6,0,0,0"
+                                ToolTip="Scan the current stack frame without waiting for another break"
+                                AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
+                                Click="ScanNow_Click"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="AutomaticFrameText"
+                               Text="Current stack frame"
+                               Margin="0,6,0,0"
+                               FontFamily="Consolas"
+                               FontSize="11"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="AutomaticScanStatusText"
+                               Text="Automatic inspection is ready."
+                               Margin="0,3,0,0"
+                               FontSize="11"
+                               Foreground="#9CDCFE"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+
+                    <ListBox Grid.Row="1" Margin="10,0,10,10" x:Name="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
                         <ListBox.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
                                 <MenuItem Header="Save raw snapshot" Click="SaveSnapshot_Click"/>
+                                <MenuItem x:Name="OpenVariableMenuItem" Header="Open Variable..." AutomationProperties.AutomationId="OpenVariableMenuItem" Click="OpenVariable_Click"/>
+                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Map This Type" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
                             </ContextMenu>
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
@@ -251,6 +285,7 @@
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="76"/>
                                         <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
                                         <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
@@ -259,13 +294,20 @@
                                         <TextBlock Text="{Binding Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Text="{Binding Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{StaticResource MutedTextBrush}"/>
                                     </StackPanel>
+                                    <Button Grid.Column="2"
+                                            Content="Map"
+                                            Margin="6,0,0,0"
+                                            VerticalAlignment="Center"
+                                            Visibility="{Binding MappingActionVisibility}"
+                                            ToolTip="Confirm only the unresolved member or pixel-format mapping"
+                                            AutomationProperties.Name="Map this detected image type"
+                                            Click="MapCandidate_Click"/>
                                 </Grid>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
-                </DockPanel>
 
-                <Border x:Name="DescriptorPanel" Grid.Row="1" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10" MaxHeight="120">
+                <Border x:Name="DescriptorPanel" Grid.Row="2" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10" MaxHeight="120">
                     <DockPanel LastChildFill="True">
                         <TextBlock DockPanel.Dock="Top" Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
@@ -321,6 +363,38 @@
 
             <ScrollViewer x:Name="InspectorPanel" Grid.Column="4" Background="{StaticResource PanelBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="10">
+                    <Border x:Name="AutomaticInspectionPanel"
+                            Visibility="Collapsed"
+                            Margin="0,0,0,12"
+                            Padding="9"
+                            Background="#252526"
+                            BorderBrush="{StaticResource StatusAccentBrush}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <TextBlock Text="Automatic Vision Inspector" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock x:Name="AutomaticInspectionConfidenceText"
+                                       Margin="0,5,0,0"
+                                       Foreground="#9CDCFE"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock x:Name="AutomaticInspectionMembersText"
+                                       Margin="0,5,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       FontFamily="Consolas"
+                                       FontSize="11"
+                                       TextWrapping="Wrap"/>
+                            <TextBlock x:Name="AutomaticInspectionValidationText"
+                                       Margin="0,5,0,0"
+                                       Foreground="{StaticResource MutedTextBrush}"
+                                       TextWrapping="Wrap"/>
+                            <Button x:Name="EditAutomaticMappingButton"
+                                    Content="Edit Mapping"
+                                    Margin="0,7,0,0"
+                                    HorizontalAlignment="Left"
+                                    ToolTip="Review inferred members and save corrections for this runtime type"
+                                    AutomationProperties.AutomationId="EditAutomaticVisionMappingButton"
+                                    Click="EditAutomaticMapping_Click"/>
+                        </StackPanel>
+                    </Border>
                     <TextBlock x:Name="PixelHeadingText" Text="Pixel" FontSize="16" FontWeight="SemiBold"/>
                     <TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
                     <TextBlock x:Name="PixelNeighborhoodHeadingText" Text="Hover 5x5 Values" Margin="0,10,0,4" FontWeight="SemiBold"/>
@@ -374,17 +448,67 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Format" Margin="0,0,8,6"/>
                         <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretStrideTextBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Bits" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Endian" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="3" Grid.Column="1" x:Name="InterpretByteOrderBox" Margin="0,0,0,6"/>
-                        <Button Grid.Row="4" Grid.Column="1" Content="Apply" HorizontalAlignment="Left" Click="ApplyInterpretation_Click"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Bits" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Endian" Margin="0,0,8,6"/>
+                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="InterpretByteOrderBox" Margin="0,0,0,6"/>
+                        <WrapPanel Grid.Row="6" Grid.Column="1">
+                            <Button Content="Apply" Click="ApplyInterpretation_Click"/>
+                            <Button x:Name="DiagnoseBufferButton" Content="Diagnose Buffer" AutomationProperties.AutomationId="DiagnoseBufferButton" ToolTip="Suggest ranked width/height/stride/pixel-format interpretations for this buffer" Click="DiagnoseBuffer_Click"/>
+                        </WrapPanel>
                     </Grid>
+
+                    <Border x:Name="DiagnosisPanel"
+                            Visibility="Collapsed"
+                            Margin="0,10,0,0"
+                            Padding="8"
+                            Background="{StaticResource InputBrush}"
+                            BorderBrush="{StaticResource BorderBrush}"
+                            BorderThickness="1">
+                        <StackPanel>
+                            <DockPanel LastChildFill="True">
+                                <Button x:Name="CloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
+                                <TextBlock Text="Diagnose Buffer" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                            </DockPanel>
+                            <TextBlock x:Name="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                            <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" MaxHeight="280" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
+                                <ListBox.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2" ToolTip="{Binding ReasonsText}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="76"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left">
+                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                            </Border>
+                                            <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                <DockPanel LastChildFill="True">
+                                                    <Border DockPanel.Dock="Right" Background="{StaticResource StatusAccentBrush}" Padding="6,1" CornerRadius="2" VerticalAlignment="Top">
+                                                        <TextBlock Text="{Binding ScoreText}" FontSize="11" FontWeight="SemiBold"/>
+                                                    </Border>
+                                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+                                                </DockPanel>
+                                                <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" Foreground="#D7BA7D" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.ItemTemplate>
+                            </ListBox>
+                        </StackPanel>
+                    </Border>
 
                     <TextBlock Text="Compare" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
                     <WrapPanel>
@@ -472,6 +596,84 @@
                                 <Button Content="Auto" Click="AutoLevels_Click"/>
                             </WrapPanel>
                         </Grid>
+                    </TabItem>
+                    <TabItem Header="Interpret">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Margin="4">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="64"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                    </Grid.RowDefinitions>
+                                    <TextBlock Grid.Row="0" Grid.Column="0" Text="Format" Margin="0,0,8,6"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CompactInterpretPixelFormatBox" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Margin="0,0,8,6"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="CompactInterpretWidthTextBox" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Margin="0,0,8,6"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="CompactInterpretHeightTextBox" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="CompactInterpretStrideTextBox" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="4" Grid.Column="0" Text="Bits" Margin="0,0,8,6"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="CompactInterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                                    <TextBlock Grid.Row="5" Grid.Column="0" Text="Endian" Margin="0,0,8,6"/>
+                                    <ComboBox Grid.Row="5" Grid.Column="1" x:Name="CompactInterpretByteOrderBox" Margin="0,0,0,6"/>
+                                    <WrapPanel Grid.Row="6" Grid.Column="1">
+                                        <Button x:Name="CompactApplyInterpretationButton" Content="Apply" Click="ApplyInterpretation_Click"/>
+                                        <Button x:Name="CompactDiagnoseBufferButton" Content="Diagnose Buffer" AutomationProperties.AutomationId="CompactDiagnoseBufferButton" ToolTip="Suggest ranked width/height/stride/pixel-format interpretations for this buffer" Click="DiagnoseBuffer_Click"/>
+                                    </WrapPanel>
+                                </Grid>
+
+                                <Border x:Name="CompactDiagnosisPanel"
+                                        Visibility="Collapsed"
+                                        Margin="0,10,0,0"
+                                        Padding="8"
+                                        Background="{StaticResource InputBrush}"
+                                        BorderBrush="{StaticResource BorderBrush}"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <DockPanel LastChildFill="True">
+                                            <Button x:Name="CompactCloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
+                                            <TextBlock Text="Diagnose Buffer" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </DockPanel>
+                                        <TextBlock x:Name="CompactDiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                                        <ListBox x:Name="CompactDiagnosisCandidateList" AutomationProperties.AutomationId="CompactDiagnosisCandidateList" MaxHeight="220" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
+                                            <ListBox.ItemTemplate>
+                                                <DataTemplate>
+                                                    <Grid Margin="0,2" ToolTip="{Binding ReasonsText}">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="76"/>
+                                                            <ColumnDefinition Width="*"/>
+                                                        </Grid.ColumnDefinitions>
+                                                        <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left">
+                                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                                        </Border>
+                                                        <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
+                                                            <DockPanel LastChildFill="True">
+                                                                <Border DockPanel.Dock="Right" Background="{StaticResource StatusAccentBrush}" Padding="6,1" CornerRadius="2" VerticalAlignment="Top">
+                                                                    <TextBlock Text="{Binding ScoreText}" FontSize="11" FontWeight="SemiBold"/>
+                                                                </Border>
+                                                                <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+                                                            </DockPanel>
+                                                            <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
+                                                            <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" Foreground="#D7BA7D" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListBox.ItemTemplate>
+                                        </ListBox>
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
                     </TabItem>
                     <TabItem Header="Diagnostics">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
