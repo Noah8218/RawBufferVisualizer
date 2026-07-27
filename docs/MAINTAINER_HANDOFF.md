@@ -9,7 +9,7 @@ This is the canonical continuation document for the next conversation. Read it a
 | Last verified | 2026-07-27 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | `cbad230` (`Add automatic vision inspection and buffer recovery tools`, pushed) plus the latest industrial-buffer safety hardening commit on `main` |
+| Implementation baseline | `174707f` (`Harden industrial camera buffer inference`, pushed) plus the latest Automatic Inspector workflow-hardening commit on `main` |
 | Source and VSIX version | `1.0.46` / `1.0.46.0`; published Marketplace line remains `1.0.45.0` |
 | Public Marketplace version | `1.0.45.0`; the public Overview was re-fetched on 2026-07-26 KST and now matches the local `1.0.45` copy, including the Large Image Performance section |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
@@ -30,7 +30,7 @@ Raw Buffer Visualizer is an Image Watch-style debugger visualizer for C# machine
 Primary workflow:
 
 1. Stop at a breakpoint with an image variable alive.
-2. Let **Auto Inspect** discover safe image-like locals, or click the Raw Buffer Visualizer icon in DataTip, Watch, Locals, or Autos for a registered type.
+2. Let **Auto Inspect on Break** discover safe image-like locals and function arguments, or click the Raw Buffer Visualizer icon in DataTip, Watch, Locals, or Autos for a registered type.
 3. Append the discovered image or supported collection entries to the existing docked `Images` list.
 4. Select a thumbnail, zoom/pan, and inspect X/Y, GV or channels, raw bytes, descriptor, and diagnostics.
 5. Compare images or export the visible view/raw snapshot when needed.
@@ -121,12 +121,14 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 
 ### Automatic Vision Inspector
 
-- **Auto Inspect** scans the current stack frame after each Break Mode transition; **Scan Now** refreshes it on demand.
+- **Auto Inspect on Break** merges the current stack frame's Locals and Arguments after each Break Mode transition; **Scan Now** refreshes it on demand.
+- The option defaults enabled after the user opens the Tool Window, persists in `%APPDATA%\RawBufferVisualizer\automatic-inspector-settings.json`, and survives a full Visual Studio restart. Breakpoints never force the Tool Window to open or steal focus.
 - The recognition order is saved mapping -> known shape -> runtime type hint -> member structure -> current-value/memory validation -> Smart Type Mapper fallback.
 - Direct fields/property getters and one nested member level are considered. Supported inferred data members are `IntPtr`, `UIntPtr`, `byte[]`, `ushort[]`, and `float[]`.
 - Complete validated shapes at 90% or higher open automatically; results from 40% through 89% remain visible as mapping/review candidates; lower scores are hidden.
+- Rows are explicit: `[Auto]` opened, `[Map]` needs metadata confirmation, and `[Failed]` was recognized but could not read its current value/memory. Each candidate has an exception boundary, and a successful row is selected before an error row.
 - Root arrays/collections stay with the existing registered collection visualizers, and arbitrary SDK methods, dynamic vendor DLL loading, private native-layout decoding, and unbounded graph traversal remain excluded.
-- Five deterministic self-tests cover direct pointer inference, one-level nesting, ambiguous pixel format, low-confidence hiding, and nested mapping extraction.
+- Deterministic self-tests cover direct pointer inference, one-level nesting, ambiguous pixel format, low-confidence hiding, nested mapping extraction, `SizeX`/buffer-length role separation, and preference persistence/fallback.
 - Full behavior, ownership, limits, and evidence are recorded in `docs/automatic-vision-inspector.md`.
 
 ### Release and documentation
@@ -160,7 +162,7 @@ These are recorded regression results, not performance promises for every PC.
 | Installed VSIX Buffer Doctor | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: five candidates appeared, the corrected interpretation was applied, and pixel inspection reported `GV 204`. Evidence: `artifacts/ui/installed-vsix-new-features/BufferDoctor-installed-vsix.json`. |
 | Automatic Vision Inspector tests | Five deterministic self-tests passed for confidence gates, direct/nested inference, ambiguous format handling, and nested mapping extraction. |
 | Automatic Vision Inspector layout | `SmokeAutomaticVisionInspectorLayout.ps1` and the focused inspector-panel smoke passed at 540/900/1160 px. Evidence: `artifacts/ui/automatic-vision-inspector/2026-07-27/`. |
-| Installed VSIX Automatic Vision Inspector | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: five image-like locals opened with zero errors, including a 64 x 48 managed `byte[]` frame and a one-level nested pointer frame; two repeated **Scan Now** operations left the same five stable rows with no duplicates. Evidence: `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-installed-vsix.json`. |
+| Installed VSIX Automatic Vision Inspector | VS2022 17.14 installed-VSIX automation passed twice on 2026-07-27: a function argument plus five locals opened, one incomplete shape remained `[Map]`, and one null-pointer shape remained `[Failed]`; the six successful images stayed usable and repeated **Scan Now** did not duplicate rows. Disabling the option, closing VS, and starting a second VS session restored the disabled state; manual **Scan Now** still passed, then re-enable and the pre-test user setting were restored. Evidence: `artifacts/ui/automatic-inspector-workflow/2026-07-27/`. |
 | Installed VSIX Smart Type Mapper fallback | VS2022 17.14 installed-VSIX automation passed on 2026-07-27: an unregistered `UnmappedCompanyFrame` remained a 92% `MappingRequired` candidate, `Mono12PackedLsb` rendered from live debuggee memory, Save wrote the inferred roles/value mapping, and automatic rescan reopened it as 640 x 484, stride 960, live source with zero final errors. The pre-existing user mapping SHA256 was restored unchanged. Evidence: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json` and the three `smart-type-mapper-*.png` captures. |
 | Industrial SDK contract hardening | Official contracts for PFNC, Basler, Spinnaker, Vimba X, IDS peak, Euresys, HIKROBOT, Sapera, Zebra, and Zivid were reviewed. Deterministic padding/payload/offset/PFNC tests passed. IDS peak ICV 1.4.0 assembly metadata passed. The rebuilt/reinstalled VSIX retained the five-row/zero-error Automatic Vision Inspector result. General vendor-runtime/hardware support is not proven. Evidence: `docs/industrial-camera-compatibility-validation.md` and `artifacts/validation/industrial-camera-sdk-contracts.json`. |
 
@@ -205,7 +207,7 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 - Smart Type Mapper does **not** make the visualizer icon appear for arbitrary individual types. Unregistered current-frame values can enter through Automatic Vision Inspector or **Open Variable**; registered collections remain another supported entry.
 - Smart Type Mapper v1 supports pointer-backed mapped variables for individual Open Variable; array-backed mapped variables must use the collection path.
 - Smart Type Mapper mappings are per type name + assembly simple name; renaming either requires a new mapping.
-- Automatic Vision Inspector scans the selected stack frame's locals only. It does not scan all threads, fields outside the bounded root/one-level inventory, or arbitrary collection contents.
+- Automatic Vision Inspector scans the selected stack frame's Locals and Arguments only. It does not scan other frames/threads, fields outside the bounded root/one-level inventory, or arbitrary collection contents.
 - Managed-array extraction prefers VSSDK child enumeration. Its EnvDTE fallback is capped at 256 elements, so a debugger engine that does not expose array children may require the existing collection path or a pointer-backed view.
 - Automatic confidence is structural evidence, not semantic proof. A plausible but wrong shape can still require **Edit Mapping**, and format ambiguities remain user decisions.
 - The new automatic path is proven with simulated company frames and IDS peak assembly metadata only, not live industrial-camera SDK objects. Padded rows, extra payload, and `Buffer`/`ImageData` offsets now fail closed.
@@ -298,12 +300,12 @@ Start with real supported OpenCvSharp/Emgu/Bitmap objects through Automatic Visi
 C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
-Recorded properties (1.0.46 industrial-layout-hardened source, rebuilt, packaged, and reinstalled locally 2026-07-27):
+Recorded properties (1.0.46 industrial-layout and Automatic Inspector workflow-hardened source, rebuilt, packaged, and reinstalled locally 2026-07-27):
 
 ```text
 Version: 1.0.46.0
-Size: 1,920,954 bytes
-SHA256: F19942F965C0701AA513754A38FF83805D0CDA73A5499913D9979DDEB7C42D60
+Size: 1,923,783 bytes
+SHA256: AFD9CD0377786CF0B1545B0BDD22E748F95E38E014D9DEAA984D1B42D5A34E25
 ```
 
 This artifact is local/generated. Rebuild it after any source, packaging, dependency, or version change; do not assume the old artifact matches a new commit. The last Marketplace-published binary remains `1.0.45.0`.

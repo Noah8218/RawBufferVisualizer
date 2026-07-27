@@ -6,6 +6,14 @@ Automatic Vision Inspector is the primary recovery path for image-like debug val
 
 It does not dynamically register visualizers. Instead, the docked Raw Buffer Visualizer scans the current stack frame whenever Visual Studio enters Break Mode, recognizes safe image-buffer shapes, validates the current values, and adds successful images to the existing `Images` list. Smart Type Mapper remains the correction and persistence step for ambiguous or incomplete shapes.
 
+The user workflow is deliberately non-modal:
+
+- opening the Raw Buffer Visualizer Tool Window expresses interest in automatic inspection;
+- **Auto Inspect on Break** defaults to enabled and is saved across Visual Studio restarts;
+- a breakpoint never forces the Tool Window to open or steal focus;
+- **Scan Now** remains available while automatic scanning is paused;
+- one failed candidate never prevents other recognized images from opening.
+
 ## Recognition Pipeline
 
 The pipeline is intentionally ordered:
@@ -17,7 +25,7 @@ The pipeline is intentionally ordered:
 5. current-value and descriptor validation;
 6. Smart Type Mapper when the result cannot be opened safely.
 
-The scanner reads the current `StackFrame.Locals`. It examines fields and debugger-visible property getters on the root object and one nested member level. It does not walk an unlimited object graph.
+The scanner merges the current `StackFrame.Locals` and `StackFrame.Arguments`, deduplicated by root expression. It examines fields and debugger-visible property getters on the root object and one nested member level. It does not walk an unlimited object graph or other stack frames.
 
 Supported inferred data members:
 
@@ -50,16 +58,31 @@ Safe GenICam PFNC aliases include `Mono10p`, `Mono12p`, Bayer RG/GR/GB/BG 8-bit,
 
 The docked window provides:
 
-- **Auto Inspect**: refresh on the next Break Mode event;
+- **Auto Inspect on Break**: refresh on the next Break Mode event; the choice is stored in `%APPDATA%\RawBufferVisualizer\automatic-inspector-settings.json`;
 - **Scan Now**: rescan the current frame without waiting for another breakpoint;
 - confidence, inferred-member summary, and validation reason on the selected row;
 - **Edit Mapping** for ambiguous or incorrect inference.
 
 Automatic rows use a stable key derived from the root expression. Every scan removes and replaces the prior automatic rows, so repeated Break/Scan Now events do not accumulate duplicates. Manually opened or visualizer-handoff rows are not removed.
 
+### Partial success and failure policy
+
+| Row state | Meaning | User action |
+| --- | --- | --- |
+| `[Auto]` | Shape inference and current buffer validation passed. | Inspect the image normally; **Edit Mapping** remains available for a semantically wrong inference. |
+| `[Map]` | Image-like shape was found, but format/layout metadata is incomplete or ambiguous. | Open **Map** and confirm only the missing roles or format. |
+| `[Failed]` | Recognition passed, but the current pointer, array, lifetime, or debugger read failed. | Inspect the reason, restore a valid paused object, then use **Scan Now**. This row does not incorrectly claim that a mapping will fix a lifetime failure. |
+| Hidden | Confidence is below 40%. | Use **Open Variable** when the expression is intentionally image-like. |
+
+For example, if eight candidates are detected and six open, one needs mapping, and one has an invalid pointer, the status reads `8 detected: 6 opened, 1 need mapping, 1 failed.` All six successful rows stay usable. The viewer selects a successful automatic row in preference to an error row, while both failure rows remain in the list for diagnosis.
+
+Malformed or unsupported preference JSON is non-fatal: the control falls back to automatic scanning enabled and shows a warning. Preference writes use a same-directory temporary file followed by replacement so a terminated write does not normally leave a partial settings file.
+
 ## Debugger And Memory Boundaries
 
 - Break-event work is deferred to the WPF dispatcher at `ContextIdle`, allowing the debugger transition event to return before expressions and paused-process memory are read.
+- Locals and arguments are enumerated independently. If one debugger collection is temporarily unavailable, the other can still produce results.
+- Every candidate is isolated by an exception boundary. An unexpected getter/debugger failure becomes one `[Failed]` row instead of aborting the scan.
 - Pointer-backed data reuses the existing paused-process memory path and therefore remains valid only while the debuggee is paused and owns the buffer.
 - Managed arrays are read through the VSSDK `IDebugProperty2` child enumerator in batches. If that path is unavailable, the EnvDTE fallback is capped at 256 elements to avoid unbounded debugger calls.
 - Root arrays and collection objects are skipped by Automatic Vision Inspector; their elements remain owned by the existing registered collection visualizers.
@@ -72,7 +95,8 @@ Automatic rows use a stable key derived from the root expression. Every scan rem
 | --- | --- |
 | `src/RawBufferVisualizer.VisualStudio.ObjectSource/VisionMemberInference.cs` | Pure member-role inference, pixel-format recognition, confidence scoring, and gates. |
 | `src/RawBufferVisualizer.VisualStudio.ObjectSource/MappedTypeVisualizerTransfer.cs` | Reads saved/transient mappings, including one-level nested member paths. |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/AutomaticVisionInspector.cs` | Enumerates current-frame locals and builds bounded member inventories. |
+| `src/RawBufferVisualizer.VisualStudio/AutomaticInspectionPreferences.cs` | Versioned per-user Auto Inspect preference with non-fatal load and atomic save behavior. |
+| `src/RawBufferVisualizer.VisualStudio.Vssdk/AutomaticVisionInspector.cs` | Merges current-frame locals and arguments and builds bounded member inventories. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/VisualStudioDebugFrameContext.cs` | Resolves the selected VSSDK frame and reads managed-array elements. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml(.cs)` | Auto Inspect/Scan Now UX, confidence rows, mapping fallback, validation, and deduplication. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferVisualizerPackage.cs` | Schedules automatic scanning on Break Mode. |
@@ -88,11 +112,12 @@ Automatic rows use a stable key derived from the root expression. Every scan rem
 
 Status: Complete
 
-Scope: Initial Automatic Vision Inspector MVP for current-frame direct and one-level nested pointer/managed-array shapes, confidence gating, validation, mapping fallback, and duplicate-free refresh.
+Scope: Current-frame locals and arguments, direct and one-level nested pointer/managed-array shapes, confidence gating, partial-success isolation, persistent Auto Inspect preference, validation, mapping fallback, and duplicate-free refresh.
 
 Acceptance criteria:
 
 - direct pointer inference and 90% automatic-open gate -> passed by self-test and installed VSIX;
+- a function image argument is merged with locals and opens in installed VSIX -> passed;
 - one-level nested member inference -> passed by self-test and installed VSIX;
 - ambiguous pixel format remains a mapping candidate -> passed by self-test and installed VSIX;
 - mapping candidate -> pixel-format confirmation -> live preview -> save -> automatic reopen -> passed in installed VSIX as a 640 x 484 `Mono12PackedLsb` live source with zero final errors;
@@ -100,6 +125,10 @@ Acceptance criteria:
 - one-level nested mapping extraction -> passed by self-test;
 - 64 x 48 `byte[]` image opens from a real paused VS2022 debug session -> passed;
 - repeated **Scan Now** does not create duplicate automatic rows -> passed;
+- six successful images remain available while one mapping candidate and one open failure are shown independently -> passed in installed VSIX;
+- a `SizeX` dimension is not misclassified as total buffer `Size` -> passed by deterministic inference regression and installed VSIX;
+- disabling **Auto Inspect on Break**, closing Visual Studio, and starting a second Visual Studio session restores the disabled state; **Scan Now** still works -> passed;
+- re-enabling the option persists, and the pre-test user settings file is restored -> passed;
 - responsive Auto Inspect UI at 540/900/1160 px -> passed.
 
 Verification:
@@ -120,6 +149,10 @@ Evidence:
 - `artifacts/ui/installed-vsix-new-features/automatic-vision-inspector.png`
 - `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-session.json`
 - `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-installed-vsix.json`
+- `artifacts/ui/automatic-inspector-workflow/2026-07-27/before.png`
+- `artifacts/ui/automatic-inspector-workflow/2026-07-27/after.png`
+- `artifacts/ui/automatic-inspector-workflow/2026-07-27/preference-disabled-write-result.json`
+- `artifacts/ui/automatic-inspector-workflow/2026-07-27/after-result.json`
 - `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json`
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-automatic-before-map.png`
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-dialog-preview.png`

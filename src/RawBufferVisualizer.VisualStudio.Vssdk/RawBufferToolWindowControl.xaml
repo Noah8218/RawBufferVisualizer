@@ -241,12 +241,13 @@
                     <TextBlock Text="Images" FontSize="16" FontWeight="SemiBold"/>
                     <WrapPanel Margin="0,5,0,0">
                         <CheckBox x:Name="AutoInspectBox"
-                                  Content="● Auto Inspect"
+                                  Content="Auto Inspect on Break"
                                   IsChecked="True"
                                   Foreground="{StaticResource TextBrush}"
                                   VerticalAlignment="Center"
-                                  ToolTip="Refresh image-like locals whenever the debugger enters Break Mode"
+                                  ToolTip="Refresh image-like locals and arguments on Break. This choice is saved; the Tool Window is never forced open."
                                   AutomationProperties.Name="Automatic Vision Inspector"
+                                  AutomationProperties.AutomationId="AutomaticVisionAutoInspectCheckBox"
                                   Checked="AutoInspectBox_Changed"
                                   Unchecked="AutoInspectBox_Changed"/>
                         <Button Content="Scan Now"

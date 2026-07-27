@@ -100,7 +100,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var height = FindBest(inventory, HeightNames, IsIntegerType, false);
             var stride = FindBest(inventory, StrideNames, IsIntegerType, false);
             var pixelFormat = FindBest(inventory, PixelFormatNames, null, false);
-            var bufferLength = FindBest(inventory, BufferLengthNames, IsIntegerType, false);
+            var bufferLength = FindBest(inventory, BufferLengthNames, IsIntegerType, false, false);
             var validBits = FindBest(inventory, ValidBitsNames, IsIntegerType, false);
             var rowPadding = FindBest(inventory, RowPaddingNames, IsIntegerType, false);
 
@@ -445,7 +445,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             IReadOnlyList<VisualizerMemberInventoryItem> inventory,
             string[] roleNames,
             Func<string?, bool>? typePredicate,
-            bool allowTypeOnly)
+            bool allowTypeOnly,
+            bool allowPartialNameMatch = true)
         {
             VisualizerMemberInventoryItem? best = null;
             var bestScore = int.MinValue;
@@ -460,7 +461,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
                 var leafName = GetLeafName(item.Name);
                 var normalized = Normalize(leafName);
-                var nameScore = MatchName(normalized, roleNames);
+                var nameScore = MatchName(normalized, roleNames, allowPartialNameMatch);
                 if (nameScore <= 0 && !allowTypeOnly)
                 {
                     continue;
@@ -477,7 +478,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return bestScore >= 35 ? best : null;
         }
 
-        private static int MatchName(string normalizedName, string[] roleNames)
+        private static int MatchName(string normalizedName, string[] roleNames, bool allowPartialNameMatch)
         {
             for (var i = 0; i < roleNames.Length; i++)
             {
@@ -486,6 +487,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 {
                     return 70 - i;
                 }
+            }
+
+            if (!allowPartialNameMatch)
+            {
+                return 0;
             }
 
             for (var i = 0; i < roleNames.Length; i++)

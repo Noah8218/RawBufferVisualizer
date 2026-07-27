@@ -97,6 +97,7 @@ namespace RawBufferVisualizer.Tests
                 VisionInferenceRequestsOnlyAmbiguousPixelFormat();
                 VisionInferenceHidesLowConfidenceShape();
                 TypeMappingReadsOneLevelNestedMemberPaths();
+                AutomaticInspectionPreferencesTests.RunAll();
                 IndustrialCameraContractTests.RunAll();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;
@@ -2439,6 +2440,7 @@ namespace RawBufferVisualizer.Tests
             Assert(inference.Members.Data == "ImageAddress", "Automatic inference selected the wrong data member.");
             Assert(inference.Members.Width == "SizeX" && inference.Members.Height == "SizeY", "Automatic inference selected the wrong dimensions.");
             Assert(inference.Members.Stride == "LinePitch", "Automatic inference selected the wrong stride.");
+            Assert(inference.Members.BufferLength == null, "SizeX/SizeY must not be mistaken for the total buffer length.");
             Assert(inference.PixelFormat == RawPixelFormat.BGR24, "Bgr should resolve to BGR24 without a full type mapping.");
         }
 

@@ -7,7 +7,11 @@ param(
     [string]$VisualStudioInstanceId = "",
     [switch]$NoBuild,
     [switch]$NoInstall,
-    [switch]$KeepVisualStudio
+    [switch]$KeepVisualStudio,
+    [ValidateSet("Any", "Enabled", "Disabled")]
+    [string]$ExpectedInitialAutoInspectPreference = "Any",
+    [ValidateSet("Unchanged", "Enabled", "Disabled")]
+    [string]$SetAutoInspectPreference = "Unchanged"
 )
 
 $ErrorActionPreference = "Stop"
@@ -723,14 +727,41 @@ function Invoke-SmartTypeMapperScenario(
 function Invoke-AutomaticVisionInspectorScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
-    $expectedSources = [ordered]@{
+    $expectedSuccessfulSources = [ordered]@{
         companyFrame = "RawBufferVisualizer.VisualizerDebuggee.CompanyFrame"
         companyArrayFrame = "RawBufferVisualizer.VisualizerDebuggee.CompanyArrayFrame"
         nestedCompanyFrame = "RawBufferVisualizer.VisualizerDebuggee.NestedCompanyFrame"
+        parameterFrame = "RawBufferVisualizer.VisualizerDebuggee.ParameterCompanyFrame"
+    }
+    $expectedSourceCounts = [ordered]@{
+        "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView" = 2
+        "RawBufferVisualizer.VisualizerDebuggee.CompanyFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.CompanyArrayFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.NestedCompanyFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.ParameterCompanyFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.IncompleteAutomaticFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.InvalidAutomaticFrame" = 1
     }
 
     Show-RawBufferToolWindow $Process.Id
     Start-Sleep -Milliseconds 750
+    $autoInspectBox = Wait-Until "Automatic Vision Inspector preference check box" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionAutoInspectCheckBox"
+    } 30
+    $togglePattern = $null
+    if (-not $autoInspectBox.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$togglePattern)) {
+        throw "Automatic Vision Inspector preference check box does not support TogglePattern."
+    }
+    $initialAutoInspectEnabled =
+        ([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -eq
+        [System.Windows.Automation.ToggleState]::On
+    if ($ExpectedInitialAutoInspectPreference -ne "Any") {
+        $expectedInitialEnabled = $ExpectedInitialAutoInspectPreference -eq "Enabled"
+        if ($initialAutoInspectEnabled -ne $expectedInitialEnabled) {
+            throw "Auto Inspect initial preference was $initialAutoInspectEnabled; expected $expectedInitialEnabled."
+        }
+    }
+
     $scanButton = Wait-Until "Automatic Vision Inspector Scan Now button" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
     } 30
@@ -747,11 +778,34 @@ function Invoke-AutomaticVisionInspectorScenario(
 
         try {
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            foreach ($sourceType in $expectedSources.Values) {
+            foreach ($sourceType in $expectedSuccessfulSources.Values) {
                 $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
                 if ($matches.Count -ne 1 -or [bool]$matches[0].isError) {
                     return $null
                 }
+            }
+
+            if ([int]$state.documentCount -ne 8 -or [int]$state.errorCount -ne 2) {
+                return $null
+            }
+
+            $mappingCandidate = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.IncompleteAutomaticFrame"
+            })[0]
+            $openFailure = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.InvalidAutomaticFrame"
+            })[0]
+            if (-not [bool]$mappingCandidate.isError -or
+                -not [bool]$mappingCandidate.automaticMappingRequired -or
+                -not [bool]$openFailure.isError -or
+                [bool]$openFailure.automaticMappingRequired -or
+                [string]$openFailure.errorType -ne "AutomaticOpenFailed") {
+                return $null
+            }
+
+            if ([string]$state.automaticScanStatus -notmatch "8 detected: 6 opened, 1 need mapping, 1 failed" -or
+                [bool]$state.errorPanelVisible) {
+                return $null
             }
 
             $state
@@ -763,7 +817,7 @@ function Invoke-AutomaticVisionInspectorScenario(
 
     $beforeNames = @($beforeState.documents | ForEach-Object { [string]$_.title })
     $arrayDocument = @($beforeState.documents | Where-Object {
-        [string]$_.sourceType -eq $expectedSources.companyArrayFrame
+        [string]$_.sourceType -eq $expectedSuccessfulSources.companyArrayFrame
     })[0]
     if ([string]$arrayDocument.sourceMode -ne "mem" -or
         [int]$arrayDocument.width -ne 64 -or
@@ -790,10 +844,12 @@ function Invoke-AutomaticVisionInspectorScenario(
         }
     } 30
 
-    foreach ($entry in $expectedSources.GetEnumerator()) {
-        $matches = @($afterState.documents | Where-Object { [string]$_.sourceType -eq [string]$entry.Value })
-        if ($matches.Count -ne 1) {
-            throw "Repeated scans accumulated or lost $($entry.Key). Expected 1 row, found $($matches.Count)."
+    foreach ($entry in $expectedSourceCounts.GetEnumerator()) {
+        $sourceType = [string]$entry.Key
+        $expectedCount = [int]$entry.Value
+        $matches = @($afterState.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+        if ($matches.Count -ne $expectedCount) {
+            throw "Repeated scans accumulated or lost $sourceType. Expected $expectedCount row(s), found $($matches.Count)."
         }
     }
     $afterNames = @($afterState.documents | ForEach-Object { [string]$_.title })
@@ -801,13 +857,40 @@ function Invoke-AutomaticVisionInspectorScenario(
     $capturePath = Join-Path $outputRoot "automatic-vision-inspector.png"
     Capture-Window $MainHandle $capturePath
 
+    $finalAutoInspectEnabled = $initialAutoInspectEnabled
+    if ($SetAutoInspectPreference -ne "Unchanged") {
+        $requestedAutoInspectEnabled = $SetAutoInspectPreference -eq "Enabled"
+        if ($finalAutoInspectEnabled -ne $requestedAutoInspectEnabled) {
+            ([System.Windows.Automation.TogglePattern]$togglePattern).Toggle()
+            $updatedPreference = Wait-Until "Automatic Vision Inspector preference update" {
+                $currentEnabled =
+                    ([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -eq
+                    [System.Windows.Automation.ToggleState]::On
+                if ($currentEnabled -eq $requestedAutoInspectEnabled) {
+                    if ($currentEnabled) { "Enabled" } else { "Disabled" }
+                }
+                else {
+                    $null
+                }
+            } 15
+            $finalAutoInspectEnabled = $updatedPreference -eq "Enabled"
+        }
+    }
+
     [ordered]@{
         scenario = "AutomaticVisionInspector"
         screenshotPath = $capturePath
         rowsBeforeRepeatedScan = $beforeNames
         rowsAfterRepeatedScan = $afterNames
         managedArrayOpened = $true
+        functionArgumentOpened = $true
+        partialFailureIsolated = $true
+        openedCount = 6
+        mappingRequiredCount = 1
+        failedCount = 1
         duplicateFree = $true
+        initialAutoInspectEnabled = $initialAutoInspectEnabled
+        finalAutoInspectEnabled = $finalAutoInspectEnabled
     }
 }
 
