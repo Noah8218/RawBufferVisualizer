@@ -58,7 +58,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-For the 1.0.47 upload, use [marketplace-release-notes-1.0.47.md](marketplace-release-notes-1.0.47.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+For the 1.0.48 hotfix upload, use [marketplace-release-notes-1.0.48.md](marketplace-release-notes-1.0.48.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -259,7 +259,9 @@ The docked smoke must validate:
 - Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
 - Save visible PNG, raw snapshot export path, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, pan, zoom, drag, and wheel interaction.
 - Non-blank framebuffer capture.
-- `Publish-VisualStudioExtension.ps1` must pass its VSSDK compatibility guard: `RawBufferVisualizer.VisualStudio.Vssdk.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
+- `Publish-VisualStudioExtension.ps1` must prove that `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef` was generated from the current hybrid project and points its `CodeBase` to `RawBufferVisualizer.VisualStudio.Extensibility.dll`.
+- The VSIX must not contain the former `RawBufferVisualizer.VisualStudio.Vssdk.pkgdef`.
+- `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 ## Install, Update, Uninstall, Reinstall
 
@@ -285,13 +287,15 @@ Manual smoke checklist:
 - Reinstall and repeat one debugger inspection.
 - For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
 - After update, restart Visual Studio once with no solution open and confirm no `RawBufferVisualizerPackage did not load correctly` popup appears.
-- If a PC already has stale VSSDK registration, close Visual Studio and run:
+- Run `Test-VisualStudioMarketplaceUpdate.ps1`, then run the installed-VSIX `AutomaticVisionInspector` and `MultiLibraryHybrid` scenarios. A successful real handoff is the registration acceptance test.
+- Confirm the normal install output contains no manual package-registration step.
+- If a developer PC already has stale VSSDK registration, close Visual Studio and run:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
 ```
 
-This rewrites the VSSDK package `CodeBase` to the current installed VSIX folder and removes old startup autoload registration.
+This rewrites the VSSDK package `CodeBase` to the current installed VSIX folder and removes old startup autoload registration. It is a recovery tool only. If a clean PC needs it, the release fails. See [vsix-package-registration.md](vsix-package-registration.md).
 
 ## Marketplace CD
 
@@ -300,7 +304,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.47
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.48
 ```
 
 GitHub setup:
@@ -322,12 +326,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.47.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.48.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.47.md](marketplace-release-notes-1.0.47.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.48.md](marketplace-release-notes-1.0.48.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
@@ -356,5 +360,8 @@ artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
 - The README or listing does not include the MIT license and third-party notice requirement.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` when inspecting an image on a VS 2022 17.9-17.13 machine.
+- The installed debugger host reports `did not acknowledge the image handoff`.
+- The generated `.pkgdef` is owned by the VSSDK support project, points to `RawBufferVisualizer.VisualStudio.Vssdk.dll`, or is absent from the VSIX.
+- A local install passes only after `Repair-VisualStudioExtensionRegistration.ps1` or another manual registry write.
 - README and the 1.0.47 Marketplace Overview disagree about Automatic Inspector's registered-type/manual-visualizer boundary.
 - Automatic scanning creates duplicate mapping rows for registered Bitmap, OpenCvSharp, Emgu CV, or RawBufferSnapshot values.

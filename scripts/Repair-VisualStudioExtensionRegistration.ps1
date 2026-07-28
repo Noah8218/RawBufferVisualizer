@@ -97,7 +97,7 @@ function Find-InstalledExtensionFolder {
         throw "Raw Buffer Visualizer VSIX is not installed under: $extensionRoot"
     }
 
-    $packageDll = Join-Path $extensionPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
+    $packageDll = Join-Path $extensionPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Extensibility.dll'
     if (-not (Test-Path -LiteralPath $packageDll)) {
         throw "Raw Buffer Visualizer VSSDK package DLL was not found: $packageDll"
     }
@@ -142,7 +142,7 @@ if (-not (Test-Path -LiteralPath $configRoot)) {
 }
 
 $packageFolder = Find-InstalledExtensionFolder -InstanceId $instanceId
-$packageDll = Join-Path $packageFolder 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
+$packageDll = Join-Path $packageFolder 'RawBufferVisualizer.VisualStudio.Extensibility.dll'
 
 if ($PSCmdlet.ShouldProcess("Visual Studio instance $instanceId", "repair Raw Buffer Visualizer VSSDK registration to $packageFolder")) {
     $packageKey = Join-Path $configRoot "Packages\$packageGuid"

@@ -153,6 +153,41 @@ function Assert-VssdkReferenceCompatibility {
     }
 }
 
+function Assert-HybridVssdkRegistration {
+    param(
+        [string]$PkgdefPath,
+        [string]$GeneratedManifestPath,
+        [string]$SourceManifestPath
+    )
+
+    $pkgdef = Get-Content -Raw -LiteralPath $PkgdefPath
+    foreach ($requiredRegistration in @(
+        '[$RootKey$\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}]',
+        '"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"',
+        '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"',
+        '[$RootKey$\Menus]',
+        '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
+    )) {
+        if (-not $pkgdef.Contains($requiredRegistration)) {
+            throw "Hybrid VSSDK pkgdef is missing registration '$requiredRegistration': $PkgdefPath"
+        }
+    }
+
+    if ($pkgdef.Contains('RawBufferVisualizer.VisualStudio.Vssdk.dll')) {
+        throw "The VSSDK package must be owned by the hybrid extension assembly, not the ToolWindow support library: $PkgdefPath"
+    }
+
+    $generatedManifest = Get-Content -Raw -LiteralPath $GeneratedManifestPath
+    if (-not $generatedManifest.Contains('Type="Microsoft.VisualStudio.VsPackage" Path="RawBufferVisualizer.VisualStudio.Extensibility.pkgdef"')) {
+        throw "Generated VSIX manifest does not reference the hybrid project's pkgdef: $GeneratedManifestPath"
+    }
+
+    $sourceManifest = Get-Content -Raw -LiteralPath $SourceManifestPath
+    if (-not $sourceManifest.Contains('Path="|%CurrentProject%;PkgdefProjectOutputGroup|"')) {
+        throw "Source VSIX manifest must use the current hybrid project's PkgdefProjectOutputGroup: $SourceManifestPath"
+    }
+}
+
 if ($ViewerFramework -ne 'net472') {
     throw 'The Visual Studio ToolWindow is packaged into the single net472 hybrid VSIX. Use -ViewerFramework net472 or omit it.'
 }
@@ -183,9 +218,9 @@ Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension met
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
 Assert-ModernDebuggerVisualizerProvidersPresent -ExtensionJsonPath $extensionJsonPath
 Assert-ModernCollectionRegistrationsOpen -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\ImageCollectionDebuggerVisualizerProvider.cs')
-Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Visual Studio docked ToolWindow pkgdef was not created'
+Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') -Message 'Hybrid Visual Studio package registration was not created'
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
-Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')
+Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.dll')
 Assert-FileExists -Path $vsixPath -Message 'Visual Studio extension VSIX was not created'
 
 $manifestPath = Join-Path $buildOutput 'extension.vsixmanifest'
@@ -197,11 +232,17 @@ if ($extensionType -ne 'VSSDK+VisualStudio.Extensibility') {
     throw "Expected a hybrid VSSDK+VisualStudio.Extensibility VSIX, but found '$extensionType'."
 }
 
+Assert-HybridVssdkRegistration `
+    -PkgdefPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') `
+    -GeneratedManifestPath $manifestPath `
+    -SourceManifestPath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest')
+
 $entryNames = Get-VsixEntryNames -Path $vsixPath
 $requiredEntries = @(
     'extension.vsixmanifest',
     '.vsextension/extension.json',
-    'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef',
+    'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef',
+    'RawBufferVisualizer.VisualStudio.Extensibility.dll',
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
     'RawBufferVisualizer.OpenGlCanvas.dll',
     'SharpGL.dll',
@@ -216,6 +257,10 @@ foreach ($entryName in $requiredEntries) {
 
 if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Classic.dll') {
     throw 'VSIX must not contain the obsolete Classic debugger visualizer assembly.'
+}
+
+if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') {
+    throw 'VSIX must not contain the obsolete split-project VSSDK pkgdef.'
 }
 
 Get-ChildItem -LiteralPath $buildOutput -Force |

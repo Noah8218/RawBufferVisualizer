@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This document describes the published `1.0.45` baseline plus the locally qualified `1.0.47` Buffer Doctor, Smart Type Mapper, and Automatic Vision Inspector release candidate. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the published `1.0.47` feature line plus the locally qualified `1.0.48` clean-install registration hotfix. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
@@ -47,9 +47,9 @@ The user installs one VSIX. Internally, Modern debugger visualizer providers ext
 | `RawBufferVisualizer.BitmapAdapter` | Bitmap-to-snapshot conversion used by standalone/sample paths. |
 | `RawBufferVisualizer.OpenCvSharpAdapter` | OpenCvSharp adapter used by standalone/sample paths; not the debugger compatibility mechanism. |
 | `RawBufferVisualizer.VisualStudio.ObjectSource` | Debuggee-side metadata, preview, chunk, reflection, pointer, collection extraction, saved mappings, and pure image-member inference. |
-| `RawBufferVisualizer.VisualStudio.Extensibility` | Debugger visualizer registration and transfer/handoff orchestration. Produces the public VSIX. |
+| `RawBufferVisualizer.VisualStudio.Extensibility` | Owns debugger visualizer registration, transfer/handoff orchestration, `RawBufferVisualizerPackage`, VSCT compilation, current-project `.pkgdef` generation, and the public hybrid VSIX. |
 | `RawBufferVisualizer.VisualStudio` | Shared inbox, temp storage, snapshot store, process/instance routing, and support-report helpers. |
-| `RawBufferVisualizer.VisualStudio.Vssdk` | Docked package, ToolWindow, responsive IDE UI, Break Mode automatic inspection, VSSDK managed-array extraction, session ownership, and source lifecycle. |
+| `RawBufferVisualizer.VisualStudio.Vssdk` | Referenced ToolWindow/UI support library: responsive IDE UI, Break Mode automatic inspection, VSSDK managed-array extraction, session ownership, and source lifecycle. It must not own the Marketplace package `.pkgdef`. |
 | `RawBufferVisualizer.OpenGlCanvas` | Internal accelerated tiled canvas, progressive viewport scheduling, textures, interaction, and render metrics. The implementation name is not user-facing. |
 | `RawBufferVisualizer.Wpf` | Optional standalone snapshot viewer and validation host. |
 | `RawBufferVisualizer.VisualStudio.Classic` | Legacy compatibility/build metadata; obsolete Classic DLLs are removed during install. |
@@ -331,6 +331,7 @@ After changes to providers, handoff, packaging, or ToolWindow code:
 9. Continue/exit after a live large Mat and confirm controlled source-unavailable behavior.
 10. Restart Visual Studio with no solution and confirm no package-load popup.
 11. Run two Visual Studio processes and confirm handoffs remain instance-local.
+12. Run `Test-VisualStudioMarketplaceUpdate.ps1` and the installed-VSIX `AutomaticVisionInspector` plus `MultiLibraryHybrid` smokes. A repair-script result is not release evidence.
 
 Detailed variable names are in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
 
@@ -346,7 +347,8 @@ The script updates:
 
 - `RawBufferVisualizer.VisualStudio.Extensibility.csproj`;
 - `RawBufferVisualizer.VisualStudio.Classic.csproj`;
-- the public Extensibility `source.extension.vsixmanifest`.
+- the public Extensibility `source.extension.vsixmanifest`;
+- `RawBufferVisualizerPackage.cs` installed-product version.
 
 Build/package:
 
@@ -366,11 +368,13 @@ Developer install, with Visual Studio closed:
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
-Registration repair, with Visual Studio closed:
+Registration repair, with Visual Studio closed, is limited to stale developer/legacy installations:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
 ```
+
+Never use the repair command to qualify a clean Marketplace candidate. The release contract and regression checks are in [vsix-package-registration.md](vsix-package-registration.md).
 
 Full publication steps and the environment-gated CD flow are in [release-runbook.md](release-runbook.md). An upload must use a version not already published. Do not create a version bump only to edit documentation when the Marketplace portal allows copy changes independently.
 
@@ -396,6 +400,19 @@ Local 1.0.47 release candidate, rechecked 2026-07-28:
 - final artifact: 1,924,125 bytes, SHA256 `DAB2CE62007F77F11CFF828AF02EF2F2DAE26A3BB3238CF251679E4A69505174`.
 
 The reusable acceptance record and exact evidence paths are in [release-qualification-1.0.47.md](release-qualification-1.0.47.md).
+
+The Marketplace `1.0.47.0` package later failed on a clean PC because its separately generated VSSDK `.pkgdef` was present in the extension folder but did not produce a running docked package. The prior local install script wrote a developer-build `CodeBase`, masking that defect.
+
+Local `1.0.48` registration hotfix, verified 2026-07-28:
+
+- `RawBufferVisualizerPackage` and `RawBufferVisualizerCommands.vsct` are owned by the public hybrid project;
+- the generated `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef` points to `$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll`;
+- normal install no longer writes VSSDK registration;
+- Release solution build and self-tests passed;
+- installed-VSIX Automatic Inspector, Buffer Doctor, Smart Type Mapper, and MultiLibraryHybrid scenarios passed after removing the stale manual developer registration;
+- final artifact: 1,990,304 bytes, SHA256 `AABBD3A36780AE070C3FBBDE384CB5CD9A1977607EA929D15DAEBF75899F717D`.
+
+The reusable record is [release-qualification-1.0.48.md](release-qualification-1.0.48.md). A separate clean-PC installation remains the external pre-upload confirmation.
 
 Do not reuse this evidence after a relevant source change. Re-run the smallest checks that cover the changed surface and update the baseline only when they pass.
 
@@ -424,9 +441,10 @@ This was rechecked during the 2026-07-17 handoff: the first no-restore attempt f
 ### Package did not load correctly
 
 1. Close all Visual Studio processes.
-2. Run `Repair-VisualStudioExtensionRegistration.ps1`.
-3. Restart and inspect `ActivityLog.xml` plus `package.log`.
-4. Check for a stale `CodeBase` path or a `Microsoft.VisualStudio.Threading` version newer than 17.9.
+2. Verify the installed version and run `Test-VisualStudioMarketplaceUpdate.ps1`.
+3. Inspect `ActivityLog.xml`, `package.log`, and the installed `.pkgdef`.
+4. Confirm the `.pkgdef` points to `RawBufferVisualizer.VisualStudio.Extensibility.dll` and run an installed-VSIX handoff smoke.
+5. Use `Repair-VisualStudioExtensionRegistration.ps1` only for a stale developer/legacy profile; never convert that recovery into release evidence.
 
 ### Image unavailable after opening
 

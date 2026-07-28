@@ -149,7 +149,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            RawBufferVisualizerPackage.WriteAutomationLog(
+            RawBufferVisualizerPackageLog.Write(
                 string.Format(
                     CultureInfo.InvariantCulture,
                     "Automatic scan inferred {0} candidate(s) from {1} local(s) and {2} argument(s); {3} duplicate expression(s) skipped",
@@ -180,7 +180,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         var canOpen = inspection.UsesSavedMapping || inspection.Inference.CanAutoOpen;
                         if (canOpen)
                         {
-                            RawBufferVisualizerPackage.WriteAutomationLog(
+                            RawBufferVisualizerPackageLog.Write(
                                 "Automatic scan opening " + inspection.RootExpression);
                             string openError;
                             var openedSuccessfully = isArrayBacked
@@ -203,7 +203,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                                     inspection.StableKey);
                             if (openedSuccessfully)
                             {
-                                RawBufferVisualizerPackage.WriteAutomationLog(
+                                RawBufferVisualizerPackageLog.Write(
                                     "Automatic scan opened " + inspection.RootExpression);
                                 var document = FindHandoffDocument(inspection.StableKey);
                                 if (document != null)
@@ -227,7 +227,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                                 continue;
                             }
 
-                            RawBufferVisualizerPackage.WriteAutomationLog(
+                            RawBufferVisualizerPackageLog.Write(
                                 "Automatic scan open failed " + inspection.RootExpression + ": " + openError);
                             AddAutomaticOpenFailure(inspection, openError);
                             failed++;
@@ -253,7 +253,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     catch (Exception ex)
                     {
                         var reason = "Unexpected inspection failure: " + ex.Message;
-                        RawBufferVisualizerPackage.WriteAutomationLog(
+                        RawBufferVisualizerPackageLog.Write(
                             "Automatic scan candidate error " + inspection.RootExpression + ": " + ex);
                         AddAutomaticOpenFailure(inspection, reason);
                         failed++;
@@ -311,16 +311,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 new Action(() =>
                 {
                     _automaticScanPending = false;
-                    RawBufferVisualizerPackage.WriteAutomationLog("Automatic scan started");
+                    RawBufferVisualizerPackageLog.Write("Automatic scan started");
                     try
                     {
                         ScanLocals();
-                        RawBufferVisualizerPackage.WriteAutomationLog("Automatic scan ended");
+                        RawBufferVisualizerPackageLog.Write("Automatic scan ended");
                     }
                     catch (Exception ex)
                     {
                         _automaticScanRunning = false;
-                        RawBufferVisualizerPackage.WriteAutomationLog("Automatic scan unhandled error " + ex);
+                        RawBufferVisualizerPackageLog.Write("Automatic scan unhandled error " + ex);
                         throw;
                     }
                 }));

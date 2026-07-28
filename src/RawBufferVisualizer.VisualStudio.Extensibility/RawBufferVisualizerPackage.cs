@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Design;
 using System.Diagnostics;
@@ -18,7 +18,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "1.0")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "1.0.48")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideToolWindow(
@@ -386,38 +386,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        internal static void WriteAutomationLog(string message)
+        private static void WriteAutomationLog(string message)
         {
-            var metricsPath = Environment.GetEnvironmentVariable("RAWBUFFERVISUALIZER_DOCKED_PERF_JSON");
-            try
-            {
-                var logPath = string.IsNullOrWhiteSpace(metricsPath)
-                    ? Path.Combine(VisualStudioTempStore.RootDirectory, "package.log")
-                    : Path.ChangeExtension(metricsPath, ".package.log");
-                var logDirectory = Path.GetDirectoryName(logPath);
-                if (!string.IsNullOrWhiteSpace(logDirectory))
-                {
-                    Directory.CreateDirectory(logDirectory);
-                }
-
-                if (File.Exists(logPath) && new FileInfo(logPath).Length > 1024 * 1024)
-                {
-                    File.Delete(logPath);
-                }
-
-                File.AppendAllText(
-                    logPath,
-                    DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)
-                    + " [devenv:"
-                    + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture)
-                    + "] "
-                    + message
-                    + Environment.NewLine);
-            }
-            catch
-            {
-                // Diagnostics must not affect Visual Studio package load.
-            }
+            RawBufferVisualizerPackageLog.Write(message);
         }
 
         private async Task<RawBufferToolWindow> ShowRawBufferToolWindowAsync(CancellationToken cancellationToken)

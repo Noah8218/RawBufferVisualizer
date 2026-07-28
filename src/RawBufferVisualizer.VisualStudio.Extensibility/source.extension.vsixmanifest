@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
   <Metadata>
-    <Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.47.0" Language="en-US" Publisher="Noah Choi" />
+    <Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="1.0.48.0" Language="en-US" Publisher="Noah Choi" />
     <DisplayName>Raw Buffer Visualizer</DisplayName>
     <Description xml:space="preserve">Image Watch-style C# debugging with Bitmap/Mat inspection, automatic camera-frame discovery, and raw-buffer diagnosis.</Description>
     <Icon>Resources\Icon.png</Icon>
@@ -22,6 +22,9 @@
     <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[17.9,)" DisplayName="Visual Studio core editor" />
   </Prerequisites>
   <Assets>
-    <Asset Type="Microsoft.VisualStudio.VsPackage" Path="RawBufferVisualizer.VisualStudio.Vssdk.pkgdef" />
+    <Asset Type="Microsoft.VisualStudio.VsPackage"
+           d:Source="Project"
+           d:ProjectName="%CurrentProject%"
+           Path="|%CurrentProject%;PkgdefProjectOutputGroup|" />
   </Assets>
 </PackageManifest>

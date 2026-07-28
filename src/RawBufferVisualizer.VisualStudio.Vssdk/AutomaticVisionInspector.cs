@@ -213,19 +213,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 if (KnownImageType.UsesRegisteredVisualizerPath(runtimeTypeName))
                 {
-                    RawBufferVisualizerPackage.WriteAutomationLog(
+                    RawBufferVisualizerPackageLog.Write(
                         "Automatic scan skipped registered visualizer type " + rootExpression + " (" + runtimeTypeName + ")");
                     continue;
                 }
 
                 if (KnownImageType.IsMetadataOnlyType(runtimeTypeName))
                 {
-                    RawBufferVisualizerPackage.WriteAutomationLog(
+                    RawBufferVisualizerPackageLog.Write(
                         "Automatic scan skipped metadata-only type " + rootExpression + " (" + runtimeTypeName + ")");
                     continue;
                 }
 
-                RawBufferVisualizerPackage.WriteAutomationLog(
+                RawBufferVisualizerPackageLog.Write(
                     "Automatic scan inspecting " + rootExpression + " (" + runtimeTypeName + ")");
                 var inventory = BuildInventory(expression);
                 var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(runtimeTypeName);
