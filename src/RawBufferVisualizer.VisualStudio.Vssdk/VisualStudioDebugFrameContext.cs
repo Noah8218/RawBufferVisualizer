@@ -5,7 +5,7 @@ using Microsoft.VisualStudio.Debugger.Interop;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
-    internal static class VisualStudioDebugFrameContext
+    public static class VisualStudioDebugFrameContext
     {
         private static readonly object Gate = new object();
         private static IDebugThread2? _currentThread;

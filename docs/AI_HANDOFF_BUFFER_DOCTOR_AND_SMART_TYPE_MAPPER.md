@@ -1,5 +1,7 @@
 # AI Handoff: Buffer Doctor + Automatic Vision Inspector + Smart Type Mapper
 
+> 2026-07-28 중요 갱신: Marketplace `1.0.47.0`은 새 PC에서 VSSDK 패키지가 실행되지 않아 `did not acknowledge the image handoff` 오류가 발생했다. `1.0.48.0`에서는 `RawBufferVisualizerPackage`와 VSCT를 메인 하이브리드 프로젝트로 이동하고, `PkgdefProjectOutputGroup`이 `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef`을 생성하도록 수정했다. 일반 설치 스크립트의 수동 레지스트리 등록은 제거했다. 재발 방지 계약은 `docs/vsix-package-registration.md`, 로컬 검증 결과는 `docs/release-qualification-1.0.48.md`가 기준이다. 깨끗한 PC 검증에는 repair 스크립트를 사용하면 안 된다.
+
 > 상태: 1.0.47 Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper 자동 폴백과 등록형 Bitmap/Mat 혼합 시나리오는 installed-VSIX 검증 통과. Marketplace 공개와 실제 카메라 SDK/하드웨어 검증은 미완료
 > 작성일: 2026-07-27
 > 대상: 후속 AI 모델이 이어서 검증/수정/개선할 수 있도록 한 문서

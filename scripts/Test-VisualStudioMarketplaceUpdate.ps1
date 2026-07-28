@@ -28,10 +28,41 @@ foreach ($instance in $instances) {
             [xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath.FullName
             $identity = $manifest.PackageManifest.Metadata.Identity
             if ([string]$identity.Id -eq $ExtensionId) {
+                $packageKey = "HKCU:\Software\Microsoft\VisualStudio\$($instance.Name)_Config\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}"
+                $packageRegistered = Test-Path -LiteralPath $packageKey
+                $codeBase = if ($packageRegistered) {
+                    [string](Get-ItemProperty -LiteralPath $packageKey -Name CodeBase -ErrorAction SilentlyContinue).CodeBase
+                }
+                else {
+                    ''
+                }
+                $expectedCodeBase = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Extensibility.dll'
+                $codeBaseMatchesInstall = -not [string]::IsNullOrWhiteSpace($codeBase) `
+                    -and (Test-Path -LiteralPath $codeBase -PathType Leaf) `
+                    -and [string]::Equals(
+                        [IO.Path]::GetFullPath($codeBase),
+                        [IO.Path]::GetFullPath($expectedCodeBase),
+                        [StringComparison]::OrdinalIgnoreCase)
+                $pkgdefPath = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef'
+                $pkgdefText = if (Test-Path -LiteralPath $pkgdefPath -PathType Leaf) {
+                    Get-Content -Raw -LiteralPath $pkgdefPath
+                }
+                else {
+                    ''
+                }
+                $registrationPayloadValid = $pkgdefText.Contains('[$RootKey$\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}]') `
+                    -and $pkgdefText.Contains('"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"') `
+                    -and $pkgdefText.Contains('"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"') `
+                    -and $pkgdefText.Contains('[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]')
+
                 $installedExtensions += [pscustomobject]@{
-                    Instance = $instance.Name
-                    Version  = [string]$identity.Version
-                    Path     = $manifestPath.DirectoryName
+                    Instance                 = $instance.Name
+                    Version                  = [string]$identity.Version
+                    RegistrationPayloadValid = $registrationPayloadValid
+                    LegacyConfigKeyVisible    = $packageRegistered
+                    CodeBaseMatchesInstall = $codeBaseMatchesInstall
+                    CodeBase                 = $codeBase
+                    Path                     = $manifestPath.DirectoryName
                 }
             }
         }
@@ -46,6 +77,17 @@ if ($installedExtensions.Count -eq 0) {
 }
 
 $installedExtensions | Sort-Object Instance, Version | Format-Table -AutoSize
+
+$registrationFailures = @($installedExtensions | Where-Object { -not $_.RegistrationPayloadValid })
+if ($registrationFailures.Count -gt 0) {
+    throw 'The installed VSIX does not contain the required current-project VSSDK registration payload. Do not qualify or upload this package.'
+}
+
+$staleLegacyKeys = @($installedExtensions |
+    Where-Object { $_.LegacyConfigKeyVisible -and -not $_.CodeBaseMatchesInstall })
+if ($staleLegacyKeys.Count -gt 0) {
+    throw 'A stale developer/manual VSSDK CodeBase is visible for this Visual Studio profile. Remove the stale registration, reinstall, restart, and run the installed-VSIX smoke before qualifying the package.'
+}
 
 if (-not [string]::IsNullOrWhiteSpace($ExpectedVersion)) {
     $expected = $ExpectedVersion.TrimStart('v')
@@ -64,7 +106,7 @@ foreach ($log in $activityLogs) {
     $raw = Get-Content -Raw -LiteralPath $log.FullName
     if ($raw -match 'RawBufferVisualizerPackage|RawBufferVisualizer') {
         if ($raw -match 'RawBufferVisualizerPackage.*(SetSite failed|did not load correctly)|Could not load file or assembly') {
-            Write-Warning "Visual Studio ActivityLog contains Raw Buffer Visualizer package load errors. If the current Visual Studio session shows the same popup, run Repair-VisualStudioExtensionRegistration.ps1: $($log.FullName)"
+            Write-Warning "Visual Studio ActivityLog contains Raw Buffer Visualizer package load errors. Do not qualify this build; preserve the log and fix the package before publishing: $($log.FullName)"
             continue
         }
 
@@ -72,4 +114,4 @@ foreach ($log in $activityLogs) {
     }
 }
 
-Write-Host 'Marketplace update verification completed.'
+Write-Host 'Marketplace update payload verification completed. Run SmokeInstalledVsixNewFeatures.ps1 after restart to prove runtime handoff acknowledgement.'

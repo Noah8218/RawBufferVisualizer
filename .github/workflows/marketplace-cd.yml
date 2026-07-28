@@ -139,8 +139,8 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Restore VSSDK publish tool
-        run: dotnet restore .\src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj
+      - name: Restore Marketplace publish tool
+        run: dotnet restore .\src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj
 
       - name: Download VSIX
         uses: actions/download-artifact@v7

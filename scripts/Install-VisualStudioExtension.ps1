@@ -20,6 +20,7 @@ $toolWindowExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
 $minimumVisualStudioVersion = [Version]'17.9.0'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
+$repairScript = Join-Path $repoRoot 'scripts\Repair-VisualStudioExtensionRegistration.ps1'
 $vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
 
 function Assert-VisualStudioNotRunning {
@@ -133,74 +134,6 @@ function Invoke-VsixInstaller {
     }
 }
 
-function Register-VssdkToolWindow {
-    param([string]$InstanceId)
-
-    if ([string]::IsNullOrWhiteSpace($InstanceId)) {
-        return
-    }
-
-    $configRoot = "HKCU:\Software\Microsoft\VisualStudio\17.0_$($InstanceId)_Config"
-    if (-not (Test-Path -LiteralPath $configRoot)) {
-        return
-    }
-
-    $packageFolder = Find-VssdkPackageFolder -InstanceId $InstanceId
-    $packageDll = Join-Path $packageFolder 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
-    if ($WhatIfPreference) {
-        Write-Host "WhatIf: would register VSSDK ToolWindow package: $packageDll"
-        return
-    }
-
-    $packageGuid = '{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}'
-    $windowGuid = '{a329e331-089a-4186-8fd7-57a241fd1917}'
-    $solutionExplorerGuid = '{3ae79031-e1bc-11d0-8f78-00a0c9110057}'
-    $autoLoadContextGuids = @(
-        '{e80ef1cb-6d64-4609-8faa-feacfd3bc89f}',
-        '{adfc4e64-0397-11d1-9f4e-00a0c911004f}',
-        '{f1536ef8-92ec-443c-9ed7-fdadf150da82}',
-        '{adfc4e61-0397-11d1-9f4e-00a0c911004f}',
-        '{10534154-102d-46e2-aba8-a6bfa25ba0be}',
-        '{d0e4deec-1b53-4cda-8559-d454583ad23b}'
-    )
-
-    $packageKey = Join-Path $configRoot "Packages\$packageGuid"
-    New-Item -Path $packageKey -Force | Out-Null
-    Set-ItemProperty -Path $packageKey -Name '(default)' -Value 'RawBufferVisualizerPackage'
-    New-ItemProperty -Path $packageKey -Name 'InprocServer32' -Value "$env:WINDIR\SYSTEM32\MSCOREE.DLL" -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $packageKey -Name 'Class' -Value 'RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage' -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $packageKey -Name 'CodeBase' -Value $packageDll -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $packageKey -Name 'AllowsBackgroundLoad' -Value 1 -PropertyType DWord -Force | Out-Null
-
-    foreach ($contextGuid in $autoLoadContextGuids) {
-        $autoLoadKey = Join-Path $configRoot "AutoLoadPackages\$contextGuid"
-        if (Test-Path -LiteralPath $autoLoadKey) {
-            Remove-ItemProperty -Path $autoLoadKey -Name $packageGuid -ErrorAction SilentlyContinue
-        }
-    }
-
-    $bindingKey = Join-Path $configRoot "BindingPaths\$packageGuid"
-    if (Test-Path -LiteralPath $bindingKey) {
-        Remove-Item -LiteralPath $bindingKey -Recurse -Force
-    }
-    New-Item -Path $bindingKey -Force | Out-Null
-    New-ItemProperty -Path $bindingKey -Name $packageFolder -Value '' -PropertyType String -Force | Out-Null
-
-    $menuKey = Join-Path $configRoot 'Menus'
-    New-Item -Path $menuKey -Force | Out-Null
-    New-ItemProperty -Path $menuKey -Name $packageGuid -Value ', Menus.ctmenu, 1' -PropertyType String -Force | Out-Null
-
-    $toolWindowKey = Join-Path $configRoot "ToolWindows\$windowGuid"
-    New-Item -Path $toolWindowKey -Force | Out-Null
-    Set-ItemProperty -Path $toolWindowKey -Name '(default)' -Value $packageGuid
-    New-ItemProperty -Path $toolWindowKey -Name 'Name' -Value 'RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindow' -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $toolWindowKey -Name 'Style' -Value 4 -PropertyType DWord -Force | Out-Null
-    New-ItemProperty -Path $toolWindowKey -Name 'Window' -Value $solutionExplorerGuid -PropertyType String -Force | Out-Null
-    New-ItemProperty -Path $toolWindowKey -Name 'Orientation' -Value 3 -PropertyType DWord -Force | Out-Null
-
-    Write-Host "Registered VSSDK ToolWindow package: $packageDll"
-}
-
 function Find-InstalledExtensionFolder {
     param([string]$InstanceId)
 
@@ -281,6 +214,28 @@ function Test-DebuggerVisualizerVsixInstall {
         throw "Debugger object source is missing: $objectSource"
     }
 
+    $packageDll = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Extensibility.dll'
+    if (-not (Test-Path -LiteralPath $packageDll)) {
+        throw "Hybrid VSSDK package assembly is missing: $packageDll"
+    }
+
+    $pkgdef = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef'
+    if (-not (Test-Path -LiteralPath $pkgdef)) {
+        throw "Hybrid VSSDK package registration is missing: $pkgdef"
+    }
+
+    $pkgdefText = Get-Content -LiteralPath $pkgdef -Raw
+    foreach ($requiredRegistration in @(
+        '[$RootKey$\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}]',
+        '"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"',
+        '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"',
+        '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
+    )) {
+        if (-not $pkgdefText.Contains($requiredRegistration)) {
+            throw "Installed VSIX has invalid hybrid VSSDK registration '$requiredRegistration': $pkgdef"
+        }
+    }
+
     foreach ($requiredText in @(
         'RawBufferSnapshotDebuggerVisualizerProvider',
         'RawBufferViewDebuggerVisualizerProvider',
@@ -297,26 +252,6 @@ function Test-DebuggerVisualizerVsixInstall {
     }
 
     Write-Host "Validated debugger visualizer VSIX metadata: $extensionPath"
-}
-
-function Find-VssdkPackageFolder {
-    param([string]$InstanceId)
-
-    $buildPackageFolder = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\net472"
-    $buildPackageDll = Join-Path $buildPackageFolder 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
-    if (Test-Path -LiteralPath $buildPackageDll) {
-        return (Resolve-Path -LiteralPath $buildPackageFolder).Path
-    }
-
-    $installedExtensionFolder = Find-InstalledExtensionFolder -InstanceId $InstanceId
-    if (-not [string]::IsNullOrWhiteSpace($installedExtensionFolder)) {
-        $installedPackageDll = Join-Path $installedExtensionFolder 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
-        if (Test-Path -LiteralPath $installedPackageDll) {
-            return (Resolve-Path -LiteralPath $installedExtensionFolder).Path
-        }
-    }
-
-    throw "RawBufferVisualizer.VisualStudio.Vssdk.dll was not found. Build the solution first, or reinstall after closing Visual Studio. Expected: $buildPackageDll"
 }
 
 function Stop-DotNetBuildServers {
@@ -347,10 +282,10 @@ if ($RepairRegistrationOnly) {
         throw 'Visual Studio 2022 instance was not found.'
     }
 
-    Write-Host "Visual Studio instance: $instanceId"
-    Register-VssdkToolWindow -InstanceId $instanceId
-    Remove-LegacyClassicVisualizer
-    Write-Host 'Repaired Raw Buffer Visualizer VSSDK registration. Restart Visual Studio before testing.'
+    & powershell -ExecutionPolicy Bypass -File $repairScript -VisualStudioInstanceId $instanceId
+    if ($LASTEXITCODE -ne 0) {
+        throw "Registration repair failed with exit code $LASTEXITCODE"
+    }
     return
 }
 
@@ -398,7 +333,6 @@ if (-not [string]::IsNullOrWhiteSpace($instanceId)) {
 }
 
 Invoke-VsixInstaller -InstallerPath $installer -Arguments ($installArguments + @($vsixPath)) -Action 'Install Raw Buffer Visualizer VSIX'
-Register-VssdkToolWindow -InstanceId $instanceId
 Remove-LegacyClassicVisualizer
 if ($WhatIfPreference) {
     Write-Host 'WhatIf completed: no VSIX changes were made.'

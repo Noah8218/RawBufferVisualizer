@@ -4,7 +4,8 @@ param(
     [string]$Version,
     [string]$ProjectPath,
     [string]$ClassicProjectPath,
-    [string]$ManifestPath
+    [string]$ManifestPath,
+    [string]$PackageSourcePath
 )
 
 $ErrorActionPreference = 'Stop'
@@ -17,6 +18,10 @@ if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
 
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
     $ManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest'
+}
+
+if ([string]::IsNullOrWhiteSpace($PackageSourcePath)) {
+    $PackageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizerPackage.cs'
 }
 
 if ([string]::IsNullOrWhiteSpace($ClassicProjectPath)) {
@@ -86,6 +91,7 @@ function Write-Utf8NoBom {
 Assert-FileExists -Path $ProjectPath -Message 'Visual Studio extension project was not found'
 Assert-FileExists -Path $ClassicProjectPath -Message 'Classic Bitmap visualizer project was not found'
 Assert-FileExists -Path $ManifestPath -Message 'Visual Studio extension manifest was not found'
+Assert-FileExists -Path $PackageSourcePath -Message 'Hybrid VSSDK package source was not found'
 
 $versions = Get-NormalizedVersion -Value $Version
 
@@ -105,9 +111,18 @@ $manifest = Get-Content -Raw -LiteralPath $ManifestPath
 $manifest = Replace-One -Content $manifest -Pattern '(<Identity\b[^>]*\bVersion=")[^"]+(")' -Replacement "`${1}$($versions.Assembly)`${2}" -Description 'VSIX Identity Version'
 Write-Utf8NoBom -Path $ManifestPath -Content $manifest
 
+$packageSource = Get-Content -Raw -LiteralPath $PackageSourcePath
+$packageSource = Replace-One `
+    -Content $packageSource `
+    -Pattern '(\[InstalledProductRegistration\("[^"]+",\s*"[^"]+",\s*")[^"]+("\)\])' `
+    -Replacement "`${1}$($versions.Package)`${2}" `
+    -Description 'InstalledProductRegistration version'
+Write-Utf8NoBom -Path $PackageSourcePath -Content $packageSource
+
 Write-Host "Updated Visual Studio extension version:"
 Write-Host "  Package:  $($versions.Package)"
 Write-Host "  Assembly: $($versions.Assembly)"
 Write-Host "  Project:  $ProjectPath"
 Write-Host "  Classic:  $ClassicProjectPath"
 Write-Host "  Manifest: $ManifestPath"
+Write-Host "  VSSDK:    $PackageSourcePath"

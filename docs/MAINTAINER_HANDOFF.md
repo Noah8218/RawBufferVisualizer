@@ -9,11 +9,11 @@ This is the canonical continuation document for the next conversation. Read it a
 | Last verified | 2026-07-28 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | `5b68cb3` (`Improve automatic inspector breakpoint workflow`, pushed) plus the current `1.0.47` release-qualification change on `main` |
-| Source and VSIX version | `1.0.47` / `1.0.47.0`; published Marketplace line remains `1.0.45.0` |
-| Public Marketplace version | `1.0.45.0`; the public Overview was re-fetched on 2026-07-26 KST and now matches the local `1.0.45` copy, including the Large Image Performance section |
+| Implementation baseline | `2df3d66` (`Qualify automatic inspection workflows for 1.0.47`, pushed) plus the current uncommitted `1.0.48` package-registration hotfix |
+| Source and VSIX version | `1.0.48` / `1.0.48.0`; public Marketplace line is `1.0.47.0` |
+| Public Marketplace version | `1.0.47.0`; a clean-PC handoff failure was reproduced after publication, so `1.0.48.0` is the required corrective update |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview; published line 1.0.45, locally qualified line 1.0.47. Automatic Vision Inspector, Smart Type Mapper fallback, and Buffer Doctor are release-qualified on the local VS2022 matrix; general vendor/hardware compatibility is not certified |
+| Product stage | Public Marketplace Preview; published `1.0.47` has a clean-install VSSDK registration defect. Local `1.0.48` fixes the package ownership path and passed installed-VSIX runtime smokes. Separate clean-PC confirmation remains required before upload |
 
 Public links:
 
@@ -21,7 +21,7 @@ Public links:
 - Repository: https://github.com/Noah8218/RawBufferVisualizer
 - CI evidence: https://github.com/Noah8218/RawBufferVisualizer/actions/runs/29512606667
 
-The public Marketplace package is `1.0.45.0`. Its Overview was re-fetched on 2026-07-26 and matches the local 1.0.45 copy, including the performance comparison section. Treat Marketplace binary publication and Marketplace copy synchronization as separate checks.
+The public Marketplace package is `1.0.47.0`. Its VSSDK DLL and `.pkgdef` were extracted on a new PC, but the docked package did not acknowledge debugger handoffs. Treat feature qualification, packaging qualification, public binary publication, and clean-PC runtime verification as separate gates.
 
 ## Product Identity
 
@@ -135,8 +135,8 @@ For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBu
 
 - Public README, Marketplace checklist/Overview source, install/update/repair guidance, release runbook, release notes, demo media, license, and third-party notices exist.
 - CI, Marketplace CD, and GitHub Release workflows exist.
-- `1.0.47.0` Release VSIX was generated, passed the packaging compatibility guard, reinstalled, and passed the final hybrid registered/automatic smoke.
-- Public Marketplace remains `1.0.45.0`; current source and locally installed qualification VSIX are `1.0.47.0`.
+- `1.0.48.0` moves package/VSCT ownership into the public hybrid project, generates the `.pkgdef` from that current project, and removes normal-install registry writes that masked the `1.0.47` defect.
+- Public Marketplace remains `1.0.47.0`; current source and locally installed qualification VSIX are `1.0.48.0`.
 
 ## Verified Evidence
 
@@ -154,6 +154,7 @@ These are recorded regression results, not performance promises for every PC.
 | Current CI | `CI #71` completed successfully for `a23d8ad`. |
 | Handoff recheck | On 2026-07-17, restore + Release build passed with the four recorded VSTHRD warnings and zero errors; `RawBufferVisualizer.Tests` passed. |
 | 1.0.47 release qualification | On 2026-07-28, the full Release solution build passed with 18 known `VSTHRD010` warnings in `ImageTypeRecognizer.cs` and zero errors; `RawBufferVisualizer.Tests`, packaging, reinstall, and the final hybrid installed-VSIX smoke passed. Full criteria: `docs/release-qualification-1.0.47.md`. |
+| 1.0.48 registration hotfix | Release build/self-tests/package guard passed. After removing the stale developer CodeBase, normal VSIX reinstall plus restart passed Automatic Inspector, Buffer Doctor, Smart Type Mapper, and registered/automatic hybrid smokes. Artifact: 1,990,304 bytes, SHA256 `AABBD3A36780AE070C3FBBDE384CB5CD9A1977607EA929D15DAEBF75899F717D`. Full record: `docs/release-qualification-1.0.48.md`. |
 | Buffer Doctor tests | 8 deterministic self-tests passed on the Core candidate generator/scorer (padded stride, diagonal shear, endianness, valid-bits, trailing-row fit, sampling cap, ambiguity group). |
 | Smart Type Mapper tests | 6 deterministic self-tests passed on mapping store, ObjectSource extraction, enum mapping, and failure inventory. |
 | Buffer Doctor UI smoke | `SmokeBufferDoctorPanel.ps1` passed: top candidate for a 2448x2048 padded Mono8 buffer is the correct `stride 2560` descriptor; applying it restores the image. Captures: `artifacts/ui/buffer-doctor/2026-07-26/`. |
@@ -180,9 +181,9 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
 ## Incomplete Or Unverified
 
-1. Marketplace still serves `1.0.45.0`; the locally qualified `1.0.47.0` VSIX and reviewed Overview/release notes have not been published.
-2. A manual Marketplace update/restart smoke on a separate PC that previously had `1.0.45.0` is not recorded. Local reinstall and CI do not replace this check.
-3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual `1.0.47` publication decision instead of presenting the historical draft as current.
+1. Marketplace serves defective `1.0.47.0`; the locally qualified `1.0.48.0` hotfix has not been uploaded.
+2. The separate PC that exposed the failure has not yet installed and runtime-smoked the exact `1.0.48` SHA-256 candidate. Local reinstall and CI do not replace this check.
+3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual `1.0.48` corrective publication decision instead of presenting the historical draft as current.
 4. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
 5. The Release build still reports 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` for EnvDTE access. Installed-VSIX behavior is proven, but the warnings remain technical debt and must not be described as zero-warning output.
 6. Vendor-specific SDK adapters are not implemented. `RawBufferView` and safe structural discovery are the generic supported answers; the exact ImagePtr registration remains a compatibility exception.
@@ -220,12 +221,14 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 - Standalone viewer speed does not prove docked Visual Studio speed. Performance acceptance must use the installed VSIX, the docked window, and real wheel/drag input.
 - Provider registration controls whether the visualizer icon appears. Reflection conversion code alone is not enough; exact/legacy type and assembly registrations must remain in the generated extension metadata.
 - Typed collections require open generic `List<>`/`Dictionary<,>` registration. Visual Studio's built-in `IEnumerable Visualizer` may also appear and is not this product.
-- VSIX update problems often come from stale Visual Studio package registration or a Visual Studio process that was still running. Close all instances, reinstall, restart, and use the repair script before changing working code.
+- A local registry repair can make a broken VSIX look healthy. Normal install must never write registration, and a clean-PC release gate must pass without `Repair-VisualStudioExtensionRegistration.ps1`.
 - Marketplace rejects an already published version. Every uploaded binary change needs a higher VSIX version, but documentation-only public copy can be edited separately when the portal permits it.
 
 ## Do-Not-Regress Checklist
 
 - One installable VSIX, not two user-installed extensions.
+- One package-registration owner: `RawBufferVisualizer.VisualStudio.Extensibility` generates `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef`; the VSSDK support library must not generate the Marketplace `.pkgdef`.
+- Normal install performs no manual VSSDK registry write; repair-only results are never release evidence.
 - One docked viewer session, not one window per image.
 - Bitmap, OpenCvSharp, Emgu, raw, registered pointer target, list, dictionary, and array icons/opens.
 - Error rows remain visible and selecting a valid row recovers normal viewing.
@@ -246,19 +249,23 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
 ## Next Priorities
 
-1. Publish the qualified 1.0.47 package and listing | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+1. Validate the exact 1.0.48 candidate on the clean PC that failed 1.0.47 | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Prerequisite: Marketplace publisher access and the owner's explicit publication action. Upload the artifact recorded below, paste `docs/marketplace-overview-1.0.47.md` and `docs/marketplace-release-notes-1.0.47.md`, then verify the public version and copy.
+   Prerequisite: the separate VS2022 PC and access to the candidate recorded below. Install, restart, run the payload check, open one registered Bitmap/Mat, run Automatic Inspector, and confirm no handoff acknowledgement failure. Do not run the repair script.
 
-2. Post-publication smoke on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+2. Upload 1.0.48 to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-   Prerequisite: a VS2022 machine with the prior Marketplace version installed. Test update, restart, registered Bitmap/Mat open, Automatic Inspector discovery, and absence of package-load popups.
+   Prerequisite: clean-PC candidate gate passed and Marketplace publisher access. Upload the exact SHA-256 artifact and paste `docs/marketplace-release-notes-1.0.48.md`.
 
-3. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
+3. Post-publication update/restart smoke | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+   Prerequisite: Marketplace propagation. Update a PC from `1.0.47`, restart, verify version/payload, registered handoff, Automatic Inspector, and absence of package-load popups.
+
+4. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
    Prerequisite: current Basler pylon, Spinnaker, and Vimba X SDK installations or legal qualification machines, representative camera/emulator objects, and lifetime rules. Follow `docs/industrial-camera-compatibility-validation.md`; do not make vendor support claims from fixtures alone.
 
-4. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+5. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
    Current evidence proves the button/panel switch is responsive behavior, not intermittent registration. Any change requires a written UI description, a text mockup, and explicit owner approval before implementation.
 
@@ -292,7 +299,7 @@ docs/ARCHITECTURE_AND_VALIDATION.md
 docs/automatic-vision-inspector.md
 ```
 
-Start by checking whether Marketplace now serves `1.0.47.0`. If not, the next external gate is publication using the qualified artifact and copy. An industrial SDK claim requires a real object, version, lifetime rule, and legal test sample. Do not reopen the completed Automatic Vision Inspector, Smart Type Mapper fallback, Buffer Doctor, or local 1.0.47 qualification scope unless its recorded acceptance criteria no longer pass. Any provider/source fix requires a new VSIX version and the installed-extension matrix.
+Start by checking whether the separate clean PC passed the exact `1.0.48.0` candidate without repair. If it passed, the next external gate is the owner's Marketplace upload. If Marketplace already serves `1.0.48.0`, perform the update/restart smoke. Do not reopen the completed Automatic Vision Inspector, Smart Type Mapper fallback, Buffer Doctor, or local 1.0.48 qualification scope unless its recorded acceptance criteria no longer pass.
 
 ## Current Release Artifact
 
@@ -300,15 +307,15 @@ Start by checking whether Marketplace now serves `1.0.47.0`. If not, the next ex
 C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
-Recorded properties (1.0.47 source, rebuilt, packaged, reinstalled, and hybrid-smoked locally 2026-07-28):
+Recorded properties (1.0.48 source, rebuilt, packaged, reinstalled without normal registry repair, and hybrid-smoked locally 2026-07-28):
 
 ```text
-Version: 1.0.47.0
-Size: 1,924,125 bytes
-SHA256: DAB2CE62007F77F11CFF828AF02EF2F2DAE26A3BB3238CF251679E4A69505174
+Version: 1.0.48.0
+Size: 1,990,304 bytes
+SHA256: AABBD3A36780AE070C3FBBDE384CB5CD9A1977607EA929D15DAEBF75899F717D
 ```
 
-This artifact is local/generated. Rebuild it after any source, packaging, dependency, or version change; do not assume the old artifact matches a new commit. The last Marketplace-published binary remains `1.0.45.0`.
+This artifact is local/generated. Rebuild it after any source, packaging, dependency, or version change; do not assume the old artifact matches a new commit. The last Marketplace-published binary remains `1.0.47.0`.
 
 ## Build Environment Note (2026-07-26)
 

@@ -14,9 +14,18 @@ Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-back
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## New In 1.0.47
+## New In 1.0.48
 
-The `1.0.47.0` package is locally qualified and prepared for the next Marketplace update. Until the Marketplace badge above reports `1.0.47`, the public install link still serves the earlier published line.
+The `1.0.48.0` package fixes the clean-PC ToolWindow registration failure found after the `1.0.47.0` Marketplace upload. Until the Marketplace badge above reports `1.0.48`, the public install link still serves `1.0.47`.
+
+### Clean-install package registration
+
+- The VSSDK package class and command table are now built by the same hybrid project that produces the Marketplace VSIX.
+- The generated `.pkgdef` points to `RawBufferVisualizer.VisualStudio.Extensibility.dll` in the installed VSIX folder.
+- Local install verification no longer writes a manual package `CodeBase`, so a broken Marketplace package cannot pass by using a developer build output.
+- Release packaging fails if the VSIX falls back to the former split-project `.pkgdef` layout.
+
+There is no image-transfer or UI behavior change in this hotfix. Automatic Vision Inspector and Vision Buffer Doctor remain the main feature additions from `1.0.47`.
 
 ### Automatic Vision Inspector
 
@@ -104,7 +113,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line adds Automatic Vision Inspector and Vision Buffer Doctor while preserving the preview-first transfer, file-backed tiled display, collections, pixel inspection, export, and comparison workflows from the published `1.0.45.0` line.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.48.0` keeps those features and fixes clean-install registration of the docked ToolWindow.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -112,7 +121,7 @@ For local development builds, close every Visual Studio window and run this from
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
-The script builds and reinstalls the single VSIX, registers the docked ToolWindow, and removes obsolete Raw Buffer Visualizer Classic DLLs from `Documents\Visual Studio 2022\Visualizers`. Restart Visual Studio after it finishes.
+The script builds and reinstalls the single VSIX and removes obsolete Raw Buffer Visualizer Classic DLLs from `Documents\Visual Studio 2022\Visualizers`. It intentionally does not write VSSDK registration values; the installed VSIX must register the docked ToolWindow by itself. Restart Visual Studio after it finishes.
 
 ### Update
 
@@ -120,13 +129,13 @@ Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the updat
 
 If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Current Marketplace packages publish the debugger providers and automatically close their temporary handoff host, so new invocations remain in the main docked viewer.
 
-If Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after an update, close all Visual Studio windows and repair the docked tool-window registration:
+For `1.0.48` and later, a release must not be qualified by manually writing a package `CodeBase`. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
 ```
 
-This can happen when Visual Studio keeps a stale package path from an older VSIX folder. The repair script points the docked tool window back to the currently installed Marketplace extension folder and removes old startup auto-load registrations.
+The repair script points the docked tool window back to the currently installed Marketplace extension folder and removes old startup auto-load registrations. After recovery, reinstall the release VSIX without repair and run the installed-VSIX smoke before treating the package as publishable.
 
 If the popup appears only when inspecting an image, check:
 
@@ -421,7 +430,7 @@ dotnet restore .\RawBufferVisualizer.sln
 dotnet build .\RawBufferVisualizer.sln -c Release
 ```
 
-The Visual Studio extension project packages generated files from `.build\bin` into the VSIX. Those DLL and `.pkgdef` payloads are generated build outputs, not source files, and are intentionally hidden from Solution Explorer.
+The hybrid `RawBufferVisualizer.VisualStudio.Extensibility` project owns debugger providers, the `RawBufferVisualizerPackage` registration shell, command table compilation, and the public VSIX. Its `PkgdefProjectOutputGroup` generates `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef` with a `CodeBase` under `$PackageFolder$`. The `RawBufferVisualizer.VisualStudio.Vssdk` project is a referenced ToolWindow/UI support library and must not produce the Marketplace package registration.
 
 Build:
 
@@ -489,12 +498,13 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Buffer Doctor ranked candidates and immediate descriptor application.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
-- VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Vssdk.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
+- VSSDK package ownership: the generated `.pkgdef` must reference `RawBufferVisualizer.VisualStudio.Extensibility.dll`; the former split-project `.pkgdef` is prohibited.
+- VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace Overview draft for this version: [1.0.47 Overview](docs/marketplace-overview-1.0.47.md).
-Marketplace release text for this version: [1.0.47 release notes](docs/marketplace-release-notes-1.0.47.md).
+Marketplace feature Overview: [1.0.47 Overview](docs/marketplace-overview-1.0.47.md).
+Marketplace release text for this hotfix: [1.0.48 release notes](docs/marketplace-release-notes-1.0.48.md).
 GitHub Release body for this version: [1.0.45 GitHub Release draft](docs/github-release-1.0.45.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
