@@ -73,6 +73,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private AutomaticInspectionPreferences _automaticInspectionPreferences =
             new AutomaticInspectionPreferences();
         private bool _loadingAutomaticInspectionPreferences = true;
+        private readonly ReleaseAnnouncementPreferencesStore _releaseAnnouncementPreferencesStore =
+            ReleaseAnnouncementPreferencesStore.CreateDefault();
+        private ReleaseAnnouncementPreferences _releaseAnnouncementPreferences =
+            new ReleaseAnnouncementPreferences();
         private EnvDTE80.DTE2? _dte;
 
         public void SetDte(EnvDTE80.DTE2 dte)
@@ -94,6 +98,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             InitializeComponent();
             LoadAutomaticInspectionPreferences();
+            InitializeReleaseAnnouncement();
             ImageList.ItemsSource = _documents;
             OpenGlImageView.PixelHovered += OpenGlImageView_PixelHovered;
             OpenGlImageView.PixelPinned += OpenGlImageView_PixelPinned;
@@ -141,7 +146,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             AutomaticVisionScanResult scan;
             try
             {
-                scan = _automaticVisionInspector.Scan(_dte.Debugger);
+                scan = _automaticVisionInspector.Scan(
+                    _dte.Debugger,
+                    _automaticInspectionPreferences.IncludeImageCollections);
             }
             catch (Exception ex)
             {
@@ -172,8 +179,73 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 for (var i = 0; i < scan.Inspections.Count; i++)
                 {
                     var inspection = scan.Inspections[i];
+                    var collectionSummary = scan.FindCollectionSummary(
+                        inspection.CollectionRootExpression);
                     try
                     {
+                        if (!string.IsNullOrWhiteSpace(inspection.PreflightError))
+                        {
+                            AddAutomaticOpenFailure(
+                                inspection,
+                                inspection.PreflightError);
+                            failed++;
+                            if (collectionSummary != null)
+                            {
+                                collectionSummary.FailedCount++;
+                            }
+
+                            continue;
+                        }
+
+                        if (inspection.KnownImageKind != AutomaticKnownImageKind.None)
+                        {
+                            RawBufferVisualizerPackageLog.Write(
+                                "Automatic scan opening known image " + inspection.RootExpression);
+                            string knownOpenError;
+                            if (TryOpenKnownRegisteredImage(
+                                _dte.Debugger,
+                                inspection,
+                                out knownOpenError))
+                            {
+                                var knownDocument = FindHandoffDocument(inspection.StableKey);
+                                if (knownDocument != null)
+                                {
+                                    knownDocument.SetAutomaticInspection(
+                                        100,
+                                        inspection.GetMembersSummary(),
+                                        "Member inference and live memory descriptor validation passed.",
+                                        inspection.Inventory,
+                                        inspection.AssemblyName,
+                                        GetDebuggeeProcessId(_dte.Debugger),
+                                        false);
+                                    ImageList.Items.Refresh();
+                                    UpdateAutomaticInspectionPanel(knownDocument);
+                                }
+
+                                opened++;
+                                if (collectionSummary != null)
+                                {
+                                    collectionSummary.OpenedCount++;
+                                }
+
+                                continue;
+                            }
+
+                            RawBufferVisualizerPackageLog.Write(
+                                "Automatic scan known image open failed " +
+                                inspection.RootExpression +
+                                ": " +
+                                knownOpenError);
+                            AddAutomaticOpenFailure(inspection, knownOpenError);
+                            failed++;
+                            if (collectionSummary != null)
+                            {
+                                collectionSummary.FailedCount++;
+                            }
+
+                            continue;
+                        }
+
                         var mapping = inspection.Mapping ?? inspection.CreateTransientMapping();
                         var dataTypeName = inspection.GetDataTypeName();
                         var isArrayBacked = dataTypeName.EndsWith("[]", StringComparison.Ordinal);
@@ -224,6 +296,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                                 }
 
                                 opened++;
+                                if (collectionSummary != null)
+                                {
+                                    collectionSummary.OpenedCount++;
+                                }
+
                                 continue;
                             }
 
@@ -231,6 +308,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                                 "Automatic scan open failed " + inspection.RootExpression + ": " + openError);
                             AddAutomaticOpenFailure(inspection, openError);
                             failed++;
+                            if (collectionSummary != null)
+                            {
+                                collectionSummary.FailedCount++;
+                            }
+
                             continue;
                         }
 
@@ -249,6 +331,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                                     : "Required image metadata is incomplete or below the automatic-open confidence gate.";
                         AddAutomaticMappingCandidate(inspection, reason);
                         needsMapping++;
+                        if (collectionSummary != null)
+                        {
+                            collectionSummary.MappingCount++;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -257,6 +343,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                             "Automatic scan candidate error " + inspection.RootExpression + ": " + ex);
                         AddAutomaticOpenFailure(inspection, reason);
                         failed++;
+                        if (collectionSummary != null)
+                        {
+                            collectionSummary.FailedCount++;
+                        }
                     }
                 }
             }
@@ -273,9 +363,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ActivateDocument(activeAutomaticDocument);
             }
 
-            if (scan.Inspections.Count == 0)
+            var collectionStatus = BuildAutomaticCollectionStatus(scan);
+            if (scan.Inspections.Count == 0 && scan.CollectionSummaries.Count == 0)
             {
                 SetAutomaticScanStatus("No image-like locals or arguments met the 40% candidate threshold.");
+            }
+            else if (scan.Inspections.Count == 0)
+            {
+                SetAutomaticScanStatus(collectionStatus.TrimStart());
             }
             else
             {
@@ -286,10 +381,72 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     opened,
                     needsMapping,
                     failed,
-                    hidden > 0 ? ", " + hidden + " hidden" : string.Empty));
+                    hidden > 0 ? ", " + hidden + " hidden" : string.Empty)
+                    + collectionStatus);
             }
 
             UpdateStatus();
+        }
+
+        private static string BuildAutomaticCollectionStatus(
+            AutomaticVisionScanResult scan)
+        {
+            if (scan.CollectionSummaries.Count == 0
+                && scan.SkippedCollectionRootCount == 0)
+            {
+                return string.Empty;
+            }
+
+            var summaries = new List<string>();
+            for (var index = 0; index < scan.CollectionSummaries.Count; index++)
+            {
+                var summary = scan.CollectionSummaries[index];
+                var text = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}: {1} inspected, {2} opened",
+                    summary.RootExpression,
+                    summary.ScheduledCount,
+                    summary.OpenedCount);
+                if (summary.MappingCount > 0)
+                {
+                    text += string.Format(
+                        CultureInfo.InvariantCulture,
+                        ", {0} need mapping",
+                        summary.MappingCount);
+                }
+
+                if (summary.FailedCount > 0)
+                {
+                    text += string.Format(
+                        CultureInfo.InvariantCulture,
+                        ", {0} failed",
+                        summary.FailedCount);
+                }
+
+                if (summary.TruncatedCount > 0)
+                {
+                    text += string.Format(
+                        CultureInfo.InvariantCulture,
+                        ", {0} not scanned (limit)",
+                        summary.TruncatedCount);
+                }
+
+                summaries.Add(text);
+            }
+
+            var result = summaries.Count == 0
+                ? " Collections:"
+                : " Collections: " + string.Join("; ", summaries);
+            if (scan.SkippedCollectionRootCount > 0)
+            {
+                result += string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0}{1} collection root(s) not scanned (limit)",
+                    summaries.Count == 0 ? " " : "; ",
+                    scan.SkippedCollectionRootCount);
+            }
+
+            return result + ".";
         }
 
         public void ScheduleAutomaticScan()
@@ -469,10 +626,39 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
+        private void IncludeImageCollectionsBox_Changed(object sender, RoutedEventArgs e)
+        {
+            var enabled = IncludeImageCollectionsBox.IsChecked == true;
+            _automaticInspectionPreferences.IncludeImageCollections = enabled;
+            if (_loadingAutomaticInspectionPreferences)
+            {
+                return;
+            }
+
+            string saveError;
+            if (!_automaticInspectionPreferencesStore.TrySave(
+                _automaticInspectionPreferences,
+                out saveError))
+            {
+                SetAutomaticScanStatus(
+                    (enabled ? "Image collection scanning enabled" : "Image collection scanning disabled")
+                    + ", but the preference was not saved. "
+                    + saveError);
+                return;
+            }
+
+            SetAutomaticScanStatus(
+                enabled
+                    ? "Image collection scanning is enabled and saved. It applies to Scan Now and the next Break Mode refresh."
+                    : "Image collection scanning is disabled and saved. Registered collection visualizers remain available.");
+        }
+
         private void LoadAutomaticInspectionPreferences()
         {
             _automaticInspectionPreferences = _automaticInspectionPreferencesStore.Load();
             AutoInspectBox.IsChecked = _automaticInspectionPreferences.AutoScanOnBreak;
+            IncludeImageCollectionsBox.IsChecked =
+                _automaticInspectionPreferences.IncludeImageCollections;
             _loadingAutomaticInspectionPreferences = false;
             if (!string.IsNullOrWhiteSpace(_automaticInspectionPreferencesStore.LastLoadError))
             {
@@ -482,12 +668,117 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 SetAutomaticScanStatus(
                     _automaticInspectionPreferences.AutoScanOnBreak
-                        ? "Auto Inspect on Break is enabled. This preference persists across Visual Studio restarts."
-                        : "Auto Inspect on Break is paused. Scan Now remains available.");
+                        ? "Auto Inspect on Break is enabled. Image collection scanning is "
+                            + (_automaticInspectionPreferences.IncludeImageCollections
+                                ? "enabled."
+                                : "disabled.")
+                            + " These preferences persist across Visual Studio restarts."
+                        : "Auto Inspect on Break is paused. Scan Now remains available; image collection scanning is "
+                            + (_automaticInspectionPreferences.IncludeImageCollections
+                                ? "enabled."
+                                : "disabled."));
             }
         }
 
+        private void InitializeReleaseAnnouncement()
+        {
+            ReleaseAnnouncementTitleText.Text =
+                "New in Raw Buffer Visualizer " + ReleaseAnnouncementCatalog.CurrentVersion;
+            ReleaseAnnouncementAutomaticCollectionsText.Text =
+                "• " + ReleaseAnnouncementCatalog.HighlightAutomaticCollections;
+            ReleaseAnnouncementFailureIsolationText.Text =
+                "• " + ReleaseAnnouncementCatalog.HighlightFailureIsolation;
+            ReleaseAnnouncementViewerReliabilityText.Text =
+                "• " + ReleaseAnnouncementCatalog.HighlightViewerReliability;
+
+            _releaseAnnouncementPreferences = _releaseAnnouncementPreferencesStore.Load();
+            ReleaseAnnouncementBanner.Visibility = ReleaseAnnouncementCatalog.ShouldShow(
+                GetExtensionVersion(),
+                _releaseAnnouncementPreferences.LastSeenVersion)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+            if (!string.IsNullOrWhiteSpace(_releaseAnnouncementPreferencesStore.LastLoadError))
+            {
+                DiagnosticsList.Items.Insert(0, "Info: " + _releaseAnnouncementPreferencesStore.LastLoadError);
+            }
+        }
+
+        private void WhatsNew_Click(object sender, RoutedEventArgs e)
+        {
+            if (!ReleaseAnnouncementCatalog.ShouldShow(GetExtensionVersion(), string.Empty))
+            {
+                SetTransientStatus("No release highlights are available for this version");
+                return;
+            }
+
+            ReleaseAnnouncementBanner.Visibility = Visibility.Visible;
+        }
+
+        private void ViewReleaseNotes_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = ReleaseAnnouncementCatalog.ReleaseNotesUrl,
+                    UseShellExecute = true
+                });
+                MarkCurrentReleaseSeen();
+                SetTransientStatus("Release notes opened");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: release notes could not be opened. " + ex.Message);
+                SetTransientStatus("Open release notes failed");
+            }
+        }
+
+        private void DismissReleaseAnnouncement_Click(object sender, RoutedEventArgs e)
+        {
+            MarkCurrentReleaseSeen();
+        }
+
+        private void MarkCurrentReleaseSeen()
+        {
+            _releaseAnnouncementPreferences.LastSeenVersion = ReleaseAnnouncementCatalog.CurrentVersion;
+            string saveError;
+            if (!_releaseAnnouncementPreferencesStore.TrySave(
+                    _releaseAnnouncementPreferences,
+                    out saveError))
+            {
+                DiagnosticsList.Items.Insert(0, "Info: " + saveError);
+                SetTransientStatus("Dismissed for this session; preference was not saved");
+            }
+
+            ReleaseAnnouncementBanner.Visibility = Visibility.Collapsed;
+        }
+
         public void OpenHandoffRequest(string requestPath)
+        {
+            string processingPath;
+            if (!VisualizerHandoffInbox.TryClaimRequest(
+                    requestPath,
+                    out processingPath))
+            {
+                return;
+            }
+
+            try
+            {
+                OpenClaimedHandoffRequest(requestPath, processingPath);
+            }
+            finally
+            {
+                // Direct callers such as the standalone smoke hosts have no producer
+                // waiting for a terminal marker.
+                VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+            }
+        }
+
+        public bool OpenClaimedHandoffRequest(
+            string requestPath,
+            string processingPath)
         {
             if (!Dispatcher.CheckAccess())
             {
@@ -497,16 +788,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 // and Shell assemblies are unavailable, so the vs-threading JTF pattern cannot
                 // be used. Callers hold no locks and the UI thread never waits on these
                 // background handoff threads, so the synchronous marshal cannot deadlock.
-                Dispatcher.Invoke(() => OpenHandoffRequest(requestPath));
+                return Dispatcher.Invoke(() => OpenClaimedHandoffRequest(
+                    requestPath,
+                    processingPath));
 #pragma warning restore VSTHRD001
-                return;
             }
 
             try
             {
                 SetTransientStatus("Loading handoff...");
-                var request = ReadHandoffRequestWithRetry(requestPath);
-                VisualizerHandoffInbox.TryDeleteRequest(requestPath);
+                var request = ReadHandoffRequestWithRetry(processingPath);
+                var opened = false;
+                string? openFailure = null;
                 if (request.IsError)
                 {
                     var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
@@ -521,23 +814,87 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         request.MemberInventory,
                         request.ItemAssemblyName,
                         request.DebuggeeProcessId);
+                    opened = true;
                 }
                 else if (request.IsLiveMemory)
                 {
                     OpenLiveMemory(request);
+                    opened = true;
                 }
                 else
                 {
+                    var documentCountBeforeOpen = _documents.Count;
                     OpenPath(
                         request.MetadataPath,
                         request.DisplayName,
                         request.SourceType,
                         request.HandoffId,
                         request.IsPreview);
+                    ImageDocument? openedDocument;
+                    if (!string.IsNullOrWhiteSpace(request.HandoffId))
+                    {
+                        openedDocument = FindHandoffDocument(request.HandoffId);
+                    }
+                    else
+                    {
+                        openedDocument = _documents.Count > documentCountBeforeOpen
+                            ? _documents[_documents.Count - 1]
+                            : null;
+                    }
+
+                    var expectedDisplayPath = Path.GetFullPath(request.MetadataPath);
+                    var openAddedErrorDocument = _documents
+                        .Skip(documentCountBeforeOpen)
+                        .Any(document => document.IsError);
+                    opened = openedDocument != null
+                        && !openedDocument.IsError
+                        && !openAddedErrorDocument
+                        && string.Equals(
+                            Path.GetFullPath(openedDocument.DisplayPath),
+                            expectedDisplayPath,
+                            StringComparison.OrdinalIgnoreCase)
+                        && openedDocument.IsPreview == request.IsPreview;
+                    if (!opened)
+                    {
+                        openFailure = _activeDocument != null
+                            && _activeDocument.IsError
+                            && !string.IsNullOrWhiteSpace(_activeDocument.ErrorMessage)
+                            ? _activeDocument.ErrorMessage
+                            : "The image document could not be created.";
+                    }
                 }
+
+                if (!opened)
+                {
+                    TryRejectHandoffOrLog(
+                        requestPath,
+                        processingPath,
+                        openFailure ?? "The handoff could not be opened.");
+                    return false;
+                }
+
+                if (!VisualizerHandoffInbox.TryAcknowledgeRequest(
+                        requestPath,
+                        processingPath))
+                {
+                    if (VisualizerHandoffInbox.GetRequestState(requestPath)
+                        == VisualizerHandoffRequestState.Acknowledged)
+                    {
+                        return true;
+                    }
+
+                    throw new IOException(
+                        "The handoff opened, but its acknowledgement marker could not be published.");
+                }
+
+                return true;
             }
             catch (Exception ex)
             {
+                TryRejectHandoffOrLog(
+                    requestPath,
+                    processingPath,
+                    ex.ToString());
                 AddErrorDocument(
                     requestPath,
                     "Debugger handoff",
@@ -545,11 +902,50 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     ex.Message,
                     ex.ToString());
                 WriteAutomationProbeFailureIfRequested(requestPath, ex);
+                return false;
             }
             finally
             {
-                VisualizerHandoffInbox.TryDeleteRequest(requestPath);
                 UpdateTempUsageStatus();
+            }
+        }
+
+        private static void TryRejectHandoffOrLog(
+            string requestPath,
+            string processingPath,
+            string reason)
+        {
+            if (VisualizerHandoffInbox.TryRejectRequest(
+                    requestPath,
+                    processingPath,
+                    reason))
+            {
+                return;
+            }
+
+            VisualizerHandoffRequestState state;
+            try
+            {
+                state = VisualizerHandoffInbox.GetRequestState(requestPath);
+            }
+            catch (Exception ex)
+            {
+                RawBufferVisualizerPackageLog.Write(
+                    "Handoff rejection state read failed "
+                    + requestPath
+                    + " "
+                    + ex);
+                return;
+            }
+
+            if (state != VisualizerHandoffRequestState.Rejected
+                && state != VisualizerHandoffRequestState.Acknowledged)
+            {
+                RawBufferVisualizerPackageLog.Write(
+                    "Handoff rejection marker publish failed "
+                    + requestPath
+                    + " state "
+                    + state);
             }
         }
 
@@ -765,6 +1161,54 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         // Open Variable is always invoked from the UI thread (button click or dialog event handler).
         // The analyzer cannot propagate the UI-thread assertion across the private helpers below.
 #pragma warning disable VSTHRD010
+        private bool TryOpenKnownRegisteredImage(
+            EnvDTE.Debugger debugger,
+            AutomaticVisionInspection inspection,
+            out string error)
+        {
+            error = string.Empty;
+            KnownRegisteredImageBuffer buffer;
+            if (!KnownRegisteredImageCapture.TryCreateBuffer(
+                debugger,
+                inspection.RootExpression,
+                inspection.KnownImageKind,
+                out buffer,
+                out error))
+            {
+                return false;
+            }
+
+            var processId = GetDebuggeeProcessId(debugger);
+            if (processId <= 0)
+            {
+                error = "No debugged process is available for live memory reads.";
+                return false;
+            }
+
+            try
+            {
+                OpenLiveMemory(new VisualizerHandoffRequest(
+                    string.Empty,
+                    inspection.RootExpression,
+                    inspection.RuntimeTypeName,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    inspection.StableKey,
+                    false,
+                    processId,
+                    buffer.Address,
+                    buffer.BufferLength,
+                    buffer.Descriptor));
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "Live memory open failed: " + ex.Message;
+                return false;
+            }
+        }
+
         private string EvaluateOpenVariable(string expressionText)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -3899,6 +4343,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "autoInspectEnabled", IsAutoInspectEnabled, true);
                 AppendJsonProperty(
                     builder,
+                    "automaticCollectionsEnabled",
+                    _automaticInspectionPreferences.IncludeImageCollections,
+                    true);
+                AppendJsonProperty(
+                    builder,
                     "automaticScanStatus",
                     AutomaticScanStatusText == null ? string.Empty : AutomaticScanStatusText.Text,
                     true);
@@ -4376,17 +4825,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static VisualizerHandoffRequest ReadHandoffRequestWithRetry(string requestPath)
         {
+            const int attemptCount = 10;
+            const int retryDelayMilliseconds = 50;
             Exception? last = null;
-            for (var i = 0; i < 5; i++)
+            for (var attempt = 0; attempt < attemptCount; attempt++)
             {
                 try
                 {
                     return VisualizerHandoffInbox.ReadSnapshotRequestInfo(requestPath);
                 }
-                catch (IOException ex)
+                catch (Exception ex) when (
+                    ex is IOException
+                    || ex is UnauthorizedAccessException)
                 {
                     last = ex;
-                    Thread.Sleep(50);
+                    if (attempt + 1 < attemptCount)
+                    {
+                        Thread.Sleep(retryDelayMilliseconds);
+                    }
                 }
             }
 

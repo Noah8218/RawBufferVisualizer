@@ -22,6 +22,9 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
+      - name: Validate release communication
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion $env:GITHUB_REF_NAME
+
       - name: Restore
         run: dotnet restore .\RawBufferVisualizer.sln
 
@@ -38,12 +41,17 @@ jobs:
         run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1
 
       - name: Create GitHub Release
-        run: >
-          gh release create $env:GITHUB_REF_NAME
-          .\artifacts\publish\RawBufferVisualizer-net8.0-windows-win-x64-sc.zip
-          .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
-          --verify-tag
-          --generate-notes
-          --title "RawBufferVisualizer $env:GITHUB_REF_NAME"
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v', 'V')
+          $notesPath = ".\docs\marketplace-release-notes-$version.md"
+          if (-not (Test-Path -LiteralPath $notesPath -PathType Leaf)) {
+            throw "Curated release notes were not found: $notesPath"
+          }
+
+          gh release create $env:GITHUB_REF_NAME `
+            .\artifacts\publish\RawBufferVisualizer-net8.0-windows-win-x64-sc.zip `
+            --verify-tag `
+            --notes-file $notesPath `
+            --title "Raw Buffer Visualizer $version"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -44,6 +44,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 return RunMultiLibraryDebug();
             }
 
+            if (Array.IndexOf(args, "--automatic-collections-debug") >= 0)
+            {
+                return RunAutomaticCollectionsDebug();
+            }
+
             if (TryGetArgument(args, "--emgu-tiff-smoke", out var tiffPath))
             {
                 return RunEmguTiffSmoke(tiffPath);
@@ -290,6 +295,31 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 PrintCase(ref caseNumber, "bitmapList as List<System.Drawing.Bitmap>");
                 if (shouldBreak || collectionOnly) Debugger.Break();
 
+                var openCvMatArray = new[] { matMono8, matBgr24, matBgra32 };
+                PrintCase(ref caseNumber, "openCvMatArray as OpenCvSharp.Mat[]");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var emguMatArray = new[] { emguMono8, emguBgr24, emguBgra32 };
+                PrintCase(ref caseNumber, "emguMatArray as Emgu.CV.Mat[]");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var bitmapArray = new[] { bitmapMono8, bitmapBgr24, bitmapBgra32 };
+                PrintCase(ref caseNumber, "bitmapArray as System.Drawing.Bitmap[]");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
+                var disposedCollectionMat = new Mat(1, 1, MatType.CV_8UC1, Scalar.All(1));
+                disposedCollectionMat.Dispose();
+                var partialOpenCvMatList = new List<Mat>
+                {
+                    matMono8,
+                    matBgr24,
+                    null!,
+                    matBgra32,
+                    disposedCollectionMat
+                };
+                PrintCase(ref caseNumber, "partialOpenCvMatList as List<OpenCvSharp.Mat> / 3 valid, 2 failed");
+                if (shouldBreak || collectionOnly) Debugger.Break();
+
                 var openCvMatDictionary = new Dictionary<string, Mat>
                 {
                     ["mono"] = matMono8,
@@ -370,6 +400,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(openCvMatList);
                 GC.KeepAlive(emguMatList);
                 GC.KeepAlive(bitmapList);
+                GC.KeepAlive(openCvMatArray);
+                GC.KeepAlive(emguMatArray);
+                GC.KeepAlive(bitmapArray);
+                GC.KeepAlive(partialOpenCvMatList);
+                GC.KeepAlive(disposedCollectionMat);
                 GC.KeepAlive(openCvMatDictionary);
                 GC.KeepAlive(emguMatDictionary);
                 GC.KeepAlive(bitmapDictionary);
@@ -411,6 +446,58 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
             value = string.Empty;
             return false;
+        }
+
+        private static int RunAutomaticCollectionsDebug()
+        {
+            var caseNumber = 1;
+            var partialOpenCvMatList = CreatePartialOpenCvMatList();
+            var emguMatArray = CreateAutomaticEmguMatArray();
+            try
+            {
+                PrintCase(
+                    ref caseNumber,
+                    "partialOpenCvMatList (3 valid, 2 failed) and emguMatArray (2 valid)");
+                Debugger.Break();
+                GC.KeepAlive(partialOpenCvMatList);
+                GC.KeepAlive(emguMatArray);
+                return 0;
+            }
+            finally
+            {
+                for (var index = 0; index < partialOpenCvMatList.Count; index++)
+                {
+                    partialOpenCvMatList[index]?.Dispose();
+                }
+
+                for (var index = 0; index < emguMatArray.Length; index++)
+                {
+                    emguMatArray[index]?.Dispose();
+                }
+            }
+        }
+
+        private static List<Mat> CreatePartialOpenCvMatList()
+        {
+            var disposed = CreateMatMono8(64, 48);
+            disposed.Dispose();
+            return new List<Mat>
+            {
+                CreateMatMono8(64, 48),
+                CreateMatBgr24(64, 48),
+                null!,
+                CreateMatBgra32(64, 48),
+                disposed
+            };
+        }
+
+        private static Emgu.CV.Mat[] CreateAutomaticEmguMatArray()
+        {
+            return new[]
+            {
+                CreateEmguMatMono8(64, 48),
+                CreateEmguMatBgr24(64, 48)
+            };
         }
 
         private static int RunBufferDoctorDebug()

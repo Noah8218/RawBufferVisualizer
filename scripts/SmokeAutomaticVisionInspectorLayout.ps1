@@ -2,6 +2,7 @@ param(
     [string]$Configuration = "Release",
     [string]$Framework = "net472",
     [string]$OutputDir = "artifacts\ui\automatic-vision-inspector\layout-smoke",
+    [int]$WindowWidth = 1160,
     [switch]$NoBuild
 )
 
@@ -21,7 +22,7 @@ $outputRoot = Join-Path $repoRoot $OutputDir
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $rawPath = Join-Path $outputRoot "automatic-inspector-mono8.raw"
 $metadataPath = Join-Path $outputRoot "automatic-inspector-mono8.rbuf.json"
-$capturePath = Join-Path $outputRoot "automatic-inspector-1160.png"
+$capturePath = Join-Path $outputRoot "automatic-inspector-$WindowWidth.png"
 $resultPath = Join-Path $outputRoot "automatic-inspector-layout.json"
 
 $width = 320
@@ -68,6 +69,7 @@ public static class AutomaticVisionInspectorLayoutNative {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
 }
@@ -94,7 +96,17 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
     $bitmap = New-Object System.Drawing.Bitmap $captureWidth, $captureHeight
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     try {
-        $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, [System.Drawing.Size]::new($captureWidth, $captureHeight))
+        $deviceContext = $graphics.GetHdc()
+        try {
+            $printed = [AutomaticVisionInspectorLayoutNative]::PrintWindow($hwnd, $deviceContext, 2)
+        }
+        finally {
+            $graphics.ReleaseHdc($deviceContext)
+        }
+
+        if (-not $printed) {
+            $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, [System.Drawing.Size]::new($captureWidth, $captureHeight))
+        }
         $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     }
     finally {
@@ -109,7 +121,7 @@ $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio
 $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl
 $window = New-Object System.Windows.Window
 $window.Title = "Automatic Vision Inspector Layout"
-$window.Width = 1160
+$window.Width = $WindowWidth
 $window.Height = 600
 $window.Left = 20
 $window.Top = 20
@@ -170,7 +182,7 @@ $helper = New-Object System.Windows.Interop.WindowInteropHelper($window)
     [AutomaticVisionInspectorLayoutNative]::HWND_TOPMOST,
     20,
     20,
-    1160,
+    $WindowWidth,
     600,
     0x0040) | Out-Null
 [AutomaticVisionInspectorLayoutNative]::SetForegroundWindow($helper.Handle) | Out-Null
@@ -178,19 +190,26 @@ Wait-Dispatcher 300
 Capture-Window $helper.Handle $capturePath
 
 $panel = $control.FindName("AutomaticInspectionPanel")
+$collectionBox = $control.FindName("IncludeImageCollectionsBox")
 $confidence = $control.FindName("AutomaticInspectionConfidenceText").Text
 $membersText = $control.FindName("AutomaticInspectionMembersText").Text
 $validation = $control.FindName("AutomaticInspectionValidationText").Text
-if (($panel.Visibility -ne [System.Windows.Visibility]::Visible) -or
-    ($confidence -ne "Confidence 96%") -or
-    (-not $membersText.Contains("Info.Width")) -or
-    (-not $validation.Contains("validation passed"))) {
+$expectFullInspector = $WindowWidth -ge 1040
+if (($expectFullInspector -and $panel.Visibility -ne [System.Windows.Visibility]::Visible) -or
+    ($null -eq $collectionBox) -or
+    ($collectionBox.Content.ToString() -ne "Mat collections") -or
+    ($expectFullInspector -and $confidence -ne "Confidence 96%") -or
+    ($expectFullInspector -and -not $membersText.Contains("Info.Width")) -or
+    ($expectFullInspector -and -not $validation.Contains("validation passed"))) {
     throw "Automatic Vision Inspector panel did not render the expected evidence."
 }
 
 @{
     Capture = $capturePath
-    PanelVisible = $true
+    WindowWidth = $WindowWidth
+    PanelVisible = ($panel.Visibility -eq [System.Windows.Visibility]::Visible)
+    CollectionOptionVisible = $true
+    CollectionOptionChecked = ($collectionBox.IsChecked -eq $true)
     Confidence = $confidence
     Members = $membersText
     Validation = $validation

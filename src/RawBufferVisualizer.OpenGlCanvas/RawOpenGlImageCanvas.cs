@@ -77,6 +77,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private int _lastTextureWidth;
         private int _lastTextureHeight;
         private uint _lastTextureError;
+        private RawOpenGlViewMode _viewMode = RawOpenGlViewMode.Fit;
+        private double _lastViewportWidth;
+        private double _lastViewportHeight;
 
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelHovered;
         public event EventHandler<RawOpenGlPixelEventArgs>? PixelPinned;
@@ -93,12 +96,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             get
             {
-                if (ViewportWidth <= 0 || _viewWidth <= 0)
+                double viewportWidth;
+                double viewportHeight;
+                if (!TryGetViewportSize(out viewportWidth, out viewportHeight) || _viewWidth <= 0)
                 {
                     return 1;
                 }
 
-                return ViewportWidth / _viewWidth;
+                return viewportWidth / _viewWidth;
             }
         }
 
@@ -166,20 +171,33 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
         }
 
-        private double ViewportWidth
+        private bool TryGetViewportSize(out double width, out double height)
         {
-            get
+            var clientSize = _openGlControl.ClientSize;
+            if (clientSize.Width > 0 && clientSize.Height > 0)
             {
-                return _openGlControl.ClientSize.Width > 0 ? _openGlControl.ClientSize.Width : ActualWidth;
+                width = clientSize.Width;
+                height = clientSize.Height;
+                return true;
             }
-        }
 
-        private double ViewportHeight
-        {
-            get
+            var actualWidth = ActualWidth;
+            var actualHeight = ActualHeight;
+            if (actualWidth > 0
+                && actualHeight > 0
+                && !double.IsNaN(actualWidth)
+                && !double.IsNaN(actualHeight)
+                && !double.IsInfinity(actualWidth)
+                && !double.IsInfinity(actualHeight))
             {
-                return _openGlControl.ClientSize.Height > 0 ? _openGlControl.ClientSize.Height : ActualHeight;
+                width = actualWidth;
+                height = actualHeight;
+                return true;
             }
+
+            width = 0;
+            height = 0;
+            return false;
         }
 
         public RawOpenGlViewState? GetViewState()
@@ -189,7 +207,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return null;
             }
 
-            return new RawOpenGlViewState(_descriptor.Width, _descriptor.Height, _viewLeft, _viewTop, _viewWidth, _viewHeight);
+            return new RawOpenGlViewState(
+                _descriptor.Width,
+                _descriptor.Height,
+                _viewLeft,
+                _viewTop,
+                _viewWidth,
+                _viewHeight,
+                _viewMode);
         }
 
         public RawOpenGlRenderStats GetRenderStatsSnapshot()
@@ -270,8 +295,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 throw new InvalidOperationException("OpenGL control is not ready.");
             }
 
-            var width = _openGlControl.ClientSize.Width;
-            var height = _openGlControl.ClientSize.Height;
+            var clientSize = _openGlControl.ClientSize;
+            var width = clientSize.Width;
+            var height = clientSize.Height;
             if (width <= 0 || height <= 0)
             {
                 throw new InvalidOperationException("OpenGL framebuffer has no visible size.");
@@ -428,6 +454,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _imageGeneration++;
             _renderOptionsGeneration++;
             _initialFitPending = false;
+            _viewMode = RawOpenGlViewMode.Fit;
+            _lastViewportWidth = 0;
+            _lastViewportHeight = 0;
             ResetProgressiveRenderState();
             DeleteTextures();
             _tiles.Clear();
@@ -559,47 +588,35 @@ namespace RawBufferVisualizer.OpenGlCanvas
         public void FitToImage()
         {
             _initialFitPending = false;
+            _viewMode = RawOpenGlViewMode.Fit;
             FitToImageCore();
         }
 
-        private void FitToImageCore()
+        private bool FitToImageCore()
         {
-            var width = ViewportWidth;
-            var height = ViewportHeight;
-            if (_descriptor == null || width <= 0 || height <= 0)
+            double width;
+            double height;
+            if (_descriptor == null || !TryGetViewportSize(out width, out height))
             {
-                return;
+                return false;
             }
 
-            var controlAspect = width / Math.Max(height, 1);
-            var imageAspect = _descriptor.Width / (double)Math.Max(_descriptor.Height, 1);
-            if (controlAspect > imageAspect)
-            {
-                _viewHeight = _descriptor.Height * 1.05;
-                _viewWidth = _viewHeight * controlAspect;
-            }
-            else
-            {
-                _viewWidth = _descriptor.Width * 1.05;
-                _viewHeight = _viewWidth / Math.Max(controlAspect, 0.0001);
-            }
-
-            _viewLeft = (_descriptor.Width - _viewWidth) / 2;
-            _viewTop = (_descriptor.Height - _viewHeight) / 2;
+            ApplyFitView(width, height);
             OnViewChanged();
             RequestRender();
+            return true;
         }
 
         public void SetZoomScale(double scale)
         {
-            _initialFitPending = false;
-            var width = ViewportWidth;
-            var height = ViewportHeight;
-            if (_descriptor == null || width <= 0 || height <= 0 || scale <= 0)
+            double width;
+            double height;
+            if (_descriptor == null || scale <= 0 || !TryGetViewportSize(out width, out height))
             {
                 return;
             }
 
+            SetManualViewMode(width, height);
             var centerX = _viewLeft + (_viewWidth / 2);
             var centerY = _viewTop + (_viewHeight / 2);
             _viewWidth = width / scale;
@@ -612,12 +629,12 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void PanByImagePixels(double deltaX, double deltaY)
         {
-            _initialFitPending = false;
             if (_descriptor == null)
             {
                 return;
             }
 
+            SetManualViewModeFromCurrentViewport();
             _viewLeft += deltaX;
             _viewTop += deltaY;
             RaiseViewChangedThrottled();
@@ -626,33 +643,37 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void PanByScreenPixels(double deltaX, double deltaY)
         {
-            _initialFitPending = false;
-            if (_descriptor == null)
+            double width;
+            double height;
+            if (_descriptor == null || !TryGetViewportSize(out width, out height))
             {
                 return;
             }
 
-            _viewLeft -= deltaX / Math.Max(ViewportWidth, 1) * _viewWidth;
-            _viewTop -= deltaY / Math.Max(ViewportHeight, 1) * _viewHeight;
+            SetManualViewMode(width, height);
+            _viewLeft -= deltaX / width * _viewWidth;
+            _viewTop -= deltaY / height * _viewHeight;
             RaiseViewChangedThrottled();
             RequestRender();
         }
 
         public void ZoomAtScreenPoint(Point position, int wheelDelta)
         {
-            _initialFitPending = false;
-            if (_descriptor == null || wheelDelta == 0)
+            double width;
+            double height;
+            if (_descriptor == null || wheelDelta == 0 || !TryGetViewportSize(out width, out height))
             {
                 return;
             }
 
-            var anchor = ScreenToImage(position);
+            SetManualViewMode(width, height);
+            var anchor = ScreenToImage(position, width, height);
             var notches = wheelDelta / 120.0;
             var factor = Math.Pow(0.8, notches);
             _viewWidth *= factor;
             _viewHeight *= factor;
-            var relativeX = position.X / Math.Max(ViewportWidth, 1);
-            var relativeY = position.Y / Math.Max(ViewportHeight, 1);
+            var relativeX = position.X / width;
+            var relativeY = position.Y / height;
             _viewLeft = anchor.X - (relativeX * _viewWidth);
             _viewTop = anchor.Y - (relativeY * _viewHeight);
             RaiseViewChangedThrottled();
@@ -666,11 +687,37 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return false;
             }
 
-            _initialFitPending = false;
             _viewLeft = state.Left;
             _viewTop = state.Top;
             _viewWidth = state.Width;
             _viewHeight = state.Height;
+
+            _viewMode = state.Mode;
+            if (_viewMode == RawOpenGlViewMode.Fit)
+            {
+                _initialFitPending = true;
+                if (FitToImageCore())
+                {
+                    _initialFitPending = false;
+                }
+                else
+                {
+                    OnViewChanged();
+                    RequestRender();
+                }
+
+                return true;
+            }
+
+            _initialFitPending = false;
+            double viewportWidth;
+            double viewportHeight;
+            if (TryGetViewportSize(out viewportWidth, out viewportHeight))
+            {
+                MatchManualViewToViewportAspect(viewportWidth, viewportHeight);
+                RememberViewport(viewportWidth, viewportHeight);
+            }
+
             OnViewChanged();
             RequestRender();
             return true;
@@ -681,14 +728,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             base.OnRenderSizeChanged(sizeInfo);
             if (_descriptor != null)
             {
-                if (_initialFitPending)
-                {
-                    FitToImageCore();
-                }
-                else
-                {
-                    ResizeViewKeepingZoom(sizeInfo.PreviousSize, sizeInfo.NewSize);
-                }
+                HandleViewportChanged();
             }
         }
 
@@ -717,7 +757,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
             var gl = _openGlControl.OpenGL;
             try
             {
-                gl.Viewport(0, 0, Math.Max(_openGlControl.ClientSize.Width, 1), Math.Max(_openGlControl.ClientSize.Height, 1));
+                var clientSize = _openGlControl.ClientSize;
+                gl.Viewport(0, 0, Math.Max(clientSize.Width, 1), Math.Max(clientSize.Height, 1));
                 gl.Clear(OpenGL.GL_COLOR_BUFFER_BIT | OpenGL.GL_DEPTH_BUFFER_BIT);
 
                 if (_tiles.Count == 0 && !_useProgressiveViewportRendering)
@@ -726,6 +767,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 }
 
                 _frameSerial++;
+                HandleViewportChanged();
                 ConfigureFixedPipelineView(gl);
 
                 if (_useProgressiveViewportRendering)
@@ -818,14 +860,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             if (_descriptor != null)
             {
-                if (_initialFitPending)
-                {
-                    FitToImageCore();
-                }
-                else
-                {
-                    MatchViewToViewportAspect();
-                }
+                HandleViewportChanged();
             }
 
             RequestRender();
@@ -960,34 +995,41 @@ namespace RawBufferVisualizer.OpenGlCanvas
             RequestRender();
         }
 
-        private void ResizeViewKeepingZoom(Size previousSize, Size newSize)
+        private void HandleViewportChanged()
         {
-            if (previousSize.Width <= 1 || previousSize.Height <= 1 || newSize.Width <= 1 || newSize.Height <= 1 || _viewWidth <= 0 || _viewHeight <= 0)
+            double width;
+            double height;
+            if (_descriptor == null || !TryGetViewportSize(out width, out height))
             {
-                FitToImage();
                 return;
             }
 
-            var zoom = previousSize.Width / _viewWidth;
-            if (zoom <= 0)
+            var changed = false;
+            if (_viewMode == RawOpenGlViewMode.Fit)
             {
-                FitToImage();
-                return;
+                changed = ApplyFitView(width, height);
+            }
+            else if (ViewportChanged(width, height))
+            {
+                changed = ResizeManualViewKeepingZoom(width, height);
+            }
+            else if (!ViewMatchesViewportAspect(width, height))
+            {
+                changed = MatchManualViewToViewportAspect(width, height);
             }
 
-            var centerX = _viewLeft + (_viewWidth / 2);
-            var centerY = _viewTop + (_viewHeight / 2);
-            _viewWidth = newSize.Width / zoom;
-            _viewHeight = newSize.Height / zoom;
-            _viewLeft = centerX - (_viewWidth / 2);
-            _viewTop = centerY - (_viewHeight / 2);
-            RaiseViewChangedNow();
-            RequestRender();
+            RememberViewport(width, height);
+            if (changed)
+            {
+                RaiseViewChangedNow();
+                RequestRender();
+            }
         }
 
         private void ScheduleInitialFit()
         {
             var generation = _imageGeneration;
+            _viewMode = RawOpenGlViewMode.Fit;
             _initialFitPending = true;
             FitToImageCore();
             Dispatcher.BeginInvoke(
@@ -1004,25 +1046,155 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 }));
         }
 
-        private void MatchViewToViewportAspect()
+        private bool ApplyFitView(double width, double height)
         {
-            var width = ViewportWidth;
-            var height = ViewportHeight;
+            if (_descriptor == null || width <= 0 || height <= 0)
+            {
+                return false;
+            }
+
+            var controlAspect = width / height;
+            var imageAspect = _descriptor.Width / (double)Math.Max(_descriptor.Height, 1);
+            double viewWidth;
+            double viewHeight;
+            if (controlAspect > imageAspect)
+            {
+                viewHeight = _descriptor.Height * 1.05;
+                viewWidth = viewHeight * controlAspect;
+            }
+            else
+            {
+                viewWidth = _descriptor.Width * 1.05;
+                viewHeight = viewWidth / Math.Max(controlAspect, 0.0001);
+            }
+
+            var viewLeft = (_descriptor.Width - viewWidth) / 2;
+            var viewTop = (_descriptor.Height - viewHeight) / 2;
+            var changed = SetView(viewLeft, viewTop, viewWidth, viewHeight);
+            RememberViewport(width, height);
+            return changed;
+        }
+
+        private bool ResizeManualViewKeepingZoom(double width, double height)
+        {
+            if (_viewWidth <= 0 || _viewHeight <= 0)
+            {
+                return MatchManualViewToViewportAspect(width, height);
+            }
+
+            var zoom = _lastViewportWidth > 0 ? _lastViewportWidth / _viewWidth : 0;
+            if (zoom <= 0 || double.IsNaN(zoom) || double.IsInfinity(zoom))
+            {
+                return MatchManualViewToViewportAspect(width, height);
+            }
+
+            var centerX = _viewLeft + (_viewWidth / 2);
+            var centerY = _viewTop + (_viewHeight / 2);
+            var viewWidth = width / zoom;
+            var viewHeight = height / zoom;
+            return SetView(
+                centerX - (viewWidth / 2),
+                centerY - (viewHeight / 2),
+                viewWidth,
+                viewHeight);
+        }
+
+        private bool MatchManualViewToViewportAspect(double width, double height)
+        {
             if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
             {
+                return false;
+            }
+
+            var centerX = _viewLeft + (_viewWidth / 2);
+            var centerY = _viewTop + (_viewHeight / 2);
+            var viewHeight = _viewWidth / Math.Max(width / height, 0.0001);
+            return SetView(
+                centerX - (_viewWidth / 2),
+                centerY - (viewHeight / 2),
+                _viewWidth,
+                viewHeight);
+        }
+
+        private bool SetView(double left, double top, double width, double height)
+        {
+            var changed = !NearlyEqual(_viewLeft, left)
+                || !NearlyEqual(_viewTop, top)
+                || !NearlyEqual(_viewWidth, width)
+                || !NearlyEqual(_viewHeight, height);
+            _viewLeft = left;
+            _viewTop = top;
+            _viewWidth = width;
+            _viewHeight = height;
+            return changed;
+        }
+
+        private void SetManualViewModeFromCurrentViewport()
+        {
+            double width;
+            double height;
+            if (TryGetViewportSize(out width, out height))
+            {
+                SetManualViewMode(width, height);
                 return;
             }
 
-            var centerY = _viewTop + (_viewHeight / 2);
-            _viewHeight = _viewWidth / Math.Max(width / height, 0.0001);
-            _viewTop = centerY - (_viewHeight / 2);
-            RaiseViewChangedNow();
+            _initialFitPending = false;
+            _viewMode = RawOpenGlViewMode.Manual;
+        }
+
+        private void SetManualViewMode(double width, double height)
+        {
+            _initialFitPending = false;
+            _viewMode = RawOpenGlViewMode.Manual;
+            RememberViewport(width, height);
+        }
+
+        private void RememberViewport(double width, double height)
+        {
+            _lastViewportWidth = width;
+            _lastViewportHeight = height;
+        }
+
+        private bool ViewportChanged(double width, double height)
+        {
+            return !NearlyEqual(_lastViewportWidth, width) || !NearlyEqual(_lastViewportHeight, height);
+        }
+
+        private bool ViewMatchesViewportAspect(double width, double height)
+        {
+            if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            {
+                return false;
+            }
+
+            var viewportAspect = width / height;
+            var viewAspect = _viewWidth / _viewHeight;
+            return Math.Abs(viewAspect - viewportAspect) / Math.Max(viewportAspect, 0.0001) <= 0.000001;
+        }
+
+        private static bool NearlyEqual(double left, double right)
+        {
+            return Math.Abs(left - right) <= Math.Max(0.000001, Math.Max(Math.Abs(left), Math.Abs(right)) * 0.0000001);
         }
 
         private Point ScreenToImage(Point screenPoint)
         {
-            var x = _viewLeft + (screenPoint.X / Math.Max(ViewportWidth, 1) * _viewWidth);
-            var y = _viewTop + (screenPoint.Y / Math.Max(ViewportHeight, 1) * _viewHeight);
+            double width;
+            double height;
+            if (!TryGetViewportSize(out width, out height))
+            {
+                width = 1;
+                height = 1;
+            }
+
+            return ScreenToImage(screenPoint, width, height);
+        }
+
+        private Point ScreenToImage(Point screenPoint, double width, double height)
+        {
+            var x = _viewLeft + (screenPoint.X / Math.Max(width, 1) * _viewWidth);
+            var y = _viewTop + (screenPoint.Y / Math.Max(height, 1) * _viewHeight);
             return new Point(x, y);
         }
 
@@ -1110,9 +1282,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private int GetTextureSampleStep()
         {
-            var width = ViewportWidth;
-            var height = ViewportHeight;
-            if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            double width;
+            double height;
+            if (!TryGetViewportSize(out width, out height) || _viewWidth <= 0 || _viewHeight <= 0)
             {
                 return 1;
             }
@@ -1131,9 +1303,9 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private int GetProgressiveSampleStep()
         {
-            var width = ViewportWidth;
-            var height = ViewportHeight;
-            if (width <= 0 || height <= 0 || _viewWidth <= 0 || _viewHeight <= 0)
+            double width;
+            double height;
+            if (!TryGetViewportSize(out width, out height) || _viewWidth <= 0 || _viewHeight <= 0)
             {
                 return 1;
             }
@@ -1911,8 +2083,15 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return false;
             }
 
-            var cellWidth = ViewportWidth / _viewWidth;
-            var cellHeight = ViewportHeight / _viewHeight;
+            double viewportWidth;
+            double viewportHeight;
+            if (!TryGetViewportSize(out viewportWidth, out viewportHeight))
+            {
+                return false;
+            }
+
+            var cellWidth = viewportWidth / _viewWidth;
+            var cellHeight = viewportHeight / _viewHeight;
             return Math.Min(cellWidth, cellHeight) >= PixelGridOverlayMinCellSize;
         }
 
@@ -1955,22 +2134,35 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.End();
             gl.Disable(OpenGL.GL_BLEND);
 
-            var viewportHeight = (int)Math.Max(1, ViewportHeight);
+            double viewportWidth;
+            double viewportHeightValue;
+            if (!TryGetViewportSize(out viewportWidth, out viewportHeightValue))
+            {
+                return;
+            }
+
+            var viewportHeight = (int)Math.Max(1, viewportHeightValue);
             for (var y = startY; y <= endY; y++)
             {
                 for (var x = startX; x <= endX; x++)
                 {
-                    DrawPixelValueText(gl, x, y, viewportHeight);
+                    DrawPixelValueText(gl, x, y, viewportWidth, viewportHeightValue, viewportHeight);
                 }
             }
         }
 
-        private void DrawPixelValueText(OpenGL gl, int x, int y, int viewportHeight)
+        private void DrawPixelValueText(
+            OpenGL gl,
+            int x,
+            int y,
+            double viewportWidth,
+            double viewportHeightValue,
+            int viewportHeight)
         {
-            var left = (x - _viewLeft) / _viewWidth * ViewportWidth;
-            var top = (y - _viewTop) / _viewHeight * ViewportHeight;
-            var cellWidth = ViewportWidth / _viewWidth;
-            var cellHeight = ViewportHeight / _viewHeight;
+            var left = (x - _viewLeft) / _viewWidth * viewportWidth;
+            var top = (y - _viewTop) / _viewHeight * viewportHeightValue;
+            var cellWidth = viewportWidth / _viewWidth;
+            var cellHeight = viewportHeightValue / _viewHeight;
             var fontSize = Math.Min(16.0f, Math.Max(10.0f, (float)(Math.Min(cellWidth, cellHeight) * 0.26)));
             var lines = GetPixelGridOverlayLines(x, y);
             var lineHeight = (int)Math.Ceiling(fontSize + 3);
@@ -2053,7 +2245,14 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return;
             }
 
-            var radius = Math.Max(_viewWidth / Math.Max(ViewportWidth, 1), _viewHeight / Math.Max(ViewportHeight, 1)) * 10.0;
+            double viewportWidth;
+            double viewportHeight;
+            if (!TryGetViewportSize(out viewportWidth, out viewportHeight))
+            {
+                return;
+            }
+
+            var radius = Math.Max(_viewWidth / viewportWidth, _viewHeight / viewportHeight) * 10.0;
             radius = Math.Max(radius, 1.0);
 
             gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);

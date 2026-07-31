@@ -9,6 +9,7 @@ using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using OpenCvSharp;
 using RawBufferVisualizer.BitmapAdapter;
 using RawBufferVisualizer.Core;
@@ -73,6 +74,9 @@ namespace RawBufferVisualizer.Tests
                 VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
                 VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance();
+                VisualizerHandoffInboxPublishesRequestsAtomically();
+                VisualizerHandoffInboxClaimsRequestExactlyOnce();
+                VisualizerHandoffInboxTracksExplicitCompletion();
                 VisualizerSupportReportContainsActionableContextWithoutImageData();
                 VisualStudioTempStoreDeletesOwnedSnapshotDirectories();
                 VisualStudioTempStoreReportsRootByteCount();
@@ -98,6 +102,8 @@ namespace RawBufferVisualizer.Tests
                 VisionInferenceHidesLowConfidenceShape();
                 TypeMappingReadsOneLevelNestedMemberPaths();
                 AutomaticInspectionPreferencesTests.RunAll();
+                AutomaticImageCollectionPolicyTests.RunAll();
+                ReleaseAnnouncementTests.RunAll();
                 IndustrialCameraContractTests.RunAll();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;
@@ -1558,6 +1564,14 @@ namespace RawBufferVisualizer.Tests
                 Assert(typedArrayView.Summary.TotalCount == 1, "Typed OpenCvSharp array count failed.");
                 Assert(typedArrayView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed OpenCvSharp array transfer failed.");
 
+                var bitmapArrayView = ImageCollectionVisualizerTransfer.CreateView(new[] { bitmap });
+                Assert(bitmapArrayView.Summary.TotalCount == 1, "Typed Bitmap array count failed.");
+                Assert(bitmapArrayView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Bitmap array transfer failed.");
+
+                var emguArrayView = ImageCollectionVisualizerTransfer.CreateView(new[] { emguMat });
+                Assert(emguArrayView.Summary.TotalCount == 1, "Typed Emgu CV array count failed.");
+                Assert(emguArrayView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Emgu CV array transfer failed.");
+
                 var dictionaryView = ImageCollectionVisualizerTransfer.CreateView(
                     new Dictionary<string, object>
                     {
@@ -1809,6 +1823,533 @@ namespace RawBufferVisualizer.Tests
                     Directory.Delete(secondInbox, true);
                 }
             }
+        }
+
+        private static void VisualizerHandoffInboxPublishesRequestsAtomically()
+        {
+            var visualStudioProcessId = CreateVisualizerTestProcessId();
+            var inboxDirectory = VisualizerHandoffInbox.GetInboxDirectory(visualStudioProcessId);
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var requestPaths = new List<string>();
+            var observed = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var observerErrors = new List<Exception>();
+            var stopObserver = 0;
+            var observerReady = new ManualResetEventSlim(false);
+            try
+            {
+                Directory.CreateDirectory(directory);
+                Directory.CreateDirectory(inboxDirectory);
+                var metadataPath = Path.Combine(directory, "atomic.rbuf.json");
+                File.WriteAllText(metadataPath, "{}");
+
+                var observer = Task.Run(() =>
+                {
+                    observerReady.Set();
+                    while (Volatile.Read(ref stopObserver) == 0)
+                    {
+                        try
+                        {
+                            foreach (var path in Directory.GetFiles(
+                                inboxDirectory,
+                                "*.rbuf-handoff",
+                                SearchOption.TopDirectoryOnly))
+                            {
+                                if (observed.Add(path))
+                                {
+                                    ReadPublishedHandoffWithRetry(path);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            lock (observerErrors)
+                            {
+                                observerErrors.Add(ex);
+                            }
+                        }
+
+                        Thread.Yield();
+                    }
+                });
+                observerReady.Wait();
+
+                const int writerCount = 8;
+                const int requestsPerWriter = 8;
+                var writers = new Task[writerCount];
+                for (var writerIndex = 0; writerIndex < writerCount; writerIndex++)
+                {
+                    writers[writerIndex] = Task.Run(() =>
+                    {
+                        for (var requestIndex = 0; requestIndex < requestsPerWriter; requestIndex++)
+                        {
+                            var path = VisualizerHandoffInbox.WriteSnapshotRequest(
+                                visualStudioProcessId,
+                                metadataPath,
+                                "atomic",
+                                "test",
+                                Guid.NewGuid().ToString("N"));
+                            lock (requestPaths)
+                            {
+                                requestPaths.Add(path);
+                            }
+                        }
+                    });
+                }
+
+                Task.WaitAll(writers);
+                Volatile.Write(ref stopObserver, 1);
+                observer.Wait();
+
+                Assert(
+                    requestPaths.Count == writerCount * requestsPerWriter,
+                    "Atomic handoff publish did not create every request.");
+                Assert(
+                    observerErrors.Count == 0,
+                    "A published handoff could not be read and parsed after retry. "
+                    + (observerErrors.Count == 0
+                        ? string.Empty
+                        : observerErrors[0].GetType().Name
+                            + ": "
+                            + observerErrors[0].Message));
+                Assert(
+                    observed.Count > 0,
+                    "The atomic handoff observer did not run concurrently with publication.");
+                Assert(
+                    Directory.GetFiles(
+                        inboxDirectory,
+                        "*.publishing.*",
+                        SearchOption.TopDirectoryOnly).Length == 0,
+                    "Atomic handoff publish left temporary files behind.");
+                foreach (var requestPath in requestPaths)
+                {
+                    var request = VisualizerHandoffInbox.ReadSnapshotRequestInfo(requestPath);
+                    Assert(
+                        request.MetadataPath == Path.GetFullPath(metadataPath),
+                        "Atomically published handoff content did not roundtrip.");
+                }
+            }
+            finally
+            {
+                Volatile.Write(ref stopObserver, 1);
+                observerReady.Dispose();
+                foreach (var requestPath in requestPaths)
+                {
+                    VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                }
+
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+
+                if (Directory.Exists(inboxDirectory))
+                {
+                    Directory.Delete(inboxDirectory, true);
+                }
+            }
+        }
+
+        private static void ReadPublishedHandoffWithRetry(string requestPath)
+        {
+            const int attemptCount = 10;
+            const int retryDelayMilliseconds = 50;
+            Exception? last = null;
+            for (var attempt = 0; attempt < attemptCount; attempt++)
+            {
+                try
+                {
+                    VisualizerHandoffInbox.ReadSnapshotRequestInfo(requestPath);
+                    return;
+                }
+                catch (Exception ex) when (
+                    ex is IOException
+                    || ex is UnauthorizedAccessException)
+                {
+                    last = ex;
+                    if (attempt + 1 < attemptCount)
+                    {
+                        Thread.Sleep(retryDelayMilliseconds);
+                    }
+                }
+            }
+
+            throw last ?? new IOException("Published handoff request could not be read.");
+        }
+
+        private static void VisualizerHandoffInboxClaimsRequestExactlyOnce()
+        {
+            var visualStudioProcessId = CreateVisualizerTestProcessId();
+            var inboxDirectory = VisualizerHandoffInbox.GetInboxDirectory(visualStudioProcessId);
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            string? requestPath = null;
+            string? successfulProcessingPath = null;
+            var successCount = 0;
+            var gate = new ManualResetEventSlim(false);
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "claim.rbuf.json");
+                File.WriteAllText(metadataPath, "{}");
+                requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                    visualStudioProcessId,
+                    metadataPath,
+                    "claim",
+                    "test");
+
+                const int claimantCount = 32;
+                var claimants = new Task[claimantCount];
+                for (var claimantIndex = 0; claimantIndex < claimantCount; claimantIndex++)
+                {
+                    claimants[claimantIndex] = Task.Run(() =>
+                    {
+                        gate.Wait();
+                        string processingPath;
+                        if (VisualizerHandoffInbox.TryClaimRequest(
+                                requestPath,
+                                out processingPath))
+                        {
+                            Interlocked.Increment(ref successCount);
+                            lock (gate)
+                            {
+                                successfulProcessingPath = processingPath;
+                            }
+                        }
+                    });
+                }
+
+                gate.Set();
+                Task.WaitAll(claimants);
+
+                Assert(
+                    successCount == 1,
+                    "Exactly one concurrent handoff claimant must succeed, but "
+                    + successCount
+                    + " succeeded.");
+                Assert(
+                    !string.IsNullOrWhiteSpace(successfulProcessingPath)
+                    && File.Exists(successfulProcessingPath),
+                    "The winning handoff claim did not own a processing file.");
+                Assert(!File.Exists(requestPath), "Claimed handoff remained visible as ready.");
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(requestPath)
+                        == VisualizerHandoffRequestState.Processing,
+                    "Claimed handoff did not report Processing state.");
+                var claimedRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(
+                    successfulProcessingPath!);
+                Assert(
+                    claimedRequest.MetadataPath == Path.GetFullPath(metadataPath),
+                    "Claimed handoff content was not preserved.");
+            }
+            finally
+            {
+                gate.Dispose();
+                if (!string.IsNullOrWhiteSpace(requestPath))
+                {
+                    VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath!);
+                }
+
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+
+                if (Directory.Exists(inboxDirectory))
+                {
+                    Directory.Delete(inboxDirectory, true);
+                }
+            }
+        }
+
+        private static void VisualizerHandoffInboxTracksExplicitCompletion()
+        {
+            var visualStudioProcessId = CreateVisualizerTestProcessId();
+            var inboxDirectory = VisualizerHandoffInbox.GetInboxDirectory(visualStudioProcessId);
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            var requestPaths = new List<string>();
+            string? lateAcknowledgementTransitionPath = null;
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "completion.rbuf.json");
+                File.WriteAllText(metadataPath, "{}");
+
+                var acknowledgedRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                    visualStudioProcessId,
+                    metadataPath,
+                    "ack",
+                    "test");
+                requestPaths.Add(acknowledgedRequestPath);
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(acknowledgedRequestPath)
+                        == VisualizerHandoffRequestState.Ready,
+                    "New handoff did not report Ready state.");
+
+                string acknowledgedProcessingPath;
+                Assert(
+                    VisualizerHandoffInbox.TryClaimRequest(
+                        acknowledgedRequestPath,
+                        out acknowledgedProcessingPath),
+                    "Acknowledgement test could not claim its handoff.");
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(acknowledgedRequestPath)
+                        == VisualizerHandoffRequestState.Processing,
+                    "Disappearance of the ready file must not count as acknowledgement.");
+                Assert(
+                    VisualizerHandoffInbox.TryAcknowledgeRequest(
+                        acknowledgedRequestPath,
+                        acknowledgedProcessingPath),
+                    "Claimed handoff could not publish acknowledgement.");
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(acknowledgedRequestPath)
+                        == VisualizerHandoffRequestState.Acknowledged,
+                    "Acknowledged handoff did not report Acknowledged state.");
+                Assert(
+                    File.Exists(VisualizerHandoffInbox.GetAcknowledgementPath(
+                        acknowledgedRequestPath)),
+                    "Acknowledgement marker was not published.");
+
+                var rejectedRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
+                    visualStudioProcessId,
+                    metadataPath,
+                    "nack",
+                    "test");
+                requestPaths.Add(rejectedRequestPath);
+                string rejectedProcessingPath;
+                Assert(
+                    VisualizerHandoffInbox.TryClaimRequest(
+                        rejectedRequestPath,
+                        out rejectedProcessingPath),
+                    "Rejection test could not claim its handoff.");
+                var rejectionObservedWithReason = false;
+                var observedRejectionReason = string.Empty;
+                var rejectionObserver = Task.Run(() =>
+                {
+                    var deadline = DateTime.UtcNow.AddSeconds(5);
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        if (VisualizerHandoffInbox.GetRequestState(rejectedRequestPath)
+                            == VisualizerHandoffRequestState.Rejected)
+                        {
+                            rejectionObservedWithReason =
+                                VisualizerHandoffInbox.TryReadRejectionReason(
+                                    rejectedRequestPath,
+                                    out observedRejectionReason);
+                            return;
+                        }
+
+                        Thread.Yield();
+                    }
+                });
+                var processingLock = new FileStream(
+                    rejectedProcessingPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.None);
+                var releaseProcessingLock = Task.Run(() =>
+                {
+                    Thread.Sleep(150);
+                    processingLock.Dispose();
+                });
+                Assert(
+                    VisualizerHandoffInbox.TryRejectRequest(
+                        rejectedRequestPath,
+                        rejectedProcessingPath,
+                        "The image document could not be created."),
+                    "Claimed handoff could not publish rejection.");
+                releaseProcessingLock.Wait();
+                rejectionObserver.Wait();
+                Assert(
+                    rejectionObservedWithReason
+                    && observedRejectionReason
+                        == "The image document could not be created.",
+                    "A visible NACK marker must always have its rejection reason available.");
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(rejectedRequestPath)
+                        == VisualizerHandoffRequestState.Rejected,
+                    "Rejected handoff did not report Rejected state.");
+                string rejectionReason;
+                Assert(
+                    VisualizerHandoffInbox.TryReadRejectionReason(
+                        rejectedRequestPath,
+                        out rejectionReason)
+                    && rejectionReason == "The image document could not be created.",
+                    "Rejected handoff reason did not roundtrip.");
+
+                var delayedCleanupRequestPath =
+                    VisualizerHandoffInbox.WriteSnapshotRequest(
+                        visualStudioProcessId,
+                        metadataPath,
+                        "delayed-cleanup",
+                        "test");
+                requestPaths.Add(delayedCleanupRequestPath);
+                string delayedCleanupProcessingPath;
+                Assert(
+                    VisualizerHandoffInbox.TryClaimRequest(
+                        delayedCleanupRequestPath,
+                        out delayedCleanupProcessingPath)
+                    && VisualizerHandoffInbox.TryAcknowledgeRequest(
+                        delayedCleanupRequestPath,
+                        delayedCleanupProcessingPath),
+                    "Delayed cleanup test could not publish acknowledgement.");
+                VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                    new[] { delayedCleanupRequestPath },
+                    TimeSpan.FromSeconds(2));
+                Assert(
+                    SpinWait.SpinUntil(
+                        () => VisualizerHandoffInbox.GetRequestState(
+                            delayedCleanupRequestPath)
+                            == VisualizerHandoffRequestState.Missing,
+                        3000),
+                    "Delayed cleanup did not remove a terminal handoff.");
+
+                var lockedCleanupRequestPath =
+                    VisualizerHandoffInbox.WriteSnapshotRequest(
+                        visualStudioProcessId,
+                        metadataPath,
+                        "locked-delayed-cleanup",
+                        "test");
+                requestPaths.Add(lockedCleanupRequestPath);
+                string lockedCleanupProcessingPath;
+                Assert(
+                    VisualizerHandoffInbox.TryClaimRequest(
+                        lockedCleanupRequestPath,
+                        out lockedCleanupProcessingPath)
+                    && VisualizerHandoffInbox.TryAcknowledgeRequest(
+                        lockedCleanupRequestPath,
+                        lockedCleanupProcessingPath),
+                    "Locked delayed cleanup test could not publish acknowledgement.");
+                var lockedAcknowledgementPath =
+                    VisualizerHandoffInbox.GetAcknowledgementPath(
+                        lockedCleanupRequestPath);
+                using (var acknowledgementLock = new FileStream(
+                    lockedAcknowledgementPath,
+                    FileMode.Open,
+                    FileAccess.Read,
+                    FileShare.Read))
+                {
+                    VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                        new[] { lockedCleanupRequestPath },
+                        TimeSpan.FromSeconds(2));
+                    Thread.Sleep(300);
+                    Assert(
+                        File.Exists(lockedAcknowledgementPath),
+                        "The locked acknowledgement unexpectedly disappeared.");
+                }
+
+                Assert(
+                    SpinWait.SpinUntil(
+                        () => VisualizerHandoffInbox.GetRequestState(
+                            lockedCleanupRequestPath)
+                            == VisualizerHandoffRequestState.Missing,
+                        3000),
+                    "Delayed cleanup did not retry a temporarily locked acknowledgement.");
+
+                var lateAcknowledgementRequestPath =
+                    VisualizerHandoffInbox.WriteSnapshotRequest(
+                        visualStudioProcessId,
+                        metadataPath,
+                        "late-acknowledgement-cleanup",
+                        "test");
+                requestPaths.Add(lateAcknowledgementRequestPath);
+                string lateAcknowledgementProcessingPath;
+                Assert(
+                    VisualizerHandoffInbox.TryClaimRequest(
+                        lateAcknowledgementRequestPath,
+                        out lateAcknowledgementProcessingPath),
+                    "Late acknowledgement cleanup test could not claim its request.");
+                lateAcknowledgementTransitionPath = Path.Combine(
+                    inboxDirectory,
+                    Guid.NewGuid().ToString("N") + ".transition");
+                File.Move(
+                    lateAcknowledgementProcessingPath,
+                    lateAcknowledgementTransitionPath);
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(
+                        lateAcknowledgementRequestPath)
+                        == VisualizerHandoffRequestState.Missing,
+                    "Late acknowledgement test did not create the intended transient Missing state.");
+                VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                    new[] { lateAcknowledgementRequestPath },
+                    TimeSpan.FromSeconds(2));
+                var publishLateAcknowledgement = Task.Run(() =>
+                {
+                    Thread.Sleep(50);
+                    File.Move(
+                        lateAcknowledgementTransitionPath,
+                        VisualizerHandoffInbox.GetAcknowledgementPath(
+                            lateAcknowledgementRequestPath));
+                    lateAcknowledgementTransitionPath = null;
+                });
+                publishLateAcknowledgement.Wait();
+                Assert(
+                    SpinWait.SpinUntil(
+                        () => VisualizerHandoffInbox.GetRequestState(
+                            lateAcknowledgementRequestPath)
+                            == VisualizerHandoffRequestState.Missing,
+                        3000),
+                    "Delayed cleanup abandoned an acknowledgement after transient Missing.");
+
+                var readyCleanupBoundaryRequestPath =
+                    VisualizerHandoffInbox.WriteSnapshotRequest(
+                        visualStudioProcessId,
+                        metadataPath,
+                        "ready-cleanup-boundary",
+                        "test");
+                requestPaths.Add(readyCleanupBoundaryRequestPath);
+                VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                    new[] { readyCleanupBoundaryRequestPath },
+                    TimeSpan.FromMilliseconds(200));
+                Thread.Sleep(400);
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(
+                        readyCleanupBoundaryRequestPath)
+                        == VisualizerHandoffRequestState.Ready,
+                    "Delayed terminal cleanup must not delete a Ready handoff.");
+
+                foreach (var requestPath in requestPaths)
+                {
+                    VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                    Assert(
+                        VisualizerHandoffInbox.GetRequestState(requestPath)
+                            == VisualizerHandoffRequestState.Missing,
+                        "Handoff cleanup left protocol artifacts behind.");
+                    Assert(
+                        Directory.GetFiles(
+                            Path.GetDirectoryName(requestPath)!,
+                            Path.GetFileName(requestPath) + "*",
+                            SearchOption.TopDirectoryOnly).Length == 0,
+                        "Handoff cleanup left an orphaned protocol file behind.");
+                }
+            }
+            finally
+            {
+                if (!string.IsNullOrWhiteSpace(
+                        lateAcknowledgementTransitionPath)
+                    && File.Exists(lateAcknowledgementTransitionPath))
+                {
+                    File.Delete(lateAcknowledgementTransitionPath);
+                }
+
+                foreach (var requestPath in requestPaths)
+                {
+                    VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                }
+
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+
+                if (Directory.Exists(inboxDirectory))
+                {
+                    Directory.Delete(inboxDirectory, true);
+                }
+            }
+        }
+
+        private static int CreateVisualizerTestProcessId()
+        {
+            return 1000000000 + (Guid.NewGuid().GetHashCode() & 0x3fffffff);
         }
 
         private static void VisualizerSupportReportContainsActionableContextWithoutImageData()

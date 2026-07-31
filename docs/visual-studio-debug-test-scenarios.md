@@ -18,6 +18,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 
 The debuggee prints the variable name before each `Debugger.Break()` call.
 
+Visual Studio stops before executing the highlighted breakpoint statement. Do not place an automatic-inspection breakpoint on the image construction/assignment line; stop on the next executable line so the variable is initialized.
+
 ## Required Cases
 
 | Step | Watch Expression | Expected Visualizer Result |
@@ -62,6 +64,50 @@ The debuggee prints the variable name before each `Debugger.Break()` call.
 
 For SDK-style objects, the visualizer target is the `RawBufferView` property, so add the exact `.View` expression to Watch when the visualizer icon is not shown directly on the parent object.
 
+## Automatic Inspector 1.0.50 Scenario
+
+Run the installed debuggee with `--multi-library-debug`, or use the installed-VSIX automation:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 `
+  -Scenario MultiLibraryHybrid `
+  -Configuration Release `
+  -NoBuild `
+  -NoInstall
+```
+
+Expected at the initialized breakpoint:
+
+1. **Auto Inspect on Break** opens exact OpenCvSharp `Mat` and Emgu CV `Mat` values through live process memory.
+2. The camera-wrapper fixtures also open automatically; status is `8 detected: 8 opened, 0 need mapping, 0 failed.`
+3. **Scan Now** refreshes the same eight automatic rows without duplication.
+4. `System.Drawing.Bitmap` does not create an automatic row. Click its registered visualizer glyph.
+5. Final state is nine documents and zero errors.
+6. `RawBufferSnapshot` and `RawBufferView` remain registered-path owned.
+
+OpenCvSharp/Emgu automatic capture supports fixed metadata for `8U C1/C3/C4`, `16U C1`, and `32F C1`. Bitmap remains glyph-only because Automatic Inspector does not inject a `LockBits`/`UnlockBits` lifecycle into the debuggee.
+
+## Automatic Mat Collections Scenario
+
+Run only after unlocking the interactive Windows desktop:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 `
+  -Scenario AutomaticCollections `
+  -Configuration Release
+```
+
+The script backs up and restores the current Automatic Inspector preference file, enables collection inspection for the isolated session, installs the current VSIX, and stops at `--automatic-collections-debug`.
+
+Expected:
+
+1. `partialOpenCvMatList` produces five indexed rows: three `[Auto]` and two `[Failed]` for the null/disposed elements.
+2. `emguMatArray` produces two `[Auto]` rows.
+3. Overall status is seven detected, five opened, zero mapping candidates, and two failed.
+4. The per-collection status reports `5 inspected, 3 opened, 2 failed` and `2 inspected, 2 opened`.
+5. A second **Scan Now** leaves seven rows and two errors without duplication.
+6. The persisted collection option is restored enabled inside the test session, then the pre-test user settings file is restored during cleanup.
+
 ## UI Checks
 
 - The Visual Studio docked visualizer shows the image list, source type, dimensions, pixel format, byte count, diagnostics, and generated metadata path.
@@ -69,11 +115,13 @@ For SDK-style objects, the visualizer target is the `RawBufferView` property, so
 - Repeated inspections append rows to the same docked `Images` list instead of opening separate standalone windows.
 - `Images` rows show thumbnails and can be clicked comfortably.
 - The descriptor fields are read-only display text.
-- Mouse wheel zoom, drag pan, `Fit`, `1:1`, descriptor, and diagnostics work in the docked Visual Studio view.
+- A new/selected image, `Fit`, and viewer double-click enter Fit mode. Resize remains aspect-correct with the Fit margin intact.
+- Mouse wheel zoom, drag pan, and `1:1` enter Manual mode; resize preserves the manual zoom and image center.
 - Pixel hover shows coordinate, decoded value, raw bytes, 5x5 neighborhood, and line profile.
 - `Interpret` can change format, stride, valid bits, and byte order without editing source code.
 - `Compare` can set A/B, use linked pan/zoom, create a diff view, and blink between A and B.
 - A failed open or malformed descriptor remains visible in `Images` as an error row and shows the reason in diagnostics.
+- The View menu contains exactly one `Raw Buffer Visualizer` and one `Raw Buffer Visualizer: Scan Current Frame` command.
 
 ## Failure Checks
 
@@ -85,7 +133,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 ```
 
 3. Reopen Visual Studio and inspect a supported variable.
-4. Expected: the docked visualizer opens without requiring `RAW_BUFFER_VISUALIZER_VIEWER`.
+4. Expected: the docked visualizer opens without requiring `RAW_BUFFER_VISUALIZER_VIEWER`; the producer receives explicit ACK only after the document opens.
+5. Force or inspect an open failure when practical. Expected: the producer receives NACK with a readable rejection reason rather than treating request-file disappearance as success.
 
 ## Evidence To Capture
 
@@ -93,4 +142,6 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension
 - One screenshot of the same docked visualizer with at least two images in the `Images` list.
 - One screenshot showing pixel hover text and zoom percentage.
 - One screenshot showing the Inspector with diagnostics or Try interpretation.
+- `MultiLibraryHybrid-installed-vsix.json` showing View-menu counts 1/1, automatic status 8/8, nine documents, and zero errors.
+- The exact VSIX SHA-256, Visual Studio/Windows versions, `package.log`, and relevant `ActivityLog.xml`.
 - One note for any unsupported SDK type, including the exact .NET type full name and SDK version.

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using Microsoft.VisualStudio.Shell;
+using RawBufferVisualizer.VisualStudio;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
@@ -12,7 +13,43 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public int LocalExpressionCount { get; set; }
         public int ArgumentExpressionCount { get; set; }
         public int DuplicateExpressionCount { get; set; }
+        public int SkippedCollectionRootCount { get; set; }
         public List<AutomaticVisionInspection> Inspections { get; } = new List<AutomaticVisionInspection>();
+        public List<AutomaticCollectionScanSummary> CollectionSummaries { get; } =
+            new List<AutomaticCollectionScanSummary>();
+
+        public AutomaticCollectionScanSummary? FindCollectionSummary(string rootExpression)
+        {
+            if (string.IsNullOrWhiteSpace(rootExpression))
+            {
+                return null;
+            }
+
+            for (var index = 0; index < CollectionSummaries.Count; index++)
+            {
+                if (string.Equals(
+                    CollectionSummaries[index].RootExpression,
+                    rootExpression,
+                    StringComparison.Ordinal))
+                {
+                    return CollectionSummaries[index];
+                }
+            }
+
+            return null;
+        }
+    }
+
+    internal sealed class AutomaticCollectionScanSummary
+    {
+        public string RootExpression { get; set; } = string.Empty;
+        public int TotalCount { get; set; }
+        public int ScheduledCount { get; set; }
+        public int TruncatedCount { get; set; }
+        public string ScanError { get; set; } = string.Empty;
+        public int OpenedCount { get; set; }
+        public int MappingCount { get; set; }
+        public int FailedCount { get; set; }
     }
 
     internal sealed class AutomaticVisionInspection
@@ -24,6 +61,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public VisionMemberInferenceResult Inference { get; set; } = new VisionMemberInferenceResult();
         public TypeMapping? Mapping { get; set; }
         public bool UsesSavedMapping { get; set; }
+        public AutomaticKnownImageKind KnownImageKind { get; set; }
+        public string CollectionRootExpression { get; set; } = string.Empty;
+        public string PreflightError { get; set; } = string.Empty;
 
         public string StableKey
         {
@@ -67,6 +107,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public string GetMembersSummary()
         {
+            if (KnownImageKind == AutomaticKnownImageKind.OpenCvSharpMat)
+            {
+                return "Data=Data\nWidth=Cols, Height=Rows\nStride=Step(), Format=Depth()/Channels()";
+            }
+
+            if (KnownImageKind == AutomaticKnownImageKind.EmguCvMat)
+            {
+                return "Data=DataPointer\nWidth=Cols, Height=Rows\nStride=Step, Format=Depth/NumberOfChannels";
+            }
+
             var members = Mapping == null ? Inference.Members : Mapping.Members;
             return string.Format(
                 CultureInfo.InvariantCulture,
@@ -107,8 +157,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     {
         private const int MaxMembersPerLocal = 128;
         private const int MaxNestedMembersPerLocal = 64;
+        private const int CollectionExpressionTimeoutMilliseconds = 500;
+
+        private sealed class AutomaticCollectionScanBudget
+        {
+            public int RemainingItems { get; set; } =
+                AutomaticImageCollectionPolicy.MaximumItemsPerScan;
+
+            public int RemainingRoots { get; set; } =
+                AutomaticImageCollectionPolicy.MaximumCollectionRootsPerScan;
+        }
 
         public AutomaticVisionScanResult Scan(EnvDTE.Debugger debugger)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            return Scan(debugger, false);
+        }
+
+        public AutomaticVisionScanResult Scan(
+            EnvDTE.Debugger debugger,
+            bool includeImageCollections)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             var result = new AutomaticVisionScanResult();
@@ -134,6 +202,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             result.FrameDisplayName = GetFrameDisplayName(frame);
             var seenExpressions = new HashSet<string>(StringComparer.Ordinal);
+            var collectionBudget = new AutomaticCollectionScanBudget();
             EnvDTE.Expressions? locals = null;
             try
             {
@@ -147,7 +216,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (locals != null)
             {
                 result.LocalExpressionCount = GetExpressionCount(locals);
-                ScanExpressions(result, locals, result.LocalExpressionCount, seenExpressions);
+                ScanExpressions(
+                    debugger,
+                    result,
+                    locals,
+                    result.LocalExpressionCount,
+                    seenExpressions,
+                    includeImageCollections,
+                    collectionBudget);
             }
 
             EnvDTE.Expressions? arguments = null;
@@ -163,17 +239,27 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (arguments != null)
             {
                 result.ArgumentExpressionCount = GetExpressionCount(arguments);
-                ScanExpressions(result, arguments, result.ArgumentExpressionCount, seenExpressions);
+                ScanExpressions(
+                    debugger,
+                    result,
+                    arguments,
+                    result.ArgumentExpressionCount,
+                    seenExpressions,
+                    includeImageCollections,
+                    collectionBudget);
             }
 
             return result;
         }
 
         private static void ScanExpressions(
+            EnvDTE.Debugger debugger,
             AutomaticVisionScanResult result,
             EnvDTE.Expressions expressions,
             int expressionCount,
-            HashSet<string> seenExpressions)
+            HashSet<string> seenExpressions,
+            bool includeImageCollections,
+            AutomaticCollectionScanBudget collectionBudget)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             for (var i = 1; i <= expressionCount; i++)
@@ -206,12 +292,34 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     continue;
                 }
 
+                AutomaticImageCollectionDescriptor collectionDescriptor;
+                if (AutomaticImageCollectionPolicy.TryDescribe(
+                    runtimeTypeName,
+                    out collectionDescriptor))
+                {
+                    if (includeImageCollections)
+                    {
+                        ScanKnownImageCollection(
+                            debugger,
+                            result,
+                            expression,
+                            rootExpression,
+                            runtimeTypeName,
+                            collectionDescriptor,
+                            collectionBudget);
+                    }
+
+                    continue;
+                }
+
                 if (ShouldSkipRootType(runtimeTypeName))
                 {
                     continue;
                 }
 
-                if (KnownImageType.UsesRegisteredVisualizerPath(runtimeTypeName))
+                var knownImageKind = KnownImageType.GetAutomaticCaptureKind(runtimeTypeName);
+                if (KnownImageType.UsesRegisteredVisualizerPath(runtimeTypeName)
+                    && knownImageKind == AutomaticKnownImageKind.None)
                 {
                     RawBufferVisualizerPackageLog.Write(
                         "Automatic scan skipped registered visualizer type " + rootExpression + " (" + runtimeTypeName + ")");
@@ -227,6 +335,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 RawBufferVisualizerPackageLog.Write(
                     "Automatic scan inspecting " + rootExpression + " (" + runtimeTypeName + ")");
+                if (knownImageKind != AutomaticKnownImageKind.None)
+                {
+                    if (IsNullOrUnavailable(expression))
+                    {
+                        RawBufferVisualizerPackageLog.Write(
+                            "Automatic scan skipped uninitialized registered image " + rootExpression);
+                        continue;
+                    }
+
+                    result.Inspections.Add(new AutomaticVisionInspection
+                    {
+                        RootExpression = rootExpression,
+                        RuntimeTypeName = runtimeTypeName,
+                        KnownImageKind = knownImageKind
+                    });
+                    continue;
+                }
+
                 var inventory = BuildInventory(expression);
                 var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(runtimeTypeName);
                 var inference = VisionMemberInference.Infer(inventory, runtimeTypeName);
@@ -246,6 +372,182 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 });
             }
         }
+
+        private static void ScanKnownImageCollection(
+            EnvDTE.Debugger debugger,
+            AutomaticVisionScanResult result,
+            EnvDTE.Expression expression,
+            string rootExpression,
+            string runtimeTypeName,
+            AutomaticImageCollectionDescriptor descriptor,
+            AutomaticCollectionScanBudget budget)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (budget.RemainingRoots <= 0)
+            {
+                result.SkippedCollectionRootCount++;
+                return;
+            }
+
+            budget.RemainingRoots--;
+            var summary = new AutomaticCollectionScanSummary
+            {
+                RootExpression = rootExpression
+            };
+            result.CollectionSummaries.Add(summary);
+
+            if (IsNullOrUnavailable(expression))
+            {
+                AddCollectionPreflightFailure(
+                    result,
+                    summary,
+                    rootExpression,
+                    runtimeTypeName,
+                    "The image collection is null or unavailable.");
+                return;
+            }
+
+            int totalCount;
+            string countError;
+            if (!TryReadCollectionCount(
+                debugger,
+                rootExpression,
+                descriptor.Kind,
+                out totalCount,
+                out countError))
+            {
+                AddCollectionPreflightFailure(
+                    result,
+                    summary,
+                    rootExpression,
+                    runtimeTypeName,
+                    countError);
+                return;
+            }
+
+            summary.TotalCount = totalCount;
+            var scheduledCount = AutomaticImageCollectionPolicy.GetScheduledItemCount(
+                totalCount,
+                budget.RemainingItems);
+            summary.ScheduledCount = scheduledCount;
+            summary.TruncatedCount = Math.Max(0, totalCount - scheduledCount);
+            budget.RemainingItems -= scheduledCount;
+
+            var knownImageKind = KnownImageType.GetAutomaticCaptureKind(
+                descriptor.ElementTypeName);
+            if (knownImageKind == AutomaticKnownImageKind.None)
+            {
+                AddCollectionPreflightFailure(
+                    result,
+                    summary,
+                    rootExpression,
+                    runtimeTypeName,
+                    "The collection element type is not supported by the automatic capture path.");
+                return;
+            }
+
+            RawBufferVisualizerPackageLog.Write(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Automatic scan expanding collection {0} ({1}); {2}/{3} item(s) scheduled",
+                    rootExpression,
+                    runtimeTypeName,
+                    scheduledCount,
+                    totalCount));
+            for (var index = 0; index < scheduledCount; index++)
+            {
+                result.Inspections.Add(new AutomaticVisionInspection
+                {
+                    RootExpression = AutomaticImageCollectionPolicy.CreateElementExpression(
+                        rootExpression,
+                        index),
+                    RuntimeTypeName = descriptor.ElementTypeName,
+                    KnownImageKind = knownImageKind,
+                    CollectionRootExpression = rootExpression
+                });
+            }
+        }
+
+        private static void AddCollectionPreflightFailure(
+            AutomaticVisionScanResult result,
+            AutomaticCollectionScanSummary summary,
+            string rootExpression,
+            string runtimeTypeName,
+            string error)
+        {
+            summary.ScanError = error;
+            result.Inspections.Add(new AutomaticVisionInspection
+            {
+                RootExpression = rootExpression,
+                RuntimeTypeName = runtimeTypeName,
+                CollectionRootExpression = rootExpression,
+                PreflightError = error
+            });
+            RawBufferVisualizerPackageLog.Write(
+                "Automatic collection scan failed " + rootExpression + ": " + error);
+        }
+
+#pragma warning disable VSTHRD010
+        private static bool TryReadCollectionCount(
+            EnvDTE.Debugger debugger,
+            string rootExpression,
+            AutomaticImageCollectionKind collectionKind,
+            out int count,
+            out string error)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            count = 0;
+            error = string.Empty;
+            var memberName = collectionKind == AutomaticImageCollectionKind.OneDimensionalArray
+                ? "Length"
+                : "Count";
+            var countExpression = rootExpression + "." + memberName;
+            try
+            {
+                var expression = debugger.GetExpression(
+                    countExpression,
+                    true,
+                    CollectionExpressionTimeoutMilliseconds);
+                if (expression == null || !expression.IsValidValue)
+                {
+                    error = "Debugger could not evaluate " + countExpression + ".";
+                    return false;
+                }
+
+                var value = ReadExpressionValue(expression).Trim().Trim('{', '}');
+                var equalsIndex = value.LastIndexOf('=');
+                if (equalsIndex >= 0 && equalsIndex + 1 < value.Length)
+                {
+                    value = value.Substring(equalsIndex + 1).Trim();
+                }
+
+                var separatorIndex = value.IndexOfAny(new[] { ' ', '\t', '\r', '\n' });
+                if (separatorIndex >= 0)
+                {
+                    value = value.Substring(0, separatorIndex);
+                }
+
+                if (!int.TryParse(
+                    value,
+                    NumberStyles.Integer,
+                    CultureInfo.InvariantCulture,
+                    out count)
+                    || count < 0)
+                {
+                    error = countExpression + " did not return a non-negative integer.";
+                    count = 0;
+                    return false;
+                }
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = "Debugger evaluation failed for " + countExpression + ": " + ex.Message;
+                return false;
+            }
+        }
+#pragma warning restore VSTHRD010
 
         private static int GetExpressionCount(EnvDTE.Expressions expressions)
         {
@@ -304,6 +606,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 default:
                     return false;
             }
+        }
+
+        private static bool IsNullOrUnavailable(EnvDTE.Expression expression)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var value = ReadExpressionValue(expression).Trim();
+            return string.Equals(value, "null", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "Nothing", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "<unreadable>", StringComparison.OrdinalIgnoreCase)
+                || value.IndexOf("not available", StringComparison.OrdinalIgnoreCase) >= 0
+                || value.IndexOf("not exist", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private static List<VisualizerMemberInventoryItem> BuildInventory(EnvDTE.Expression expression)

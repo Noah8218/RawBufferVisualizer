@@ -3,6 +3,12 @@ using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.OpenGlCanvas
 {
+    public enum RawOpenGlViewMode
+    {
+        Fit,
+        Manual
+    }
+
     public sealed class RawOpenGlPixelEventArgs : EventArgs
     {
         public int X { get; private set; }
@@ -33,8 +39,22 @@ namespace RawBufferVisualizer.OpenGlCanvas
         public double Top { get; private set; }
         public double Width { get; private set; }
         public double Height { get; private set; }
+        public RawOpenGlViewMode Mode { get; private set; }
+        public bool IsFitMode { get { return Mode == RawOpenGlViewMode.Fit; } }
 
         public RawOpenGlViewState(int imageWidth, int imageHeight, double left, double top, double width, double height)
+            : this(imageWidth, imageHeight, left, top, width, height, RawOpenGlViewMode.Manual)
+        {
+        }
+
+        public RawOpenGlViewState(
+            int imageWidth,
+            int imageHeight,
+            double left,
+            double top,
+            double width,
+            double height,
+            RawOpenGlViewMode mode)
         {
             ImageWidth = imageWidth;
             ImageHeight = imageHeight;
@@ -42,6 +62,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             Top = top;
             Width = width;
             Height = height;
+            Mode = mode;
         }
 
         public bool Matches(int imageWidth, int imageHeight)

@@ -37,6 +37,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
         {
             var visualStudioProcessId = Process.GetCurrentProcess().Id;
             var sourceType = "Image collection";
+            var requestPaths = new List<string>();
 
             try
             {
@@ -72,49 +73,50 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                 {
                     if (result.IsError)
                     {
-                        VisualizerHandoffInbox.WriteErrorRequest(
+                        requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                             visualStudioProcessId,
                             result.DisplayName,
                             result.SourceType,
                             result.ErrorMessage,
                             memberInventory: result.MemberInventory,
                             itemAssemblyName: result.ItemAssemblyName,
-                            debuggeeProcessId: result.DebuggeeProcessId);
+                            debuggeeProcessId: result.DebuggeeProcessId));
                         continue;
                     }
 
                     try
                     {
-                        VisualizerHandoffInbox.WriteSnapshotRequest(
+                        requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
                             visualStudioProcessId,
                             result.MetadataPath,
                             result.DisplayName,
-                            result.SourceType);
+                            result.SourceType));
                     }
                     catch (Exception ex)
                     {
                         VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(result.MetadataPath);
-                        VisualizerHandoffInbox.WriteErrorRequest(
+                        requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                             visualStudioProcessId,
                             result.DisplayName,
                             result.SourceType,
                             ex.Message,
                             ex.GetType().FullName,
-                            ex.ToString());
+                            ex.ToString()));
                     }
                 }
             }
             catch (Exception ex)
             {
-                VisualizerHandoffInbox.WriteErrorRequest(
+                requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                     visualStudioProcessId,
                     "Image collection",
                     sourceType,
                     ex.Message,
                     ex.GetType().FullName,
-                    ex.ToString());
+                    ex.ToString()));
             }
 
+            RawBufferClassicDebuggerVisualizer.ScheduleTerminalCleanup(requestPaths);
             RawBufferClassicDebuggerVisualizer.WakeDockedToolWindow(visualStudioProcessId);
         }
     }

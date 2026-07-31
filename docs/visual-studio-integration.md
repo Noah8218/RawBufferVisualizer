@@ -87,13 +87,20 @@ src\RawBufferVisualizer.VisualStudio.Extensibility\
 
 The current Visual Studio session handoff is:
 
-- The extension writes one `.rbuf.json` plus `.raw` pair per inspected image.
-- The debugger visualizer sends the snapshot path to the docked Visual Studio image inspector.
+- Snapshot-backed requests write one `.rbuf.json` plus `.raw` pair per inspected image; eligible large/automatic sources can instead use paused-process live memory.
+- The producer serializes a complete request to `.publishing.<guid>` and atomically renames it to the visible `.rbuf-handoff` path.
+- The docked package claims the request exactly once and moves it to `.processing.<guid>`.
+- The debugger visualizer succeeds only after the ToolWindow publishes an explicit ACK after opening the document. Removing or claiming the ready file is not acknowledgement.
+- A failed open publishes its reason before NACK so the producer can report the actual failure.
 - Repeated inspections add rows to the same `Images` list instead of opening a separate window per image.
 - The list item keeps the variable/title, thumbnail, dimensions, pixel format, stride, and source type.
 - Failed opens remain visible in the list as error rows with the reason.
 
-The docked viewer owns mouse wheel zoom, drag pan, descriptor display, diagnostics, Try interpretation, pixel inspection, and A/B comparison.
+Modern timeout/cancel and Classic/fire-and-forget producers both schedule the shared `ScheduleTerminalArtifactCleanup`. It polls every 100 ms for up to two minutes and deletes ACK/NACK/conflict terminal markers only. It never deletes Ready or Processing on timeout, because another consumer may still own in-flight work. Cancellation and exception cleanup inspects all producer-owned requests and preserves the snapshot payload whenever any request remains non-Missing. Created and Renamed inbox events are both registered before watcher events are enabled, and transient marker/request I/O is retried up to 10 attempts at 50 ms intervals. A marker that terminalizes after two minutes and a Processing item stranded by process crash are not immediately reclaimed.
+
+Automatic Inspector uses a separate in-process path for current-frame values. Initialized exact OpenCvSharp and Emgu CV Mats use fixed metadata expressions and paused-process live memory; Bitmap remains on its registered glyph path. A breakpoint on an assignment stops before the assignment executes, so automatic scenarios must break on the following line.
+
+The docked viewer owns mouse wheel zoom, drag pan, descriptor display, diagnostics, Try interpretation, pixel inspection, and A/B comparison. A new/selected image, Fit, or double-click enters sticky Fit mode. Wheel, pan, or 1:1 enters Manual mode. Resize recomputes aspect-correct Fit or preserves Manual zoom and center.
 
 ## Temporary Snapshot Storage
 
@@ -116,7 +123,7 @@ Cleanup policy:
 
 - Selecting an image row and pressing `Delete` removes that row and deletes its owned debugger temp snapshot directory.
 - `Clear` disposes all current rows and deletes their owned debugger temp snapshot directories.
-- Failed debugger handoffs delete partial temp snapshot directories.
+- Terminal handoff artifacts are polled for up to two minutes and cleaned after producer observation. Ready/Processing artifacts and their snapshot payload are preserved on timeout or cancellation to avoid racing an in-flight consumer; markers that terminalize later and Processing items stranded by process crash wait for later stale-session recovery.
 - On each new debugger snapshot, stale Raw Buffer Visualizer temp snapshot directories older than 24 hours are cleaned up.
 - User-opened external `.rbuf.json` files are not deleted.
 

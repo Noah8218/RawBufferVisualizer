@@ -162,10 +162,11 @@ function Assert-HybridVssdkRegistration {
 
     $pkgdef = Get-Content -Raw -LiteralPath $PkgdefPath
     foreach ($requiredRegistration in @(
-        '[$RootKey$\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}]',
+        '[$RootKey$\Packages\{1977574b-f107-465f-bfd1-5fc022907039}]',
         '"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"',
         '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"',
         '[$RootKey$\Menus]',
+        '"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"',
         '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
     )) {
         if (-not $pkgdef.Contains($requiredRegistration)) {
@@ -175,6 +176,20 @@ function Assert-HybridVssdkRegistration {
 
     if ($pkgdef.Contains('RawBufferVisualizer.VisualStudio.Vssdk.dll')) {
         throw "The VSSDK package must be owned by the hybrid extension assembly, not the ToolWindow support library: $PkgdefPath"
+    }
+
+    if ($pkgdef.Contains('{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}')) {
+        throw "The retired 1.0.47/1.0.48 package GUID must not remain in the recovery VSIX registration: $PkgdefPath"
+    }
+
+    foreach ($singleRegistration in @(
+        '[$RootKey$\Packages\{1977574b-f107-465f-bfd1-5fc022907039}]',
+        '"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"',
+        '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
+    )) {
+        if ([regex]::Matches($pkgdef, [regex]::Escape($singleRegistration)).Count -ne 1) {
+            throw "Hybrid VSSDK pkgdef must contain exactly one registration '$singleRegistration': $PkgdefPath"
+        }
     }
 
     $generatedManifest = Get-Content -Raw -LiteralPath $GeneratedManifestPath
