@@ -23,10 +23,6 @@ if ([string]::IsNullOrWhiteSpace($VsixPath)) {
     $VsixPath = Join-Path $repoRoot 'artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
 }
 
-if ([string]::IsNullOrWhiteSpace($OverviewPath)) {
-    $OverviewPath = Join-Path $repoRoot 'README.md'
-}
-
 if ([string]::IsNullOrWhiteSpace($PublishManifestPath)) {
     $PublishManifestPath = Join-Path $repoRoot 'artifacts\marketplace\vs-publish.json'
 }
@@ -145,7 +141,15 @@ function Get-AssetFiles {
 }
 
 Assert-FileExists -Path $VsixPath -Message 'VSIX payload was not found'
+$metadata = Get-VsixMetadata -Path $VsixPath
+$parsedVersion = [version]$metadata.Version
+$packageVersion = "$($parsedVersion.Major).$($parsedVersion.Minor).$($parsedVersion.Build)"
+if ([string]::IsNullOrWhiteSpace($OverviewPath)) {
+    $OverviewPath = Join-Path $repoRoot "docs\marketplace-overview-$packageVersion.md"
+}
 Assert-FileExists -Path $OverviewPath -Message 'Marketplace overview file was not found'
+
+& (Join-Path $PSScriptRoot 'Test-ReleaseCommunication.ps1') -ExpectedVersion $metadata.Version
 
 if ($Publisher -match '\s') {
     throw "Publisher must be the Marketplace publisher ID, not the display name: '$Publisher'"
@@ -211,7 +215,6 @@ foreach ($category in $categoryList) {
     }
 }
 
-$metadata = Get-VsixMetadata -Path $VsixPath
 Write-Host "VSIX: $($metadata.DisplayName) $($metadata.Version) [$($metadata.Id)]"
 
 $manifest = [ordered]@{

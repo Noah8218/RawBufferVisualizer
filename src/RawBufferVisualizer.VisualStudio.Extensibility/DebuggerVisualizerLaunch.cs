@@ -31,6 +31,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             var snapshotOwnedByDockedWindow = false;
             var previewForwarded = false;
             var handoffId = Guid.NewGuid().ToString("N");
+            var publishedRequestPaths = new List<string>();
             try
             {
                 visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
@@ -61,10 +62,12 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             FormatPreviewSourceType(metadata),
                             handoffId,
                             isPreview: true);
-                        snapshotOwnedByDockedWindow = await TryCompleteHandoffAsync(
+                        publishedRequestPaths.Add(previewRequestPath);
+                        var previewCompletion = await TryCompleteHandoffAsync(
                             visualStudioProcessId,
                             new[] { previewRequestPath },
                             cancellationToken);
+                        snapshotOwnedByDockedWindow = previewCompletion.Succeeded;
                         previewForwarded = snapshotOwnedByDockedWindow;
                     }
                 }
@@ -88,9 +91,14 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         handoffId);
                 }
 
-                if (!await TryCompleteHandoffAsync(visualStudioProcessId, new[] { requestPath }, cancellationToken))
+                publishedRequestPaths.Add(requestPath);
+                var completion = await TryCompleteHandoffAsync(
+                    visualStudioProcessId,
+                    new[] { requestPath },
+                    cancellationToken);
+                if (!completion.Succeeded)
                 {
-                    session.ReportFailure("The docked Raw Buffer Visualizer did not acknowledge the image handoff.");
+                    session.ReportFailure(completion.Message);
                 }
                 else
                 {
@@ -107,7 +115,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
+                if (!snapshotOwnedByDockedWindow
+                    && snapshotDirectory != null
+                    && CanDeleteSnapshotAfterFailedTransfer(publishedRequestPaths))
                 {
                     VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                 }
@@ -116,7 +126,16 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
-                if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
+                if (publishedRequestPaths.Count > 0)
+                {
+                    VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                        publishedRequestPaths,
+                        TimeSpan.FromMinutes(2));
+                }
+
+                if (!snapshotOwnedByDockedWindow
+                    && snapshotDirectory != null
+                    && CanDeleteSnapshotAfterFailedTransfer(publishedRequestPaths))
                 {
                     VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                 }
@@ -198,6 +217,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     var snapshotOwnedByDockedWindow = false;
                     var previewForwarded = false;
                     var handoffId = Guid.NewGuid().ToString("N");
+                    var itemPublishedRequestPaths = new List<string>();
                     try
                     {
                         var metadata = item.Metadata;
@@ -219,17 +239,24 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                     FormatPreviewSourceType(metadata),
                                     handoffId,
                                     isPreview: true);
-                                snapshotOwnedByDockedWindow = await TryCompleteHandoffAsync(
+                                itemPublishedRequestPaths.Add(previewRequestPath);
+                                var previewCompletion = await TryCompleteHandoffAsync(
                                     visualStudioProcessId,
                                     new[] { previewRequestPath },
                                     cancellationToken);
+                                snapshotOwnedByDockedWindow = previewCompletion.Succeeded;
                                 previewForwarded = snapshotOwnedByDockedWindow;
                             }
                         }
 
                         if (ShouldUseDirectMemory(metadata))
                         {
-                            requestPaths.Add(WriteLiveMemoryRequest(visualStudioProcessId, metadata, handoffId));
+                            var liveRequestPath = WriteLiveMemoryRequest(
+                                visualStudioProcessId,
+                                metadata,
+                                handoffId);
+                            requestPaths.Add(liveRequestPath);
+                            itemPublishedRequestPaths.Add(liveRequestPath);
                             if (!previewForwarded && snapshotDirectory != null)
                             {
                                 VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
@@ -248,18 +275,22 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                 rawPath,
                                 cancellationToken);
 
-                            requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
+                            var snapshotRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
                                 visualStudioProcessId,
                                 metadataPath,
                                 metadata.DisplayName,
                                 metadata.SourceType,
-                                handoffId));
+                                handoffId);
+                            requestPaths.Add(snapshotRequestPath);
+                            itemPublishedRequestPaths.Add(snapshotRequestPath);
                         }
                         forwarded++;
                     }
                     catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
                     {
-                        if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
+                        if (!snapshotOwnedByDockedWindow
+                            && snapshotDirectory != null
+                            && CanDeleteSnapshotAfterFailedTransfer(itemPublishedRequestPaths))
                         {
                             VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                         }
@@ -267,7 +298,16 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     }
                     catch (Exception ex)
                     {
-                        if (!snapshotOwnedByDockedWindow && snapshotDirectory != null)
+                        if (itemPublishedRequestPaths.Count > 0)
+                        {
+                            VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                                itemPublishedRequestPaths,
+                                TimeSpan.FromMinutes(2));
+                        }
+
+                        if (!snapshotOwnedByDockedWindow
+                            && snapshotDirectory != null
+                            && CanDeleteSnapshotAfterFailedTransfer(itemPublishedRequestPaths))
                         {
                             VisualStudioTempStore.TryDeleteDirectory(snapshotDirectory);
                         }
@@ -289,7 +329,11 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Collection contains no supported image items.");
                 }
 
-                if (await TryCompleteHandoffAsync(visualStudioProcessId, requestPaths, cancellationToken))
+                var completion = await TryCompleteHandoffAsync(
+                    visualStudioProcessId,
+                    requestPaths,
+                    cancellationToken);
+                if (completion.Succeeded)
                 {
                     session.ReportCollectionForwarded(
                         summary.TotalCount,
@@ -300,11 +344,18 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 }
                 else
                 {
-                    session.ReportFailure("The docked Raw Buffer Visualizer did not acknowledge the collection handoff.");
+                    session.ReportFailure(completion.Message);
                 }
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
+                if (requestPaths.Count > 0)
+                {
+                    VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                        requestPaths,
+                        TimeSpan.FromMinutes(2));
+                }
+
                 throw;
             }
             catch (Exception ex)
@@ -325,6 +376,16 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
 
             return new DockedVisualizerControl(session, closeWhenLoaded ? visualizerTarget : null);
+        }
+
+        private static bool CanDeleteSnapshotAfterFailedTransfer(
+            IReadOnlyList<string> publishedRequestPaths)
+        {
+            // Once a request has been published, Missing is not proof that the
+            // docked window never owned the payload: the producer or delayed
+            // reaper may already have removed an ACK/NACK marker. Preserve the
+            // payload whenever ownership crossed the handoff boundary.
+            return publishedRequestPaths.Count == 0;
         }
 
         private static async Task<bool> TryForwardFailureAsync(
@@ -354,7 +415,11 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     errorType,
                     errorDetails,
                     handoffId));
-                if (!await TryCompleteHandoffAsync(visualStudioProcessId, requestPaths, cancellationToken))
+                var completion = await TryCompleteHandoffAsync(
+                    visualStudioProcessId,
+                    requestPaths,
+                    cancellationToken);
+                if (!completion.Succeeded)
                 {
                     return false;
                 }
@@ -367,6 +432,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch
             {
+                if (requestPaths != null && requestPaths.Count > 0)
+                {
+                    VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                        requestPaths,
+                        TimeSpan.FromMinutes(2));
+                }
+
                 return false;
             }
         }
@@ -499,39 +571,203 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 metadata.Descriptor.PixelFormat);
         }
 
-        private static async Task<bool> TryCompleteHandoffAsync(
+        private static async Task<HandoffCompletionResult> TryCompleteHandoffAsync(
             int visualStudioProcessId,
             IReadOnlyList<string> requestPaths,
             CancellationToken cancellationToken)
         {
             if (requestPaths.Count == 0)
             {
-                return false;
+                return HandoffCompletionResult.Failed(
+                    "The handoff did not contain any requests.");
             }
 
             TryWakeDockedToolWindow(visualStudioProcessId);
             var deadline = DateTime.UtcNow.Add(HandoffAcknowledgementTimeout);
+            var terminal = new bool[requestPaths.Count];
+            var terminalCount = 0;
+            var failures = new List<string>();
             while (DateTime.UtcNow < deadline)
             {
                 var pending = false;
                 for (var index = 0; index < requestPaths.Count; index++)
                 {
-                    if (File.Exists(requestPaths[index]))
+                    if (terminal[index])
                     {
-                        pending = true;
-                        break;
+                        continue;
                     }
+
+                    var requestPath = requestPaths[index];
+                    var state = VisualizerHandoffInbox.GetRequestState(requestPath);
+                    if (state == VisualizerHandoffRequestState.Rejected)
+                    {
+                        terminal[index] = true;
+                        terminalCount++;
+                        failures.Add(ReadHandoffRejection(requestPath));
+                        VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                        continue;
+                    }
+
+                    if (state == VisualizerHandoffRequestState.Conflicted)
+                    {
+                        terminal[index] = true;
+                        terminalCount++;
+                        failures.Add(
+                            "The handoff produced conflicting acknowledgement and rejection markers.");
+                        VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                        continue;
+                    }
+
+                    if (state == VisualizerHandoffRequestState.Acknowledged)
+                    {
+                        terminal[index] = true;
+                        terminalCount++;
+                        VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                        continue;
+                    }
+
+                    pending = true;
                 }
 
                 if (!pending)
                 {
-                    return true;
+                    VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                        requestPaths,
+                        TimeSpan.FromMinutes(2));
+                    if (failures.Count > 0)
+                    {
+                        return HandoffCompletionResult.Failed(
+                            string.Join(" ", failures.ToArray()));
+                    }
+
+                    return HandoffCompletionResult.Success();
                 }
 
-                await Task.Delay(50, cancellationToken);
+                try
+                {
+                    await Task.Delay(50, cancellationToken);
+                }
+                catch (OperationCanceledException) when (
+                    cancellationToken.IsCancellationRequested)
+                {
+                    VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                        requestPaths,
+                        TimeSpan.FromMinutes(2));
+                    throw;
+                }
             }
 
-            return false;
+            var ready = 0;
+            var processing = 0;
+            var missing = 0;
+            for (var index = 0; index < requestPaths.Count; index++)
+            {
+                if (terminal[index])
+                {
+                    continue;
+                }
+
+                var requestPath = requestPaths[index];
+                switch (VisualizerHandoffInbox.GetRequestState(requestPath))
+                {
+                    case VisualizerHandoffRequestState.Ready:
+                        ready++;
+                        break;
+                    case VisualizerHandoffRequestState.Processing:
+                        processing++;
+                        break;
+                    case VisualizerHandoffRequestState.Acknowledged:
+                        terminal[index] = true;
+                        terminalCount++;
+                        VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                        break;
+                    case VisualizerHandoffRequestState.Rejected:
+                        terminal[index] = true;
+                        terminalCount++;
+                        failures.Add(ReadHandoffRejection(requestPath));
+                        VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                        break;
+                    case VisualizerHandoffRequestState.Conflicted:
+                        terminal[index] = true;
+                        terminalCount++;
+                        failures.Add(
+                            "The handoff produced conflicting acknowledgement and rejection markers.");
+                        VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                        break;
+                    default:
+                        missing++;
+                        break;
+                }
+            }
+
+            if (terminalCount == requestPaths.Count)
+            {
+                VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                    requestPaths,
+                    TimeSpan.FromMinutes(2));
+                return failures.Count == 0
+                    ? HandoffCompletionResult.Success()
+                    : HandoffCompletionResult.Failed(
+                        string.Join(" ", failures.ToArray()));
+            }
+
+            var timeoutMessage = string.Format(
+                CultureInfo.InvariantCulture,
+                "The docked Raw Buffer Visualizer did not complete the handoff within {0:0} seconds. Ready {1}, processing {2}, missing {3}, completed {4}.",
+                HandoffAcknowledgementTimeout.TotalSeconds,
+                ready,
+                processing,
+                missing,
+                terminalCount);
+            if (failures.Count > 0)
+            {
+                timeoutMessage = string.Join(" ", failures.ToArray())
+                    + " "
+                    + timeoutMessage;
+            }
+
+            VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                requestPaths,
+                TimeSpan.FromMinutes(2));
+            return HandoffCompletionResult.Failed(timeoutMessage);
+        }
+
+        private static string ReadHandoffRejection(string requestPath)
+        {
+            string rejectionReason;
+            if (!VisualizerHandoffInbox.TryReadRejectionReason(
+                    requestPath,
+                    out rejectionReason)
+                || string.IsNullOrWhiteSpace(rejectionReason))
+            {
+                rejectionReason = "The docked window could not open the image document.";
+            }
+
+            return "The docked Raw Buffer Visualizer rejected the handoff: "
+                + rejectionReason;
+        }
+
+        private sealed class HandoffCompletionResult
+        {
+            private HandoffCompletionResult(bool succeeded, string message)
+            {
+                Succeeded = succeeded;
+                Message = message ?? string.Empty;
+            }
+
+            public bool Succeeded { get; private set; }
+
+            public string Message { get; private set; }
+
+            public static HandoffCompletionResult Success()
+            {
+                return new HandoffCompletionResult(true, string.Empty);
+            }
+
+            public static HandoffCompletionResult Failed(string message)
+            {
+                return new HandoffCompletionResult(false, message);
+            }
         }
 
         private static void TryWakeDockedToolWindow(int visualStudioProcessId)

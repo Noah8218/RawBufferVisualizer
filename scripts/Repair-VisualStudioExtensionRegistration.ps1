@@ -7,7 +7,10 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $extensionId = 'RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f'
-$packageGuid = '{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}'
+$packageGuid = '{1977574b-f107-465f-bfd1-5fc022907039}'
+$retiredPackageGuids = @(
+    '{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}'
+)
 $windowGuid = '{a329e331-089a-4186-8fd7-57a241fd1917}'
 $solutionExplorerGuid = '{3ae79031-e1bc-11d0-8f78-00a0c9110057}'
 $autoLoadContextGuids = @(
@@ -133,6 +136,27 @@ function Remove-AutoLoadRegistration {
     }
 }
 
+function Remove-RetiredPackageRegistration {
+    param([string]$ConfigRoot)
+
+    foreach ($retiredPackageGuid in $retiredPackageGuids) {
+        foreach ($relativePath in @(
+            "Packages\$retiredPackageGuid",
+            "BindingPaths\$retiredPackageGuid"
+        )) {
+            $retiredKey = Join-Path $ConfigRoot $relativePath
+            if (Test-Path -LiteralPath $retiredKey) {
+                Remove-Item -LiteralPath $retiredKey -Recurse -Force
+            }
+        }
+
+        $menuKey = Join-Path $ConfigRoot 'Menus'
+        if (Test-Path -LiteralPath $menuKey) {
+            Remove-ItemProperty -Path $menuKey -Name $retiredPackageGuid -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 Assert-VisualStudioNotRunning
 
 $instanceId = Find-VisualStudioInstanceId
@@ -154,6 +178,7 @@ if ($PSCmdlet.ShouldProcess("Visual Studio instance $instanceId", "repair Raw Bu
     New-ItemProperty -Path $packageKey -Name 'AllowsBackgroundLoad' -Value 1 -PropertyType DWord -Force | Out-Null
 
     Remove-AutoLoadRegistration -ConfigRoot $configRoot
+    Remove-RetiredPackageRegistration -ConfigRoot $configRoot
 
     $bindingKey = Join-Path $configRoot "BindingPaths\$packageGuid"
     if (Test-Path -LiteralPath $bindingKey) {
@@ -164,7 +189,7 @@ if ($PSCmdlet.ShouldProcess("Visual Studio instance $instanceId", "repair Raw Bu
 
     $menuKey = Join-Path $configRoot 'Menus'
     New-Item -Path $menuKey -Force | Out-Null
-    Set-StringProperty -Path $menuKey -Name $packageGuid -Value ', Menus.ctmenu, 1'
+    Set-StringProperty -Path $menuKey -Name $packageGuid -Value ', Menus.ctmenu, 2'
 
     $toolWindowKey = Join-Path $configRoot "ToolWindows\$windowGuid"
     New-Item -Path $toolWindowKey -Force | Out-Null

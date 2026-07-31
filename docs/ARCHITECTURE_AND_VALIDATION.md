@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This document describes the published `1.0.47` feature line plus the locally qualified `1.0.48` clean-install registration hotfix. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the public `1.0.49.0` Marketplace line and the locally qualified `1.0.50.0` stability candidate. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting. The affected external Windows 10 public-1.0.49 in-place update remains the only open `1.0.50` release gate.
 
 ## Supported Environment
 
@@ -128,18 +128,21 @@ For a richer industrial descriptor, expose `RawBufferView` with buffer address/l
 Automatic Vision Inspector complements provider registration; it does not change Visual Studio's registration rules.
 
 1. The package receives a Break Mode event and schedules the scan at WPF `DispatcherPriority.ContextIdle`.
-2. The scanner merges `Debugger.CurrentStackFrame.Locals` and `.Arguments`, deduplicated by root expression, while skipping primitive, root-array, and root-collection values.
-3. Each remaining root contributes at most 128 direct members and 64 one-level nested members. Unlimited recursion is prohibited.
-4. `VisionMemberInference` assigns data/width/height/stride/format roles and a structural confidence score.
-5. A saved type mapping takes precedence. Otherwise only complete, unambiguous inference at 90% or higher is eligible to open automatically.
-6. Pointer-backed shapes reuse paused-process memory. Managed-array shapes use the current VSSDK frame/property child enumerator; the EnvDTE element fallback is bounded to 256 items.
-7. The constructed descriptor and current buffer are validated before an image row is accepted.
-8. Ambiguous/incomplete results at 40% or higher become visible `[Map]` candidates; lower-scoring objects are hidden. A recognized shape whose current pointer/array read fails becomes `[Failed]`, not a misleading mapping request.
-9. Every root is processed behind an exception boundary, so a failed candidate cannot block successful images. A successful row is selected in preference to an error row.
-10. Automatic rows are replaced by stable root-expression key on refresh, while manual/provider-handoff rows are preserved.
-11. **Auto Inspect on Break** is a versioned per-user preference. It defaults on after the user opens the Tool Window, persists across Visual Studio restarts, and never forces the Tool Window to open or steal focus. **Scan Now** is independent of the preference.
+2. The scanner merges `Debugger.CurrentStackFrame.Locals` and `.Arguments`, deduplicated by root expression, while skipping primitives and unsupported root arrays/collections.
+3. When the persisted **Mat collections** option is enabled, exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, and corresponding one-dimensional arrays expand into indexed expressions. The policy caps work at 8 items per collection, 16 items and 8 collection roots per scan.
+4. Exact initialized OpenCvSharp `Mat` and Emgu CV `Mat` roots or indexed elements take a fixed known-type branch. OpenCvSharp reads `Data`, `Cols`, `Rows`, `Step()`, `Depth()`, and `Channels()`; Emgu reads `DataPointer`, `Cols`, `Rows`, `Step`, `Depth`, and `NumberOfChannels`.
+5. Known Mat metadata is converted to a validated descriptor and opened through paused-process live memory. Null/disposed collection elements become isolated `[Failed]` rows. Bitmap, `RawBufferSnapshot`, `RawBufferView`, the exact ImagePtr target, and unsupported collections remain registered-path owned.
+6. Each remaining unregistered root contributes at most 128 direct members and 64 one-level nested members. Unlimited recursion is prohibited.
+7. `VisionMemberInference` assigns data/width/height/stride/format roles and a structural confidence score.
+8. A saved type mapping takes precedence. Otherwise only complete, unambiguous inference at 90% or higher is eligible to open automatically.
+9. Pointer-backed shapes reuse paused-process memory. Managed-array shapes use the current VSSDK frame/property child enumerator; the EnvDTE element fallback is bounded to 256 items.
+10. The constructed descriptor and current buffer are validated before an image row is accepted.
+11. Ambiguous/incomplete results at 40% or higher become visible `[Map]` candidates; lower-scoring objects are hidden. A recognized shape whose current pointer/array read fails becomes `[Failed]`, not a misleading mapping request.
+12. Every root/collection element is processed behind an exception boundary, so a failed candidate cannot block successful images. A successful row is selected in preference to an error row.
+13. Automatic rows are replaced by stable root/index-expression key on refresh, while manual/provider-handoff rows are preserved.
+14. **Auto Inspect on Break** and **Mat collections** are versioned per-user preferences. Auto Inspect defaults on and collection expansion defaults off; both persist across Visual Studio restarts. Restoring either option does not itself scan or force the Tool Window open. **Scan Now** respects the collection option and is independent of Auto Inspect on Break.
 
-The scanner reads debugger-visible fields and property getters. It does not call arbitrary vendor methods, load SDK assemblies dynamically, decode private native layouts, or control an acquisition device. See [automatic-vision-inspector.md](automatic-vision-inspector.md) for the detailed confidence/UX contract and current evidence.
+The scanner reads debugger-visible fields and property getters. Exact OpenCvSharp/Emgu capture evaluates only the fixed extension-owned metadata expressions above; exact `List<T>.Count` or array `Length` is the only additional collection metadata evaluation. It does not execute arbitrary `IEnumerable`, inject Bitmap `LockBits`/`UnlockBits`, load SDK assemblies dynamically, decode private native layouts, or control an acquisition device. A breakpoint on an assignment statement stops before that statement executes, so the object must be constructed on an earlier line. See [automatic-vision-inspector.md](automatic-vision-inspector.md) for the detailed confidence/UX contract and current evidence.
 
 ## Individual Transfer Flow
 
@@ -149,8 +152,13 @@ The scanner reads debugger-visible fields and property getters. It does not call
 4. For buffers at or above 64 MiB, the extension first requests a sampled preview bounded to 512 x 512.
 5. If the large source supports direct memory and has a valid process ID/address, the docked viewer receives a live process-memory request after the preview.
 6. If direct memory is unavailable, the extension falls back to chunking the full source to an owned temp snapshot after checking disk space.
-7. The handoff is written to an inbox scoped to the hosting `devenv.exe` process and acknowledged by that ToolWindow.
-8. The temporary Modern host closes after successful handoff; the docked VSSDK window remains.
+7. The producer writes complete request JSON to a unique `.publishing.<guid>` path and atomically moves it to the visible `.rbuf-handoff` path in an inbox scoped to the hosting `devenv.exe` process.
+8. The docked package claims a ready request exactly once by using an exclusive claim guard and moving it to a unique `.processing.<guid>` path.
+9. The ToolWindow reads the processing file and publishes an explicit ACK only after the image/error document is added successfully. A failed open atomically publishes its reason before a NACK marker.
+10. The producer treats only ACK as success. Disappearance of the ready file means Processing, not acknowledgement; NACK and conflicting terminal markers are failures.
+11. The temporary Modern host closes after every request reaches a successful ACK; the docked VSSDK window remains. Modern timeout/cancel and Classic fire-and-forget both schedule the shared terminal-artifact cleanup.
+
+Transient handoff reads and terminal-marker moves retry `IOException` and `UnauthorizedAccessException` up to 10 total attempts at 50 ms intervals. Persistent I/O failure or JSON parse/validation failure remains an error. `ScheduleTerminalArtifactCleanup` polls every 100 ms for up to two minutes and removes ACK/NACK/conflict terminal artifacts only. Locked ACK/NACK cleanup is retried, and a request must be observed Missing consecutively before it leaves the pending set. It never deletes Ready or Processing on timeout because another consumer may still own in-flight work. Outer non-cancellation exception catches also schedule the same cleanup. On producer cancellation/exception, any owned request that is still non-Missing causes its snapshot payload directory to be preserved. A marker that terminalizes after the two-minute window and a Processing file stranded by process crash are not immediately reclaimed; stale-session cleanup remains the eventual recovery boundary.
 
 The 64 MiB threshold is `PreviewFirstThreshold` in `DebuggerVisualizerLaunch.cs`. The preview is an early visible state, not proof that the full/live source is available forever.
 
@@ -178,13 +186,15 @@ Do not replace this with broad `IEnumerable` execution while the debugger is pau
 
 The viewer:
 
-1. computes Fit/zoom/pan and the visible source rectangle;
+1. keeps an explicit `Fit` or `Manual` view mode and computes the visible source rectangle;
 2. plans logical tiles for the viewport;
 3. reads only needed source rows/tiles;
 4. decodes the requested format into display tiles;
 5. uploads/caches bounded textures;
 6. renders progressively for large file-backed sources;
 7. reads pixels/raw bytes through the same source abstraction.
+
+A newly opened/selected image, the Fit command, and viewer double-click enter Fit mode. Fit recomputes an aspect-correct view with a 5% margin when the viewport changes. Wheel zoom, pan, and 1:1 enter Manual mode; a Manual resize preserves zoom and image center while normalizing the view rectangle to the current viewport aspect.
 
 Current internal limits relevant to performance reviews:
 
@@ -226,10 +236,14 @@ Lifecycle:
 
 - Delete removes the selected row and disposes/deletes its owned temp directory;
 - Clear disposes all rows and owned directories;
-- failed/partial handoffs attempt immediate cleanup;
+- terminal ACK/NACK/conflict handoff artifacts are polled and cleaned for up to two minutes at 100 ms intervals;
+- timed-out Ready/Processing handoffs and their payloads are preserved so an in-flight consumer is not disrupted;
+- terminal markers produced after that two-minute cleanup window and Processing items stranded by process crash are not immediately reclaimed;
 - new sessions remove stale snapshot directories older than 24 hours;
 - `package.log` is reset when it exceeds 1 MiB;
 - live direct-memory sources avoid a full raw snapshot but may retain the bounded sampled preview until the row/session is disposed.
+
+The 24-hour `VisualStudioTempStore` sweep does not currently acquire an active-document lease. An unusually long Visual Studio session can therefore delete a file-backed payload still referenced by a document that has remained open for more than 24 hours. Treat this as technical debt and a support boundary, not as a `1.0.50` pass claim.
 
 When investigating disk usage, distinguish user-exported snapshots, smoke artifacts, current owned temp rows, and stale crash leftovers.
 
@@ -327,11 +341,13 @@ After changes to providers, handoff, packaging, or ToolWindow code:
 5. Inspect all individual raw/registered-pointer/Bitmap/OpenCvSharp/Emgu cases, and confirm any claimed sample pointer type exactly matches a provider target.
 6. Inspect typed lists/dictionaries, mixed collections, and arrays.
 7. Confirm all rows land in the same docked viewer.
-8. Confirm valid/error row recovery, pixel values, Save, Delete, Clear, Fit, wheel zoom, and drag pan.
+8. Confirm valid/error row recovery, pixel values, Save, Delete, Clear, Fit, wheel zoom, and drag pan. Fit must remain aspect-correct after resize; Manual zoom/pan must preserve scale and center.
 9. Continue/exit after a live large Mat and confirm controlled source-unavailable behavior.
 10. Restart Visual Studio with no solution and confirm no package-load popup.
 11. Run two Visual Studio processes and confirm handoffs remain instance-local.
-12. Run `Test-VisualStudioMarketplaceUpdate.ps1` and the installed-VSIX `AutomaticVisionInspector` plus `MultiLibraryHybrid` smokes. A repair-script result is not release evidence.
+12. Open the View menu and confirm exactly one `Raw Buffer Visualizer` and one `Raw Buffer Visualizer: Scan Current Frame` entry.
+13. Stop after image assignments, not on the construction line. Confirm OpenCvSharp/Emgu Mats open automatically on Break and **Scan Now**, while Bitmap remains glyph-owned.
+14. Run `Test-VisualStudioMarketplaceUpdate.ps1` and the installed-VSIX `AutomaticVisionInspector` plus `MultiLibraryHybrid` smokes. A repair-script result is not release evidence.
 
 Detailed variable names are in [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md).
 
@@ -376,6 +392,8 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionR
 
 Never use the repair command to qualify a clean Marketplace candidate. The release contract and regression checks are in [vsix-package-registration.md](vsix-package-registration.md).
 
+The `1.0.50` package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}` and registers `Menus.ctmenu` resource version 2. The package, menu, and ToolWindow registrations must each occur exactly once. Every future VSCT command/group change must increment the menu resource version and update the publish, install, repair, and payload-verification checks in the same change.
+
 Full publication steps and the environment-gated CD flow are in [release-runbook.md](release-runbook.md). An upload must use a version not already published. Do not create a version bump only to edit documentation when the Marketplace portal allows copy changes independently.
 
 ## Current Validation Baseline
@@ -413,6 +431,16 @@ Local `1.0.48` registration hotfix, verified 2026-07-28:
 - final artifact: 1,990,304 bytes, SHA256 `AABBD3A36780AE070C3FBBDE384CB5CD9A1977607EA929D15DAEBF75899F717D`.
 
 The reusable record is [release-qualification-1.0.48.md](release-qualification-1.0.48.md). A separate clean-PC installation remains the external pre-upload confirmation.
+
+External follow-up invalidated the public `1.0.48` conclusion: the View command was present but did not open the ToolWindow, and debugger handoffs timed out. Version `1.0.49` changed the VSPackage GUID from `{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}` to `{1977574b-f107-465f-bfd1-5fc022907039}` while retaining the Marketplace extension ID. Public `1.0.49.0` is now reported working on that Windows 10 PC only after uninstall and clean reinstall. This does not prove an in-place update. Historical evidence is [release-qualification-1.0.49.md](release-qualification-1.0.49.md).
+
+Source `1.0.50.0` adds atomic Ready/Processing/ACK/NACK handoff, CTMENU resource version 2 and exact single-registration checks, explicit Fit/Manual state, automatic OpenCvSharp/Emgu live capture, an opt-in bounded Automatic Mat collection scan, and one-time in-product release highlights. The current package is 2,011,595 bytes with SHA-256 `E31F254EFCFD80D6F03FED3E453BEFC47CB4924D0FF853167AE7385F36B94D93`.
+
+A full Release solution build passed with 0 errors and 18 existing `VSTHRD010` warnings; the final candidate incremental/package build after the last handoff hardening passed 0/0 and self-test passed 20/20. Current-source Preview-first and 540/900/1160 Fit/Manual checks passed; the Fit matrix reported zero aspect error, 1.05 margin, and zero Manual zoom/center delta.
+
+An ordinary local reinstall of the pre-collection 2,001,513-byte baseline without repair or `/ResetSkipPkgs` passed on Windows 10 Pro build 19045, VS 17.14.37314.3 instance `2c8402d8`. Fresh `MultiLibraryHybrid` evidence reports one Open command, one Scan command, automatic OpenCvSharp/Emgu, Bitmap glyph ownership, 8/8 automatic opens, nine documents, zero errors, duplicate-free refresh, and zero protocol errors. Fresh `AutomaticVisionInspector` reports six opened, one mapping candidate, one isolated failure, duplicate-free refresh, enabled preference before/after, and zero protocol errors. The installed screenshots are visual aspect evidence only; the full Fit assertions are current-source view evidence.
+
+That baseline evidence is recorded in [release-qualification-1.0.50.md](release-qualification-1.0.50.md) and `artifacts/ui/release-qualification-1.0.50`. The final 2,011,595-byte package passed source build/self-tests, release-communication validation, Marketplace dry run, ordinary scripted reinstall, installed release-announcement automation, `AutomaticCollections`, and `MultiLibraryHybrid`. Results were: persisted Dismiss and What's New reopen with no image-list side effects; seven indexed collection rows with five opens/two isolated failures and duplicate-free rescan; nine hybrid documents/zero errors; exact one-command menu counts; zero protocol errors. Evidence is under `artifacts/ui/installed-vsix-new-features`. The affected external Windows 10 public-`1.0.49` in-place update remains Pending.
 
 Do not reuse this evidence after a relevant source change. Re-run the smallest checks that cover the changed surface and update the baseline only when they pass.
 

@@ -14,18 +14,20 @@ Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-back
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## New In 1.0.48
+## 1.0.50 Candidate
 
-The `1.0.48.0` package fixes the clean-PC ToolWindow registration failure found after the `1.0.47.0` Marketplace upload. Until the Marketplace badge above reports `1.0.48`, the public install link still serves `1.0.47`.
+The public Marketplace version is `1.0.49.0`. On the same Windows 10 PC that reported the earlier `1.0.48.0` handoff failure, uninstalling the extension and reinstalling `1.0.49` restored normal operation. That is clean-reinstall evidence only; it does not prove an in-place update or the current `1.0.50` candidate.
 
-### Clean-install package registration
+The `1.0.50.0` source candidate hardens four reported workflows:
 
-- The VSSDK package class and command table are now built by the same hybrid project that produces the Marketplace VSIX.
-- The generated `.pkgdef` points to `RawBufferVisualizer.VisualStudio.Extensibility.dll` in the installed VSIX folder.
-- Local install verification no longer writes a manual package `CodeBase`, so a broken Marketplace package cannot pass by using a developer build output.
-- Release packaging fails if the VSIX falls back to the former split-project `.pkgdef` layout.
+- debugger handoffs are published atomically, claimed once, and complete only after an explicit acknowledgement or rejection;
+- the View menu contract is exactly one `Raw Buffer Visualizer` command and one `Raw Buffer Visualizer: Scan Current Frame` command, backed by `Menus.ctmenu` resource version 2;
+- Fit and Manual are explicit viewer modes, so docking or resizing no longer changes image aspect or silently resets manual zoom and pan;
+- initialized OpenCvSharp `Mat` and Emgu CV `Mat` locals and arguments can open automatically on Break Mode or **Scan Now**.
 
-There is no image-transfer or UI behavior change in this hotfix. Automatic Vision Inspector and Vision Buffer Doctor remain the main feature additions from `1.0.47`.
+The package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}` introduced by `1.0.49` and the existing Marketplace extension ID. The current Automatic Mat collection package passed its dedicated local installed-VSIX scenario. Publication remains gated by the affected external Windows 10 PC updating from public `1.0.49` without uninstall, repair, or `/ResetSkipPkgs`.
+
+When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.50`, it shows a non-modal summary of the release. **Dismiss** is saved per user across Visual Studio restarts, and **What's New** reopens the current summary without starting a scan or opening an image. See the complete [changelog](CHANGELOG.md).
 
 ### Automatic Vision Inspector
 
@@ -37,7 +39,9 @@ Open the docked Tool Window once, leave `Auto Inspect on Break` enabled, and sto
 - One failed candidate does not prevent the remaining images from opening.
 - `Auto Inspect on Break` is a per-user preference that persists across Visual Studio restarts. `Scan Now` still works while automatic scanning is off.
 
-Registered OpenCvSharp, Emgu CV, and Bitmap types continue to use their reliable debugger-visualizer icon path and are excluded from automatic mapping candidates. Automatic discovery is for unregistered pointer/array-backed wrappers whose required members are visible to the debugger; it does not call arbitrary SDK methods or reverse-engineer private native layouts.
+Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values can use Automatic Inspector's validated live-memory path and still retain their debugger-visualizer icons. An optional persisted **Mat collections** mode expands exact Mat `List<T>` and one-dimensional arrays with bounded per-element success/failure rows. `System.Drawing.Bitmap`, `RawBufferSnapshot`, `RawBufferView`, and other registered collections remain on their registered visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which Automatic Inspector deliberately does not inject or invoke.
+
+Visual Studio stops before executing the highlighted breakpoint statement. If the breakpoint is on `Bitmap bitmap = new Bitmap(...)`, `bitmap` is not initialized yet. Stop on the next executable line, or use **Scan Now** only after the image object exists in the selected stack frame.
 
 ![Automatic Vision Inspector finds safe image-like values in the current stack frame](docs/images/automatic-vision-inspector.png)
 
@@ -54,7 +58,7 @@ Buffer Doctor is a buffer-layout assistant, not a semantic image detector. RGB/B
 1. Install the extension from [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer) and restart Visual Studio.
 2. Open `View > Other Windows > Raw Buffer Visualizer` once.
 3. Start debugging and stop where image variables or camera-frame wrappers are alive.
-4. Let `Auto Inspect on Break` open safe unregistered wrappers. For Bitmap, OpenCvSharp, Emgu CV, and registered collections, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
+4. Let `Auto Inspect on Break` open initialized OpenCvSharp/Emgu Mats and safe unregistered wrappers. Enable **Mat collections** when exact Mat lists/arrays should also expand automatically. For Bitmap and other registered collections, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
 5. Select a thumbnail, zoom or pan, and inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
 6. If a raw image looks wrong, run `Interpret > Diagnose Buffer` and select the most plausible candidate.
 
@@ -113,7 +117,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.48.0` keeps those features and fixes clean-install registration of the docked ToolWindow.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Public `1.0.49.0` uses the current VSPackage identity; an external Windows 10 clean reinstall is reported working. The source is now `1.0.50.0`, which keeps that identity and adds handoff, menu, Fit, and automatic Mat hardening.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -129,7 +133,7 @@ Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the updat
 
 If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Current Marketplace packages publish the debugger providers and automatically close their temporary handoff host, so new invocations remain in the main docked viewer.
 
-For `1.0.48` and later, a release must not be qualified by manually writing a package `CodeBase`. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
+For `1.0.48` and later, a release must not be qualified by manually writing a package `CodeBase`. Qualification of `1.0.50` requires a real update from public `1.0.49` without uninstall, repair, or `/ResetSkipPkgs`; a clean install alone is insufficient. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
@@ -224,6 +228,7 @@ The docked layout adapts to the available width:
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs instead of requiring the debuggee's OpenCvSharp package version. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
 | Image collections | Supported | Typed or mixed `List<T>`, `Dictionary<TKey, TValue>`, `ArrayList`, `Hashtable`, `object[]`, and supported image arrays. Up to 256 entries are processed per invocation. |
+| Automatic Mat collections | `1.0.50` candidate | Optional exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays; 8 items per collection, 16 items and 8 roots per scan. Bitmap and broad collections remain glyph-owned. Current local installed-VSIX qualification passed. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
 
@@ -396,22 +401,28 @@ Version `1.0.27.0` and later include the following runtime safeguards:
 - Stale owned snapshot folders are cleaned on later visualizer runs when they are older than 24 hours.
 - The package log is capped so repeated package-load diagnostics do not grow without bound.
 
+The 24-hour stale sweep does not yet hold an active-document lease. In an unusually long Visual Studio session, a file-backed image document that remains open for more than 24 hours could lose its payload to a later stale sweep. This is tracked technical debt rather than a `1.0.50` reliability claim.
+
 If disk usage looks high after a crashed debug session, close Visual Studio and delete:
 
 ```text
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Latest recorded release-gate smoke for the current runtime line:
+Recorded evidence is split between historical installed-VSIX runs and the current `1.0.50` source candidate:
 
 | Check | Result |
 | --- | --- |
-| Full solution and unit-style self-tests | Passed for the declared `net472`, `netstandard2.0`, and .NET 8 targets. |
+| Current `1.0.50` source build/self-tests | Automatic Mat collection policy, settings migration, per-element failure isolation, and registered `Bitmap[]`/Mat-array transfer regressions are included. Full Release solution build passed with 0 errors and the existing 18 `VSTHRD010` warnings; the final incremental/package build passed 0/0; self-tests passed. |
+| Current `1.0.50` release package | `artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`; 2,011,595 bytes; SHA-256 `E31F254EFCFD80D6F03FED3E453BEFC47CB4924D0FF853167AE7385F36B94D93`. Release communication, ordinary reinstall, installed What's New, Automatic Mat collections, and MultiLibraryHybrid passed. The collection scenario produced seven rows, five opens, two isolated failures, and a duplicate-free rescan; the hybrid scenario produced nine documents/zero errors. Every installed run reported one Open/Scan menu command each and zero protocol errors. |
+| Pre-collection `1.0.50` local installed-VSIX baseline | The 2,001,513-byte artifact on Windows 10 Pro / VS 17.14.37314.3 passed one Open command, one Scan command, automatic OpenCvSharp/Emgu, Bitmap glyph path, MultiLibrary 9 documents/0 errors, Automatic Inspector partial-failure isolation, duplicate-free rescan, and 0 protocol errors. This evidence does not qualify the newer collection package. |
+| Current-source Fit/Manual matrix | 540/900/1160 px passed with aspect errors 0, Fit margin 1.05, and Manual zoom/center delta 0. This is current-source view evidence, not an installed-VSIX Fit behavioral run. |
+| Full solution and unit-style self-tests (historical runtime line) | Passed for the declared `net472`, `netstandard2.0`, and .NET 8 targets. |
 | Legacy image libraries | Passed with five OpenCvSharp and five Emgu CV package versions plus .NET Framework Bitmap. |
 | Standalone viewer interactions | Passed open, pixel/GV read, Fit, 1:1, slider and wheel zoom, PNG/snapshot export, tabs, and linked views. |
 | VS2022 docked `5000 x 5000 Mono8` | Passed with `115.3 ms` open path, `1.24 ms` max wheel command, `0.77 ms` max drag command, and `33.94 ms` max frame. |
-| Installed VSIX, real `8192 x 8192` Mats | Passed in VS2022 17.14 with OpenCvSharp and Emgu CV, correct GV values, at most `1 MiB` per new preview file, and controlled `Unavailable` state after debuggee exit. |
-| Installed VSIX, hybrid current-frame session | Passed in VS2022 17.14 with real OpenCvSharp `4.13.0.20260627`, Emgu CV `4.13.0.5924`, and Bitmap values through registered visualizers plus six automatically opened pointer-backed camera-shape fixtures; 9 images, 0 errors, and no duplicate mapping rows for registered types. |
+| Installed VSIX, real `8192 x 8192` Mats (historical) | Passed in VS2022 17.14 with OpenCvSharp and Emgu CV, correct GV values, at most `1 MiB` per new preview file, and controlled `Unavailable` state after debuggee exit. This is not exact `1.0.50` evidence. |
+| Installed VSIX, hybrid current-frame session (historical) | Passed in VS2022 17.14 with real OpenCvSharp `4.13.0.20260627`, Emgu CV `4.13.0.5924`, and Bitmap values through registered visualizers plus six automatically opened pointer-backed camera-shape fixtures; 9 images, 0 errors, and no duplicate mapping rows for registered types. The exact `1.0.50` result is recorded in the current row above. |
 | Dense file-backed `100000 x 100000 Mono8` | Passed with a non-sparse `10,000,000,000` byte payload, `1.73 s` first visible time, and `88.0 MB` working set. |
 | Dense file-backed `200000 x 200000 Mono8` | Passed with a non-sparse `40,000,000,000` byte payload, `1.94 s` first visible time, and `87.5 MB` working set. |
 | Docked accumulation and cleanup soak | Passed 240 repeated `2048 x 2048 Mono8` opens using both selected-item Delete and Clear, with no positive managed/private/working-set growth, no GDI/USER growth, and no owned temporary directories left behind. |
@@ -481,7 +492,7 @@ Run the debugger visualizer sample:
 dotnet run --project .\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj -- --no-break
 ```
 
-For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates individual image variables, typed OpenCvSharp/Emgu CV/Bitmap lists and dictionaries, and mixed object collections and arrays so each visualizer path can be checked from Watch, Locals, Autos, or DataTip. Pass `--collection-only` to stop only at collection cases.
+For manual Visual Studio validation, set `RawBufferVisualizer.VisualizerDebuggee` as the startup project and run under the debugger without `--no-break`. The sample creates individual image variables, typed OpenCvSharp/Emgu CV/Bitmap lists, arrays and dictionaries, and mixed object collections so each visualizer path can be checked from Watch, Locals, Autos, or DataTip. Pass `--collection-only` to stop only at collection cases. Pass `--automatic-collections-debug` for one breakpoint containing a five-item OpenCvSharp list with three valid/two failed elements plus a two-item Emgu array.
 
 README and Marketplace screenshots must be reviewed before commit. Do not publish screenshots that include unrelated applications, private desktop content, stale UI, or a feature state that does not match the text.
 
@@ -494,18 +505,22 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Docked Visual Studio workflow with narrow and wide tool-window layouts.
 - Save PNG, raw snapshot export, pixel status, hover 5x5 statistics, marker values, pan, zoom, high-zoom overlay, error rows, and support-report actions.
 - `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, and supported collections.
-- Automatic Inspector partial-result behavior, preference persistence, registered-type deduplication, and Smart Type Mapper recovery.
+- Automatic Inspector partial-result behavior, preference persistence, automatic OpenCvSharp/Emgu live opens, Bitmap registered-path ownership, duplicate-free refresh, and Smart Type Mapper recovery.
 - Buffer Doctor ranked candidates and immediate descriptor application.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
+- Upgrade recovery: update a profile that runs public `1.0.49` to the exact `1.0.50` candidate, then prove the View command, Bitmap handoff, and automatic Mat workflow without uninstall, repair, or `/ResetSkipPkgs`.
 - VSSDK package ownership: the generated `.pkgdef` must reference `RawBufferVisualizer.VisualStudio.Extensibility.dll`; the former split-project `.pkgdef` is prohibited.
+- VSPackage/menu identity: the `1.0.50` `.pkgdef` must contain `{1977574b-f107-465f-bfd1-5fc022907039}`, exactly one `Menus.ctmenu, 2` entry, and no retired `1.0.47`/`1.0.48` GUID.
+- View menu: exactly one open command and one current-frame scan command.
+- Fit/Manual: Fit remains aspect-correct after resize; wheel, pan, and 1:1 remain Manual and preserve center/scale.
 - VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview: [1.0.47 Overview](docs/marketplace-overview-1.0.47.md).
-Marketplace release text for this hotfix: [1.0.48 release notes](docs/marketplace-release-notes-1.0.48.md).
-GitHub Release body for this version: [1.0.45 GitHub Release draft](docs/github-release-1.0.45.md).
+Marketplace feature Overview: [1.0.50 Overview](docs/marketplace-overview-1.0.50.md).
+Marketplace release text for this candidate: [1.0.50 release notes](docs/marketplace-release-notes-1.0.50.md).
+Complete user-visible history: [CHANGELOG](CHANGELOG.md). The `v1.0.50` GitHub Release uses the same curated 1.0.50 release notes and points Visual Studio users to Marketplace rather than attaching a second VSIX distribution.
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License

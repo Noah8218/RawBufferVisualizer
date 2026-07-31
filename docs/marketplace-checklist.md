@@ -8,6 +8,7 @@ Build a Release VSIX:
 
 ```powershell
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.50
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472
 ```
 
@@ -36,6 +37,8 @@ Suggested Marketplace fields:
 
 Keep the product name stable and put the search-oriented positioning in the short description and first Overview paragraph. Keep the extension ID unchanged.
 
+For every update, the binary version, `CHANGELOG.md`, dedicated Marketplace Overview, Marketplace/GitHub release notes, embedded VSIX `ReleaseNotes.txt`, and in-product `ReleaseAnnouncement.cs` version must agree. The communication test above enforces that contract. Confirm the first Tool Window open shows the current non-modal highlights, **Dismiss** survives a Visual Studio restart, and **What's New** can reopen them without triggering a scan.
+
 ## GitHub Discovery
 
 Recommended repository description:
@@ -58,7 +61,9 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-For the 1.0.48 hotfix upload, use [marketplace-release-notes-1.0.48.md](marketplace-release-notes-1.0.48.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+For the `1.0.50` update, use [marketplace-release-notes-1.0.50.md](marketplace-release-notes-1.0.50.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+
+The GitHub tag workflow uses that same file as its curated Release body. It attaches only the standalone viewer; do not attach the Visual Studio VSIX to GitHub Releases.
 
 Record the first product demo with [demo-recording-guide.md](demo-recording-guide.md). Do not publish a simulated animation; the capture must show the real Visual Studio debugger workflow.
 
@@ -90,9 +95,9 @@ Lead with the debugger workflow, not the large-image benchmark. Publish only in 
 
 Current Overview copy:
 
-[Raw Buffer Visualizer 1.0.47 Marketplace Overview](marketplace-overview-1.0.47.md)
+[Raw Buffer Visualizer 1.0.50 Marketplace Overview](marketplace-overview-1.0.50.md)
 
-The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for 1.0.47.
+The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.50`.
 
 Historical 1.0.45 Overview copy:
 
@@ -238,6 +243,7 @@ dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLegacyImageCompatibility.ps1
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario BufferDoctor -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticVisionInspector -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticCollections -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario SmartTypeMapper -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Width 100000 -Height 100000 -Configuration Release -Framework net472 -Dense -NoBuild
@@ -245,7 +251,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Wid
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -PixelFormat Mono16 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat BGR24 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat Float32 -Width 320 -Height 240
-powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir artifacts\ui\fit-stability-after-1.0.50
 ```
 
 The docked smoke must validate:
@@ -259,8 +265,11 @@ The docked smoke must validate:
 - Medium and wide layouts expose compact tab Inspector and full Inspector respectively.
 - Save visible PNG, raw snapshot export path, pixel status, raw bytes, hover 5x5 statistics, selected/pinned marker, pan, zoom, drag, and wheel interaction.
 - Non-blank framebuffer capture.
+- Explicit Fit/Manual behavior: new image/Fit/double-click enter Fit; wheel/pan/1:1 enter Manual; resize keeps Fit aspect/margin or Manual center/scale.
 - `Publish-VisualStudioExtension.ps1` must prove that `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef` was generated from the current hybrid project and points its `CodeBase` to `RawBufferVisualizer.VisualStudio.Extensibility.dll`.
 - The VSIX must not contain the former `RawBufferVisualizer.VisualStudio.Vssdk.pkgdef`.
+- The `1.0.50` registration must use Package GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, contain exactly one `Menus.ctmenu, 2` registration, and reject retired `{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}`.
+- Package, menu, and ToolWindow registrations must each occur exactly once; each VS instance must have one main extension manifest and no legacy split VSSDK extension.
 - `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
 
 ## Install, Update, Uninstall, Reinstall
@@ -271,13 +280,17 @@ Use the install script for developer verification:
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
+The script closes no active Visual Studio window: all `devenv.exe` processes must already be closed. It stops idle `Microsoft.ServiceHub.Controller` processes between quiet VSIXInstaller operations so uninstall descendants cannot block the following install. Exit code `2004` requires checking the newest `%TEMP%\dd_VSIXInstaller_*.log` for the named blocker.
+
 Manual smoke checklist:
 
 - Install from the generated VSIX.
 - Restart Visual Studio.
 - Confirm `Raw Buffer Visualizer` appears in `Extensions > Manage Extensions > Installed`.
+- Open the View menu and confirm exactly one `Raw Buffer Visualizer` and one `Raw Buffer Visualizer: Scan Current Frame` command.
 - Debug `RawBufferVisualizer.VisualizerDebuggee`.
-- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, typed OpenCvSharp/Emgu CV/Bitmap lists and dictionaries, `imageList`, `imageDictionary`, and `imageArray`; confirm every result uses the same upper docked viewer.
+- Place the breakpoint after image construction. Confirm initialized OpenCvSharp/Emgu Mats open automatically on Break and **Scan Now**, Bitmap stays on its registered visualizer glyph, and repeated scans do not duplicate rows.
+- Inspect `RawBufferSnapshot`, `RawBufferView`, `ImagePtr`, `Bitmap`, typed OpenCvSharp/Emgu CV/Bitmap lists and dictionaries, `imageList`, `imageDictionary`, and `imageArray`; confirm every result uses the same upper docked viewer.
 - Inspect a mixed `object[]` containing a valid image, `null`, and an unsupported object; confirm the valid image row and per-item error rows appear together in the upper `Images` list.
 - Start two separate Visual Studio `devenv.exe` processes, invoke the visualizer in each process, and confirm each snapshot appears only in the docked viewer belonging to the process that invoked it.
 - Close Visual Studio.
@@ -287,7 +300,8 @@ Manual smoke checklist:
 - Reinstall and repeat one debugger inspection.
 - For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
 - After update, restart Visual Studio once with no solution open and confirm no `RawBufferVisualizerPackage did not load correctly` popup appears.
-- Run `Test-VisualStudioMarketplaceUpdate.ps1`, then run the installed-VSIX `AutomaticVisionInspector` and `MultiLibraryHybrid` scenarios. A successful real handoff is the registration acceptance test.
+- Mandatory update gate: begin with public `1.0.49` on the affected Windows 10 PC, update to the exact `1.0.50` candidate without uninstall, repair, or `/ResetSkipPkgs`, and prove the View/menu, Bitmap handoff, automatic Mat, and Fit/Manual workflows.
+- Run `Test-VisualStudioMarketplaceUpdate.ps1`, then run the installed-VSIX `AutomaticVisionInspector`, `AutomaticCollections`, and `MultiLibraryHybrid` scenarios. A successful real handoff is the registration acceptance test.
 - Confirm the normal install output contains no manual package-registration step.
 - If a developer PC already has stale VSSDK registration, close Visual Studio and run:
 
@@ -304,7 +318,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.48
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.50
 ```
 
 GitHub setup:
@@ -326,12 +340,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.48.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.50.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.48.md](marketplace-release-notes-1.0.48.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.50.md](marketplace-release-notes-1.0.50.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
@@ -342,8 +356,9 @@ artifacts\perf\vs-docked\visual-studio-docked-performance.json
 artifacts\perf\vs-docked\visual-studio-docked-session.json
 artifacts\perf\vs-docked\visual-studio-docked-session.png
 artifacts\perf\vs-docked\visual-studio-docked-framebuffer.png
-artifacts\ui\docked-layout-widths\layout-widths.json
+artifacts\ui\fit-stability-after-1.0.50\layout-widths.json
 artifacts\ui\installed-vsix-new-features\AutomaticVisionInspector-installed-vsix.json
+artifacts\ui\installed-vsix-new-features\AutomaticCollections-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\BufferDoctor-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\SmartTypeMapper-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
@@ -361,7 +376,12 @@ artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` when inspecting an image on a VS 2022 17.9-17.13 machine.
 - The installed debugger host reports `did not acknowledge the image handoff`.
+- Handoff success can be reported without an explicit ACK, or a NACK reason is unavailable.
 - The generated `.pkgdef` is owned by the VSSDK support project, points to `RawBufferVisualizer.VisualStudio.Vssdk.dll`, or is absent from the VSIX.
+- Package, `Menus.ctmenu, 2`, or ToolWindow registration is missing or duplicated.
+- The View menu contains anything other than one open command and one current-frame scan command.
 - A local install passes only after `Repair-VisualStudioExtensionRegistration.ps1` or another manual registry write.
-- README and the 1.0.47 Marketplace Overview disagree about Automatic Inspector's registered-type/manual-visualizer boundary.
-- Automatic scanning creates duplicate mapping rows for registered Bitmap, OpenCvSharp, Emgu CV, or RawBufferSnapshot values.
+- README and the 1.0.50 Marketplace Overview disagree about Automatic Inspector's automatic Mat/registered Bitmap boundary.
+- Initialized OpenCvSharp/Emgu Mats do not each create one live automatic row, Bitmap/RawBufferSnapshot/RawBufferView creates an automatic row, or **Scan Now** duplicates rows.
+- Fit changes image aspect after resize or Manual resize resets zoom/center.
+- The Windows 10 update from public `1.0.49` requires uninstall/reinstall.

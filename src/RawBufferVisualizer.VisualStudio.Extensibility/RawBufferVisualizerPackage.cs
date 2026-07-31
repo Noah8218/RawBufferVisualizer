@@ -18,9 +18,9 @@ using Task = System.Threading.Tasks.Task;
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "1.0.48")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "1.0.50")]
     [ProvideBindingPath]
-    [ProvideMenuResource("Menus.ctmenu", 1)]
+    [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(
         typeof(RawBufferToolWindow),
         Style = VsDockStyle.Tabbed,
@@ -31,7 +31,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     [Guid(PackageGuidString)]
     public sealed class RawBufferVisualizerPackage : AsyncPackage, IDebugEventCallback2
     {
-        public const string PackageGuidString = "c15cc508-0fef-49bb-9478-4d2fdf9f87d2";
+        // 1.0.47 and 1.0.48 used c15cc508-0fef-49bb-9478-4d2fdf9f87d2.
+        // Keep this recovery GUID distinct so Visual Studio profiles that cached
+        // the failed package identity can load the corrected package after update.
+        public const string PackageGuidString = "1977574b-f107-465f-bfd1-5fc022907039";
         public const string CommandSetGuidString = "8e7bc2db-12a4-4f45-8f5a-38c1846a0f26";
         public const int ShowToolWindowCommandId = 0x0100;
         public const int ScanLocalsCommandId = 0x0101;
@@ -158,11 +161,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             WriteAutomationLog("StartInboxWatcher " + _inboxDirectory);
             _watcher = new FileSystemWatcher(_inboxDirectory, "*.rbuf-handoff")
             {
-                EnableRaisingEvents = true,
+                EnableRaisingEvents = false,
                 IncludeSubdirectories = false,
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size
             };
             _watcher.Created += OnHandoffCreated;
+            _watcher.Renamed += OnHandoffRenamed;
+            _watcher.EnableRaisingEvents = true;
             _inboxPollTimer = new Timer(_ => PollInbox(), null, InboxPollMinInterval, Timeout.InfiniteTimeSpan);
         }
 
@@ -195,9 +200,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
                     window.ScanLocals();
                 }
+                catch (OperationCanceledException) when (DisposalToken.IsCancellationRequested)
+                {
+                }
                 catch (Exception ex)
                 {
-                    WriteAutomationLog("ScanLocals command error " + ex);
+                    await ReportCommandFailureAsync("scan the current debugger frame", ex);
                 }
             });
         }
@@ -262,11 +270,32 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     await ShowRawBufferToolWindowAsync(DisposalToken);
                     ScheduleNextInboxPoll(ScanInbox());
                 }
+                catch (OperationCanceledException) when (DisposalToken.IsCancellationRequested)
+                {
+                }
                 catch (Exception ex)
                 {
-                    WriteAutomationLog("Command error " + ex);
+                    await ReportCommandFailureAsync("open the docked window", ex);
                 }
             });
+        }
+
+        private async Task ReportCommandFailureAsync(string action, Exception exception)
+        {
+            WriteAutomationLog("Command error while attempting to " + action + ": " + exception);
+            await JoinableTaskFactory.SwitchToMainThreadAsync(CancellationToken.None);
+            VsShellUtilities.ShowMessageBox(
+                this,
+                "Raw Buffer Visualizer could not "
+                + action
+                + ".\n\n"
+                + exception.Message
+                + "\n\nDiagnostic log:\n"
+                + Path.Combine(VisualStudioTempStore.RootDirectory, "package.log"),
+                "Raw Buffer Visualizer",
+                OLEMSGICON.OLEMSGICON_CRITICAL,
+                OLEMSGBUTTON.OLEMSGBUTTON_OK,
+                OLEMSGDEFBUTTON.OLEMSGDEFBUTTON_FIRST);
         }
 
         private void OnHandoffCreated(object sender, FileSystemEventArgs e)
@@ -277,35 +306,77 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ScheduleInboxPoll(InboxPollMinInterval);
         }
 
+        private void OnHandoffRenamed(object sender, RenamedEventArgs e)
+        {
+            if (!e.FullPath.EndsWith(
+                    ".rbuf-handoff",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            WriteAutomationLog("Published " + e.FullPath);
+            _inboxPollInterval = InboxPollMinInterval;
+            QueueOpenHandoff(e.FullPath);
+            ScheduleInboxPoll(InboxPollMinInterval);
+        }
+
         private void QueueOpenHandoff(string requestPath)
         {
+            string processingPath;
+            try
+            {
+                if (!VisualizerHandoffInbox.TryClaimRequest(requestPath, out processingPath))
+                {
+                    WriteAutomationLog("Claim skipped " + requestPath);
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("Claim error " + requestPath + " " + ex);
+                return;
+            }
+
+            var fullRequestPath = Path.GetFullPath(requestPath);
             lock (_requestGate)
             {
-                if (!_queuedRequests.Add(Path.GetFullPath(requestPath)))
+                if (!_queuedRequests.Add(fullRequestPath))
                 {
                     WriteAutomationLog("Already queued " + requestPath);
+                    TryRejectHandoffOrLog(
+                        fullRequestPath,
+                        processingPath,
+                        "The handoff request was already queued.");
                     return;
                 }
             }
 
-            WriteAutomationLog("Queue " + requestPath);
+            WriteAutomationLog("Queue " + requestPath + " as " + processingPath);
             _ = JoinableTaskFactory.RunAsync(async delegate
             {
                 try
                 {
                     WriteAutomationLog("Open start " + requestPath);
-                    await OpenHandoffAsync(requestPath, DisposalToken);
+                    await OpenHandoffAsync(
+                        fullRequestPath,
+                        processingPath,
+                        DisposalToken);
                     WriteAutomationLog("Open end " + requestPath);
                 }
                 catch (Exception ex)
                 {
                     WriteAutomationLog("Open error " + ex);
+                    TryRejectHandoffOrLog(
+                        fullRequestPath,
+                        processingPath,
+                        ex.ToString());
                 }
                 finally
                 {
                     lock (_requestGate)
                     {
-                        _queuedRequests.Remove(Path.GetFullPath(requestPath));
+                        _queuedRequests.Remove(fullRequestPath);
                     }
                 }
             });
@@ -411,12 +482,70 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return (RawBufferToolWindow)window;
         }
 
-        private async Task OpenHandoffAsync(string requestPath, CancellationToken cancellationToken)
+        private async Task OpenHandoffAsync(
+            string requestPath,
+            string processingPath,
+            CancellationToken cancellationToken)
         {
             var window = await ShowRawBufferToolWindowAsync(cancellationToken);
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-            window.OpenHandoffRequest(requestPath);
-            ScheduleDebuggerVisualizerHostCleanup();
+            if (window.OpenClaimedHandoffRequest(requestPath, processingPath))
+            {
+                ScheduleDebuggerVisualizerHostCleanup();
+            }
+            else
+            {
+                WriteAutomationLog("Open rejected " + requestPath);
+                var state = VisualizerHandoffInbox.GetRequestState(requestPath);
+                if (state != VisualizerHandoffRequestState.Rejected
+                    && state != VisualizerHandoffRequestState.Acknowledged
+                    && state != VisualizerHandoffRequestState.Conflicted)
+                {
+                    TryRejectHandoffOrLog(
+                        requestPath,
+                        processingPath,
+                        "The docked window could not open the handoff.");
+                }
+            }
+        }
+
+        private static void TryRejectHandoffOrLog(
+            string requestPath,
+            string processingPath,
+            string reason)
+        {
+            if (VisualizerHandoffInbox.TryRejectRequest(
+                    requestPath,
+                    processingPath,
+                    reason))
+            {
+                return;
+            }
+
+            VisualizerHandoffRequestState state;
+            try
+            {
+                state = VisualizerHandoffInbox.GetRequestState(requestPath);
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog(
+                    "Rejection marker state read failed "
+                    + requestPath
+                    + " "
+                    + ex);
+                return;
+            }
+
+            if (state != VisualizerHandoffRequestState.Rejected
+                && state != VisualizerHandoffRequestState.Acknowledged)
+            {
+                WriteAutomationLog(
+                    "Rejection marker publish failed "
+                    + requestPath
+                    + " state "
+                    + state);
+            }
         }
 
         private void ScheduleDebuggerVisualizerHostCleanup()

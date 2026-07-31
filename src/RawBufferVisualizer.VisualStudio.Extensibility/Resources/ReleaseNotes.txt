@@ -1,0 +1,15 @@
+Raw Buffer Visualizer 1.0.50
+
+NEW
+- Automatic Vision Inspector can inspect exact OpenCvSharp and Emgu CV Mat lists and one-dimensional arrays when the saved Mat collections option is enabled.
+- Collection elements fail independently, so null or disposed Mats do not hide valid images.
+
+IMPROVED
+- Debugger handoffs use atomic request claiming and explicit completion acknowledgement.
+- New and selected images keep an aspect-correct Fit; manual zoom and pan remain stable.
+- Visual Studio command registration is guarded against duplicate View menu entries.
+
+The Raw Buffer Visualizer Tool Window now shows these highlights once per version. Use What's New to reopen them later.
+
+Complete notes:
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1050

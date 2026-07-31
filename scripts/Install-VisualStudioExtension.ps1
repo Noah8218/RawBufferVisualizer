@@ -111,6 +111,30 @@ function Find-VisualStudioInstanceId {
     ''
 }
 
+function Stop-IdleVisualStudioServiceHubController {
+    if (Get-Process -Name devenv -ErrorAction SilentlyContinue) {
+        return
+    }
+
+    $controllers = @(Get-Process -Name 'Microsoft.ServiceHub.Controller' -ErrorAction SilentlyContinue)
+    if ($controllers.Count -eq 0) {
+        return
+    }
+
+    foreach ($controller in $controllers) {
+        Stop-Process -Id $controller.Id -Force -ErrorAction SilentlyContinue
+    }
+
+    Start-Sleep -Milliseconds 500
+    $remaining = @(Get-Process -Name 'Microsoft.ServiceHub.Controller' -ErrorAction SilentlyContinue)
+    if ($remaining.Count -gt 0) {
+        $processIds = ($remaining | ForEach-Object { $_.Id }) -join ', '
+        throw "Visual Studio ServiceHub Controller did not stop. Remaining PID(s): $processIds"
+    }
+
+    Write-Host "Stopped $($controllers.Count) idle Visual Studio ServiceHub Controller process(es)."
+}
+
 function Invoke-VsixInstaller {
     param(
         [string]$InstallerPath,
@@ -123,14 +147,23 @@ function Invoke-VsixInstaller {
         return
     }
 
-    $process = Start-Process -FilePath $InstallerPath -ArgumentList $Arguments -Wait -PassThru -WindowStyle Hidden
-    if ($process.ExitCode -ne 0) {
+    Stop-IdleVisualStudioServiceHubController
+
+    # Start-Process -Wait also waits for descendant processes. VSIXInstaller can
+    # leave ServiceHub.Controller running after it has already exited, which made
+    # quiet reinstall automation wait forever. Wait for the installer process
+    # itself, then let the next operation clean up any idle controller.
+    $process = Start-Process -FilePath $InstallerPath -ArgumentList $Arguments -PassThru -WindowStyle Hidden
+    $process.WaitForExit()
+    $exitCode = $process.ExitCode
+    $process.Dispose()
+    if ($exitCode -ne 0) {
         if ($AllowFailure) {
-            Write-Warning "$Action failed with exit code $($process.ExitCode). Continuing."
+            Write-Warning "$Action failed with exit code $exitCode. Continuing."
             return
         }
 
-        throw "$Action failed with exit code $($process.ExitCode). Close Visual Studio and retry."
+        throw "$Action failed with exit code $exitCode. Close Visual Studio and retry."
     }
 }
 
@@ -226,13 +259,28 @@ function Test-DebuggerVisualizerVsixInstall {
 
     $pkgdefText = Get-Content -LiteralPath $pkgdef -Raw
     foreach ($requiredRegistration in @(
-        '[$RootKey$\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}]',
+        '[$RootKey$\Packages\{1977574b-f107-465f-bfd1-5fc022907039}]',
         '"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"',
         '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"',
+        '"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"',
         '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
     )) {
         if (-not $pkgdefText.Contains($requiredRegistration)) {
             throw "Installed VSIX has invalid hybrid VSSDK registration '$requiredRegistration': $pkgdef"
+        }
+    }
+
+    if ($pkgdefText.Contains('{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}')) {
+        throw "Installed VSIX still contains the retired 1.0.47/1.0.48 package GUID: $pkgdef"
+    }
+
+    foreach ($singleRegistration in @(
+        '[$RootKey$\Packages\{1977574b-f107-465f-bfd1-5fc022907039}]',
+        '"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"',
+        '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
+    )) {
+        if ([regex]::Matches($pkgdefText, [regex]::Escape($singleRegistration)).Count -ne 1) {
+            throw "Installed VSIX must contain exactly one registration '$singleRegistration': $pkgdef"
         }
     }
 

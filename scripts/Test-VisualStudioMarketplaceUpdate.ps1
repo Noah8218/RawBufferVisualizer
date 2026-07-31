@@ -7,12 +7,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$packageGuid = '{1977574b-f107-465f-bfd1-5fc022907039}'
+$retiredPackageGuid = '{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}'
+$legacySplitExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
+$packageRegistrationHeader = '[$RootKey$\Packages\' + $packageGuid + ']'
+$menuRegistration = '"' + $packageGuid + '"=", Menus.ctmenu, 2"'
+$toolWindowRegistrationHeader = '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
 $vsRoot = Join-Path $env:LOCALAPPDATA 'Microsoft\VisualStudio'
 if (-not (Test-Path -LiteralPath $vsRoot -PathType Container)) {
     throw "Visual Studio user data folder was not found: $vsRoot"
 }
 
 $installedExtensions = @()
+$legacySplitExtensions = @()
 $instances = @(Get-ChildItem -LiteralPath $vsRoot -Directory -Filter '17.0_*' |
     Where-Object { $IncludeExperimental -or $_.Name -match '^17\.0_[0-9a-fA-F]{8}$' })
 
@@ -27,8 +34,17 @@ foreach ($instance in $instances) {
         try {
             [xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath.FullName
             $identity = $manifest.PackageManifest.Metadata.Identity
+            if ([string]$identity.Id -eq $legacySplitExtensionId) {
+                $legacySplitExtensions += [pscustomobject]@{
+                    Instance = $instance.Name
+                    Version  = [string]$identity.Version
+                    Path     = $manifestPath.DirectoryName
+                }
+                continue
+            }
+
             if ([string]$identity.Id -eq $ExtensionId) {
-                $packageKey = "HKCU:\Software\Microsoft\VisualStudio\$($instance.Name)_Config\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}"
+                $packageKey = "HKCU:\Software\Microsoft\VisualStudio\$($instance.Name)_Config\Packages\$packageGuid"
                 $packageRegistered = Test-Path -LiteralPath $packageKey
                 $codeBase = if ($packageRegistered) {
                     [string](Get-ItemProperty -LiteralPath $packageKey -Name CodeBase -ErrorAction SilentlyContinue).CodeBase
@@ -50,10 +66,15 @@ foreach ($instance in $instances) {
                 else {
                     ''
                 }
-                $registrationPayloadValid = $pkgdefText.Contains('[$RootKey$\Packages\{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}]') `
+                $registrationPayloadValid = $pkgdefText.Contains($packageRegistrationHeader) `
                     -and $pkgdefText.Contains('"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"') `
                     -and $pkgdefText.Contains('"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"') `
-                    -and $pkgdefText.Contains('[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]')
+                    -and $pkgdefText.Contains($menuRegistration) `
+                    -and $pkgdefText.Contains($toolWindowRegistrationHeader) `
+                    -and [regex]::Matches($pkgdefText, [regex]::Escape($packageRegistrationHeader)).Count -eq 1 `
+                    -and [regex]::Matches($pkgdefText, [regex]::Escape($menuRegistration)).Count -eq 1 `
+                    -and [regex]::Matches($pkgdefText, [regex]::Escape($toolWindowRegistrationHeader)).Count -eq 1 `
+                    -and -not $pkgdefText.Contains($retiredPackageGuid)
 
                 $installedExtensions += [pscustomobject]@{
                     Instance                 = $instance.Name
@@ -74,6 +95,18 @@ foreach ($instance in $instances) {
 
 if ($installedExtensions.Count -eq 0) {
     throw "Raw Buffer Visualizer is not installed for any Visual Studio 2022 instance under $vsRoot."
+}
+
+if ($legacySplitExtensions.Count -gt 0) {
+    $legacySplitExtensions | Sort-Object Instance, Version | Format-Table -AutoSize
+    throw "The retired split VSSDK extension is still installed. Uninstall '$legacySplitExtensionId', restart Visual Studio, and repeat the qualification."
+}
+
+$duplicateMainInstalls = @($installedExtensions |
+    Group-Object Instance |
+    Where-Object Count -ne 1)
+if ($duplicateMainInstalls.Count -gt 0) {
+    throw 'Each Visual Studio instance must contain exactly one Raw Buffer Visualizer Marketplace extension manifest.'
 }
 
 $installedExtensions | Sort-Object Instance, Version | Format-Table -AutoSize

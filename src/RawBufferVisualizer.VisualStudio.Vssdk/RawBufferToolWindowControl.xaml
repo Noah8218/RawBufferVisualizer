@@ -190,6 +190,7 @@
     <Grid Background="#1E1E1E">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
@@ -209,12 +210,67 @@
                     <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
                     <CheckBox x:Name="SelectionOverlayBox" Content="Selection" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="8,0,0,0" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"/>
                     <ToggleButton x:Name="InspectorToggleButton" Content="Inspector" Visibility="Collapsed" Checked="InspectorToggleButton_Changed" Unchecked="InspectorToggleButton_Changed"/>
+                    <Button x:Name="WhatsNewButton"
+                            Content="What's New"
+                            ToolTip="Show the current Raw Buffer Visualizer release highlights"
+                            AutomationProperties.Name="Show release highlights"
+                            AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
+                            Click="WhatsNew_Click"/>
                     <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                 </WrapPanel>
             </DockPanel>
         </Border>
 
-        <Grid Grid.Row="1">
+        <Border x:Name="ReleaseAnnouncementBanner"
+                Grid.Row="1"
+                Visibility="Collapsed"
+                Background="#17384A"
+                BorderBrush="#2B88B8"
+                BorderThickness="0,0,0,1"
+                Padding="10,8"
+                AutomationProperties.Name="Raw Buffer Visualizer release highlights"
+                AutomationProperties.AutomationId="ReleaseAnnouncementBanner">
+            <DockPanel LastChildFill="True">
+                <StackPanel DockPanel.Dock="Right"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Top"
+                            Margin="12,0,0,0">
+                    <Button Content="View release notes"
+                            ToolTip="Open the complete release notes in your browser"
+                            AutomationProperties.Name="View release notes"
+                            AutomationProperties.AutomationId="ReleaseAnnouncementNotesButton"
+                            Click="ViewReleaseNotes_Click"/>
+                    <Button Content="Dismiss"
+                            Margin="0"
+                            ToolTip="Hide these highlights for this version"
+                            AutomationProperties.Name="Dismiss release highlights"
+                            AutomationProperties.AutomationId="ReleaseAnnouncementDismissButton"
+                            Click="DismissReleaseAnnouncement_Click"/>
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock x:Name="ReleaseAnnouncementTitleText"
+                               AutomationProperties.AutomationId="ReleaseAnnouncementTitle"
+                               FontSize="14"
+                               FontWeight="SemiBold"
+                               Foreground="#FFFFFF"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ReleaseAnnouncementAutomaticCollectionsText"
+                               Margin="0,4,0,0"
+                               Foreground="#D8EEF8"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ReleaseAnnouncementFailureIsolationText"
+                               Margin="0,2,0,0"
+                               Foreground="#D8EEF8"
+                               TextWrapping="Wrap"/>
+                    <TextBlock x:Name="ReleaseAnnouncementViewerReliabilityText"
+                               Margin="0,2,0,0"
+                               Foreground="#D8EEF8"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="2">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition x:Name="CompactInspectorSplitterRow" Height="Auto"/>
@@ -256,6 +312,17 @@
                                 AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
                                 Click="ScanNow_Click"/>
                     </WrapPanel>
+                    <CheckBox x:Name="IncludeImageCollectionsBox"
+                              Content="Mat collections"
+                              IsChecked="False"
+                              Margin="18,4,0,0"
+                              Foreground="{StaticResource TextBrush}"
+                              VerticalAlignment="Center"
+                              ToolTip="Inspect exact OpenCvSharp/Emgu Mat List and one-dimensional array values. Up to 8 items per collection and 16 per scan. This choice is saved."
+                              AutomationProperties.Name="Include Mat collections"
+                              AutomationProperties.AutomationId="AutomaticVisionIncludeCollectionsCheckBox"
+                              Checked="IncludeImageCollectionsBox_Changed"
+                              Unchecked="IncludeImageCollectionsBox_Changed"/>
                     <TextBlock x:Name="AutomaticFrameText"
                                Text="Current stack frame"
                                Margin="0,6,0,0"
@@ -698,7 +765,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="2" Height="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
+        <Border Grid.Row="3" Height="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
             <DockPanel LastChildFill="True">
                 <TextBlock x:Name="StatusText"
                            DockPanel.Dock="Right"

@@ -3,6 +3,13 @@ using System.Collections.Generic;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
+    internal enum AutomaticKnownImageKind
+    {
+        None = 0,
+        OpenCvSharpMat,
+        EmguCvMat
+    }
+
     /// <summary>
     /// Registry of image types that Raw Buffer Visualizer can open directly.
     /// </summary>
@@ -46,6 +53,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     runtimeTypeName,
                     "Cressem.ImageModel.ImagePtr",
                     StringComparison.OrdinalIgnoreCase);
+        }
+
+        public static AutomaticKnownImageKind GetAutomaticCaptureKind(string typeName)
+        {
+            var runtimeTypeName = GetRuntimeTypeName(typeName);
+            if (string.Equals(runtimeTypeName, "OpenCvSharp.Mat", StringComparison.OrdinalIgnoreCase))
+            {
+                return AutomaticKnownImageKind.OpenCvSharpMat;
+            }
+
+            if (string.Equals(runtimeTypeName, "Emgu.CV.Mat", StringComparison.OrdinalIgnoreCase))
+            {
+                return AutomaticKnownImageKind.EmguCvMat;
+            }
+
+            return AutomaticKnownImageKind.None;
         }
 
         public static bool IsMetadataOnlyType(string typeName)

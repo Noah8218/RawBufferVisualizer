@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using Microsoft.VisualStudio.DebuggerVisualizers;
@@ -86,6 +87,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
             var displayName = "Raw buffer";
             var sourceType = "Debugger visualizer";
             string? metadataPath = null;
+            var requestPaths = new List<string>();
 
             try
             {
@@ -103,11 +105,11 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                         .ToObject<VisualizerSnapshotChunk>()
                         ?? throw new InvalidDataException("The debugger visualizer returned an invalid chunk."));
 
-                VisualizerHandoffInbox.WriteSnapshotRequest(
+                requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
                     visualStudioProcessId,
                     metadataPath,
                     displayName,
-                    sourceType);
+                    sourceType));
             }
             catch (Exception ex)
             {
@@ -116,16 +118,24 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(metadataPath);
                 }
 
-                VisualizerHandoffInbox.WriteErrorRequest(
+                requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                     visualStudioProcessId,
                     displayName,
                     sourceType,
                     ex.Message,
                     ex.GetType().FullName,
-                    ex.ToString());
+                    ex.ToString()));
             }
 
+            ScheduleTerminalCleanup(requestPaths);
             WakeDockedToolWindow(visualStudioProcessId);
+        }
+
+        internal static void ScheduleTerminalCleanup(IEnumerable<string> requestPaths)
+        {
+            VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
+                requestPaths,
+                TimeSpan.FromMinutes(2));
         }
 
         internal static void WakeDockedToolWindow(int visualStudioProcessId)

@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "OpenVariable", "AutomaticVisionInspector", "MultiLibraryHybrid")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ReleaseAnnouncement")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -27,6 +27,11 @@ $failureScreenshotPath = Join-Path $outputRoot "$Scenario-failure.png"
 $activityLogPath = Join-Path $outputRoot "$Scenario-activity-log.xml"
 $userMappingPath = Join-Path $env:APPDATA "RawBufferVisualizer\type-mappings.json"
 $userMappingBackupPath = Join-Path $outputRoot ("SmartTypeMapper-user-mapping-backup-" + $PID + ".json")
+$automaticPreferencePath = Join-Path $env:APPDATA "RawBufferVisualizer\automatic-inspector-settings.json"
+$automaticPreferenceBackupPath = Join-Path $outputRoot ("AutomaticInspector-preference-backup-" + $PID + ".json")
+$releaseAnnouncementPreferencePath = Join-Path $env:APPDATA "RawBufferVisualizer\release-announcement-settings.json"
+$releaseAnnouncementPreferenceBackupPath = Join-Path $outputRoot ("ReleaseAnnouncement-preference-backup-" + $PID + ".json")
+$packageLogPath = Join-Path ([IO.Path]::GetTempPath()) "RawBufferVisualizer\VisualStudio\package.log"
 Remove-Item -LiteralPath $sessionPath, $resultPath, $failureScreenshotPath, $activityLogPath -ErrorAction SilentlyContinue
 
 function Assert-InteractiveDesktop {
@@ -442,6 +447,115 @@ function Show-RawBufferToolWindow([int]$ProcessId) {
             $null,
             $commands,
             @("{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}", 0x0100, $null, $null)) | Out-Null
+    }
+}
+
+function Assert-RawBufferViewMenuContract(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    Focus-Window $MainHandle
+    $root = Get-AutomationRoot $MainHandle
+    $topLevelMenuItems = Get-ElementsByControlType $root ([System.Windows.Automation.ControlType]::MenuItem)
+    $viewMenu = $topLevelMenuItems |
+        Where-Object {
+            $name = [string]$_.Current.Name
+            $name -eq "View" -or
+            $name -like "View(*" -or
+            $name -eq ([string]([char]0xBCF4) + [string]([char]0xAE30)) -or
+            $name -like (([string]([char]0xBCF4) + [string]([char]0xAE30)) + "(*")
+        } |
+        Select-Object -First 1
+    if (-not $viewMenu) {
+        throw "Visual Studio View menu was not found."
+    }
+
+    $expandPattern = $null
+    if (-not $viewMenu.TryGetCurrentPattern(
+        [System.Windows.Automation.ExpandCollapsePattern]::Pattern,
+        [ref]$expandPattern)) {
+        throw "Visual Studio View menu does not support UI Automation expansion."
+    }
+
+    ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Expand()
+    try {
+        $menuItems = Wait-Until "Raw Buffer Visualizer View menu entries" {
+            $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+            $viewBounds = $viewMenu.Current.BoundingRectangle
+            $menuItemTypeCondition = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+                [System.Windows.Automation.ControlType]::MenuItem)
+            $openNameCondition = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::NameProperty,
+                "Raw Buffer Visualizer")
+            $scanNameCondition = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::NameProperty,
+                "Raw Buffer Visualizer: Scan Current Frame")
+            $nameCondition = [System.Windows.Automation.OrCondition]::new(
+                [System.Windows.Automation.Condition[]]@(
+                    $openNameCondition,
+                    $scanNameCondition))
+            $matchingCondition = [System.Windows.Automation.AndCondition]::new(
+                [System.Windows.Automation.Condition[]]@(
+                    $menuItemTypeCondition,
+                    $nameCondition))
+            $matchingCollection = $desktop.FindAll(
+                [System.Windows.Automation.TreeScope]::Descendants,
+                $matchingCondition)
+            $visibleItems = @()
+            for ($index = 0; $index -lt $matchingCollection.Count; $index++) {
+                $item = $matchingCollection.Item($index)
+                if (
+                    $item.Current.ProcessId -eq $Process.Id -and
+                    -not [bool]$item.Current.IsOffscreen -and
+                    $item.Current.BoundingRectangle.Left -ge ($viewBounds.Left - 64) -and
+                    $item.Current.BoundingRectangle.Left -le ($viewBounds.Left + 640)) {
+                    $visibleItems += $item
+                }
+            }
+            if ($visibleItems.Count -gt 0) { $visibleItems } else { $null }
+        } 15
+
+        $menuItems = @($menuItems |
+            Group-Object {
+                $bounds = $_.Current.BoundingRectangle
+                "{0}|{1}|{2}|{3}|{4}" -f
+                    [string]$_.Current.Name,
+                    [Math]::Round($bounds.Left, 1),
+                    [Math]::Round($bounds.Top, 1),
+                    [Math]::Round($bounds.Width, 1),
+                    [Math]::Round($bounds.Height, 1)
+            } |
+            ForEach-Object { $_.Group[0] })
+        $openCount = @($menuItems |
+            Where-Object { [string]$_.Current.Name -eq "Raw Buffer Visualizer" }).Count
+        $scanCount = @($menuItems |
+            Where-Object { [string]$_.Current.Name -eq "Raw Buffer Visualizer: Scan Current Frame" }).Count
+        if ($openCount -ne 1 -or $scanCount -ne 1) {
+            $menuItems |
+                ForEach-Object {
+                    "name=$($_.Current.Name) id=$($_.Current.AutomationId) rect=$($_.Current.BoundingRectangle) offscreen=$($_.Current.IsOffscreen)"
+                } |
+                Set-Content -LiteralPath (Join-Path $outputRoot "ViewMenu-contract-failure.log") -Encoding UTF8
+            Capture-Window $MainHandle (Join-Path $outputRoot "ViewMenu-contract-failure.png")
+            throw "View menu contract failed: expected one open command and one scan command; found open=$openCount, scan=$scanCount."
+        }
+
+        $menuScreenshotPath = Join-Path $outputRoot "$Scenario-view-menu-after.png"
+        Capture-Window $MainHandle $menuScreenshotPath
+
+        [pscustomobject]@{
+            openCommandCount = $openCount
+            scanCommandCount = $scanCount
+            screenshotPath = $menuScreenshotPath
+        }
+    }
+    finally {
+        try {
+            ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Collapse()
+        }
+        catch {
+            [System.Windows.Forms.SendKeys]::SendWait("{ESC}")
+        }
     }
 }
 
@@ -917,20 +1031,214 @@ function Invoke-AutomaticVisionInspectorScenario(
     }
 }
 
+function Invoke-AutomaticCollectionsScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 750
+    $automationRoot = Get-AutomationRoot $MainHandle
+    $collectionBox = Wait-Until "Automatic collection preference check box" {
+        Find-ElementByAutomationId $automationRoot "AutomaticVisionIncludeCollectionsCheckBox"
+    } 30
+    $collectionTogglePattern = $null
+    if (-not $collectionBox.TryGetCurrentPattern(
+        [System.Windows.Automation.TogglePattern]::Pattern,
+        [ref]$collectionTogglePattern)) {
+        throw "Automatic collection preference check box does not support TogglePattern."
+    }
+    if (([System.Windows.Automation.TogglePattern]$collectionTogglePattern).Current.ToggleState -ne
+        [System.Windows.Automation.ToggleState]::On) {
+        throw "Automatic collection inspection was not restored as enabled."
+    }
+
+    $scanButton = Wait-Until "Automatic collection Scan Now button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+    } 30
+    $invokePattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$invokePattern)) {
+        throw "Automatic collection Scan Now button does not support InvokePattern."
+    }
+
+    $scanStopwatch = [Diagnostics.Stopwatch]::StartNew()
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    $firstState = Wait-Until "Automatic collection scan state" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $openCvRows = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "OpenCvSharp.Mat"
+            })
+            $emguRows = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "Emgu.CV.Mat"
+            })
+            if ([int]$state.documentCount -ne 7 -or
+                [int]$state.errorCount -ne 2 -or
+                $openCvRows.Count -ne 5 -or
+                $emguRows.Count -ne 2 -or
+                @($openCvRows | Where-Object { -not [bool]$_.isError }).Count -ne 3 -or
+                @($openCvRows | Where-Object { [bool]$_.isError }).Count -ne 2 -or
+                @($emguRows | Where-Object { [bool]$_.isError }).Count -ne 0 -or
+                -not [bool]$state.automaticCollectionsEnabled) {
+                return $null
+            }
+
+            $status = [string]$state.automaticScanStatus
+            if ($status -notmatch "7 detected: 5 opened, 0 need mapping, 2 failed" -or
+                $status -notmatch "partialOpenCvMatList: 5 inspected, 3 opened, 2 failed" -or
+                $status -notmatch "emguMatArray: 2 inspected, 2 opened") {
+                return $null
+            }
+
+            $state
+        }
+        catch {
+            $null
+        }
+    } 60
+    $scanStopwatch.Stop()
+    if ($scanStopwatch.Elapsed.TotalSeconds -gt 15) {
+        throw "Automatic collection scan exceeded the 15 second installed-VSIX smoke budget."
+    }
+
+    $firstNames = @($firstState.documents | ForEach-Object { [string]$_.title })
+    $firstSessionStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    $secondState = Wait-Until "Automatic collection duplicate-free rescan" {
+        if (-not (Test-Path -LiteralPath $sessionPath) -or
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $firstSessionStamp) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([int]$state.documentCount -eq 7 -and
+                [int]$state.errorCount -eq 2) {
+                $state
+            }
+            else {
+                $null
+            }
+        }
+        catch {
+            $null
+        }
+    } 30
+    $secondNames = @($secondState.documents | ForEach-Object { [string]$_.title })
+
+    $capturePath = Join-Path $outputRoot "automatic-collections.png"
+    Capture-Window $MainHandle $capturePath
+
+    [ordered]@{
+        scenario = "AutomaticCollections"
+        screenshotPath = $capturePath
+        rowsBeforeRepeatedScan = $firstNames
+        rowsAfterRepeatedScan = $secondNames
+        listInspected = $true
+        arrayInspected = $true
+        openedCount = 5
+        failedCount = 2
+        partialFailureIsolated = $true
+        duplicateFree = $true
+        collectionPreferenceRestored = $true
+        scanElapsedMilliseconds = [Math]::Round($scanStopwatch.Elapsed.TotalMilliseconds, 2)
+    }
+}
+
+function Invoke-ReleaseAnnouncementScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 750
+    $root = Get-AutomationRoot $MainHandle
+    $title = Wait-Until "1.0.50 release announcement title" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
+    } 30
+    if (-not $title -or [string]$title.Current.Name -ne "New in Raw Buffer Visualizer 1.0.50") {
+        throw "The installed Tool Window did not expose the expected 1.0.50 release title."
+    }
+
+    $rowsBefore = @(Get-ImageListItems $root).Count
+    $capturePath = Join-Path $outputRoot "release-announcement-installed.png"
+    Capture-Window $MainHandle $capturePath
+
+    $dismissButton = Find-ElementByAutomationId $root "ReleaseAnnouncementDismissButton"
+    $dismissPattern = $null
+    if (-not $dismissButton -or -not $dismissButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$dismissPattern)) {
+        throw "The release announcement Dismiss button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$dismissPattern).Invoke()
+
+    Wait-Until "persisted release announcement dismissal" {
+        if (-not (Test-Path -LiteralPath $releaseAnnouncementPreferencePath)) {
+            return $null
+        }
+        try {
+            $saved = Get-Content -LiteralPath $releaseAnnouncementPreferencePath -Raw | ConvertFrom-Json
+            if ([string]$saved.lastSeenVersion -eq "1.0.50" -and
+                -not (Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle")) {
+                return $saved
+            }
+        }
+        catch {
+        }
+        $null
+    } 30 | Out-Null
+
+    $openButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
+    $openPattern = $null
+    if (-not $openButton -or -not $openButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$openPattern)) {
+        throw "The What's New button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$openPattern).Invoke()
+    Wait-Until "reopened release announcement" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
+    } 30 | Out-Null
+
+    $rowsAfter = @(Get-ImageListItems (Get-AutomationRoot $MainHandle)).Count
+    if ($rowsAfter -ne $rowsBefore) {
+        throw "Opening or dismissing release highlights changed the image list ($rowsBefore to $rowsAfter)."
+    }
+
+    [ordered]@{
+        scenario = "ReleaseAnnouncement"
+        screenshotPath = $capturePath
+        title = [string]$title.Current.Name
+        dismissalPersisted = $true
+        reopenedFromWhatsNew = $true
+        imageRowsBefore = $rowsBefore
+        imageRowsAfter = $rowsAfter
+        inspectionSideEffectFree = ($rowsBefore -eq $rowsAfter)
+    }
+}
+
 function Invoke-MultiLibraryHybridScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
     $registeredTypes = [ordered]@{
-        openCvMat = "OpenCvSharp.Mat"
-        emguMat = "Emgu.CV.Mat"
         bitmap = "System.Drawing.Bitmap"
     }
+    $automaticRegisteredTypes = @(
+        "OpenCvSharp.Mat",
+        "Emgu.CV.Mat"
+    )
     $registeredAutomaticSkipTypes = @(
         "RawBufferVisualizer.Sdk.RawBufferSnapshot",
-        "RawBufferVisualizer.Sdk.RawBufferView"
+        "RawBufferVisualizer.Sdk.RawBufferView",
+        "System.Drawing.Bitmap"
     )
-    $registeredSkipTypes = @($registeredTypes.Values) + $registeredAutomaticSkipTypes
+    $registeredSkipTypes = $registeredAutomaticSkipTypes
     $automaticTypes = @(
+        "OpenCvSharp.Mat",
+        "Emgu.CV.Mat",
         "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView",
         "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult",
         "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr",
@@ -938,6 +1246,8 @@ function Invoke-MultiLibraryHybridScenario(
         "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage"
     )
     $automaticTypeCounts = [ordered]@{
+        "OpenCvSharp.Mat" = 1
+        "Emgu.CV.Mat" = 1
         "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView" = 2
         "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult" = 1
         "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr" = 1
@@ -948,6 +1258,52 @@ function Invoke-MultiLibraryHybridScenario(
     Show-LocalsWindow $Process.Id
     Show-RawBufferToolWindow $Process.Id
     Start-Sleep -Milliseconds 750
+
+    $automaticBreakState = Wait-Until "automatic registered images opened on Break Mode" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            foreach ($entry in $automaticTypeCounts.GetEnumerator()) {
+                $sourceType = [string]$entry.Key
+                $expectedCount = [int]$entry.Value
+                $matches = @($state.documents | Where-Object {
+                    [string]$_.sourceType -eq $sourceType -and
+                    [bool]$_.isAutomaticInspection -and
+                    -not [bool]$_.isError
+                })
+                if ($matches.Count -ne $expectedCount) {
+                    return $null
+                }
+            }
+
+            if ([string]$state.automaticScanStatus -notmatch "8 detected: 8 opened, 0 need mapping, 0 failed") {
+                return $null
+            }
+
+            $state
+        }
+        catch {
+            $null
+        }
+    } 60
+
+    foreach ($sourceType in $automaticRegisteredTypes) {
+        $document = @($automaticBreakState.documents | Where-Object {
+            [string]$_.sourceType -eq $sourceType
+        })[0]
+        if (-not [bool]$document.isAutomaticInspection -or
+            [string]$document.sourceMode -ne "live" -or
+            [int]$document.width -ne 640 -or
+            [int]$document.height -ne 484 -or
+            [int]$document.stride -ne 640 -or
+            [string]$document.pixelFormat -ne "Mono8") {
+            throw "$sourceType was not automatically opened as the expected initialized 640x484 live Mono8 image."
+        }
+    }
+
     $scanButton = Wait-Until "Automatic Vision Inspector Scan Now button" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
     } 30
@@ -957,10 +1313,12 @@ function Invoke-MultiLibraryHybridScenario(
         [ref]$invokePattern)) {
         throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
     }
+    $beforeManualScanStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
     ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
 
-    Wait-Until "automatic camera-shape inspection before registered visualizers" {
-        if (-not (Test-Path -LiteralPath $sessionPath)) {
+    Wait-Until "Scan Now automatic registered-image refresh" {
+        if (-not (Test-Path -LiteralPath $sessionPath) -or
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $beforeManualScanStamp) {
             return $null
         }
 
@@ -1046,7 +1404,7 @@ function Invoke-MultiLibraryHybridScenario(
             }
             if ([int]$state.documentCount -ne 9 -or
                 [int]$state.errorCount -ne 0 -or
-                [string]$state.automaticScanStatus -notmatch "6 detected: 6 opened, 0 need mapping, 0 failed") {
+                [string]$state.automaticScanStatus -notmatch "8 detected: 8 opened, 0 need mapping, 0 failed") {
                 return $null
             }
 
@@ -1064,9 +1422,10 @@ function Invoke-MultiLibraryHybridScenario(
         scenario = "MultiLibraryHybrid"
         screenshotPath = $capturePath
         registeredVisualizerTypes = @($registeredTypes.Values)
+        registeredTypesOpenedByAutomaticScan = $automaticRegisteredTypes
         registeredAutomaticSkipTypes = $registeredAutomaticSkipTypes
         automaticInspectorTypes = $automaticTypes
-        registeredTypesSkippedByAutomaticScan = $true
+        registeredTypesSkippedByAutomaticScan = $registeredAutomaticSkipTypes
         documentCount = [int]$finalState.documentCount
         errorCount = [int]$finalState.errorCount
         automaticScanStatus = [string]$finalState.automaticScanStatus
@@ -1213,6 +1572,12 @@ if (-not (Test-Path -LiteralPath $debuggeePath)) {
 $debuggeePath = (Resolve-Path -LiteralPath $debuggeePath).Path
 
 $testStartedUtc = [DateTime]::UtcNow
+$packageLogStartLineCount = if (Test-Path -LiteralPath $packageLogPath) {
+    @(Get-Content -LiteralPath $packageLogPath).Count
+}
+else {
+    0
+}
 $visualStudio = $null
 $mainHandle = [IntPtr]::Zero
 $completed = $false
@@ -1220,13 +1585,20 @@ $executionStateActive = $false
 $debuggingStopped = $false
 $userMappingIsolated = $false
 $userMappingExisted = $false
+$menuContract = $null
+$automaticPreferenceIsolated = $false
+$automaticPreferenceExisted = $false
+$releaseAnnouncementPreferenceIsolated = $false
+$releaseAnnouncementPreferenceExisted = $false
 
 $scenarioArgument = switch ($Scenario) {
     "BufferDoctor" { "--buffer-doctor-debug" }
     "SmartTypeMapper" { "--smart-type-mapper-fallback-debug" }
     "OpenVariable" { "--smart-type-mapper-debug" }
     "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
+    "AutomaticCollections" { "--automatic-collections-debug" }
     "MultiLibraryHybrid" { "--multi-library-debug" }
+    "ReleaseAnnouncement" { "--buffer-doctor-debug" }
     default { "--buffer-doctor-debug" }
 }
 
@@ -1238,6 +1610,33 @@ try {
             Copy-Item -LiteralPath $userMappingPath -Destination $userMappingBackupPath -Force
         }
         Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
+    }
+    if ($Scenario -eq "MultiLibraryHybrid" -or $Scenario -eq "AutomaticCollections") {
+        $automaticPreferenceIsolated = $true
+        $automaticPreferenceExisted = Test-Path -LiteralPath $automaticPreferencePath
+        if ($automaticPreferenceExisted) {
+            Copy-Item -LiteralPath $automaticPreferencePath -Destination $automaticPreferenceBackupPath -Force
+        }
+
+        $automaticPreferenceDirectory = Split-Path -Parent $automaticPreferencePath
+        New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
+        $automaticPreferenceJson = [ordered]@{
+            version = 1
+            autoScanOnBreak = $true
+            includeImageCollections = ($Scenario -eq "AutomaticCollections")
+        } | ConvertTo-Json
+        [IO.File]::WriteAllText(
+            $automaticPreferencePath,
+            $automaticPreferenceJson,
+            (New-Object Text.UTF8Encoding($false)))
+    }
+    if ($Scenario -eq "ReleaseAnnouncement") {
+        $releaseAnnouncementPreferenceIsolated = $true
+        $releaseAnnouncementPreferenceExisted = Test-Path -LiteralPath $releaseAnnouncementPreferencePath
+        if ($releaseAnnouncementPreferenceExisted) {
+            Copy-Item -LiteralPath $releaseAnnouncementPreferencePath -Destination $releaseAnnouncementPreferenceBackupPath -Force
+        }
+        Remove-Item -LiteralPath $releaseAnnouncementPreferencePath -Force -ErrorAction SilentlyContinue
     }
 
     [RawBufferInstalledVsixNative]::SetThreadExecutionState($executionState) | Out-Null
@@ -1270,6 +1669,7 @@ try {
     } 180
 
     Focus-Window $mainHandle 1920 1040
+    $menuContract = Assert-RawBufferViewMenuContract $visualStudio $mainHandle
     Show-RawBufferToolWindow $visualStudio.Id
     Start-Sleep -Milliseconds 1500
     $toolElement = Wait-Until "Raw Buffer Visualizer tool window element" { Find-RawBufferToolWindowElement $mainHandle } 30
@@ -1289,6 +1689,12 @@ try {
         elseif ($Scenario -eq "MultiLibraryHybrid") {
             (Find-TreeItem $root "openCvMat") -ne $null
         }
+        elseif ($Scenario -eq "AutomaticCollections") {
+            (Find-TreeItem $root "partialOpenCvMatList") -ne $null
+        }
+        elseif ($Scenario -eq "ReleaseAnnouncement") {
+            (Find-TreeItem $root "badStrideSnapshot") -ne $null
+        }
         else {
             (Find-TreeItem $root "companyFrameList") -ne $null
         }
@@ -1301,11 +1707,33 @@ try {
         "SmartTypeMapper" { Invoke-SmartTypeMapperScenario $visualStudio $mainHandle }
         "OpenVariable" { Invoke-OpenVariableScenario $visualStudio $mainHandle }
         "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
+        "AutomaticCollections" { Invoke-AutomaticCollectionsScenario $visualStudio $mainHandle }
         "MultiLibraryHybrid" { Invoke-MultiLibraryHybridScenario $visualStudio $mainHandle }
+        "ReleaseAnnouncement" { Invoke-ReleaseAnnouncementScenario $visualStudio $mainHandle }
     }
 
     Stop-Debugging $visualStudio.Id
     $debuggingStopped = $true
+    Start-Sleep -Milliseconds 250
+
+    $newPackageLogLines = if (Test-Path -LiteralPath $packageLogPath) {
+        @(Get-Content -LiteralPath $packageLogPath | Select-Object -Skip $packageLogStartLineCount)
+    }
+    else {
+        @()
+    }
+    $packageProtocolErrors = @($newPackageLogLines | Where-Object {
+        $_ -match "Claim error" -or
+        $_ -match "Open error" -or
+        $_ -match "Rejection marker publish failed" -or
+        $_ -match "Automatic Inspector settings were ignored" -or
+        $_ -match "Release announcement settings were ignored"
+    })
+    if ($packageProtocolErrors.Count -gt 0) {
+        $packageProtocolErrors |
+            Set-Content -LiteralPath (Join-Path $outputRoot "$Scenario-package-protocol-errors.log") -Encoding UTF8
+        throw "Raw Buffer Visualizer package log contains $($packageProtocolErrors.Count) protocol or settings error(s) from this smoke session."
+    }
 
     $result = [ordered]@{
         passed = $true
@@ -1317,6 +1745,9 @@ try {
             processId = $visualStudio.Id
         }
         result = $scenarioResult
+        viewMenu = $menuContract
+        packageLogNewLineCount = $newPackageLogLines.Count
+        packageProtocolErrorCount = 0
         resultPath = $resultPath
     }
     $result | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $resultPath -Encoding UTF8
@@ -1356,6 +1787,28 @@ finally {
         }
         else {
             Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if ($automaticPreferenceIsolated) {
+        if ($automaticPreferenceExisted -and (Test-Path -LiteralPath $automaticPreferenceBackupPath)) {
+            $automaticPreferenceDirectory = Split-Path -Parent $automaticPreferencePath
+            New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
+            Copy-Item -LiteralPath $automaticPreferenceBackupPath -Destination $automaticPreferencePath -Force
+            Remove-Item -LiteralPath $automaticPreferenceBackupPath -Force
+        }
+        else {
+            Remove-Item -LiteralPath $automaticPreferencePath -Force -ErrorAction SilentlyContinue
+        }
+    }
+    if ($releaseAnnouncementPreferenceIsolated) {
+        if ($releaseAnnouncementPreferenceExisted -and (Test-Path -LiteralPath $releaseAnnouncementPreferenceBackupPath)) {
+            $releaseAnnouncementPreferenceDirectory = Split-Path -Parent $releaseAnnouncementPreferencePath
+            New-Item -ItemType Directory -Path $releaseAnnouncementPreferenceDirectory -Force | Out-Null
+            Copy-Item -LiteralPath $releaseAnnouncementPreferenceBackupPath -Destination $releaseAnnouncementPreferencePath -Force
+            Remove-Item -LiteralPath $releaseAnnouncementPreferenceBackupPath -Force
+        }
+        else {
+            Remove-Item -LiteralPath $releaseAnnouncementPreferencePath -Force -ErrorAction SilentlyContinue
         }
     }
 }

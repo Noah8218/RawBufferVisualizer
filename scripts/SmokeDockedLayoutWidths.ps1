@@ -169,6 +169,120 @@ foreach ($layoutWidth in $Widths) {
     if ($aspectError -gt 0.01) {
         throw "Fit aspect mismatch at width $layoutWidth. Relative error: $aspectError"
     }
+    if (-not $viewState.IsFitMode) {
+        throw "A newly opened image did not start in sticky Fit mode at width $layoutWidth."
+    }
+    $initialFitMargin = [Math]::Min($viewState.Width / $width, $viewState.Height / $height)
+    if ([Math]::Abs($initialFitMargin - 1.05) -gt 0.005) {
+        throw "Initial Fit margin was not 5% at width $layoutWidth. Margin: $initialFitMargin"
+    }
+
+    $distortedState = [RawBufferVisualizer.OpenGlCanvas.RawOpenGlViewState]::new(
+        $width,
+        $height,
+        10.0,
+        20.0,
+        400.0,
+        400.0)
+    if (-not $imageView.TryApplyViewState($distortedState)) {
+        throw "A matching manual view state could not be restored at width $layoutWidth."
+    }
+    Wait-Dispatcher 100
+    $normalizedState = $imageView.GetViewState()
+    $normalizedAspect = $normalizedState.Width / $normalizedState.Height
+    $normalizedViewportAspect = $imageView.ActualWidth / $imageView.ActualHeight
+    $normalizedAspectError = [Math]::Abs($normalizedAspect - $normalizedViewportAspect) / $normalizedViewportAspect
+    if ($normalizedState.IsFitMode -or $normalizedAspectError -gt 0.01) {
+        throw "A restored manual view was not normalized to the current viewport at width $layoutWidth. Relative error: $normalizedAspectError"
+    }
+
+    $imageView.FitToImage()
+    $imageView.SetZoomScale(1.0)
+    if ($imageView.GetViewState().IsFitMode) {
+        throw "The 1:1 command did not switch the viewer to Manual mode at width $layoutWidth."
+    }
+    $imageView.FitToImage()
+    $imageView.ZoomAtScreenPoint(
+        [System.Windows.Point]::new($imageView.ActualWidth / 2, $imageView.ActualHeight / 2),
+        120)
+    if ($imageView.GetViewState().IsFitMode) {
+        throw "Wheel zoom did not switch the viewer to Manual mode at width $layoutWidth."
+    }
+    $imageView.FitToImage()
+    $imageView.PanByImagePixels(1.0, 1.0)
+    if ($imageView.GetViewState().IsFitMode) {
+        throw "Pan did not switch the viewer to Manual mode at width $layoutWidth."
+    }
+
+    $imageView.FitToImage()
+    [RawBufferDockedLayoutNative]::SetWindowPos(
+        $helper.Handle,
+        [RawBufferDockedLayoutNative]::HWND_TOPMOST,
+        20,
+        20,
+        $layoutWidth,
+        620,
+        0x0040) | Out-Null
+    Wait-Dispatcher 500
+    $resizedFitState = $imageView.GetViewState()
+    $resizedFitAspect = $resizedFitState.Width / $resizedFitState.Height
+    $resizedViewportAspect = $imageView.ActualWidth / $imageView.ActualHeight
+    $resizedFitAspectError = [Math]::Abs($resizedFitAspect - $resizedViewportAspect) / $resizedViewportAspect
+    $resizedFitMargin = [Math]::Min($resizedFitState.Width / $width, $resizedFitState.Height / $height)
+    if (-not $resizedFitState.IsFitMode -or $resizedFitAspectError -gt 0.01) {
+        throw "Fit mode did not remain aspect-correct after resize at width $layoutWidth. Relative error: $resizedFitAspectError"
+    }
+    if ([Math]::Abs($resizedFitMargin - 1.05) -gt 0.005) {
+        throw "Fit mode did not retain its 5% margin after resize at width $layoutWidth. Margin: $resizedFitMargin"
+    }
+
+    $imageView.SetZoomScale(2.0)
+    $imageView.PanByImagePixels(31.0, -17.0)
+    Wait-Dispatcher 100
+    $manualBeforeResize = $imageView.GetViewState()
+    $manualZoomBeforeResize = $imageView.ZoomScale
+    $manualCenterXBeforeResize = $manualBeforeResize.Left + ($manualBeforeResize.Width / 2)
+    $manualCenterYBeforeResize = $manualBeforeResize.Top + ($manualBeforeResize.Height / 2)
+    [RawBufferDockedLayoutNative]::SetWindowPos(
+        $helper.Handle,
+        [RawBufferDockedLayoutNative]::HWND_TOPMOST,
+        20,
+        20,
+        $layoutWidth,
+        560,
+        0x0040) | Out-Null
+    Wait-Dispatcher 500
+    $manualAfterResize = $imageView.GetViewState()
+    $manualZoomAfterResize = $imageView.ZoomScale
+    $manualCenterXAfterResize = $manualAfterResize.Left + ($manualAfterResize.Width / 2)
+    $manualCenterYAfterResize = $manualAfterResize.Top + ($manualAfterResize.Height / 2)
+    $manualAspect = $manualAfterResize.Width / $manualAfterResize.Height
+    $manualViewportAspect = $imageView.ActualWidth / $imageView.ActualHeight
+    $manualAspectError = [Math]::Abs($manualAspect - $manualViewportAspect) / $manualViewportAspect
+    if ($manualAfterResize.IsFitMode) {
+        throw "Manual zoom/pan unexpectedly returned to Fit mode after resize at width $layoutWidth."
+    }
+    if ([Math]::Abs($manualZoomAfterResize - $manualZoomBeforeResize) -gt 0.01) {
+        throw "Manual zoom changed after resize at width $layoutWidth. Before: $manualZoomBeforeResize After: $manualZoomAfterResize"
+    }
+    if ([Math]::Abs($manualCenterXAfterResize - $manualCenterXBeforeResize) -gt 0.001 -or
+        [Math]::Abs($manualCenterYAfterResize - $manualCenterYBeforeResize) -gt 0.001) {
+        throw "Manual center changed after resize at width $layoutWidth."
+    }
+    if ($manualAspectError -gt 0.01) {
+        throw "Manual view aspect mismatch after resize at width $layoutWidth. Relative error: $manualAspectError"
+    }
+
+    $imageView.FitToImage()
+    [RawBufferDockedLayoutNative]::SetWindowPos(
+        $helper.Handle,
+        [RawBufferDockedLayoutNative]::HWND_TOPMOST,
+        20,
+        20,
+        $layoutWidth,
+        520,
+        0x0040) | Out-Null
+    Wait-Dispatcher 500
 
     $imageView.PinMarkerAtImagePixel(100, 100) | Out-Null
     Wait-Dispatcher 50
@@ -329,6 +443,17 @@ foreach ($layoutWidth in $Widths) {
         ImageViewWidth = [Math]::Round($imageView.ActualWidth, 1)
         ImageViewHeight = [Math]::Round($imageView.ActualHeight, 1)
         RelativeAspectError = [Math]::Round($aspectError, 8)
+        InitialFitMargin = [Math]::Round($initialFitMargin, 6)
+        RestoredManualAspectError = [Math]::Round($normalizedAspectError, 8)
+        ResizedFitAspectError = [Math]::Round($resizedFitAspectError, 8)
+        ResizedFitMargin = [Math]::Round($resizedFitMargin, 6)
+        ManualResizeAspectError = [Math]::Round($manualAspectError, 8)
+        ManualResizeZoomDelta = [Math]::Round([Math]::Abs($manualZoomAfterResize - $manualZoomBeforeResize), 8)
+        ManualResizeCenterDelta = [Math]::Round(
+            [Math]::Max(
+                [Math]::Abs($manualCenterXAfterResize - $manualCenterXBeforeResize),
+                [Math]::Abs($manualCenterYAfterResize - $manualCenterYBeforeResize)),
+            8)
         PinFrozenAfterHover = $pinFrozen
         HoverResumedAfterClear = $hoverResumed
         HoverRenderFrameCount = $hoverFrameCount

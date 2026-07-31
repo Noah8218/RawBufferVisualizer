@@ -242,16 +242,61 @@ try {
     if ($fullSummary.StartsWith("Preview  ", [StringComparison]::Ordinal)) {
         throw "Preview summary remained after full handoff: $fullSummary"
     }
+    $fullStatus = $statusText.Text
 
     $helper = Prepare-WindowCapture $window
     $fullCapture = Join-Path $outputRoot "full-stage.png"
     Capture-Window $helper.Handle $fullCapture
 
+    $missingMetadataPath = Join-Path $sampleRoot "missing-full.rbuf.json"
+    $failedReplacementRequest = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteSnapshotRequest(
+        $PID,
+        $missingMetadataPath,
+        "cameraFrame",
+        "OpenCvSharp.Mat",
+        $handoffId,
+        $false)
+    $failedReplacementProcessingPath = ""
+    $failedReplacementReason = ""
+    try {
+        if (-not [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::TryClaimRequest(
+            $failedReplacementRequest,
+            [ref]$failedReplacementProcessingPath)) {
+            throw "Failed replacement handoff could not be claimed."
+        }
+
+        if ($control.OpenClaimedHandoffRequest(
+            $failedReplacementRequest,
+            $failedReplacementProcessingPath)) {
+            throw "Failed full-resolution replacement was incorrectly acknowledged."
+        }
+
+        $failedReplacementState =
+            [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::GetRequestState(
+                $failedReplacementRequest)
+        if ($failedReplacementState -ne
+            [RawBufferVisualizer.VisualStudio.VisualizerHandoffRequestState]::Rejected) {
+            throw "Failed full-resolution replacement did not publish a NACK: $failedReplacementState"
+        }
+
+        if (-not [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::TryReadRejectionReason(
+            $failedReplacementRequest,
+            [ref]$failedReplacementReason)) {
+            throw "Failed full-resolution replacement NACK had no reason."
+        }
+    }
+    finally {
+        [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::CleanupRequestArtifacts(
+            $failedReplacementRequest)
+    }
+
     $result = [ordered]@{
         previewItemCount = 1
         fullItemCount = 1
+        failedReplacementRejected = $true
+        failedReplacementReason = $failedReplacementReason
         previewStatus = "Preview 320x180 BGRA32"
-        fullStatus = $statusText.Text
+        fullStatus = $fullStatus
         previewCapture = $previewCapture
         fullCapture = $fullCapture
     }

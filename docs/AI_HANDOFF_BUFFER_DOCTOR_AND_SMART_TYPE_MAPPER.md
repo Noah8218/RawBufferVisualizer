@@ -1,372 +1,271 @@
-# AI Handoff: Buffer Doctor + Automatic Vision Inspector + Smart Type Mapper
+# Raw Buffer Visualizer AI 작업 인계
 
-> 2026-07-28 중요 갱신: Marketplace `1.0.47.0`은 새 PC에서 VSSDK 패키지가 실행되지 않아 `did not acknowledge the image handoff` 오류가 발생했다. `1.0.48.0`에서는 `RawBufferVisualizerPackage`와 VSCT를 메인 하이브리드 프로젝트로 이동하고, `PkgdefProjectOutputGroup`이 `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef`을 생성하도록 수정했다. 일반 설치 스크립트의 수동 레지스트리 등록은 제거했다. 재발 방지 계약은 `docs/vsix-package-registration.md`, 로컬 검증 결과는 `docs/release-qualification-1.0.48.md`가 기준이다. 깨끗한 PC 검증에는 repair 스크립트를 사용하면 안 된다.
+이 문서는 다음 작업자가 현재 제품 상태와 `1.0.50` 릴리스 후보의 검증 경계를 빠르게 복원하기 위한 인계 문서입니다.
 
-> 상태: 1.0.47 Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper 자동 폴백과 등록형 Bitmap/Mat 혼합 시나리오는 installed-VSIX 검증 통과. Marketplace 공개와 실제 카메라 SDK/하드웨어 검증은 미완료
-> 작성일: 2026-07-27
-> 대상: 후속 AI 모델이 이어서 검증/수정/개선할 수 있도록 한 문서
+## 1. 제품 정체성
 
----
+Raw Buffer Visualizer는 C# 머신비전 개발자를 위한 Visual Studio 2022 Image Watch 스타일 디버거 확장입니다.
 
-## 1. 이 프로젝트는 무엇인가
+핵심 사용 흐름은 다음과 같습니다.
 
-**Raw Buffer Visualizer**는 C# 머신비전 개발자를 위한 Visual Studio 2022 디버거 확장이다. Image Watch처럼 중단점에서 이미지 변수를 한 번에 볼 수 있으며, OpenCvSharp.Mat, Emgu.CV.Mat, System.Drawing.Bitmap, RawBufferSnapshot/View, 그리고 지원하는 컬렉션(`List<>`, `Dictionary<,>`, `object[]`, 배열 등)을 하나의 도킹된 창에 누적해서 표시한다.
+1. 이미지 객체가 값 대입까지 끝난 줄 이후에 중단점을 건다.
+2. 등록된 형식은 DataTip/Watch/Locals/Autos의 돋보기 아이콘으로 연다.
+3. **Auto Inspect on Break**가 켜져 있으면 현재 스택 프레임의 Locals와 Arguments를 검사한다.
+4. 열린 이미지는 하나의 도킹된 `Raw Buffer Visualizer` 창에 누적된다.
+5. 사용자는 Fit/1:1/zoom/pan, 픽셀 값, raw bytes, 진단 및 비교 기능으로 영상을 확인한다.
 
-핵심 차별점은 "원시 버퍼 진단"이다: stride, pixel format, valid bits, byte order, packed mono, Bayer 등을 UI에서 직접 확인하고 해석할 수 있다.
+카메라 취득, 조명, PLC/I/O, 레시피 실행 및 산업용 SDK 제어 화면은 이 프로젝트 범위가 아닙니다.
 
----
+## 2. 릴리스 상태
 
-## 2. 이번에 추가한 세 기능
+| 항목 | 현재 상태 |
+| --- | --- |
+| Marketplace 공개 버전 | `1.0.49.0` |
+| 현재 소스/후속 후보 | `1.0.50.0` |
+| 공개 버전 외부 PC 결과 | Windows 10 문제 PC에서 확장 제거 후 `1.0.49` 재설치 시 정상화 |
+| 이 결과가 증명하는 것 | 해당 PC/profile의 clean reinstall 경로 |
+| 로컬 `1.0.50` 결과 | Windows 10 Pro / VS2022에서 exact 2,011,595-byte VSIX의 release announcement, 메뉴, ToolWindow, Automatic Mat collections, Bitmap handoff 및 hybrid 9 documents/0 errors 통과 |
+| 현재 업로드 파일 | `artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`; SHA-256 `E31F254EFCFD80D6F03FED3E453BEFC47CB4924D0FF853167AE7385F36B94D93` |
+| 아직 증명하지 못한 것 | 문제 외부 PC의 `1.0.49 -> 1.0.50` 인플레이스 업데이트와 해당 PC의 DPI/도킹 Fit |
 
-### 2-1. Vision Buffer Doctor
+외부 PC가 clean reinstall 뒤 정상화된 사실을 인플레이스 업데이트 성공으로 기록하면 안 됩니다. 로컬 exact `1.0.50` 검증은 통과했습니다. 사용자는 이번에는 Marketplace 업로드를 먼저 하고 전파 뒤 문제 PC의 무삭제 업데이트를 검증하기로 했으므로, 외부 gate가 통과하기 전까지 전체 릴리스 상태는 `Incomplete`입니다.
 
-**목표**: 이미지가 깨져 보일 때(대각선 밀림, 줄 깨짐, 밝기 이상 등) 사용자가 Width/Height/Stride/Pixel Format을 하나씩 바꿔보지 않아도, 가능한 해석 후보를 점수와 이유와 함께 보여주고 선택하면 즉시 적용한다.
+## 3. 세 기능의 관계
 
-**핵심 메시지**: "이미지를 보는 도구가 아니라, 이미지가 왜 깨졌는지 알려주는 도구."
+### Vision Buffer Doctor
 
-**구현 위치**:
-- `src/RawBufferVisualizer.Core/BufferInterpretation.cs` — 후보/결과 타입, `BufferDoctor.Diagnose()` 진입점
-- `src/RawBufferVisualizer.Core/BufferInterpretationCandidateGenerator.cs` — 버퍼 길이로부터 가능한 (width, height, stride, format) 후보 생성
-- `src/RawBufferVisualizer.Core/BufferInterpretationScorer.cs` — 구조 점수 + 샘플링 기반 콘텐츠 점수
-- `src/RawBufferVisualizer.Core/RawImageSource.cs` — `TryReadRange()` API 추가 (메모리/파일/프로세스 메모리 소스 구현)
-- `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml(.cs)` — Interpret 섹션에 "Diagnose Buffer" 버튼 + 후보 패널
-- `tests/RawBufferVisualizer.Tests/Program.cs` — 8개의 Buffer Doctor 단위 테스트
+깨져 보이는 이미지를 다시 해석할 후보를 자동으로 제시합니다.
 
-**Phase 1에서 지원하는 포맷**:
-- Mono8
-- Mono16 (Little/Big Endian, ValidBits 10/12/14/16)
-- RGB24 / BGR24
-- BGRA32
-- Mono10PackedLsb / Mono12PackedLsb
-- Float32
+- pixel format, stride/row padding, width/height, endianness, valid bits 후보를 순위화합니다.
+- 후보를 선택하면 debugger round-trip 없이 즉시 적용합니다.
+- RGB/BGR 및 Bayer phase처럼 콘텐츠만으로 구분할 수 없는 경우는 모호성을 명시합니다.
+- 최대 64행/4 MiB만 샘플링하여 전체 대형 버퍼 스캔을 피합니다.
 
-**지원하지 않는 것(Phase 2로 연기)**:
-- Top-down / Bottom-up 행 순서
-- Bayer phase 자동 판별 (현재는 힌트가 있을 때 모호성 그룹으로만 표시)
-- Planar / Interleaved
-- YUV, signed, 압축 포맷
+### Smart Type Mapper
 
-**점수 구조**:
-- 구조 점수 최대 40: exact/trailing-row fit, stride alignment, plausible dimensions, common sensor width, row padding
-- 콘텐츠 점수 최대 60: 인접 행 연속성(row continuity) 상관계수, Mono16 endianness smoothness, Mono16 valid-bits 적합도
-- 샘플링 한도: 최대 64개 행, 총 4MiB 이하. 전체 버퍼 스캔 금지.
+등록되지 않은 회사 전용 이미지 클래스를 사용자가 한 번 매핑하여 재사용하게 합니다.
 
-**자동화된 테스트** (`tests/RawBufferVisualizer.Tests/Program.cs`에 추가됨):
-1. `BufferDoctorFindsPaddedMono8Descriptor` — 2448x2048 stride 2560(112B padding) 버퍼에서 정확한 descriptor가 1위
-2. `BufferDoctorCorrectStrideWinsOnRowContinuity` — 대각선 shear 케이스에서 올바른 stride가 승리
-3. `BufferDoctorPrefersCorrectEndianness` — Mono16 LE/BE ramp에서 올바른 endianness 승리
-4. `BufferDoctorPrefersMatchingValidBits` — 값이 4096 미만일 때 ValidBits 12가 16보다 높게
-5. `BufferDoctorFindsPackedMono12Candidate` — packed Mono12 후보 발견
-6. `BufferDoctorSamplingStaysWithinCaps` — 100000x100000 file-backed source에서 샘플링량 제한 준수
-7. `BufferDoctorMarksRgbBgrAsAmbiguousTieGroup` — RGB24/BGR24을 모호성 그룹으로 표시
-8. `BufferDoctorAcceptsTrailingRowFit` — stride*(h-1)+minStride 길이 허용
+- 데이터 포인터/배열, width, height, stride, pixel format 역할을 저장합니다.
+- 사용자 범위 `%APPDATA%\RawBufferVisualizer\type-mappings.json`과 선택적 solution-local 설정을 지원합니다.
+- 임의 메서드를 실행하지 않고 필드와 property getter만 읽습니다.
+- arbitrary individual type에 Visual Studio 돋보기 아이콘을 새로 등록하지는 못합니다.
 
----
+### Automatic Vision Inspector
 
-### 2-2. Smart Type Mapper
+Smart Type Mapper의 “사용자가 먼저 형식을 알아야 한다”는 한계를 줄이는 현재 프레임 탐색 기능입니다.
 
-**목표**: Raw Buffer Visualizer가 원래 지원하지 않는 회사 전용 이미지 클래스(예: `Company.Vision.CompanyFrame`)를 사용자가 한 번 멤버 매핑하면, 코드 수정이나 확장 재빌드 없이 계속 열어볼 수 있게 한다.
+- Break Mode 진입 후 Locals와 Arguments를 합쳐 검사합니다.
+- **Scan Now**는 같은 검사를 사용자가 즉시 재실행하게 합니다.
+- 완전하고 안전하게 검증된 후보만 자동으로 열고, 불완전 후보는 `[Map]`, 실패 후보는 `[Failed]`로 격리합니다.
+- 여러 후보 중 일부가 실패해도 성공한 이미지는 유지되어야 합니다.
+- 자동 검사는 창을 강제로 열거나 포커스를 빼앗지 않습니다.
+- 옵션은 사용자 설정에 저장되고 Visual Studio 재시작 뒤 복원됩니다.
 
-**핵심 메시지**: "모든 회사를 직접 지원할 수 없으므로, 어떤 회사 타입이든 사용자가 1회 매핑할 수 있게 지원한다."
+## 4. `1.0.50` Automatic Inspector 계약
 
-**구현 위치**:
-- `src/RawBufferVisualizer.VisualStudio.ObjectSource/TypeMappingStore.cs` — 매핑 파일(JSON) 로드/저장, solution-local vs %APPDATA% 우선순위
-- `src/RawBufferVisualizer.VisualStudio.ObjectSource/MappedTypeVisualizerTransfer.cs` — 매핑에 따라 멤버를 읽어 ImageCollectionItemTransfer 생성
-- `src/RawBufferVisualizer.VisualStudio.ObjectSource/VisualizerMemberInventory.cs` — 실패 시 멤버 목록(이름/종류/타입/샘플값/enum 값) 수집
-- `src/RawBufferVisualizer.VisualStudio.Vssdk/TypeMappingDialog.xaml(.cs)` — 매핑 다이얼로그(드롭다운 + enum 매핑 + Preview + Save)
-- `src/RawBufferVisualizer.VisualStudio.Vssdk/ImageTypeRecognizer.cs` — Break Mode에서 Local 변수를 스캔해 이미지 후보 찾기
-- `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml.cs` — "Scan Locals" 명령, Open Variable, 후보/에러 행 표시
-- `src/RawBufferVisualizer.VisualStudio.Vssdk/OpenVariableDialog.xaml(.cs)` — 개별 변수 표현식 입력 다이얼로그
+### OpenCvSharp Mat
 
-**매핑 파일 스키마(v1)**:
-- `%APPDATA%\RawBufferVisualizer\type-mappings.json` (사용자 전용)
-- `<SolutionRoot>\.rawbuffervisualizer.json` (팀 공유, 우선순위 더 높음)
+정확한 런타임 형식으로 확인된 초기화된 `OpenCvSharp.Mat`은 자동 경로에서 다음 메타데이터를 사용합니다.
 
-```json
-{
-  "version": 1,
-  "mappings": [
-    {
-      "typeName": "Company.Vision.CompanyFrame",
-      "assemblyName": "Company.Vision",
-      "members": {
-        "data": "ImageAddress",
-        "width": "SizeX",
-        "height": "SizeY",
-        "stride": "LinePitch",
-        "bufferLength": null,
-        "pixelFormat": "PixelType",
-        "validBits": null,
-        "bitDepth": null
-      },
-      "pixelFormatMap": {
-        "Mono8": "Mono8",
-        "Mono12": "Mono12PackedLsb",
-        "Bgr": "BGR24"
-      },
-      "byteOrder": "LittleEndian"
-    }
-  ]
-}
+- `Data`
+- `Cols`
+- `Rows`
+- `Step()`
+- `Depth()`
+- `Channels()`
+
+### Emgu CV Mat
+
+정확한 런타임 형식으로 확인된 초기화된 `Emgu.CV.Mat`은 다음 메타데이터를 사용합니다.
+
+- `DataPointer`
+- `Cols`
+- `Rows`
+- `Step`
+- `Depth`
+- `NumberOfChannels`
+
+두 Mat 계열 모두 구조적 추측보다 exact-known-type 분기가 우선합니다. null/empty/disposed/잘못된 stride 또는 읽을 수 없는 메모리는 실패 행으로 격리해야 합니다.
+
+### System.Drawing.Bitmap
+
+Bitmap은 등록된 debugger visualizer의 돋보기 아이콘 경로를 사용합니다. Automatic Inspector는 debugger 평가 중 `LockBits`를 안전하게 수행할 수 없으므로 Bitmap을 자동 live-open 대상으로 과장하지 않습니다.
+
+### 중단점 위치
+
+다음은 잘못된 예입니다.
+
+```csharp
+Mat image = LoadImage(); // 이 줄에 멈추면 대입 전일 수 있음
 ```
 
-**사용자 흐름**:
-1. `List<CompanyFrame>` 변수의 돋보기 아이콘 클릭
-2. 매핑이 없으면 각 항목이 "Unsupported type" 에러 행으로 표시되고 "Map This Type" 버튼 노출
-3. 다이얼로그에서 멤버 역할 선택(Data/Width/Height/Stride/PixelFormat/BufferLength/ValidBits/ByteOrder)
-4. PixelFormat이 enum이면 enum 값별로 RawPixelFormat 매핑
-5. Preview 버튼으로 live debuggee memory에서 썸네일 확인
-6. Save for This Type → JSON 저장
-7. 다음 번부터는 자동으로 열림
+다음 줄 이후에 중단점을 걸어야 합니다.
 
-**개별 변수 열기**: 도킹된 창의 "Open Variable" 버튼으로 `frame` 같은 표현식 입력. Break Mode일 때만 동작.
+```csharp
+Mat image = LoadImage();
+Use(image); // 여기에서 image가 초기화된 상태
+```
 
-**자동화된 테스트** (`tests/RawBufferVisualizer.Tests/Program.cs`에 추가됨):
-1. `TypeMappingFileRoundTrips` — JSON 직렬화/역직렬화
-2. `TypeMappingResolutionPrefersSolutionLocal` — solution-local이 %APPDATA%보다 우선
-3. `TypeMappingExtractsMappedCompanyFrame` — IntPtr/byte[]/ushort[] 기반 추출
-4. `TypeMappingAppliesEnumPixelFormatMap` — `Mono12 -> Mono12PackedLsb`
-5. `TypeMappingFailureIncludesMemberInventory` — 매핑 실패 시 멤버 목록 포함
-6. `TypeMappingMissingMemberFailsVisibly` — 멤버 누락 시 가시적 에러
+자동 검사 실패를 판단하기 전에 반드시 “대입 완료 후 중단” 조건을 확인합니다.
 
-**안전 규칙**:
-- 읽기만: field, property getter, enum 값, 배열 길이
-- 메서드 호출 금지 (`GetBuffer()`, `ConvertImage()` 등)
-- 임의 표현식 평가는 v1에서 제외
+## 5. 원자적 handoff 계약
 
----
+Debugger producer와 도킹 창 consumer 사이의 파일 handoff는 다음 상태를 사용합니다.
 
-### 2-3. Automatic Vision Inspector
+```text
+publishing -> Ready -> Processing -> ACK
+                                  -> NACK(reason)
+```
 
-**목표**: Visual Studio가 빌드 시점에 등록하지 않은 회사 전용 타입에는 돋보기 아이콘을 붙일 수 없다는 Smart Type Mapper의 진입점 한계를 해소한다. 중단점에 들어가면 현재 Stack Frame의 Local을 자동으로 스캔하고, 안전하게 이미지 구조를 확인할 수 있는 값은 즉시 기존 도킹 창에 연다. 불확실한 값에만 Smart Type Mapper를 제시한다.
+필수 규칙:
 
-**우선순위**:
-1. 저장된 사용자 Type Mapping
-2. 알려진 이미지 형태
-3. 타입 이름 힌트
-4. 필드/프로퍼티 멤버 구조
-5. 현재 값과 메모리/descriptor 유효성
-6. Smart Type Mapper
+- producer는 임시 `.publishing` 파일을 완성한 뒤 원자적으로 Ready 경로로 이동합니다.
+- consumer는 Ready를 Processing으로 독점 claim한 뒤에만 읽습니다.
+- 문서가 실제로 열린 뒤에만 ACK를 기록합니다.
+- 거부 또는 예외 시 reason을 기록한 NACK를 남깁니다.
+- Ready 파일이 사라진 것만으로 성공으로 판단하지 않습니다.
+- request read와 terminal marker 이동은 `10 x 50 ms` 재시도합니다.
+- watcher는 이벤트를 활성화하기 전에 `Created`와 `Renamed` 핸들러를 등록합니다.
 
-**지원 범위**:
-- 직접 멤버와 1단계 중첩 멤버
-- `IntPtr`, `UIntPtr`, `byte[]`, `ushort[]`, `float[]`
-- Data, Width, Height 필수; Stride, BufferLength, ValidBits, PixelFormat은 신뢰도와 안전성을 보강
-- 90점 이상이고 포맷이 명확하면 자동 열기
-- 40점 이상이지만 불완전하거나 모호하면 매핑 후보로 표시
-- 40점 미만은 기본 숨김
-- Break Mode 자동 스캔과 `Scan Now`
-- 자동 행은 루트 표현식 기준으로 교체하여 반복 스캔 시 중복 방지
+Modern producer의 timeout/cancel과 Classic fire-and-forget 모두 공용 `ScheduleTerminalArtifactCleanup`을 사용합니다.
 
-**안전 경계**:
-- 임의 SDK 메서드 자동 호출 금지
-- 무제한 객체 그래프 탐색 금지
-- 동적 벤더 DLL 로딩/비공개 native layout 해석 금지
-- 루트 배열과 컬렉션은 기존 등록된 collection visualizer가 담당
-- 관리 배열은 VSSDK debugger property 자식 열거를 우선 사용하고 EnvDTE fallback은 256개로 제한
+- 최대 2분 동안 100 ms 간격으로 ACK/NACK/conflict terminal artifact만 정리합니다.
+- Ready/Processing은 reaper timeout에서 절대 삭제하지 않습니다.
+- 취소/예외 시 소유한 요청 중 하나라도 `Missing`이 아니면 in-flight consumer와 경쟁하지 않도록 snapshot payload 디렉터리를 보존합니다.
+- 2분 뒤에 terminalize된 marker와 process crash로 고착된 Processing은 즉시 자동 회수되지 않는 현재 경계입니다.
 
-**구현/검증 문서**: `docs/automatic-vision-inspector.md`
+Persistent NACK marker 기록 실패는 상태와 함께 `package.log`에 남겨야 합니다.
 
-**2026-07-28 installed-VSIX 결과**:
-- VS2022 17.14에서 함수 인자, 직접 포인터, `byte[]`(64 x 48), 1단계 중첩 포인터를 포함한 6개 이미지를 오류 없이 자동 표시
-- 별도의 `[Map]` 1개와 `[Failed]` 1개가 있어도 6개 성공 이미지가 유지되고, `Scan Now` 반복 뒤에도 중복 없음
-- 결과: `artifacts/ui/installed-vsix-new-features/AutomaticVisionInspector-installed-vsix.json`
-- 화면: `artifacts/ui/installed-vsix-new-features/automatic-vision-inspector.png`
-- Smart Type Mapper 자동 폴백: 88% `MappingRequired` 후보 → `Mono12PackedLsb` 선택 → live-memory Preview → Save → 640 x 484, stride 960, 오류 0으로 자동 재열림
-- Smart Type Mapper 결과: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json`
-- Smart Type Mapper 화면: `smart-type-mapper-automatic-before-map.png`, `smart-type-mapper-dialog-preview.png`, `smart-type-mapper-automatic-after-reopen.png`
-- 실제 OpenCvSharp `Mat`, Emgu CV `Mat`, `System.Drawing.Bitmap`은 등록형 visualizer로 열리고 자동 후보에서 제외됨
-- `RawBufferSnapshot`/`RawBufferView`도 자동 후보에서 제외되며, 카메라형 래퍼 6개는 자동으로 열려 전체 9개 이미지/오류 0개
-- 혼합 결과: `artifacts/ui/installed-vsix-new-features/MultiLibraryHybrid-installed-vsix.json`
+## 6. Visual Studio 패키지/메뉴 계약
 
----
+- Marketplace extension ID는 유지합니다.
+- VSPackage GUID는 `{1977574b-f107-465f-bfd1-5fc022907039}`입니다.
+- command table resource는 `Menus.ctmenu, 2`입니다.
+- `View` 메뉴에는 `Raw Buffer Visualizer`와 `Raw Buffer Visualizer: Scan Current Frame`이 각각 정확히 한 번만 보여야 합니다.
+- 향후 `.vsct` command table을 변경하면 ctmenu resource version도 증가시켜 stale cache와 구분합니다.
+- 메뉴가 보이는 것만으로 package load/ToolWindow open 성공을 판정하지 않습니다.
 
-## 3. 현재까지 완료된 것
+## 7. Viewer Fit/Manual 계약
 
-| 항목 | 상태 | 근거 |
-|------|------|------|
-| Buffer Doctor Core (생성/점수/샘플링) | 완료 | `BufferInterpretation*.cs`, 8개 단위 테스트 통과 |
-| Buffer Doctor UI (Interpret 섹션 버튼 + 후보 패널) | 완료 | `RawBufferToolWindowControl.xaml/cs` |
-| Smart Type Mapper Core (매핑 파일, 추출) | 완료 | `TypeMappingStore.cs`, `MappedTypeVisualizerTransfer.cs` |
-| Smart Type Mapper UI (다이얼로그, Preview, Save) | 완료 | `TypeMappingDialog.xaml/cs` |
-| Open Variable (개별 변수 EnvDTE 진입점) | 완료 | `OpenVariableDialog.xaml/cs`, `RawBufferToolWindowControl.OpenVariableExpression()` |
-| Break Mode Locals 스캔 | 완료 | `ImageTypeRecognizer.cs`, `RawBufferToolWindowControl.ScanLocals()` |
-| Automatic Vision Inspector | 완료 | `AutomaticVisionInspector.cs`, `VisionMemberInference.cs`, `VisualStudioDebugFrameContext.cs`, ToolWindow Auto Inspect UI |
-| Automatic Vision Inspector installed-VSIX | 통과 | VS2022 17.14, 6개 자동 열기, 64x48 배열, 함수 인자, 1단계 중첩, 부분 실패 격리, 반복 스캔 중복 없음 |
-| Smart Type Mapper 자동 폴백 installed-VSIX | 통과 | VS2022 17.14, 모호 후보 → live Preview → Save → 640x484 Mono12PackedLsb 자동 재열림, 오류 0 |
-| 등록형/자동 혼합 installed-VSIX | 통과 | 실제 OpenCvSharp/Emgu/Bitmap + 자동 래퍼 6개, 전체 이미지 9개, 오류 0개 |
-| Release 빌드 | 통과 | 2026-07-28, 경고 18개(VSTHRD010), 오류 0개 |
-| VSIX 재설치 | 완료 | `RawBufferVisualizer.VisualStudio.Extensibility.vsix` 설치됨 |
-| 단위 테스트 | 통과 (이전 회차) | `RawBufferVisualizer.Tests` 80+개 테스트 |
-| 1.0.47 로컬 출시 자격 | 완료 | `docs/release-qualification-1.0.47.md` |
+Viewer는 명시적인 두 상태를 가집니다.
 
----
+### Fit
 
-## 4. 검증 기록과 남은 실물 검증
+- 새 이미지가 열릴 때
+- 선택 이미지가 바뀔 때
+- **Fit** 버튼을 누를 때
+- viewer를 더블클릭할 때
 
-### 4-1. installed-VSIX 검증 체크리스트 (자동화 통과, 수동 재확인용)
+Fit은 aspect ratio를 유지하며 viewport 안에 약 5% 여백으로 전체 영상을 배치합니다. 도킹 크기가 바뀌면 Fit 상태에서는 다시 계산합니다.
 
-2026-07-27에 Visual Studio 2022 17.14 설치본 자동화로 Buffer Doctor, Automatic Vision Inspector, Smart Type Mapper 자동 폴백이 통과했다. 아래 항목은 향후 수동 회귀 확인이나 컬렉션/Open Variable 경로 확장 검증에 재사용한다.
+### Manual
 
-**Buffer Doctor**:
-1. `--buffer-doctor-debug` 인자로 실행
-2. `badStrideSnapshot` 중단점에서 이미지가 깨져 보이는지 확인
-3. "Diagnose Buffer" 버튼 클릭
-4. 후보 패널에서 `stride 2560` 후보가 1위인지 확인
-5. 해당 후보 선택 시 이미지가 바로 복원되는지 확인
-6. UI smoke 스크립트 참고: `scripts/SmokeBufferDoctorPanel.ps1`
+- mouse wheel zoom
+- drag pan
+- **1:1**
 
-**Smart Type Mapper (컬렉션 경로)**:
-1. `--smart-type-mapper-debug` 인자로 실행
-2. `companyFrameList` 변수의 돋보기 클릭
-3. 항목이 "Unsupported type" 에러 행으로 표시되고 "Map This Type" 버튼이 보이는지 확인
-4. 매핑 다이얼로그에서 멤버가 자동으로 선택되었는지 확인
-   - Data → `ImageAddress`
-   - Width → `SizeX`
-   - Height → `SizeY`
-   - Stride → `LinePitch`
-   - Pixel Format → `PixelType`
-5. Preview 버튼 클릭 시 live memory에서 썸네일이 렌더링되는지 확인
-6. enum 매핑: `Mono12 -> Mono12PackedLsb`, `Bgr -> BGR24` 설정 후 Save
-7. `%APPDATA%\RawBufferVisualizer\type-mappings.json`에 저장되었는지 확인
-8. 다시 변수의 돋보기 클릭 시 자동으로 이미지가 열리는지 확인
+Manual 상태에서는 resize나 selection refresh 때문에 사용자의 zoom/center가 임의로 초기화되면 안 됩니다.
 
-**Smart Type Mapper (개별 변수 경로)**:
-1. `--multi-library-debug` 또는 `--smart-type-mapper-debug`로 실행
-2. 도킹된 창의 "Open Variable" 버튼 클릭
-3. 표현식에 `companyFrame` 입력
-4. 매핑되어 있으면 이미지가 열리고, 없으면 매핑 다이얼로그가 뜨는지 확인
-5. Pointer-backed(`IntPtr`) 데이터는 v1에서만 지원; array-backed 개별 변수는 아직 컬렉션 경로로 사용
+## 8. 구현 파일 지도
 
-### 4-2. 다양한 시뮬레이션 클래스 검증
+| 영역 | 주요 파일 |
+| --- | --- |
+| Buffer Doctor 후보/점수 | `src/RawBufferVisualizer.Core` |
+| Smart Type Mapper 저장/추출 | `src/RawBufferVisualizer.ObjectSource`, `src/RawBufferVisualizer.VisualStudio.Vssdk` |
+| Automatic Inspector | `src/RawBufferVisualizer.VisualStudio.Vssdk/AutomaticVisionInspector.cs` |
+| exact known types | `src/RawBufferVisualizer.VisualStudio.Vssdk/KnownImageType.cs` |
+| registered type capture | `src/RawBufferVisualizer.VisualStudio.Vssdk/KnownRegisteredImageCapture.cs` |
+| 도킹 UI/consumer | `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml.cs` |
+| package/watcher | `src/RawBufferVisualizer.VisualStudio.Extensibility/RawBufferVisualizerPackage.cs` |
+| Modern producer | `src/RawBufferVisualizer.VisualStudio.Extensibility/DebuggerVisualizerLaunch.cs` |
+| Classic producer | `src/RawBufferVisualizer.VisualStudio.Classic` |
+| handoff 상태/claim | `src/RawBufferVisualizer.VisualStudio/VisualizerHandoffInbox.cs` |
+| OpenGL Fit/Manual | `src/RawBufferVisualizer.OpenGlCanvas/RawOpenGlImageCanvas.cs` |
+| 회귀 테스트 | `tests/RawBufferVisualizer.Tests/Program.cs` |
 
-`samples/RawBufferVisualizer.VisualizerDebuggee/Program.cs`에 추가된 다음 클래스들은 실제 칩/라이브러리가 아닌 시뮬레이션이지만, Smart Type Mapper가 구조 기반으로 인식하는지 확인할 수 있다.
+## 9. 현재 소스 검증 결과
 
-- `SimulatedOpenCvSharpMat` — `Data`, `Rows`, `Cols`, `Step`
-- `SimulatedEmguCvMat` — `DataPointer`, `Rows`, `Cols`, `Step`, `Depth`, `Channels`
-- `SimulatedBaslerGrabResult` — `PixelData`, `Width`, `Height`, `Stride`, `PixelType`
-- `SimulatedFlirImagePtr` — `Data`, `Width`, `Height`, `Stride`, `PixelFormat`
-- `SimulatedAvtVimbaFrame` — `Buffer`, `Width`, `Height`, `Stride`, `PixelFormat`
-- `SimulatedIdsUeyeMemoryBuffer` — `Data`, `Width`, `Height`, `Stride`
+현재 기록된 소스 검증:
 
-`--multi-library-debug` 인자로 실행하면 위 객체들이 모두 스코프에 있다. 각각에 대해:
-- `ImageTypeRecognizer`가 Local 스캔에서 후보로 잡는지 (Scan Locals)
-- `Map This Type`이 필요한 경우 매핑 후 다시 열리는지
-- 매핑 후 Buffer Doctor와 연동되는지 (깨진 이미지면 Diagnose Buffer)
+- Release solution build: 성공, 오류 0, 기존 `VSTHRD010` 경고 18개
+- self-test: `20/20` 통과
+- 원자적 handoff 테스트:
+  - `VisualizerHandoffInboxPublishesRequestsAtomically`
+  - `VisualizerHandoffInboxClaimsRequestExactlyOnce`
+  - `VisualizerHandoffInboxTracksExplicitCompletion`
+- observer start gate와 실제 관찰 횟수 `> 0` 검증
+- NACK Processing 파일을 150 ms 독점 잠금하여 retry 경로 검증
+- terminal ACK가 cleanup 뒤 Missing이 되는 것, 잠긴 ACK 재시도 및 일시적 Missing 뒤 늦은 ACK 정리를 검증
+- 200 ms reaper 뒤 Ready가 유지되는 것 검증
+- `SmokePreviewFirstHandoff.ps1 -NoBuild`: preview 1/full 1 통과
+- `SmokeSmartTypeMapper.ps1`: 통과
+- `SmokeDockedLayoutWidths.ps1` 540/900/1160 px: aspect error 0, Fit margin 1.05, Manual zoom/center delta 0
 
-### 4-3. 다양한 실제 포맷/라이브러리 검증
+이 current-source 결과와 별도로 exact installed-VSIX의 실제 Visual Studio debugger 동작도 아래와 같이 검증했습니다.
 
-실제 OpenCvSharp/Emgu/Bitmap은 등록형 visualizer 경로로 검증되었다. 아래 포맷 목록은 호환성 매트릭스로도 확인됐지만, Automatic Inspector가 이 등록형 타입을 다시 추론하지 않는 것이 의도된 동작이다. 산업 카메라 SDK는 실제 런타임 객체가 확보될 때 추가 테스트해야 한다.
+## 10. `1.0.50` 필수 installed-VSIX 검증
 
-**OpenCvSharp**:
-- `Mat` (CV_8UC1, CV_8UC3, CV_8UC4, CV_16UC1, CV_32FC1)
-- `Mat` inside `List<Mat>`, `Dictionary<string, Mat>`
+### 로컬 VS2022: 통과
 
-**Emgu CV**:
-- `Emgu.CV.Mat` (Cv8U C1/C3/C4, Cv16U C1, Cv32F C1)
+- Windows 10 Pro `10.0.19045`, VS2022 `17.14.37314.3`, exact `1.0.50.0`
+- `View` 메뉴의 open command 1개, scan command 1개
+- `--multi-library-debug`를 대입 완료 후 중단점으로 실행
+- OpenCvSharp/Emgu Mat 자동 열기: `8 detected: 8 opened, 0 need mapping, 0 failed`
+- Bitmap 등록 visualizer 열기, 최종 9 documents / 0 errors
+- **Scan Now** 반복 시 중복 없음
+- 부분 실패: 6 opened / 1 mapping / 1 failed, 성공 이미지 유지
+- package protocol error 0, ActivityLog의 관련 잠재 오류 0
+- installed 화면은 육안 비율 증거이며, 정량 Fit/Manual 검증은 current-source 540/900/1160 matrix로 분리
 
-**System.Drawing.Bitmap**:
-- Format8bppIndexed, Format24bppRgb, Format32bppArgb
+### 외부 Windows 10 PC
 
-**산업 칩라 SDK (가능한 경우)**:
-- Basler pylon `IGrabResult` / `IBuffer`
-- HIKROBOT MVS `IFrame`
-- FLIR Spinnaker `ImagePtr`
-- AVT Vimba `Frame`
-- IDS uEye `MemoryBuffer`
-- Euresys eGrabber / Teledyne DALSA Sapera / Matrox MIL
+- 공개 `1.0.49`가 설치된 상태에서 제거/repair 없이 `1.0.50`으로 업데이트
+- Visual Studio 완전 종료/재시작
+- 메뉴 개수, ToolWindow open, registered Bitmap/Mat, Automatic Inspector, ACK, Fit을 검증
 
-이들은 실제 객체가 필요하므로, 객체가 없다면 시뮬레이션 클래스로 동일한 멤버 구조를 검증하는 것으로 대체할 수 있다. 단, 실제 SDK 객체의 lifetime, pointer validity, enum 값 이름은 반드시 실제 환경에서 확인해야 한다.
+clean reinstall은 이 인플레이스 업데이트 항목의 대체 증거가 아닙니다.
 
-### 4-4. 엣지 케이스 검증
+## 11. 알려진 제한
 
-- 매핑 파일이 손상되었을 때 확장이 crash 없이 에러 행으로 실패하는지
-- `typeName`은 같지만 `assemblyName`이 다른 두 타입이 별개로 매핑되는지
-- 매핑된 멤버가 rename되어 없어졌을 때 가시적 에러가 나오는지
-- Buffer Doctor 후보를 선택 후 다시 Interpret 수동 조정이 잘 연동되는지
-- Buffer Doctor의 RGB/BGR 모호성 그룹이 실제로 잘 표시되는지
-- Large Mat(8192x8192 이상)에서 Buffer Doctor 샘플링이 여전히 빠른지
-- Break Mode가 아닐 때 Open Variable이 비활성화되거나 명확한 메시지를 보여주는지
+- Automatic Inspector는 현재 선택된 stack frame의 Locals와 Arguments만 검사합니다.
+- root 및 한 단계 nested member까지만 제한적으로 조사합니다.
+- arbitrary SDK method 호출, vendor DLL 동적 로드 및 private native layout 추측은 하지 않습니다.
+- Bitmap automatic live-open은 지원 근거가 없으며 glyph 경로가 계약입니다.
+- pointer lifetime은 debuggee가 paused 상태이고 메모리가 유효할 때만 보장됩니다.
+- array-backed mapped individual variable은 기존 collection 경로가 필요할 수 있습니다.
+- process crash로 남은 Processing과 2분 이후 terminal marker는 즉시 자동 회수하지 않습니다.
+- 기존 24시간 stale snapshot 정리에는 active-document lease가 없어, 매우 오래 열린 file-backed 문서는 별도 장기 세션 검증과 lease 보강이 필요합니다.
+- `VSTHRD010` 경고 18개는 남아 있는 기술 부채입니다.
+- Windows 10 DPI/도킹 Fit은 외부 실증 전까지 지원 완료로 선언하지 않습니다.
 
----
-
-## 5. 알려진 제한 사항
-
-1. **시각화 아이콘 제한**: Smart Type Mapper가 임의의 개별 타입에 돋보기 아이콘을 만들지는 못한다. Visual Studio는 빌드 시점에 등록된 타입에만 아이콘을 붙인다. 매핑된 타입은 등록된 컬렉션 나이거나, "Open Variable" 진입점을 통해야 한다.
-2. **개별 변수 array-backed 매핑**: v1에서는 `Open Variable`이 pointer-backed(`IntPtr`) 변수만 지원한다. 배열 기반 매핑은 컬렉션(`List<>` 등)을 통해 열어야 한다.
-3. **자동 인식 한계**: Buffer Doctor는 후보를 제시할 뿐, RGB/BGR이나 Bayer phase는 장면에 따라 수학적으로 구분 불가능할 수 있다.
-4. **메서드 호출 금지**: Smart Type Mapper는 field/property getter만 읽는다. `GetBuffer()` 같은 메서드는 호출하지 않는다.
-5. **VSTHRD010 경고**: `ImageTypeRecognizer.cs`에서 EnvDTE 객체 접근 시 UI 스레드 경고가 18개 있다. installed-VSIX 동작은 검증했지만 경고는 기술 부채로 남아 있다.
-
----
-
-## 6. 다음 모델이 수행할 권장 작업 순서
-
-### 단계 1: 실제 산업 SDK 객체 검증
-
-Prerequisite: 정확한 패키지/SDK 버전, 재현 가능한 런타임 객체, 포인터 lifetime 규칙, 합법적으로 사용할 수 있는 샘플. 이 입력이 없으면 산업 SDK 검증에 모델 토큰을 쓰지 않는다.
-
-1. 사용자가 실제 산업 SDK 객체를 제공하면 type/assembly/멤버/enum/lifetime을 기록하고 동일한 Break Mode 경로를 검증한다.
-2. 시뮬레이션 객체 결과를 실제 SDK 지원 주장으로 확대하지 않는다.
-
-Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
-
-### 단계 2: 1.0.47 Marketplace 공개
-
-1. `docs/marketplace-overview-1.0.47.md`와 `docs/marketplace-release-notes-1.0.47.md`를 Marketplace에 반영한다.
-2. SHA256 `DAB2CE62007F77F11CFF828AF02EF2F2DAE26A3BB3238CF251679E4A69505174`인 최종 VSIX를 업로드한다.
-3. 공개 버전/Overview가 실제로 전파됐는지 확인한다.
-
-Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
-
-### 단계 3: 별도 PC 업데이트/재시작 검증
-
-이전에 1.0.45가 설치된 다른 VS2022 PC에서 update → restart → registered provider/Automatic Inspector 경로를 확인하고 package-load popup이 없음을 기록한다.
-
-Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
-
----
-
-## 7. 주요 파일 요약
-
-| 파일 | 역할 |
-|------|------|
-| `src/RawBufferVisualizer.Core/BufferInterpretation.cs` | Buffer Doctor 진입점, 후보 정렬, 모호성 그룹 처리 |
-| `src/RawBufferVisualizer.Core/BufferInterpretationCandidateGenerator.cs` | 버퍼 길이 → 해석 후보 생성 |
-| `src/RawBufferVisualizer.Core/BufferInterpretationScorer.cs` | 후보 샘플링 및 점수 계산 |
-| `src/RawBufferVisualizer.Core/RawImageSource.cs` | `TryReadRange` API, 메모리/파일/프로세스 소스 |
-| `src/RawBufferVisualizer.VisualStudio.ObjectSource/TypeMappingStore.cs` | 매핑 JSON 로드/저장 |
-| `src/RawBufferVisualizer.VisualStudio.ObjectSource/MappedTypeVisualizerTransfer.cs` | 매핑 기반 debuggee 객체 → transfer |
-| `src/RawBufferVisualizer.VisualStudio.ObjectSource/VisualizerMemberInventory.cs` | 실패 시 멤버 목록 수집 |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/ImageTypeRecognizer.cs` | Break Mode Local 변수 스캔 |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/TypeMappingDialog.xaml(.cs)` | 매핑 다이얼로그 |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/OpenVariableDialog.xaml(.cs)` | 개별 변수 표현식 입력 |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml(.cs)` | ToolWindow UI, Scan Locals, Open Variable, Diagnose Buffer 패널 |
-| `samples/RawBufferVisualizer.VisualizerDebuggee/Program.cs` | 테스트용 debuggee, 여러 시뮬레이션 클래스 포함 |
-| `tests/RawBufferVisualizer.Tests/Program.cs` | 단위 테스트 |
-| `docs/buffer-doctor-design.md` | Buffer Doctor 설계 문서 |
-| `docs/smart-type-mapper-design.md` | Smart Type Mapper 설계 문서 |
-| `docs/MAINTAINER_HANDOFF.md` | 전체 프로젝트 상태 문서 |
-
----
-
-## 8. 마지막으로 실행된 명령
+## 12. 재현/검증 명령
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File "C:\Git\RawBufferVisualizer\scripts\Install-VisualStudioExtension.ps1" -Configuration Release -Framework net472 -ViewerFramework net472 -VisualStudioInstanceId 2c8402d8 -NoBuild -Reinstall
-powershell -ExecutionPolicy Bypass -File "C:\Git\RawBufferVisualizer\scripts\SmokeInstalledVsixNewFeatures.ps1" -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
+dotnet build RawBufferVisualizer.sln -c Release --no-restore /nodeReuse:false
+dotnet run --project tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj -c Release --no-build
+powershell -ExecutionPolicy Bypass -File scripts\SmokePreviewFirstHandoff.ps1 -NoBuild
+powershell -ExecutionPolicy Bypass -File scripts\SmokeSmartTypeMapper.ps1
+powershell -ExecutionPolicy Bypass -File scripts\SmokeDockedLayoutWidths.ps1 -Widths 540,900,1160
+powershell -ExecutionPolicy Bypass -File scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.50
+powershell -ExecutionPolicy Bypass -File scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoZip
+powershell -ExecutionPolicy Bypass -File scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.50.0
 ```
 
-결과:
-- 1.0.47 최종 VSIX 설치 완료
-- 새 Visual Studio 세션에서 혼합 시나리오 통과
-- 등록형 3개 + 자동 6개 = 이미지 9개, 오류 0개
+실제 옵션은 각 스크립트의 `Get-Help` 또는 parameter block을 먼저 확인합니다. 이미 최신 빌드가 있는 경우에만 `-NoBuild`를 사용합니다.
 
----
+## 13. 다음 우선순위
 
-## 9. 주의사항
+1. 현재 변경을 GitHub에 커밋/푸시하고 exact 후보를 Marketplace에 업로드 | Prerequisite: 사용자 PUSH 지시와 Publisher 권한 | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+2. Marketplace 전파 뒤 Windows 10 공개 `1.0.49 -> 1.0.50` 인플레이스 업데이트 검증 | Prerequisite: 해당 외부 VS2022 PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+3. 실제 산업 카메라 SDK/runtime 검증 확대 | Prerequisite: 합법적인 SDK, 드라이버, 대표 객체 또는 하드웨어 | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
-- 이 문서의 1.0.47 자동화 시나리오는 실제 Visual Studio 2022 디버거/installed-VSIX 환경에서 완료되었다. 실제 산업 카메라 SDK 런타임과 하드웨어는 별도 미검증 범위다.
-- "Open Variable"과 "Scan Locals"는 Break Mode에서만 의미 있다.
-- 매핑 파일은 `%APPDATA%\RawBufferVisualizer\type-mappings.json`에 저장된다. 이 파일을 수동으로 편집할 때는 JSON 형식과 `version: 1`을 유지해야 한다.
-- 새로운 SDK 포맷을 추가할 때는 반드시 실제 객체의 lifetime과 pointer validity를 고려해야 한다.
+## 완료 기록
+
+```text
+Status: Incomplete
+Scope: 1.0.50 source, final package, 통합 release communication, local installed-VSIX announcement/handoff/menu/automatic-image 동작 및 current-source Fit/Manual
+Acceptance criteria: source, package/static, release communication, 로컬 exact installed-VSIX 및 current-source Fit matrix 통과; 외부 문제 PC 인플레이스 업데이트는 Pending
+Verification: Release build 0 errors/18 existing warnings; self-tests 통과; communication guard/Marketplace dry run 통과; installed ReleaseAnnouncement, AutomaticCollections 및 MultiLibraryHybrid 통과
+Evidence: docs/release-qualification-1.0.50.md, artifacts/ui/installed-vsix-new-features, exact SHA-256 E31F254EFCFD80D6F03FED3E453BEFC47CB4924D0FF853167AE7385F36B94D93
+Boundary / next dependency: 외부 Windows 10 PC에서 public 1.0.49를 제거/repair 없이 exact 1.0.50으로 업데이트
+```

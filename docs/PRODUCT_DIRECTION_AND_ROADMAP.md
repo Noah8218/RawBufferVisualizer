@@ -8,7 +8,7 @@ The product promise is:
 
 > Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, pointer-backed images, raw buffers, and supported image collections directly inside one docked Visual Studio window.
 
-For registered types, the normal debugger visualizer remains available. For safe unregistered company-frame shapes, Automatic Vision Inspector discovers the current frame at Break Mode and uses Smart Type Mapper only when structural inference is ambiguous. It should remove debug-only code such as temporary image saves, `ImShow`, conversion helpers, and ad hoc pointer dumps.
+Registered debugger visualizers remain available. Automatic Vision Inspector also opens initialized exact OpenCvSharp and Emgu CV Mats through a validated live-memory path, while safe unregistered company-frame shapes use structural discovery and Smart Type Mapper only when inference is ambiguous. Bitmap remains on its registered visualizer path. The workflow should remove debug-only code such as temporary image saves, `ImShow`, conversion helpers, and ad hoc pointer dumps.
 
 ## Target Users And Problems
 
@@ -94,7 +94,9 @@ Responsive behavior:
 Interaction rules:
 
 - wheel zoom is centered predictably and drag pan follows the pointer;
-- a newly loaded/selected image gets a valid Fit state;
+- a newly loaded/selected image, the Fit command, and viewer double-click enter sticky Fit mode;
+- wheel zoom, pan, and 1:1 enter Manual mode;
+- Fit remains aspect-correct after docking or resize, while Manual resize preserves zoom and image center;
 - hover updates coordinate/value/selection while unpinned;
 - pinning freezes the intended inspection point and its corresponding detail panels;
 - high-zoom overlay values remain readable;
@@ -154,20 +156,23 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Now: publish and observe the locally qualified 1.0.47 line
+### Now: qualify the 1.0.50 stability update
 
-1. Upload the qualified `1.0.47.0` VSIX and reviewed Overview/release notes to Marketplace.
-2. Record real Marketplace update/install/restart smoke on another VS2022 machine that previously had `1.0.45.0`.
-3. Watch team usage for repeated-open memory, temp storage, package-load, provider-icon, automatic-scan false positives, and live-source-unavailable issues.
-4. Remove VSSDK threading analyzer warnings with no behavior regression.
-5. Create the first `1.0.47` Git tag/GitHub Release after the published package and update smoke agree.
+1. Update the affected Windows 10 PC that now runs public `1.0.49` to the exact qualified `1.0.50` SHA without uninstall, repair, or `/ResetSkipPkgs`.
+2. Repeat menu, ToolWindow, Automatic Inspector, registered Bitmap, explicit handoff completion, and Fit checks on that external profile.
+3. Publish only after the external update gate, README, Marketplace Overview, release notes, qualification record, and binary version agree.
+4. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
 
-The `1.0.47` source, package metadata, README, Marketplace copy, and local installed-VSIX feature matrix are qualified. Automatic Vision Inspector is the primary discovery path for safe unregistered wrappers, Smart Type Mapper is the explicit correction/persistence fallback, and Vision Buffer Doctor repairs plausible raw-layout mistakes. Public Marketplace publication, separate-PC update behavior, and live vendor hardware remain distinct gates.
+Public Marketplace `1.0.49.0` is reported working on the affected Windows 10 PC only after uninstall and clean reinstall. That result does not prove an in-place update. The exact local `1.0.50.0` package and installed-VSIX runtime passed on Windows 10 Pro / VS2022; the affected external-PC update and live vendor hardware remain separate qualification scopes.
 
 Exit criteria:
 
 - no package-load popup after update/restart;
+- exactly one View open command and one current-frame scan command;
+- debugger handoff success requires an explicit ACK and rejection surfaces its reason;
 - primary individual/collection providers appear and open;
+- initialized OpenCvSharp/Emgu Mats open automatically without creating duplicate rows, while Bitmap stays glyph-owned;
+- Fit and Manual mode behavior remains stable across resize;
 - pointer support claims match exact provider registrations and samples;
 - docked real-mouse zoom/pan remains responsive;
 - error/report/recovery, Save, Delete, Clear, and cleanup work;
@@ -176,7 +181,7 @@ Exit criteria:
 ### Next: supportability and compatibility growth
 
 1. Convert real user failures into reproducible samples in `VisualizerDebuggee` or focused smoke scripts.
-2. Convert only real vendor SDK/runtime evidence into new compatibility claims; registered OpenCvSharp/Emgu/Bitmap values already pass the 1.0.47 hybrid installed-VSIX scenario.
+2. Convert only real vendor SDK/runtime evidence into new compatibility claims; the qualified `1.0.50` OpenCvSharp/Emgu automatic capture and Bitmap registered capture do not certify unrelated vendor SDK objects.
 3. Add only requested formats/types with an exact source type, assembly version, descriptor mapping, and lifetime rule.
 4. Extend long-session and multi-instance regression coverage when a real failure reveals a missing assertion.
 5. Evaluate Visual Studio 18 and newer .NET debuggee matrices after stable tooling is available.

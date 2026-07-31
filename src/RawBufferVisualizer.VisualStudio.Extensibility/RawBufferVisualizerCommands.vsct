@@ -29,7 +29,7 @@
   </Commands>
 
   <Symbols>
-    <GuidSymbol name="RawBufferVisualizerPackage" value="{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}" />
+    <GuidSymbol name="RawBufferVisualizerPackage" value="{1977574b-f107-465f-bfd1-5fc022907039}" />
     <GuidSymbol name="RawBufferVisualizerCommandSet" value="{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}">
       <IDSymbol name="RawBufferVisualizerGroup" value="0x1020" />
       <IDSymbol name="ShowToolWindowCommand" value="0x0100" />

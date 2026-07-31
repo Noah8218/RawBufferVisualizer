@@ -13,6 +13,9 @@ namespace RawBufferVisualizer.VisualStudio
 
         [DataMember(Name = "autoScanOnBreak", Order = 1)]
         public bool AutoScanOnBreak { get; set; } = true;
+
+        [DataMember(Name = "includeImageCollections", Order = 2)]
+        public bool IncludeImageCollections { get; set; }
     }
 
     public sealed class AutomaticInspectionPreferencesStore
@@ -153,7 +156,8 @@ namespace RawBufferVisualizer.VisualStudio
             return new AutomaticInspectionPreferences
             {
                 Version = SupportedVersion,
-                AutoScanOnBreak = true
+                AutoScanOnBreak = true,
+                IncludeImageCollections = false
             };
         }
     }
