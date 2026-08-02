@@ -54,7 +54,7 @@ Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\Raw
 Size: 1,902,513 bytes
 SHA-256: 3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F
 Manifest target: [17.14,18.0) for Community/Professional/Enterprise x64
-Source: commit 43e347c plus the current intentional uncommitted working tree
+Source: commit 854cb67
 ```
 
 Rebuilding or changing any packaged source invalidates this exact record.
@@ -100,7 +100,7 @@ Test-process `TEMP` and `TMP` were routed under `D:\OpenVisionLab-TestData\RawBu
 
 ## Windows reinstall preservation
 
-The intended `1.0.52` source, documentation, and validation scripts are preserved through the `origin/main` checkpoint recorded below. The exact candidate and runtime evidence under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52` are not Git content. Preserve that directory when reinstalling Windows, or copy it to external storage before any operation that may format or repartition `D:`. After copying, verify the candidate length and SHA-256 recorded above. Rebuilding a new VSIX is not a substitute for the unchanged package required by the remaining public-update gate.
+The intended `1.0.52` source, documentation, and validation scripts are preserved from source checkpoint commit `854cb67` through the immediately following handoff checkpoint on `origin/main`. The exact candidate and runtime evidence under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52` are not Git content. Preserve that directory when reinstalling Windows, or copy it to external storage before any operation that may format or repartition `D:`. After copying, verify the candidate length and SHA-256 recorded above. Rebuilding a new VSIX is not a substitute for the unchanged package required by the remaining public-update gate.
 
 ## Evidence locations
 
@@ -118,6 +118,6 @@ D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\final-validation
 Status: Blocked
 Scope: Local `1.0.52` implementation, packaging, structure/lease verification, VS2022/VS2026 installed-runtime qualification, and Marketplace metadata preparation
 Acceptance criteria: Every local criterion passed; the required separate-PC public `1.0.50 -> 1.0.52` update criterion has no eligible external machine in this workspace
-Verification: Exact artifact/hash inspection; Release build; aggregate self-tests; release communication; VS2022 and VS2026 installation plus three runtime scenarios; registration audit; Marketplace dry run; public Gallery query; `git diff --check`
+Verification: Exact artifact/hash inspection; Release build; aggregate self-tests; release communication; VS2022 and VS2026 installation plus three runtime scenarios; registration audit; Marketplace dry run; public Gallery query; `git diff --check`; source checkpoint commit `854cb67` and `origin/main` push verification
 Evidence: Exact candidate SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` and the D-drive evidence paths above
 Boundary / next dependency: On a separate serviced VS2022 `17.14+` or stable VS2026 PC that currently has exact public `1.0.50.0`, update to this unchanged VSIX without uninstall, repair, or `/ResetSkipPkgs`, restart, and repeat the core runtime matrix. Only after that passes may Marketplace publication proceed with publisher credentials/approval.
