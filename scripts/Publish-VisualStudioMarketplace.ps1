@@ -1,5 +1,7 @@
 [CmdletBinding()]
 param(
+    [Parameter(Mandatory = $true)]
+    [ValidateNotNullOrEmpty()]
     [string]$VsixPath,
     [Parameter(Mandatory = $true)]
     [string]$Publisher,
@@ -18,10 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-
-if ([string]::IsNullOrWhiteSpace($VsixPath)) {
-    $VsixPath = Join-Path $repoRoot 'artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
-}
+$sourceProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
 
 if ([string]::IsNullOrWhiteSpace($PublishManifestPath)) {
     $PublishManifestPath = Join-Path $repoRoot 'artifacts\marketplace\vs-publish.json'
@@ -74,6 +73,38 @@ function Get-VsixMetadata {
     finally {
         $zip.Dispose()
     }
+}
+
+function Get-SourceReleaseVersion {
+    param([string]$ProjectPath)
+
+    Assert-FileExists -Path $ProjectPath -Message 'Visual Studio extension project was not found'
+    [xml]$project = Get-Content -LiteralPath $ProjectPath -Raw
+    $version = @($project.Project.PropertyGroup | ForEach-Object { $_.Version } | Where-Object { $_ }) |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace([string]$version)) {
+        throw "Visual Studio extension project does not declare a release Version: $ProjectPath"
+    }
+
+    return [string]$version
+}
+
+function ConvertTo-FourPartVersion {
+    param(
+        [string]$Version,
+        [string]$Label
+    )
+
+    try {
+        $parsed = [version]$Version
+    }
+    catch {
+        throw "$Label is not a valid version: '$Version'"
+    }
+
+    $build = if ($parsed.Build -ge 0) { $parsed.Build } else { 0 }
+    $revision = if ($parsed.Revision -ge 0) { $parsed.Revision } else { 0 }
+    return "$($parsed.Major).$($parsed.Minor).$build.$revision"
 }
 
 function Find-VsixPublisher {
@@ -141,7 +172,15 @@ function Get-AssetFiles {
 }
 
 Assert-FileExists -Path $VsixPath -Message 'VSIX payload was not found'
+$VsixPath = (Resolve-Path -LiteralPath $VsixPath).Path
 $metadata = Get-VsixMetadata -Path $VsixPath
+$sourceVersion = Get-SourceReleaseVersion -ProjectPath $sourceProjectPath
+$expectedManifestVersion = ConvertTo-FourPartVersion -Version $sourceVersion -Label 'Source release version'
+$actualManifestVersion = ConvertTo-FourPartVersion -Version $metadata.Version -Label 'VSIX manifest version'
+if ($actualManifestVersion -ne $expectedManifestVersion) {
+    throw "VSIX manifest version $actualManifestVersion does not match current source release $sourceVersion ($expectedManifestVersion). Select the exact qualified candidate explicitly; do not publish a preserved or stale VSIX. Path: $VsixPath"
+}
+
 $parsedVersion = [version]$metadata.Version
 $packageVersion = "$($parsedVersion.Major).$($parsedVersion.Minor).$($parsedVersion.Build)"
 if ([string]::IsNullOrWhiteSpace($OverviewPath)) {

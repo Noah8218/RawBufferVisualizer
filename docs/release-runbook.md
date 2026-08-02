@@ -57,7 +57,7 @@ Run the coherence guard:
 powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.52
 ```
 
-The guard fails when any version, heading, path, manifest metadata, or GitHub Release notes flow is stale. `Publish-VisualStudioMarketplace.ps1` also runs this guard and defaults to `docs\marketplace-overview-<VSIX version>.md`; it no longer uploads the root README as the Overview.
+The guard fails when any version, heading, path, manifest metadata, or GitHub Release notes flow is stale. `Publish-VisualStudioMarketplace.ps1` requires an explicit `-VsixPath`, rejects a VSIX whose manifest version differs from the current extension project version, and defaults only the Overview to `docs\marketplace-overview-<VSIX version>.md`; it no longer uploads the root README as the Overview. Never depend on a repository publish folder containing the current qualified candidate.
 
 The Tool Window announcement is intentionally non-modal. It appears only after the user opens Raw Buffer Visualizer, never opens the Tool Window itself, never starts inspection, and stores **Dismiss** per user in `%APPDATA%\RawBufferVisualizer\release-announcement-settings.json`. **What's New** remains available to reopen the current summary.
 
@@ -82,6 +82,14 @@ The VSIX to upload or smoke-test is:
 ```text
 D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
+
+Validate the exact package and generated Marketplace manifest without publishing:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\marketplace\vs-publish.json -DryRun
+```
+
+Omitting `-VsixPath` is an error. Passing the preserved repository `1.0.51` VSIX is also an error because its manifest version does not match the current `1.0.52` source release.
 
 ## Pre-publish clean/update gate
 

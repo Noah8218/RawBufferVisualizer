@@ -34,7 +34,7 @@ Current intended changes:
 - release/version alignment: `CHANGELOG.md`, `README.md`, both Visual Studio project versions, VSIX manifest/package version and `17.14` floor, embedded release notes, `ReleaseAnnouncement.cs`, and its tests;
 - current public copy: `docs/marketplace-overview-1.0.52.md`, `docs/marketplace-release-notes-1.0.52.md`, `docs/release-qualification-1.0.52.md`, plus the preserved failed `1.0.51` record;
 - maintainer state: `AGENTS.md`, `docs/README.md`, this handoff, architecture, product direction, Marketplace checklist, and release runbook;
-- release/test infrastructure: exact `-VsixPath`, custom D-drive publish root, D-drive output routing, leftmost-monitor evidence, VS2026 UI Automation handling, VS2022/VS2026 instance discovery, and per-machine extension-conflict detection in the modified PowerShell scripts;
+- release/test infrastructure: mandatory exact Marketplace `-VsixPath` plus source/manifest version rejection, custom D-drive publish root, D-drive output routing, leftmost-monitor evidence, VS2026 UI Automation handling, VS2022/VS2026 instance discovery, and per-machine extension-conflict detection in the modified PowerShell scripts;
 - ToolWindow lifetime/ownership: document workspace, claimed-handoff coordinator, snapshot-directory leases, ToolWindow disposal, and focused aggregate self-tests.
 
 Do not stage, commit, delete, or treat these pre-existing untracked paths as part of the release without separate inspection and user authorization:

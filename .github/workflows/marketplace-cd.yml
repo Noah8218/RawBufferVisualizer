@@ -102,6 +102,7 @@ jobs:
           }
 
           powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 `
+            -VsixPath .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix `
             -Publisher $publisher `
             -InternalName '${{ inputs.internal_name }}' `
             -Categories '${{ inputs.categories }}' `
@@ -164,6 +165,7 @@ jobs:
           }
 
           powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 `
+            -VsixPath .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix `
             -Publisher $publisher `
             -PersonalAccessToken $env:VS_MARKETPLACE_TOKEN `
             -InternalName '${{ inputs.internal_name }}' `
