@@ -378,6 +378,7 @@ artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
 
 ## Do Not Ship If
 
+- `Publish-VisualStudioMarketplace.ps1` was invoked without the exact explicit `-VsixPath`, or its manifest version does not match the current source release.
 - User-facing text still mentions rendering implementation details.
 - Narrow Visual Studio docking hides Save, image list, viewer, status strip, or Inspector access.
 - Debugger inspections open multiple independent viewer windows instead of one docked image list.
