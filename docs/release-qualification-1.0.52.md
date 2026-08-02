@@ -76,7 +76,7 @@ Rebuilding or changing any packaged source invalidates this exact record.
 | Menu and protocol contract | Pass | one Open and one Scan command per run; zero package protocol errors |
 | Monitor placement | Pass | leftmost `\\.\DISPLAY2`, bounds `-1920,360,1920,1080`; verified window rectangle `-1900,380,-20,1420` |
 | Installed registration audit | Pass | both profiles report `1.0.52.0`, valid registration payload, and no visible legacy config key |
-| Marketplace dry run | Pass | no external write; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\marketplace\vs-publish.json` |
+| Marketplace dry run | Pass | no external write; original `marketplace\vs-publish.json` plus post-qualification safety evidence under `marketplace-safety-guard`; exact `1.0.52` passed, omitted `-VsixPath` failed, and preserved `1.0.51` was rejected before manifest generation |
 | Separate-PC public `1.0.50 -> 1.0.52` update | Blocked | requires another serviced VS2022 `17.14+` or stable VS2026 PC that still runs exact public `1.0.50`; no uninstall, repair, or `/ResetSkipPkgs` is allowed between versions |
 
 ## Commands run
@@ -118,6 +118,6 @@ D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\final-validation
 Status: Blocked
 Scope: Local `1.0.52` implementation, packaging, structure/lease verification, VS2022/VS2026 installed-runtime qualification, and Marketplace metadata preparation
 Acceptance criteria: Every local criterion passed; the required separate-PC public `1.0.50 -> 1.0.52` update criterion has no eligible external machine in this workspace
-Verification: Exact artifact/hash inspection; Release build; aggregate self-tests; release communication; VS2022 and VS2026 installation plus three runtime scenarios; registration audit; Marketplace dry run; public Gallery query; `git diff --check`; source checkpoint commit `854cb67` and `origin/main` push verification
+Verification: Exact artifact/hash inspection; Release build; aggregate self-tests; release communication; VS2022 and VS2026 installation plus three runtime scenarios; registration audit; Marketplace dry run; explicit-path/source-version Marketplace safety checks; public Gallery query; `git diff --check`; candidate source commit `854cb67`, safety commit `8fe40a2`, and `origin/main` push verification
 Evidence: Exact candidate SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` and the D-drive evidence paths above
 Boundary / next dependency: On a separate serviced VS2022 `17.14+` or stable VS2026 PC that currently has exact public `1.0.50.0`, update to this unchanged VSIX without uninstall, repair, or `/ResetSkipPkgs`, restart, and repeat the core runtime matrix. Only after that passes may Marketplace publication proceed with publisher credentials/approval.
