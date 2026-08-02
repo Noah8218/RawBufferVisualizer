@@ -67,6 +67,21 @@ namespace RawBufferVisualizer.VisualStudio
             }
         }
 
+        public static VisualStudioSnapshotDirectoryLease CreateSnapshotDirectoryLease(
+            string metadataPath)
+        {
+            string snapshotDirectory;
+            if (!TryGetOwnedSnapshotDirectory(metadataPath, out snapshotDirectory))
+            {
+                throw new ArgumentException(
+                    "The metadata path is not in an owned Visual Studio snapshot directory.",
+                    "metadataPath");
+            }
+
+            Directory.CreateDirectory(snapshotDirectory);
+            return new VisualStudioSnapshotDirectoryLease(snapshotDirectory);
+        }
+
         public static void TryCleanupStaleSnapshotDirectories(TimeSpan maxAge)
         {
             try
@@ -106,12 +121,54 @@ namespace RawBufferVisualizer.VisualStudio
                     return;
                 }
 
+                if (IsSnapshotDirectoryLeased(directory))
+                {
+                    return;
+                }
+
                 Directory.Delete(directory, true);
             }
             catch
             {
                 // A locked temp file can be cleaned on the next visualization run.
             }
+        }
+
+        private static bool IsSnapshotDirectoryLeased(string directory)
+        {
+            try
+            {
+                foreach (var leasePath in Directory.EnumerateFiles(
+                    directory,
+                    ".rbuf-active-*.lease",
+                    SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        using (new FileStream(
+                            leasePath,
+                            FileMode.Open,
+                            FileAccess.ReadWrite,
+                            FileShare.None))
+                        {
+                        }
+                    }
+                    catch (IOException)
+                    {
+                        return true;
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch
+            {
+                return true;
+            }
+
+            return false;
         }
 
         public static bool TryGetRootByteCount(out long byteCount)

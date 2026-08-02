@@ -4,9 +4,33 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No user-visible changes are queued after `1.0.50`.
+No user-visible changes are queued after `1.0.52`.
 
-## [1.0.50] - 2026-07-31
+## [1.0.52] - 2026-08-02
+
+Release status: locally qualified development candidate. Marketplace publication, propagation, and the corresponding GitHub tag/release are not complete.
+
+### Fixed
+
+- Updated the stable Microsoft Visual Studio Extensibility SDK from `17.9.2092` to the `17.14` line so registered debugger visualizers activate on stable Visual Studio 2026 `18.x` hosts.
+- Raised the Visual Studio 2022 support floor to the serviced `17.14` baseline so the declared range matches the extension runtime dependencies.
+- Added per-document snapshot leases so the 24-hour stale cleanup cannot delete a file-backed payload while its document is still open.
+- Preview-to-full handoff replacement now releases the previous snapshot directory; removing, clearing, or disposing the Tool Window releases the current directory.
+
+### Improved
+
+- Moved document activation/removal/disposal into `RawBufferDocumentWorkspace` and claimed handoff ACK/NACK policy into `ClaimedHandoffOpenCoordinator`, with focused tests for both boundaries.
+- Hardened installed-VSIX UI automation for VS 2026 Locals virtualization by reacquiring a row after selection before clicking its debugger visualizer.
+- Carries forward the automatic Mat collection inspection and one-time release highlights prepared in the unpublished `1.0.51` candidate.
+
+### Compatibility evidence
+
+- Stable Visual Studio 2026 Community `18.8.2` (`18.8.12023.21`) passed the installed `ReleaseAnnouncement`, `AutomaticCollections`, and `MultiLibraryHybrid` core matrix: Bitmap registered handoff plus eight automatic opens produced nine documents, zero errors, one Open command, one Scan command, and zero protocol errors.
+- The original `1.0.51` candidate remains unchanged as failed evidence: its SHA-256 is `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`, and its registered debugger visualizer cannot activate on VS 2026 `18.8.2` because its older framework requests `ServiceHub.Host.Extensibility.Contracts, Version=17.0.0.0` while that host supplies `18.0.0.0`.
+
+## [1.0.51] - 2026-08-01
+
+Release status: superseded local candidate. It was never published because stable Visual Studio 2026 runtime qualification failed.
 
 ### Added
 
@@ -17,14 +41,28 @@ No user-visible changes are queued after `1.0.50`.
 
 - Each automatic collection element now succeeds or fails independently, so null or disposed Mats do not hide valid images from the same collection.
 - Automatic collection work is bounded to 8 items per collection, 16 items and 8 roots per scan.
-- Debugger handoff now uses atomic claiming plus explicit ACK/NACK completion.
-- New and selected images remain in aspect-correct Fit mode; manual zoom and pan are preserved.
-- Visual Studio package and View-menu registration checks reject duplicate or retired registrations.
+
+### Release communication
+
+- Refreshed the Marketplace Overview and release notes so the public listing describes Automatic Vision Inspector, Vision Buffer Doctor, Smart Type Mapper, automatic Mat collections, and current safety limits.
+- Carried forward the `1.0.50` handoff, menu-registration, automatic direct-Mat, and Fit/Manual reliability improvements in the higher version required for Marketplace updates.
 
 ### Compatibility
 
+- Documented the then-intended Visual Studio 2022 `17.9+` and stable Visual Studio 2026 `18.x` range. Subsequent VS2026 runtime failure superseded this candidate.
 - `System.Drawing.Bitmap`, mixed collections, dictionaries, jagged arrays, multidimensional arrays, and arbitrary enumerables continue to use their registered debugger-visualizer path.
 - Automatic Inspector does not invoke arbitrary vendor methods or decode private native layouts.
+
+## [1.0.50] - 2026-07-29
+
+### Improved
+
+- Automatic Inspector can open initialized exact OpenCvSharp and Emgu CV `Mat` values from the selected stack frame after assignment.
+- Debugger handoff uses atomic claiming plus explicit ACK/NACK completion.
+- New and selected images remain in aspect-correct Fit mode; manual zoom and pan are preserved.
+- Visual Studio package and View-menu registration checks reject duplicate or retired registrations.
+
+The public Marketplace `1.0.50.0` package was built before automatic Mat collection expansion and the in-product release-highlights banner. Those changes were first prepared in unpublished `1.0.51` and are carried into candidate `1.0.52`.
 
 ## [1.0.49] - 2026-07-29
 
@@ -56,8 +94,12 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.50...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.52...HEAD
+[1.0.52]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.52
+[1.0.51]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.51
 [1.0.50]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.50
 [1.0.49]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.49
 [1.0.48]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.48
 [1.0.47]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.47
+
+The version links above are release targets used by the tag workflow. A link is expected to remain unavailable until that version's GitHub tag and Release have actually been created.

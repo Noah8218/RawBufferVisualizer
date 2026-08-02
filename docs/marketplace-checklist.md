@@ -8,16 +8,16 @@ Build a Release VSIX:
 
 ```powershell
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.50
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.52
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate
 ```
 
 Expected output:
 
 ```text
-artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\
-artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
-artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
 ## Listing Metadata
@@ -34,8 +34,18 @@ Suggested Marketplace fields:
 | Tags | image-watch, csharp, opencvsharp, machine-vision, raw-buffer, emgucv, image-debugger |
 | License | MIT |
 | Release stage | Preview for the first Marketplace upload |
+| Supported Visual Studio | Visual Studio 2022 `17.14+` and stable Visual Studio 2026 `18.x`; Community/Professional/Enterprise x64 |
 
 Keep the product name stable and put the search-oriented positioning in the short description and first Overview paragraph. Keep the extension ID unchanged.
+
+Every Overview must distinguish the technical support range from exact runtime evidence:
+
+- technical/API floor: Visual Studio 2022 `17.14`;
+- stable VS2026 target: `18.x`, using Microsoft's VSIX API-version compatibility model;
+- exact installed IDE builds: list only versions that passed the current installed-VSIX matrix;
+- excluded release targets: Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, and Preview/Insiders builds.
+
+The `1.0.52` manifest range `[17.14,18.0)` is valid for VS2026 because VS2026 supports API version 17.x and ignores the upper bound. The `17.14` lower bound is intentional and matches the Extensibility runtime dependency; any later manifest edit produces a new exact package and requires full requalification.
 
 For every update, the binary version, `CHANGELOG.md`, dedicated Marketplace Overview, Marketplace/GitHub release notes, embedded VSIX `ReleaseNotes.txt`, and in-product `ReleaseAnnouncement.cs` version must agree. The communication test above enforces that contract. Confirm the first Tool Window open shows the current non-modal highlights, **Dismiss** survives a Visual Studio restart, and **What's New** can reopen them without triggering a scan.
 
@@ -61,7 +71,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-For the `1.0.50` update, use [marketplace-release-notes-1.0.50.md](marketplace-release-notes-1.0.50.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+For the `1.0.52` update, use [marketplace-release-notes-1.0.52.md](marketplace-release-notes-1.0.52.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 The GitHub tag workflow uses that same file as its curated Release body. It attaches only the standalone viewer; do not attach the Visual Studio VSIX to GitHub Releases.
 
@@ -95,9 +105,9 @@ Lead with the debugger workflow, not the large-image benchmark. Publish only in 
 
 Current Overview copy:
 
-[Raw Buffer Visualizer 1.0.50 Marketplace Overview](marketplace-overview-1.0.50.md)
+[Raw Buffer Visualizer 1.0.52 Marketplace Overview](marketplace-overview-1.0.52.md)
 
-The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.50`.
+The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.52`.
 
 Historical 1.0.45 Overview copy:
 
@@ -251,7 +261,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\SmokeLargeFileBacked.ps1 -Wid
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -PixelFormat Mono16 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat BGR24 -Width 640 -Height 484
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeVisualStudioDockedPerformance.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoBuild -NoInstall -PixelFormat Float32 -Width 320 -Height 240
-powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir artifacts\ui\fit-stability-after-1.0.50
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\fit-stability
 ```
 
 The docked smoke must validate:
@@ -268,9 +278,11 @@ The docked smoke must validate:
 - Explicit Fit/Manual behavior: new image/Fit/double-click enter Fit; wheel/pan/1:1 enter Manual; resize keeps Fit aspect/margin or Manual center/scale.
 - `Publish-VisualStudioExtension.ps1` must prove that `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef` was generated from the current hybrid project and points its `CodeBase` to `RawBufferVisualizer.VisualStudio.Extensibility.dll`.
 - The VSIX must not contain the former `RawBufferVisualizer.VisualStudio.Vssdk.pkgdef`.
-- The `1.0.50` registration must use Package GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, contain exactly one `Menus.ctmenu, 2` registration, and reject retired `{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}`.
+- The current registration must use Package GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, contain exactly one `Menus.ctmenu, 2` registration, and reject retired `{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}`.
 - Package, menu, and ToolWindow registrations must each occur exactly once; each VS instance must have one main extension manifest and no legacy split VSSDK extension.
-- `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
+- `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than the declared Visual Studio 2022 `17.14` floor.
+- The current release record must include installed-VSIX results for a serviced VS2022 `17.14` instance and stable VS2026 `18.x` when both environments are available. If one is unavailable, Marketplace copy must say which exact runtime qualification remains pending.
+- `Test-VisualStudioMarketplaceUpdate.ps1` must report no per-machine historical Raw Buffer Visualizer under the selected VS2026 `Common7\IDE\VSExtensions` root. If it finds one, remove/update it through Visual Studio tooling with administrator rights and rerun; never qualify by manually deleting `Program Files` content.
 
 ## Install, Update, Uninstall, Reinstall
 
@@ -300,7 +312,7 @@ Manual smoke checklist:
 - Reinstall and repeat one debugger inspection.
 - For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
 - After update, restart Visual Studio once with no solution open and confirm no `RawBufferVisualizerPackage did not load correctly` popup appears.
-- Mandatory update gate: begin with public `1.0.49` on the affected Windows 10 PC, update to the exact `1.0.50` candidate without uninstall, repair, or `/ResetSkipPkgs`, and prove the View/menu, Bitmap handoff, automatic Mat, and Fit/Manual workflows.
+- Mandatory update gate: on a separate eligible PC, begin with the exact public `1.0.50` package, update to the exact `1.0.52` candidate without uninstall, repair, or `/ResetSkipPkgs`, and prove the View/menu, Bitmap handoff, automatic Mat, automatic Mat collection, and Fit/Manual workflows.
 - Run `Test-VisualStudioMarketplaceUpdate.ps1`, then run the installed-VSIX `AutomaticVisionInspector`, `AutomaticCollections`, and `MultiLibraryHybrid` scenarios. A successful real handoff is the registration acceptance test.
 - Confirm the normal install output contains no manual package-registration step.
 - If a developer PC already has stale VSSDK registration, close Visual Studio and run:
@@ -318,7 +330,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.50
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 1.0.52
 ```
 
 GitHub setup:
@@ -340,12 +352,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.50.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.52.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.50.md](marketplace-release-notes-1.0.50.md) into the Marketplace release notes field.
+For the current update, paste [marketplace-release-notes-1.0.52.md](marketplace-release-notes-1.0.52.md) into the Marketplace release notes field.
 
 ## Evidence Artifacts
 
@@ -356,7 +368,7 @@ artifacts\perf\vs-docked\visual-studio-docked-performance.json
 artifacts\perf\vs-docked\visual-studio-docked-session.json
 artifacts\perf\vs-docked\visual-studio-docked-session.png
 artifacts\perf\vs-docked\visual-studio-docked-framebuffer.png
-artifacts\ui\fit-stability-after-1.0.50\layout-widths.json
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\fit-stability\layout-widths.json
 artifacts\ui\installed-vsix-new-features\AutomaticVisionInspector-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\AutomaticCollections-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\BufferDoctor-installed-vsix.json
@@ -374,14 +386,15 @@ artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license and third-party notice requirement.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.
-- Visual Studio shows `RawBufferVisualizerPackage did not load correctly` when inspecting an image on a VS 2022 17.9-17.13 machine.
+- The listing or manifest offers `1.0.52` to a VS2022 `17.9`-`17.13` machine even though the candidate depends on the `17.14` Extensibility runtime.
 - The installed debugger host reports `did not acknowledge the image handoff`.
 - Handoff success can be reported without an explicit ACK, or a NACK reason is unavailable.
 - The generated `.pkgdef` is owned by the VSSDK support project, points to `RawBufferVisualizer.VisualStudio.Vssdk.dll`, or is absent from the VSIX.
 - Package, `Menus.ctmenu, 2`, or ToolWindow registration is missing or duplicated.
 - The View menu contains anything other than one open command and one current-frame scan command.
 - A local install passes only after `Repair-VisualStudioExtensionRegistration.ps1` or another manual registry write.
-- README and the 1.0.50 Marketplace Overview disagree about Automatic Inspector's automatic Mat/registered Bitmap boundary.
+- README and the 1.0.52 Marketplace Overview disagree about Automatic Inspector's automatic Mat/registered Bitmap boundary.
 - Initialized OpenCvSharp/Emgu Mats do not each create one live automatic row, Bitmap/RawBufferSnapshot/RawBufferView creates an automatic row, or **Scan Now** duplicates rows.
 - Fit changes image aspect after resize or Manual resize resets zoom/center.
-- The Windows 10 update from public `1.0.49` requires uninstall/reinstall.
+- The update from public `1.0.50` to candidate `1.0.52` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
+- The unchanged candidate has not passed the stable VS2026 installed-runtime core matrix.

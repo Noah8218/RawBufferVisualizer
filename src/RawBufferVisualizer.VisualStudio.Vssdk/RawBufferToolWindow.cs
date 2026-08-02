@@ -50,5 +50,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             get { return _control.IsAutoInspectEnabled; }
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _control.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
     }
 }

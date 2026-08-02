@@ -210,7 +210,7 @@ This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currentl
 
 ## Version Policy
 
-- Primary: Visual Studio 2022 17.9 or newer, using `VisualStudio.Extensibility`.
+- Primary: Visual Studio 2022 17.14 or newer and stable Visual Studio 2026 18.x, using `VisualStudio.Extensibility`.
 - Fallback: older VSSDK visualizer only if support for older Visual Studio versions becomes a product requirement.
 - Runtime: keep the standalone viewer on `net472` plus modern .NET targets. The VS extension can use a modern target where the extension model allows it.
 

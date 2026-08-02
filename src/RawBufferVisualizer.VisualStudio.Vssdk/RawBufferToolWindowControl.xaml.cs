@@ -25,7 +25,7 @@ using Line = System.Windows.Shapes.Line;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
-    public partial class RawBufferToolWindowControl : UserControl
+    public partial class RawBufferToolWindowControl : UserControl, IDisposable
     {
         private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
         private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
@@ -40,9 +40,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             Wide
         }
 
-        private readonly ObservableCollection<ImageDocument> _documents = new ObservableCollection<ImageDocument>();
+        private readonly RawBufferDocumentWorkspace<ImageDocument> _workspace =
+            new RawBufferDocumentWorkspace<ImageDocument>();
+        private readonly ClaimedHandoffOpenCoordinator _handoffCoordinator =
+            new ClaimedHandoffOpenCoordinator(RawBufferVisualizerPackageLog.Write);
         private readonly DispatcherTimer _performanceTimer;
-        private ImageDocument? _activeDocument;
+        private ObservableCollection<ImageDocument> _documents
+        {
+            get { return _workspace.Documents; }
+        }
+        private ImageDocument? _activeDocument
+        {
+            get { return _workspace.ActiveDocument; }
+        }
+        private bool _disposed;
         private LayoutMode _layoutMode = LayoutMode.Unknown;
         private bool _syncingZoomSlider;
         private bool _syncingDocumentSelection;
@@ -508,7 +519,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger),
                 true,
                 inspection.Inference.Members);
-            _documents.Add(document);
+            _workspace.Add(document);
             if (!_automaticScanRunning)
             {
                 ActivateDocument(document);
@@ -541,7 +552,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger),
                 false,
                 inspection.Inference.Members);
-            _documents.Add(document);
+            _workspace.Add(document);
         }
 
         private void RemoveAutomaticInspectionDocuments()
@@ -564,13 +575,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     _compareB = null;
                 }
 
-                if (ReferenceEquals(_activeDocument, document))
-                {
-                    _activeDocument = null;
-                }
-
-                _documents.RemoveAt(i);
-                document.Dispose();
+                _workspace.RemoveAt(i, false);
             }
 
             if (_activeDocument == null && _documents.Count > 0)
@@ -797,112 +802,23 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 SetTransientStatus("Loading handoff...");
-                var request = ReadHandoffRequestWithRetry(processingPath);
-                var opened = false;
-                string? openFailure = null;
-                if (request.IsError)
-                {
-                    var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
-                        ? (string.IsNullOrWhiteSpace(request.SourceType) ? "Debugger visualizer" : request.SourceType)
-                        : request.DisplayName;
-                    AddErrorDocument(
-                        displayName,
-                        request.SourceType,
-                        request.ErrorType,
-                        request.ErrorMessage,
-                        request.ErrorDetails,
-                        request.MemberInventory,
-                        request.ItemAssemblyName,
-                        request.DebuggeeProcessId);
-                    opened = true;
-                }
-                else if (request.IsLiveMemory)
-                {
-                    OpenLiveMemory(request);
-                    opened = true;
-                }
-                else
-                {
-                    var documentCountBeforeOpen = _documents.Count;
-                    OpenPath(
-                        request.MetadataPath,
-                        request.DisplayName,
-                        request.SourceType,
-                        request.HandoffId,
-                        request.IsPreview);
-                    ImageDocument? openedDocument;
-                    if (!string.IsNullOrWhiteSpace(request.HandoffId))
-                    {
-                        openedDocument = FindHandoffDocument(request.HandoffId);
-                    }
-                    else
-                    {
-                        openedDocument = _documents.Count > documentCountBeforeOpen
-                            ? _documents[_documents.Count - 1]
-                            : null;
-                    }
-
-                    var expectedDisplayPath = Path.GetFullPath(request.MetadataPath);
-                    var openAddedErrorDocument = _documents
-                        .Skip(documentCountBeforeOpen)
-                        .Any(document => document.IsError);
-                    opened = openedDocument != null
-                        && !openedDocument.IsError
-                        && !openAddedErrorDocument
-                        && string.Equals(
-                            Path.GetFullPath(openedDocument.DisplayPath),
-                            expectedDisplayPath,
-                            StringComparison.OrdinalIgnoreCase)
-                        && openedDocument.IsPreview == request.IsPreview;
-                    if (!opened)
-                    {
-                        openFailure = _activeDocument != null
-                            && _activeDocument.IsError
-                            && !string.IsNullOrWhiteSpace(_activeDocument.ErrorMessage)
-                            ? _activeDocument.ErrorMessage
-                            : "The image document could not be created.";
-                    }
-                }
-
-                if (!opened)
-                {
-                    TryRejectHandoffOrLog(
-                        requestPath,
-                        processingPath,
-                        openFailure ?? "The handoff could not be opened.");
-                    return false;
-                }
-
-                if (!VisualizerHandoffInbox.TryAcknowledgeRequest(
-                        requestPath,
-                        processingPath))
-                {
-                    if (VisualizerHandoffInbox.GetRequestState(requestPath)
-                        == VisualizerHandoffRequestState.Acknowledged)
-                    {
-                        return true;
-                    }
-
-                    throw new IOException(
-                        "The handoff opened, but its acknowledgement marker could not be published.");
-                }
-
-                return true;
-            }
-            catch (Exception ex)
-            {
-                TryRejectHandoffOrLog(
+                var outcome = _handoffCoordinator.Open(
                     requestPath,
                     processingPath,
-                    ex.ToString());
-                AddErrorDocument(
-                    requestPath,
-                    "Debugger handoff",
-                    ex.GetType().FullName ?? ex.GetType().Name,
-                    ex.Message,
-                    ex.ToString());
-                WriteAutomationProbeFailureIfRequested(requestPath, ex);
-                return false;
+                    OpenClaimedHandoff);
+                if (!outcome.Succeeded && outcome.Exception != null)
+                {
+                    var ex = outcome.Exception;
+                    AddErrorDocument(
+                        requestPath,
+                        "Debugger handoff",
+                        ex.GetType().FullName ?? ex.GetType().Name,
+                        ex.Message,
+                        ex.ToString());
+                    WriteAutomationProbeFailureIfRequested(requestPath, ex);
+                }
+
+                return outcome.Succeeded;
             }
             finally
             {
@@ -910,43 +826,76 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private static void TryRejectHandoffOrLog(
-            string requestPath,
-            string processingPath,
-            string reason)
+        private ClaimedHandoffOpenResult OpenClaimedHandoff(
+            VisualizerHandoffRequest request)
         {
-            if (VisualizerHandoffInbox.TryRejectRequest(
-                    requestPath,
-                    processingPath,
-                    reason))
+            if (request.IsError)
             {
-                return;
+                var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
+                    ? (string.IsNullOrWhiteSpace(request.SourceType)
+                        ? "Debugger visualizer"
+                        : request.SourceType)
+                    : request.DisplayName;
+                AddErrorDocument(
+                    displayName,
+                    request.SourceType,
+                    request.ErrorType,
+                    request.ErrorMessage,
+                    request.ErrorDetails,
+                    request.MemberInventory,
+                    request.ItemAssemblyName,
+                    request.DebuggeeProcessId);
+                return ClaimedHandoffOpenResult.Success();
             }
 
-            VisualizerHandoffRequestState state;
-            try
+            if (request.IsLiveMemory)
             {
-                state = VisualizerHandoffInbox.GetRequestState(requestPath);
-            }
-            catch (Exception ex)
-            {
-                RawBufferVisualizerPackageLog.Write(
-                    "Handoff rejection state read failed "
-                    + requestPath
-                    + " "
-                    + ex);
-                return;
+                OpenLiveMemory(request);
+                return ClaimedHandoffOpenResult.Success();
             }
 
-            if (state != VisualizerHandoffRequestState.Rejected
-                && state != VisualizerHandoffRequestState.Acknowledged)
+            var documentCountBeforeOpen = _documents.Count;
+            OpenPath(
+                request.MetadataPath,
+                request.DisplayName,
+                request.SourceType,
+                request.HandoffId,
+                request.IsPreview);
+            ImageDocument? openedDocument;
+            if (!string.IsNullOrWhiteSpace(request.HandoffId))
             {
-                RawBufferVisualizerPackageLog.Write(
-                    "Handoff rejection marker publish failed "
-                    + requestPath
-                    + " state "
-                    + state);
+                openedDocument = FindHandoffDocument(request.HandoffId);
             }
+            else
+            {
+                openedDocument = _documents.Count > documentCountBeforeOpen
+                    ? _documents[_documents.Count - 1]
+                    : null;
+            }
+
+            var expectedDisplayPath = Path.GetFullPath(request.MetadataPath);
+            var openAddedErrorDocument = _documents
+                .Skip(documentCountBeforeOpen)
+                .Any(document => document.IsError);
+            var opened = openedDocument != null
+                && !openedDocument.IsError
+                && !openAddedErrorDocument
+                && string.Equals(
+                    Path.GetFullPath(openedDocument.DisplayPath),
+                    expectedDisplayPath,
+                    StringComparison.OrdinalIgnoreCase)
+                && openedDocument.IsPreview == request.IsPreview;
+            if (opened)
+            {
+                return ClaimedHandoffOpenResult.Success();
+            }
+
+            var openFailure = _activeDocument != null
+                && _activeDocument.IsError
+                && !string.IsNullOrWhiteSpace(_activeDocument.ErrorMessage)
+                ? _activeDocument.ErrorMessage
+                : "The image document could not be created.";
+            return ClaimedHandoffOpenResult.Failure(openFailure);
         }
 
         public void OpenPath(string path)
@@ -993,7 +942,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         reference.Descriptor,
                         title,
                         resolvedSourceType,
-                        isPreview);
+                        isPreview,
+                        ShouldDeleteSnapshotDirectoryOnDispose(fullPath));
                     ImageList.Items.Refresh();
                     if (wasActive)
                     {
@@ -1028,7 +978,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     ShouldDeleteSnapshotDirectoryOnDispose(fullPath),
                     handoffId,
                     isPreview);
-                _documents.Add(document);
+                _workspace.Add(document);
                 ActivateDocument(document);
                 DiagnosticsList.Items.Insert(0, string.Format(
                     CultureInfo.InvariantCulture,
@@ -1077,13 +1027,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void Clear_Click(object sender, RoutedEventArgs e)
         {
             OpenGlImageView.ClearImage();
-            foreach (var document in _documents)
-            {
-                document.Dispose();
-            }
-
-            _documents.Clear();
-            _activeDocument = null;
+            _workspace.Clear();
             _compareA = null;
             _compareB = null;
             _blinkTimer.Stop();
@@ -1101,6 +1045,34 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateCompareText();
             UpdateStatus();
             UpdateTempUsageStatus();
+        }
+
+        public void Dispose()
+        {
+            if (!Dispatcher.CheckAccess())
+            {
+#pragma warning disable VSTHRD001
+                Dispatcher.Invoke(Dispose);
+#pragma warning restore VSTHRD001
+                return;
+            }
+
+            if (_disposed)
+            {
+                return;
+            }
+
+            _disposed = true;
+            _performanceTimer.Stop();
+            _blinkTimer.Stop();
+            CancelDiagnosis();
+            OpenGlImageView.PixelHovered -= OpenGlImageView_PixelHovered;
+            OpenGlImageView.PixelPinned -= OpenGlImageView_PixelPinned;
+            OpenGlImageView.PixelSelected -= OpenGlImageView_PixelSelected;
+            OpenGlImageView.ViewChanged -= OpenGlImageView_ViewChanged;
+            OpenGlImageView.SourceUnavailable -= OpenGlImageView_SourceUnavailable;
+            OpenGlImageView.ClearImage();
+            _workspace.Dispose();
         }
 
         private void SaveVisiblePng_Click(object sender, RoutedEventArgs e)
@@ -2277,7 +2249,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             SaveActiveDocumentView();
-            _activeDocument = document;
+            _workspace.Activate(document);
             UpdateAutomaticInspectionPanel(document);
             CancelDiagnosis();
             DiagnosisPanel.Visibility = Visibility.Collapsed;
@@ -2448,7 +2420,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 memberInventory,
                 itemAssemblyName,
                 debuggeeProcessId);
-            _documents.Add(document);
+            _workspace.Add(document);
             ActivateDocument(document);
         }
 
@@ -2508,6 +2480,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     descriptor,
                     displayName,
                     sourceType,
+                    false,
                     false);
                 ImageList.Items.Refresh();
                 if (wasActive)
@@ -2528,7 +2501,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     false,
                     handoffId,
                     false);
-                _documents.Add(document);
+                _workspace.Add(document);
                 if (!_automaticScanRunning)
                 {
                     ActivateDocument(document);
@@ -2575,6 +2548,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     request.LiveDescriptor,
                     request.DisplayName,
                     resolvedSourceType,
+                    false,
                     false);
                 ImageList.Items.Refresh();
                 if (wasActive)
@@ -2603,7 +2577,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     false,
                     request.HandoffId,
                     false);
-                _documents.Add(document);
+            _workspace.Add(document);
                 if (!_automaticScanRunning)
                 {
                     ActivateDocument(document);
@@ -2957,25 +2931,23 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             if (wasActive)
             {
-                _activeDocument = null;
                 _blinkTimer.Stop();
             }
 
+            ImageDocument? replacement;
             _syncingDocumentSelection = true;
             try
             {
-                _documents.RemoveAt(index);
+                replacement = _workspace.RemoveAt(index, true);
             }
             finally
             {
                 _syncingDocumentSelection = false;
             }
 
-            document.Dispose();
-
-            if (_documents.Count > 0)
+            if (_documents.Count > 0 && replacement != null)
             {
-                ActivateDocument(_documents[Math.Min(index, _documents.Count - 1)]);
+                ActivateDocument(replacement);
             }
             else
             {
@@ -3237,7 +3209,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     source.Descriptor,
                     "Diff: " + _compareA.Title + " | " + _compareB.Title,
                     "A/B diff");
-                _documents.Add(document);
+                _workspace.Add(document);
                 ActivateDocument(document);
             }
             catch (Exception ex)
@@ -3263,7 +3235,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     source.Descriptor,
                     "Split: " + _compareA.Title + " | " + _compareB.Title,
                     "A/B split");
-                _documents.Add(document);
+                _workspace.Add(document);
                 ActivateDocument(document);
             }
             catch (Exception ex)
@@ -4823,32 +4795,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 .Replace("\n", "\\n");
         }
 
-        private static VisualizerHandoffRequest ReadHandoffRequestWithRetry(string requestPath)
-        {
-            const int attemptCount = 10;
-            const int retryDelayMilliseconds = 50;
-            Exception? last = null;
-            for (var attempt = 0; attempt < attemptCount; attempt++)
-            {
-                try
-                {
-                    return VisualizerHandoffInbox.ReadSnapshotRequestInfo(requestPath);
-                }
-                catch (Exception ex) when (
-                    ex is IOException
-                    || ex is UnauthorizedAccessException)
-                {
-                    last = ex;
-                    if (attempt + 1 < attemptCount)
-                    {
-                        Thread.Sleep(retryDelayMilliseconds);
-                    }
-                }
-            }
-
-            throw last ?? new IOException("Handoff request could not be read.");
-        }
-
         private static RawImageSource CreateImageSource(string rawPath, RawImageDescriptor descriptor, long rawByteLength)
         {
             if (rawByteLength > MaxInMemorySourceBytes)
@@ -5065,7 +5011,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 get { return MemberInventory != null && MemberInventory.Count > 0; }
             }
-            private readonly string? _ownedSnapshotDirectory;
+            private readonly VisualStudioSnapshotLeaseOwner _snapshotLeaseOwner =
+                new VisualStudioSnapshotLeaseOwner();
             private bool _disposed;
 
             public void SetAutomaticInspection(
@@ -5163,7 +5110,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AutomaticValidationSummary = string.Empty;
                 AutomaticMappingRequired = false;
                 SuggestedMappingMembers = null;
-                _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
+                try
+                {
+                    _snapshotLeaseOwner.Replace(DisplayPath, deleteSnapshotDirectoryOnDispose);
+                }
+                catch
+                {
+                    Source.Dispose();
+                    throw;
+                }
             }
 
             private ImageDocument(
@@ -5208,7 +5163,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AutomaticValidationSummary = string.Empty;
                 AutomaticMappingRequired = false;
                 SuggestedMappingMembers = null;
-                _ownedSnapshotDirectory = GetOwnedSnapshotDirectory(DisplayPath, deleteSnapshotDirectoryOnDispose);
+                try
+                {
+                    _snapshotLeaseOwner.Replace(DisplayPath, deleteSnapshotDirectoryOnDispose);
+                }
+                catch
+                {
+                    Source.Dispose();
+                    throw;
+                }
             }
 
             public static ImageDocument CreateError(
@@ -5236,7 +5199,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)
             {
-                ReplaceSource(DisplayPath, source, descriptor, Title, SourceType, false);
+                ReplaceSource(
+                    DisplayPath,
+                    source,
+                    descriptor,
+                    Title,
+                    SourceType,
+                    false,
+                    _snapshotLeaseOwner.HasLease);
             }
 
             public void ReplaceSource(
@@ -5245,20 +5215,29 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 RawImageDescriptor descriptor,
                 string? title,
                 string sourceType,
-                bool isPreview)
+                bool isPreview,
+                bool deleteSnapshotDirectoryOnDispose)
             {
                 if (source == null)
                 {
                     throw new ArgumentNullException("source");
                 }
 
+                var nextDisplayPath = GetDisplayPath(displayPath);
+                var nextDescriptor = descriptor == null
+                    ? throw new ArgumentNullException("descriptor")
+                    : descriptor.Clone();
+                var nextThumbnail = CreateThumbnailSource(source, nextDescriptor);
                 var previousSource = Source;
-                DisplayPath = GetDisplayPath(displayPath);
+                var previousSnapshotDirectory = _snapshotLeaseOwner.Replace(
+                    nextDisplayPath,
+                    deleteSnapshotDirectoryOnDispose);
+                DisplayPath = nextDisplayPath;
                 Title = string.IsNullOrWhiteSpace(title) ? CreateTitle(DisplayPath) : title!.Trim();
                 SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Source = source;
-                Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
-                Thumbnail = CreateThumbnailSource(Source, Descriptor);
+                Descriptor = nextDescriptor;
+                Thumbnail = nextThumbnail;
                 ViewState = null;
                 IsPreview = isPreview;
                 ErrorMessage = string.Empty;
@@ -5270,6 +5249,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 if (!ReferenceEquals(previousSource, source))
                 {
                     previousSource.Dispose();
+                }
+
+                if (!string.IsNullOrWhiteSpace(previousSnapshotDirectory))
+                {
+                    VisualStudioTempStore.TryDeleteDirectory(previousSnapshotDirectory);
                 }
             }
 
@@ -5295,10 +5279,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 _disposed = true;
                 Source.Dispose();
-                if (_ownedSnapshotDirectory != null)
-                {
-                    VisualStudioTempStore.TryDeleteDirectory(_ownedSnapshotDirectory);
-                }
+                _snapshotLeaseOwner.Dispose();
             }
 
             private static string CreateTitle(string displayPath)
@@ -5322,18 +5303,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
             }
 
-            private static string? GetOwnedSnapshotDirectory(string displayPath, bool deleteSnapshotDirectoryOnDispose)
-            {
-                if (!deleteSnapshotDirectoryOnDispose)
-                {
-                    return null;
-                }
-
-                string snapshotDirectory;
-                return VisualStudioTempStore.TryGetOwnedSnapshotDirectory(displayPath, out snapshotDirectory)
-                    ? snapshotDirectory
-                    : null;
-            }
         }
     }
 }

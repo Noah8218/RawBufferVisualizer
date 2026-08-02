@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "1.0.50";
+        public const string CurrentVersion = "1.0.52";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1050";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1052";
 
         public const string HighlightAutomaticCollections =
             "Automatic inspection for OpenCvSharp/Emgu Mat lists and arrays";
 
         public const string HighlightFailureIsolation =
-            "Per-element failure isolation so valid images keep opening";
+            "Stable Visual Studio 2026 debugger visualizer activation";
 
         public const string HighlightViewerReliability =
-            "Reliable debugger handoff and stable aspect-correct Fit";
+            "Leased snapshots survive stale cleanup and retire on replacement";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

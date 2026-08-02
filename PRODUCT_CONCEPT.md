@@ -1,18 +1,21 @@
 # Product Concept
 
-## Current Priority
+## Current Product State
 
-Raw Buffer Visualizer is an Image Watch style utility for C# machine-vision developers.
+Raw Buffer Visualizer is an Image Watch-style Visual Studio debugger extension for C# machine-vision developers.
 
 The immediate goal is to make image variables easy to inspect regardless of whether they start as `byte[]`, `IntPtr`, `ushort[]`, `float[]`, `Bitmap`, OpenCvSharp `Mat`, or camera SDK buffers.
 
-The delivery order is:
+The current delivery order is:
 
-1. Complete the standalone Windows Image Watch program.
-2. Publish and package the project on GitHub.
-3. Add Visual Studio integration so developers can open supported image variables while debugging.
+1. Keep one docked Visual Studio image list reliable across registered visualizers and Automatic Vision Inspector.
+2. Diagnose raw-buffer layout problems without hiding ambiguity or unsafe memory assumptions.
+3. Preserve viewport-bounded behavior for large images and explicit failure rows for unsupported values.
+4. Qualify each Marketplace update on real installed Visual Studio instances before expanding compatibility claims.
 
-## Final Product Direction
+The standalone WPF viewer remains a support, snapshot, and test host. It is not the primary product surface.
+
+## Product Direction
 
 The final target is Visual Studio debugger integration, similar in workflow to Image Watch:
 
@@ -20,7 +23,7 @@ The final target is Visual Studio debugger integration, similar in workflow to I
 - Select or invoke an image variable.
 - Inspect pixels, metadata, zoom, histogram, stride, format, and diagnostics.
 - Open raw buffers, `Bitmap`, `Mat`, and adapter-provided camera SDK image objects.
-- Keep the standalone viewer as the same inspection surface used by the Visual Studio integration.
+- Keep the standalone viewer available for snapshots and focused rendering tests without creating a second primary workflow.
 
 ## Problem
 
@@ -44,7 +47,7 @@ Existing debugger image tools mostly inspect already-known image objects.
 - Visual Studio debugger visualizers can display individual managed objects.
 - Vendor tools are powerful but tied to their ecosystem.
 
-This product should stay small and vendor-neutral: a lightweight C# SDK, optional adapters, a standalone viewer, and later a Visual Studio entry point.
+This product stays small and vendor-neutral: a lightweight C# SDK, optional adapters, one Visual Studio docked inspection surface, and a supporting standalone viewer.
 
 ## Product Shape
 
@@ -52,30 +55,36 @@ Main components:
 
 - `RawBufferVisualizer.Core`: descriptors, pixel formats, validation, tile decode, diagnostics.
 - `RawBufferVisualizer.Sdk`: snapshot helpers for buffers and pointers.
-- `RawBufferVisualizer.Wpf`: standalone inspection viewer.
-- Adapter packages: OpenCvSharp `Mat`, `Bitmap`, and later vendor-specific objects.
-- Visual Studio integration: debugger-side entry point that sends supported variables to the viewer.
+- `RawBufferVisualizer.VisualStudio.Extensibility`: public hybrid VSIX, registered debugger visualizers, package, and menu ownership.
+- `RawBufferVisualizer.VisualStudio.Vssdk`: docked Tool Window and debugger integration.
+- `RawBufferVisualizer.VisualStudio.ObjectSource`: safe object extraction, inference, and mapping.
+- `RawBufferVisualizer.OpenGlCanvas`: viewport-bounded tiled display.
+- `RawBufferVisualizer.Wpf`: standalone support and test viewer.
+- Optional adapter packages: OpenCvSharp `Mat` and `Bitmap` without making them core dependencies.
 
-## MVP
+## Current Core Contract
 
-The MVP should be able to:
+The product must continue to:
 
 1. Open `.rbuf.json` plus `.raw` payload files.
 2. Inspect supported mono, packed mono, color, float, and Bayer formats.
 3. Open snapshots produced from `byte[]`, `IntPtr`, `ushort[]`, `float[]`, `Bitmap`, and `Mat`.
 4. Show pixel values, histogram, diagnostics, zoom, and export options.
 5. Handle large images without requiring one full-frame WPF bitmap.
-6. Package a Windows executable and sample files through GitHub.
+6. Route registered and automatically recognized values into the same docked image list.
+7. Keep automatic inspection bounded, non-modal, duplicate-free, and isolated per candidate.
+8. Require real installed-runtime evidence before claiming a Visual Studio or vendor compatibility target.
 
-## Visual Studio Integration Goals
+## Visual Studio Workflow Contract
 
-The Visual Studio integration should start small:
+The Visual Studio integration follows these rules:
 
-1. Debugger visualizer or extension entry for managed image-like objects.
-2. Support `RawBufferSnapshot`, `Bitmap`, and OpenCvSharp `Mat` first.
-3. Add raw pointer support only when descriptor metadata can be supplied safely.
-4. Reuse the standalone viewer surface instead of building a second UI.
-5. Keep adapters optional so user projects do not inherit dependencies they do not use.
+1. Registered image types use their debugger-visualizer glyph.
+2. Safe unregistered current-frame shapes use Automatic Vision Inspector or Smart Type Mapper.
+3. A breakpoint never opens the Tool Window or steals focus merely because automatic inspection is enabled.
+4. One failed value does not hide successful values, and failures remain visible with a reason.
+5. Raw pointers open only when descriptor metadata and paused-process memory access are safe enough to validate.
+6. Adapters remain optional so user projects do not inherit unused dependencies.
 
 The current implementation direction is fixed in [docs/visual-studio-integration.md](docs/visual-studio-integration.md).
 
@@ -84,8 +93,10 @@ The current implementation direction is fixed in [docs/visual-studio-integration
 - Replacing HALCON, VisionPro, or OpenCV.
 - Building a recipe editor.
 - Running live camera acquisition.
+- Controlling lighting, PLC, I/O, or industrial execution equipment.
 - Adding a database server.
 - Managing full inspection-run timelines.
+- Claiming vendor SDK or hardware compatibility from documentation-only research.
 
 ## Technical Principles
 

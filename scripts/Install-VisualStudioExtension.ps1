@@ -6,6 +6,7 @@ param(
     [string]$ViewerFramework = 'net472',
     [string]$VisualStudioInstanceId = '',
     [string]$VsixInstallerPath = '',
+    [string]$VsixPath = '',
     [switch]$NoBuild,
     [switch]$NoViewerEnv,
     [switch]$Reinstall,
@@ -17,14 +18,20 @@ $ErrorActionPreference = 'Stop'
 
 $extensionId = 'RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f'
 $toolWindowExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
-$minimumVisualStudioVersion = [Version]'17.9.0'
+$minimumVisualStudioVersion = [Version]'17.14.0'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
 $repairScript = Join-Path $repoRoot 'scripts\Repair-VisualStudioExtensionRegistration.ps1'
-$vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
+if ([string]::IsNullOrWhiteSpace($VsixPath)) {
+    $VsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
+}
+else {
+    $VsixPath = [IO.Path]::GetFullPath($VsixPath)
+}
 
 function Assert-VisualStudioNotRunning {
-    if ($AllowRunningVisualStudio -and $WhatIfPreference) {
+    if ($AllowRunningVisualStudio) {
+        Write-Warning 'Visual Studio is running. Continue only when the explicitly targeted Visual Studio instance is closed; the installer can still reject another running instance.'
         return
     }
 
@@ -90,22 +97,34 @@ function Find-VisualStudioInstanceId {
     }
 
     $instances = Get-VisualStudioInstances
-    $compatibleInstance = $instances |
+    $compatible2022 = $instances |
         Where-Object {
             $_.installationVersion -like '17.*' -and
             $_.isLaunchable -eq $true -and
             ([Version]$_.installationVersion) -ge $minimumVisualStudioVersion
         } |
         Select-Object -First 1
+    $compatible2026 = $instances |
+        Where-Object {
+            $_.installationVersion -like '18.*' -and
+            $_.isLaunchable -eq $true
+        } |
+        Select-Object -First 1
+    $compatibleInstance = @($compatible2022, $compatible2026) |
+        Where-Object { $null -ne $_ } |
+        Select-Object -First 1
     if ($compatibleInstance) {
         return $compatibleInstance.instanceId
     }
 
     $unsupportedInstance = $instances |
-        Where-Object { $_.installationVersion -like '17.*' -and $_.isLaunchable -eq $true } |
+        Where-Object {
+            ($_.installationVersion -like '17.*' -or $_.installationVersion -like '18.*') -and
+            $_.isLaunchable -eq $true
+        } |
         Select-Object -First 1
     if ($unsupportedInstance) {
-        throw "Raw Buffer Visualizer requires Visual Studio 2022 $minimumVisualStudioVersion or newer. Installed Visual Studio version is $($unsupportedInstance.installationVersion). Update Visual Studio, then rerun this script."
+        throw "Raw Buffer Visualizer requires Visual Studio 2022 $minimumVisualStudioVersion or newer, or Visual Studio 2026. Installed Visual Studio version is $($unsupportedInstance.installationVersion). Update Visual Studio, then rerun this script."
     }
 
     ''
@@ -174,12 +193,11 @@ function Find-InstalledExtensionFolder {
         return ''
     }
 
-    $extensionRoot = Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\17.0_$InstanceId\Extensions"
-    if (-not (Test-Path -LiteralPath $extensionRoot)) {
-        return ''
-    }
-
-    $extensionPath = Get-ChildItem -LiteralPath $extensionRoot -Filter extension.vsixmanifest -File -Recurse -ErrorAction SilentlyContinue |
+    $profileRoots = @('17.0', '18.0') |
+        ForEach-Object { Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\$($_)_$InstanceId\Extensions" }
+    $extensionPath = $profileRoots |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+        ForEach-Object { Get-ChildItem -LiteralPath $_ -Filter extension.vsixmanifest -File -Recurse -ErrorAction SilentlyContinue } |
         Where-Object {
             try {
                 (Get-Content -LiteralPath $_.FullName -Raw) -match [regex]::Escape($extensionId)
@@ -198,8 +216,41 @@ function Find-InstalledExtensionFolder {
     ''
 }
 
+function Find-PerMachineInstalledExtension {
+    param([string]$InstanceId)
+
+    if ([string]::IsNullOrWhiteSpace($InstanceId)) {
+        return @()
+    }
+
+    $instance = Get-VisualStudioInstances |
+        Where-Object { $_.instanceId -eq $InstanceId } |
+        Select-Object -First 1
+    if (-not $instance) {
+        return @()
+    }
+
+    $root = Join-Path ([string]$instance.installationPath) 'Common7\IDE\VSExtensions'
+    if (-not (Test-Path -LiteralPath $root -PathType Container)) {
+        return @()
+    }
+
+    @(Get-ChildItem -LiteralPath $root -Filter extension.vsixmanifest -File -Recurse -ErrorAction SilentlyContinue |
+        Where-Object {
+            try {
+                (Get-Content -LiteralPath $_.FullName -Raw) -match [regex]::Escape($extensionId)
+            }
+            catch {
+                $false
+            }
+        })
+}
+
 function Remove-LegacyClassicVisualizer {
-    $visualizersDirectory = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Visual Studio 2022\Visualizers'
+    $visualizersDirectories = @(
+        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Visual Studio 2022\Visualizers'),
+        (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'Visual Studio 2026\Visualizers')
+    )
     $relativePaths = @(
         'RawBufferVisualizer.VisualStudio.Classic.dll',
         'RawBufferVisualizer.Core.dll',
@@ -211,11 +262,13 @@ function Remove-LegacyClassicVisualizer {
         'netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll'
     )
 
-    foreach ($relativePath in $relativePaths) {
-        $path = Join-Path $visualizersDirectory $relativePath
-        if (Test-Path -LiteralPath $path) {
-            if ($PSCmdlet.ShouldProcess($path, 'Remove legacy Classic debugger visualizer file')) {
-                Remove-Item -LiteralPath $path -Force
+    foreach ($visualizersDirectory in $visualizersDirectories) {
+        foreach ($relativePath in $relativePaths) {
+            $path = Join-Path $visualizersDirectory $relativePath
+            if (Test-Path -LiteralPath $path) {
+                if ($PSCmdlet.ShouldProcess($path, 'Remove legacy Classic debugger visualizer file')) {
+                    Remove-Item -LiteralPath $path -Force
+                }
             }
         }
     }
@@ -227,13 +280,14 @@ function Test-DebuggerVisualizerVsixInstall {
     param([string]$InstanceId)
 
     if ([string]::IsNullOrWhiteSpace($InstanceId)) {
-        throw 'Visual Studio 2022 instance id was not found. Cannot validate debugger visualizer installation.'
+        throw 'A supported Visual Studio instance id was not found. Cannot validate debugger visualizer installation.'
     }
 
     $extensionPath = Find-InstalledExtensionFolder -InstanceId $InstanceId
     if ([string]::IsNullOrWhiteSpace($extensionPath)) {
-        $extensionRoot = Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\17.0_$InstanceId\Extensions"
-        throw "Raw Buffer Visualizer VSIX is not installed in this Visual Studio instance. Debugger icons will not appear. Expected extension id '$extensionId' under: $extensionRoot"
+        $extensionRoots = @('17.0', '18.0') |
+            ForEach-Object { Join-Path $env:LOCALAPPDATA "Microsoft\VisualStudio\$($_)_$InstanceId\Extensions" }
+        throw "Raw Buffer Visualizer VSIX is not installed in this Visual Studio instance. Debugger icons will not appear. Expected extension id '$extensionId' under one of: $($extensionRoots -join '; ')"
     }
 
     $extensionJson = Join-Path $extensionPath '.vsextension\extension.json'
@@ -327,7 +381,7 @@ function Stop-DotNetBuildServers {
 if ($RepairRegistrationOnly) {
     $instanceId = Find-VisualStudioInstanceId
     if ([string]::IsNullOrWhiteSpace($instanceId)) {
-        throw 'Visual Studio 2022 instance was not found.'
+        throw 'A supported Visual Studio instance was not found.'
     }
 
     & powershell -ExecutionPolicy Bypass -File $repairScript -VisualStudioInstanceId $instanceId
@@ -363,6 +417,20 @@ $instanceId = Find-VisualStudioInstanceId
 Write-Host "VSIXInstaller: $installer"
 if (-not [string]::IsNullOrWhiteSpace($instanceId)) {
     Write-Host "Visual Studio instance: $instanceId"
+}
+
+$perMachineInstalls = @(Find-PerMachineInstalledExtension -InstanceId $instanceId)
+if ($perMachineInstalls.Count -gt 0) {
+    $details = $perMachineInstalls | ForEach-Object {
+        try {
+            [xml]$installedManifest = Get-Content -LiteralPath $_.FullName -Raw
+            "$([string]$installedManifest.PackageManifest.Metadata.Identity.Version) at $($_.DirectoryName)"
+        }
+        catch {
+            $_.DirectoryName
+        }
+    }
+    throw "A per-machine Raw Buffer Visualizer installation already owns this extension ID for Visual Studio instance '$instanceId': $($details -join '; '). Do not delete Program Files content manually. Remove or update that installation through Visual Studio Manage Extensions/Installer with administrator rights, then retry the per-user VSIX install."
 }
 
 if ($Reinstall) {

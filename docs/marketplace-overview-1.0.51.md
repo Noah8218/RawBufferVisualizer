@@ -1,34 +1,31 @@
-# Raw Buffer Visualizer 1.0.50 Marketplace Overview
-
-> Historical draft: this Overview was not uploaded with the public `1.0.50.0` package. The public package predates automatic Mat collection expansion and the in-product release-highlights banner. Use the `1.0.51` Overview for the current Marketplace update.
+# Raw Buffer Visualizer 1.0.51 Marketplace Overview
 
 Stop saving temporary images or adding debug-only conversion code. Inspect C# machine-vision images, discover compatible camera-frame wrappers, and diagnose raw-buffer layout mistakes while stopped at a breakpoint.
 
-Raw Buffer Visualizer is an Image Watch-style debugger tool for C# developers. It combines Bitmap, OpenCvSharp, Emgu CV, raw buffer, pointer, and image-collection visualizers with one docked image list inside Visual Studio 2022.
+Raw Buffer Visualizer is an Image Watch-style debugger tool for C# developers. It combines Bitmap, OpenCvSharp, Emgu CV, raw buffer, pointer, and image-collection visualizers with one docked image list inside Visual Studio 2022 and Visual Studio 2026.
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
 
-## What's New in 1.0.50
+## What's New in 1.0.51
 
-This update makes breakpoint inspection safer and more useful in real C# machine-vision projects:
+This update completes the collection and release-communication work built after the public `1.0.50` package:
 
-- Automatically discover initialized OpenCvSharp and Emgu CV `Mat` values in the selected stack frame.
-- Optionally expand exact `Mat` lists and one-dimensional arrays, with independent success or failure for every element.
-- Keep valid images visible when another candidate is null, disposed, unsupported, or unreadable.
-- Complete debugger-to-viewer handoffs only after an explicit acknowledgement from the docked window.
-- Preserve aspect-correct Fit while keeping intentional manual zoom and pan stable.
-- Prevent duplicate Raw Buffer Visualizer commands in the Visual Studio View menu.
+- Optionally expand exact OpenCvSharp and Emgu CV `Mat` lists and one-dimensional arrays from the selected stack frame.
+- Keep valid images visible when another collection element is null, disposed, unsupported, or unreadable.
+- Bound automatic collection work to 8 items per collection, 16 items and 8 roots per scan.
 - Show a concise summary once for this version, with a persistent **Dismiss** and a reusable **What's New** button.
 
-### More useful Automatic Vision Inspector
+The update also carries forward the reliable debugger handoff, single View-menu registration, automatic direct-Mat inspection, and stable aspect-correct Fit behavior introduced in the public `1.0.50` line.
+
+### Automatic Vision Inspector for individual images and Mat collections
 
 Open the Tool Window once, enable **Auto Inspect on Break**, and stop after your image variables have been assigned. Automatic Vision Inspector scans the selected frame's Locals and Arguments.
 
-- Initialized exact OpenCvSharp and Emgu CV `Mat` values can now open automatically.
-- Compatible unregistered pointer/array-backed wrappers still use bounded structural discovery.
+- Initialized exact OpenCvSharp and Emgu CV `Mat` values can open automatically.
+- Compatible unregistered pointer/array-backed wrappers use bounded structural discovery.
 - `[Auto]` means inference and current-buffer validation passed.
 - `[Map]` means the object looks image-like but needs member or format confirmation.
-- `[Failed]` isolates one unreadable value without blocking the images that succeeded.
+- `[Failed]` isolates one unreadable value without blocking images that succeeded.
 - **Scan Now** refreshes the current frame without duplicating existing automatic rows.
 - The enabled option persists across Visual Studio restarts and does not force the Tool Window open or steal focus.
 - Exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays can be included with the persisted, default-off **Mat collections** option; each element succeeds or fails independently.
@@ -37,23 +34,25 @@ Open the Tool Window once, enable **Auto Inspect on Break**, and stop after your
 
 ![Automatic Vision Inspector finds safe image-like values in the current stack frame](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/automatic-vision-inspector.png)
 
+### Release highlights without a repeated popup
+
+The first Tool Window open after this update shows a concise, non-modal summary of the `1.0.51` changes. Selecting **Dismiss** marks this version as seen and keeps the summary hidden across Visual Studio restarts. It will not appear automatically again for `1.0.51`, but **What's New** can reopen it at any time. A future release can show its own summary.
+
+Closing the Tool Window or Visual Studio without selecting **Dismiss** does not mark the summary as seen. Dismissing or reopening the summary never starts a scan or opens an image.
+
 ### Reliable image handoff
 
-The debugger visualizer and docked window now use an atomic request claim plus explicit completion acknowledgement. A transfer is successful only after the docked viewer has opened the image; rejected requests retain an actionable reason. This prevents a disappearing request file from being mistaken for a successful open.
+The debugger visualizer and docked window use an atomic request claim plus explicit completion acknowledgement. A transfer is successful only after the docked viewer has opened the image; rejected requests retain an actionable reason. This prevents a disappearing request file from being mistaken for a successful open.
 
 ### Stable Fit and manual navigation
 
 - A new image, a changed selection, **Fit**, or double-click fits the full image while preserving its aspect ratio.
-- Mouse-wheel zoom, drag pan, and **1:1** enter manual navigation and preserve the chosen zoom/center.
+- Mouse-wheel zoom, drag pan, and **1:1** enter manual navigation and preserve the chosen zoom and center.
 - Fit is recalculated when the docked viewer changes size; manual navigation is not reset by an unrelated layout refresh.
 
 ### Visual Studio registration hardening
 
-The package uses a new command-table cache version and validates that the View menu contains exactly one `Raw Buffer Visualizer` command and one `Raw Buffer Visualizer: Scan Current Frame` command.
-
-### Release highlights without a repeated popup
-
-The first Tool Window open after this update shows a concise, non-modal summary of the `1.0.50` changes. Selecting **Dismiss** marks this version as seen and keeps the summary hidden across Visual Studio restarts. It will not appear automatically again for `1.0.50`, but **What's New** can reopen it at any time. A future release can show its own new summary. Closing the Tool Window or Visual Studio without selecting **Dismiss** does not mark the summary as seen. Neither action starts a scan or opens an image.
+The package validates that the View menu contains exactly one `Raw Buffer Visualizer` command and one `Raw Buffer Visualizer: Scan Current Frame` command.
 
 ## Vision Buffer Doctor
 
@@ -69,15 +68,25 @@ When an unregistered company-specific wrapper is recognizable but incomplete, **
 
 Smart Type Mapper does not dynamically register a debugger glyph for arbitrary CLR types. Individual registered types use their glyph; current-frame unregistered values enter through Automatic Inspector or **Open Variable**.
 
+## Visual Studio Support
+
+| Product | Supported range | Notes |
+| --- | --- | --- |
+| Visual Studio 2022 | `17.9` or newer, x64 | Community, Professional, and Enterprise. The current serviced `17.14` baseline is recommended. Exact `1.0.51` installed runtime qualification passed on Community `17.14.33`. |
+| Visual Studio 2026 | Stable `18.x`, x64 | Community, Professional, and Enterprise. Supported through Microsoft's VSIX API compatibility model; exact `18.7.1` installed runtime qualification is pending. |
+
+Visual Studio 2019, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets. Visual Studio 2026 supports the stable Visual Studio 17.x extension APIs used by this VSIX and evaluates the manifest's lower API bound. See [Microsoft's Visual Studio extension compatibility model](https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility?view=visualstudio).
+
 ## One-Minute Quick Start
 
-1. Install the extension and fully restart Visual Studio.
-2. Open `View > Raw Buffer Visualizer`.
+1. Install the extension in Visual Studio 2022 17.9+ or stable Visual Studio 2026 and fully restart Visual Studio.
+2. Open `View > Raw Buffer Visualizer` once.
 3. Start debugging and stop on a line after image assignment has completed.
-4. Let **Auto Inspect on Break** open initialized OpenCvSharp/Emgu Mats and safe unregistered wrappers. Enable the default-off **Mat collections** option when exact Mat lists or one-dimensional arrays should also expand automatically.
-5. For Bitmap and other registered types, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
-6. Select a thumbnail and inspect pixels, raw bytes, stride, format, and diagnostics.
-7. If the interpretation looks wrong, run **Diagnose Buffer** and select a candidate.
+4. Let **Auto Inspect on Break** open initialized OpenCvSharp/Emgu Mats and safe unregistered wrappers.
+5. Enable the default-off **Mat collections** option when exact Mat lists or one-dimensional arrays should also expand automatically.
+6. For Bitmap and other registered types, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
+7. Select a thumbnail and inspect pixels, raw bytes, stride, format, and diagnostics.
+8. If the interpretation looks wrong, run **Diagnose Buffer** and select a candidate.
 
 ## Why Raw Buffer Visualizer?
 
@@ -87,6 +96,7 @@ Smart Type Mapper does not dynamically register a debugger glyph for arbitrary C
 | Emgu CV `Mat` | Varies | Registered and automatic current-frame paths |
 | `System.Drawing.Bitmap` | Varies | Registered debugger-visualizer path |
 | Typed and mixed image collections | Varies | Supported |
+| Optional automatic exact Mat list/array expansion | Uncommon | Bounded and failure-isolated |
 | `IntPtr` and raw image buffers | Limited | `RawBufferView`, mappings, and compatible shapes |
 | Current-frame discovery for unregistered wrappers | Uncommon | Bounded Locals/Arguments inspection |
 | Wrong stride/format/byte-order recovery | Uncommon | Ranked Buffer Doctor candidates |
@@ -101,6 +111,7 @@ Other debugger visualizers have different feature sets. This table compares a ba
 
 - One docked Visual Studio image list
 - Automatic Inspector with isolated `[Auto]`, `[Map]`, and `[Failed]` outcomes
+- Optional bounded automatic inspection of exact OpenCvSharp/Emgu Mat lists and one-dimensional arrays
 - Smart Type Mapper for compatible company-specific wrappers
 - Vision Buffer Doctor with ranked, immediately applicable interpretations
 - Thumbnail, dimensions, stride, format, source type, and diagnostic details
@@ -135,12 +146,12 @@ Current compatibility points include tested OpenCvSharp `Mat` packages from `4.0
 ## Safety And Known Limits
 
 - Automatic Inspector scans only the selected stack frame's Locals and Arguments.
-- Stop after assignment. A breakpoint on the assignment line can expose the old/null value.
+- Stop after assignment. A breakpoint on the assignment line can expose the old or null value.
 - Automatic inspection is bounded to direct and one-level nested members.
 - It does not invoke arbitrary vendor methods, dynamically load SDK DLLs, or decode private native layouts.
 - Exact OpenCvSharp/Emgu Mat lists and one-dimensional arrays can be expanded automatically when the persisted option is enabled; work is capped at 8 items per collection, 16 items and 8 roots per scan.
 - Bitmap, dictionary, mixed, jagged/multidimensional, and arbitrary enumerable collections use their registered collection visualizer path.
-- A collection visualization processes at most 256 entries.
+- A registered collection visualization processes at most 256 entries.
 - A buffer address without valid dimensions, stride/length, format, and lifetime cannot be opened safely.
 - Bayer phase and RGB/BGR ordering can be inherently ambiguous.
 - Industrial-camera contract fixtures are not real SDK/hardware certification.

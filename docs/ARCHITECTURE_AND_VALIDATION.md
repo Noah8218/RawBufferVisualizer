@@ -1,18 +1,18 @@
 # Architecture And Validation
 
-This document describes the public `1.0.49.0` Marketplace line and the locally qualified `1.0.50.0` stability candidate. It is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting. The affected external Windows 10 public-1.0.49 in-place update remains the only open `1.0.50` release gate.
+This document describes the public `1.0.50.0` Marketplace baseline, the preserved failed `1.0.51.0` candidate, and the local `1.0.52.0` successor. A full VS2026 reinstall removed the orphaned per-machine `1.0.6.0`, after which exact `1.0.51` runtime testing exposed an Extensibility host-contract activation failure. Version `1.0.52` adopts the stable `17.14` Extensibility SDK line and the matching VS2022 support floor, and adds explicit document/lease and handoff coordination ownership. See `release-qualification-1.0.51.md` and `release-qualification-1.0.52.md`. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
 | Surface | Current target |
 | --- | --- |
-| Visual Studio extension | Visual Studio 2022 17.9 or newer, manifest range `[17.9,18.0)` |
+| Visual Studio extension | Visual Studio 2022 `17.14+` and stable Visual Studio 2026 `18.x`, Community/Professional/Enterprise x64; manifest API range `[17.14,18.0)` |
 | Extension/VSSDK projects | .NET Framework 4.7.2 (`net472`) |
 | Core/SDK/object source | `net472`, `netstandard2.0`, and/or `net8.0` depending on project |
 | Standalone WPF viewer | `net472` and `net8.0-windows` |
 | Build machine | Visual Studio 2022 with .NET desktop development and .NET 8 SDK or newer |
 
-Visual Studio 18/2026 and explicit .NET 9/10 matrices are not current release claims. Do not update public support text until the manifest, build, install, and debugger compatibility have been tested.
+The technical/API floor for `1.0.52` is Visual Studio 2022 `17.14`, matching the stable Extensibility SDK/runtime used to fix activation on VS2026. Visual Studio 2026 supports API version 17.x, evaluates the lower bound of the VSIX installation range, and ignores its product-version upper bound, so `[17.14,18.0)` remains valid on stable VS2026 `18.x`. Exact installed runtime qualification is tracked separately. Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not current `1.0.52` support claims.
 
 ## System Shape
 
@@ -48,8 +48,8 @@ The user installs one VSIX. Internally, Modern debugger visualizer providers ext
 | `RawBufferVisualizer.OpenCvSharpAdapter` | OpenCvSharp adapter used by standalone/sample paths; not the debugger compatibility mechanism. |
 | `RawBufferVisualizer.VisualStudio.ObjectSource` | Debuggee-side metadata, preview, chunk, reflection, pointer, collection extraction, saved mappings, and pure image-member inference. |
 | `RawBufferVisualizer.VisualStudio.Extensibility` | Owns debugger visualizer registration, transfer/handoff orchestration, `RawBufferVisualizerPackage`, VSCT compilation, current-project `.pkgdef` generation, and the public hybrid VSIX. |
-| `RawBufferVisualizer.VisualStudio` | Shared inbox, temp storage, snapshot store, process/instance routing, and support-report helpers. |
-| `RawBufferVisualizer.VisualStudio.Vssdk` | Referenced ToolWindow/UI support library: responsive IDE UI, Break Mode automatic inspection, VSSDK managed-array extraction, session ownership, and source lifecycle. It must not own the Marketplace package `.pkgdef`. |
+| `RawBufferVisualizer.VisualStudio` | Shared inbox, claimed-handoff coordination, document-workspace ownership, temp/snapshot leases, process/instance routing, and support-report helpers. |
+| `RawBufferVisualizer.VisualStudio.Vssdk` | Referenced ToolWindow/UI support library: responsive IDE presentation, Break Mode automatic inspection, VSSDK managed-array extraction, and image-source/document presentation. It must not own the Marketplace package `.pkgdef`. |
 | `RawBufferVisualizer.OpenGlCanvas` | Internal accelerated tiled canvas, progressive viewport scheduling, textures, interaction, and render metrics. The implementation name is not user-facing. |
 | `RawBufferVisualizer.Wpf` | Optional standalone snapshot viewer and validation host. |
 | `RawBufferVisualizer.VisualStudio.Classic` | Legacy compatibility/build metadata; obsolete Classic DLLs are removed during install. |
@@ -154,11 +154,13 @@ The scanner reads debugger-visible fields and property getters. Exact OpenCvShar
 6. If direct memory is unavailable, the extension falls back to chunking the full source to an owned temp snapshot after checking disk space.
 7. The producer writes complete request JSON to a unique `.publishing.<guid>` path and atomically moves it to the visible `.rbuf-handoff` path in an inbox scoped to the hosting `devenv.exe` process.
 8. The docked package claims a ready request exactly once by using an exclusive claim guard and moving it to a unique `.processing.<guid>` path.
-9. The ToolWindow reads the processing file and publishes an explicit ACK only after the image/error document is added successfully. A failed open atomically publishes its reason before a NACK marker.
+9. `ClaimedHandoffOpenCoordinator` reads the processing file and publishes an explicit ACK only after the ToolWindow-supplied opener adds the image/error document successfully. A failed open atomically publishes its reason before a NACK marker.
 10. The producer treats only ACK as success. Disappearance of the ready file means Processing, not acknowledgement; NACK and conflicting terminal markers are failures.
 11. The temporary Modern host closes after every request reaches a successful ACK; the docked VSSDK window remains. Modern timeout/cancel and Classic fire-and-forget both schedule the shared terminal-artifact cleanup.
 
 Transient handoff reads and terminal-marker moves retry `IOException` and `UnauthorizedAccessException` up to 10 total attempts at 50 ms intervals. Persistent I/O failure or JSON parse/validation failure remains an error. `ScheduleTerminalArtifactCleanup` polls every 100 ms for up to two minutes and removes ACK/NACK/conflict terminal artifacts only. Locked ACK/NACK cleanup is retried, and a request must be observed Missing consecutively before it leaves the pending set. It never deletes Ready or Processing on timeout because another consumer may still own in-flight work. Outer non-cancellation exception catches also schedule the same cleanup. On producer cancellation/exception, any owned request that is still non-Missing causes its snapshot payload directory to be preserved. A marker that terminalizes after the two-minute window and a Processing file stranded by process crash are not immediately reclaimed; stale-session cleanup remains the eventual recovery boundary.
+
+`RawBufferDocumentWorkspace<TDocument>` is the single owner of the ToolWindow document collection, active-document state, removal, clear, and disposal. The ToolWindow translates user/UI events into workspace operations and owns presentation updates, but does not mutate the collection or active state directly. `ImageDocument` owns its image source and a `VisualStudioSnapshotLeaseOwner`; `RawBufferToolWindow.Dispose` disposes the control, which disposes the workspace and all remaining documents.
 
 The 64 MiB threshold is `PreviewFirstThreshold` in `DebuggerVisualizerLaunch.cs`. The preview is an early visible state, not proof that the full/live source is available forever.
 
@@ -240,10 +242,12 @@ Lifecycle:
 - timed-out Ready/Processing handoffs and their payloads are preserved so an in-flight consumer is not disrupted;
 - terminal markers produced after that two-minute cleanup window and Processing items stranded by process crash are not immediately reclaimed;
 - new sessions remove stale snapshot directories older than 24 hours;
+- every open owned file-backed document locks a unique `.rbuf-active-*.lease`, so stale cleanup skips its directory;
+- preview-to-full replacement acquires the next directory lease before releasing the prior one; source disposal is followed by a second old-directory delete attempt;
 - `package.log` is reset when it exceeds 1 MiB;
 - live direct-memory sources avoid a full raw snapshot but may retain the bounded sampled preview until the row/session is disposed.
 
-The 24-hour `VisualStudioTempStore` sweep does not currently acquire an active-document lease. An unusually long Visual Studio session can therefore delete a file-backed payload still referenced by a document that has remained open for more than 24 hours. Treat this as technical debt and a support boundary, not as a `1.0.50` pass claim.
+After a process crash, an unlocked lease marker and its payload directory can remain until the later stale sweep. This is expected eventual cleanup, not an active-document deletion risk.
 
 When investigating disk usage, distinguish user-exported snapshots, smoke artifacts, current owned temp rows, and stale crash leftovers.
 
@@ -392,13 +396,25 @@ powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionR
 
 Never use the repair command to qualify a clean Marketplace candidate. The release contract and regression checks are in [vsix-package-registration.md](vsix-package-registration.md).
 
-The `1.0.50` package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}` and registers `Menus.ctmenu` resource version 2. The package, menu, and ToolWindow registrations must each occur exactly once. Every future VSCT command/group change must increment the menu resource version and update the publish, install, repair, and payload-verification checks in the same change.
+The current package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}` and registers `Menus.ctmenu` resource version 2. The package, menu, and ToolWindow registrations must each occur exactly once. Every future VSCT command/group change must increment the menu resource version and update the publish, install, repair, and payload-verification checks in the same change.
 
 Full publication steps and the environment-gated CD flow are in [release-runbook.md](release-runbook.md). An upload must use a version not already published. Do not create a version bump only to edit documentation when the Marketplace portal allows copy changes independently.
 
 ## Current Validation Baseline
 
-Published implementation baseline `a23d8ad` / `1.0.45`:
+Exact local `1.0.52.0` release candidate, last updated 2026-08-02:
+
+- artifact size 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`;
+- source baseline is commit `43e347c` plus the current intentional `1.0.52` implementation, version, documentation, and test-infrastructure working tree;
+- Release solution build, aggregate self-tests, communication checks, package guards, and Marketplace dry run passed;
+- the same exact candidate passed ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, exact menu counts, installed registration, and protocol diagnostics on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`;
+- workspace lifecycle, snapshot lease/replacement/disposal, and claimed handoff ACK/NACK/exception tests pass;
+- separate-PC public `1.0.50.0 -> 1.0.52.0` update evidence is the remaining external release gate;
+- the exact artifact, criteria, commands, and D-drive evidence are recorded in [release-qualification-1.0.52.md](release-qualification-1.0.52.md).
+
+The sections below preserve historical validation baselines for regression context. They are not the current release status.
+
+Historical published implementation baseline `a23d8ad` / `1.0.45`:
 
 - GitHub CI #71: success;
 - local Release build/tests/package: passed in the release-preparation turn;
@@ -434,7 +450,7 @@ The reusable record is [release-qualification-1.0.48.md](release-qualification-1
 
 External follow-up invalidated the public `1.0.48` conclusion: the View command was present but did not open the ToolWindow, and debugger handoffs timed out. Version `1.0.49` changed the VSPackage GUID from `{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}` to `{1977574b-f107-465f-bfd1-5fc022907039}` while retaining the Marketplace extension ID. Public `1.0.49.0` is now reported working on that Windows 10 PC only after uninstall and clean reinstall. This does not prove an in-place update. Historical evidence is [release-qualification-1.0.49.md](release-qualification-1.0.49.md).
 
-Source `1.0.50.0` adds atomic Ready/Processing/ACK/NACK handoff, CTMENU resource version 2 and exact single-registration checks, explicit Fit/Manual state, automatic OpenCvSharp/Emgu live capture, an opt-in bounded Automatic Mat collection scan, and one-time in-product release highlights. The current package is 2,011,595 bytes with SHA-256 `E31F254EFCFD80D6F03FED3E453BEFC47CB4924D0FF853167AE7385F36B94D93`.
+Public `1.0.50.0` established atomic Ready/Processing/ACK/NACK handoff, CTMENU resource version 2 and exact single-registration checks, explicit Fit/Manual state, and automatic OpenCvSharp/Emgu live capture. Failed candidate `1.0.51.0` added opt-in bounded Automatic Mat collection scanning and one-time in-product release highlights but could not activate the registered provider on VS2026. Candidate `1.0.52.0` corrects that runtime dependency and adds explicit workspace/coordinator/lease ownership. The exact current candidate identity is recorded at the start of this section.
 
 A full Release solution build passed with 0 errors and 18 existing `VSTHRD010` warnings; the final candidate incremental/package build after the last handoff hardening passed 0/0 and self-test passed 20/20. Current-source Preview-first and 540/900/1160 Fit/Manual checks passed; the Fit matrix reported zero aspect error, 1.05 margin, and zero Manual zoom/center delta.
 
