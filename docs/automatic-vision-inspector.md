@@ -135,7 +135,7 @@ Malformed or unsupported preference JSON is non-fatal: the control falls back to
 
 ## Verification Record
 
-Status: Incomplete
+Status: Complete
 
 Scope: Current-frame locals and arguments, direct and one-level nested pointer/managed-array shapes, exact OpenCvSharp/Emgu live capture, optional bounded exact-Mat list/array expansion, confidence gating, partial-success isolation, persistent preferences, validation, mapping fallback, and duplicate-free refresh.
 
@@ -163,7 +163,7 @@ Acceptance criteria:
 - `Bitmap[]` and Emgu `Mat[]` item transfer in the registered collection path -> passed by current-source self-test;
 - the new collection option renders in the approved location and defaults disabled -> passed current-source layout smoke;
 - a legacy settings file preserves its existing Auto Inspect choice and migrates collection inspection as disabled; enabled collection preference survives store recreation -> passed by current-source self-test;
-- installed VSIX `List<OpenCvSharp.Mat>` partial result (3 open/2 failed), `Emgu.CV.Mat[]` (2 open), duplicate-free rescan, and restored collection preference -> passed again on the final 2,011,595-byte package; seven rows, five opens, two isolated failures, 125.92 ms scan, and zero protocol errors.
+- installed VSIX `List<OpenCvSharp.Mat>` partial result (3 open/2 failed), `Emgu.CV.Mat[]` (2 open), duplicate-free rescan, and restored collection preference -> passed on the exact 2,011,587-byte `1.0.51` candidate; seven rows, five opens, two isolated failures, 141.37 ms scan, and zero protocol errors.
 
 Verification:
 
@@ -202,5 +202,6 @@ Evidence:
 - `artifacts/ui/installed-vsix-new-features/automatic-collections.png`
 - `artifacts/ui/installed-vsix-new-features/AutomaticCollections-view-menu-after.png`
 - `artifacts/ui/installed-vsix-new-features/AutomaticCollections-installed-vsix.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.51\runtime\AutomaticCollections-installed-vsix.json` (exact `1.0.51` candidate)
 
-Boundary / next dependency: Exact local `1.0.50` installed-VSIX evidence now proves both the existing automatic OpenCvSharp/Emgu behavior and the bounded exact Mat collection workflow, including partial-failure isolation and duplicate-free refresh. The affected external Windows 10 PC must still update from public `1.0.49` without uninstall or repair. This does not prove Bitmap automatic collection capture, live vendor runtime objects, buffer lifetime, drivers, emulators, or hardware.
+Boundary / next dependency: This feature record is complete for the exact local `1.0.51` candidate on VS2022. The overall `1.0.51` release remains incomplete until the unchanged candidate passes installed-runtime qualification on stable VS2026 and publication/update propagation closes. This does not prove Bitmap automatic collection capture, live vendor runtime objects, buffer lifetime, drivers, emulators, or hardware.

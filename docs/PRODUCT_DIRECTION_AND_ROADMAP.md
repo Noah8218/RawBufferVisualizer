@@ -156,14 +156,14 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Now: qualify the 1.0.50 stability update
+### Now: publish and externally verify the 1.0.51 update
 
-1. Update the affected Windows 10 PC that now runs public `1.0.49` to the exact qualified `1.0.50` SHA without uninstall, repair, or `/ResetSkipPkgs`.
-2. Repeat menu, ToolWindow, Automatic Inspector, registered Bitmap, explicit handoff completion, and Fit checks on that external profile.
-3. Publish only after the external update gate, README, Marketplace Overview, release notes, qualification record, and binary version agree.
+1. Publish the exact qualified `1.0.51` SHA without rebuilding it.
+2. Update another PC from public `1.0.50` to Marketplace `1.0.51` without uninstall, repair, or `/ResetSkipPkgs`.
+3. Repeat menu, ToolWindow, Automatic Inspector, automatic Mat collections, registered Bitmap, explicit handoff completion, and Fit checks on that external profile.
 4. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
 
-Public Marketplace `1.0.49.0` is reported working on the affected Windows 10 PC only after uninstall and clean reinstall. That result does not prove an in-place update. The exact local `1.0.50.0` package and installed-VSIX runtime passed on Windows 10 Pro / VS2022; the affected external-PC update and live vendor hardware remain separate qualification scopes.
+Public Marketplace `1.0.50.0` is the early 2,001,513-byte baseline. The exact local `1.0.51.0` package passed an in-place update from that downloaded baseline plus installed runtime checks on Windows 10 Pro / VS2022. Marketplace publication, post-propagation verification on another PC, and live vendor hardware remain separate qualification scopes.
 
 Exit criteria:
 
@@ -181,7 +181,7 @@ Exit criteria:
 ### Next: supportability and compatibility growth
 
 1. Convert real user failures into reproducible samples in `VisualizerDebuggee` or focused smoke scripts.
-2. Convert only real vendor SDK/runtime evidence into new compatibility claims; the qualified `1.0.50` OpenCvSharp/Emgu automatic capture and Bitmap registered capture do not certify unrelated vendor SDK objects.
+2. Convert only real vendor SDK/runtime evidence into new compatibility claims; the qualified `1.0.51` OpenCvSharp/Emgu automatic capture and Bitmap registered capture do not certify unrelated vendor SDK objects.
 3. Add only requested formats/types with an exact source type, assembly version, descriptor mapping, and lifetime rule.
 4. Extend long-session and multi-instance regression coverage when a real failure reveals a missing assertion.
 5. Evaluate Visual Studio 18 and newer .NET debuggee matrices after stable tooling is available.

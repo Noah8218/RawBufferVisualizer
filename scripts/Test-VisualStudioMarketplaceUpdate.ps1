@@ -20,8 +20,45 @@ if (-not (Test-Path -LiteralPath $vsRoot -PathType Container)) {
 
 $installedExtensions = @()
 $legacySplitExtensions = @()
-$instances = @(Get-ChildItem -LiteralPath $vsRoot -Directory -Filter '17.0_*' |
-    Where-Object { $IncludeExperimental -or $_.Name -match '^17\.0_[0-9a-fA-F]{8}$' })
+$perMachineConflicts = @()
+$instances = @(Get-ChildItem -LiteralPath $vsRoot -Directory |
+    Where-Object {
+        $_.Name -match '^(17|18)\.0_' -and
+        ($IncludeExperimental -or $_.Name -match '^(17|18)\.0_[0-9a-fA-F]{8}$')
+    })
+
+$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+if (Test-Path -LiteralPath $vswhere) {
+    $setupInstances = @((& $vswhere -all -products * -format json | ConvertFrom-Json) | ForEach-Object { $_ })
+    foreach ($setupInstance in $setupInstances) {
+        if ($setupInstance.installationVersion -notmatch '^(17|18)\.') {
+            continue
+        }
+
+        $perMachineRoot = Join-Path ([string]$setupInstance.installationPath) 'Common7\IDE\VSExtensions'
+        if (-not (Test-Path -LiteralPath $perMachineRoot -PathType Container)) {
+            continue
+        }
+
+        foreach ($manifestPath in Get-ChildItem -LiteralPath $perMachineRoot -Recurse -Filter 'extension.vsixmanifest' -File -ErrorAction SilentlyContinue) {
+            try {
+                [xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath.FullName
+                $identity = $manifest.PackageManifest.Metadata.Identity
+                if ([string]$identity.Id -eq $ExtensionId -or [string]$identity.Id -eq $legacySplitExtensionId) {
+                    $perMachineConflicts += [pscustomobject]@{
+                        Instance = "$(([Version]$setupInstance.installationVersion).Major).0_$($setupInstance.instanceId)"
+                        Id       = [string]$identity.Id
+                        Version  = [string]$identity.Version
+                        Path     = $manifestPath.DirectoryName
+                    }
+                }
+            }
+            catch {
+                Write-Warning "Skipped invalid per-machine VSIX manifest: $($manifestPath.FullName)"
+            }
+        }
+    }
+}
 
 foreach ($instance in $instances) {
     $extensionsRoot = Join-Path $instance.FullName 'Extensions'
@@ -93,8 +130,13 @@ foreach ($instance in $instances) {
     }
 }
 
+if ($perMachineConflicts.Count -gt 0) {
+    $perMachineConflicts | Sort-Object Instance, Id, Version | Format-Table -AutoSize
+    throw 'A per-machine Raw Buffer Visualizer installation already owns the extension ID. Do not delete Program Files content manually. Remove or update it through Visual Studio Manage Extensions/Installer with administrator rights before qualifying a Marketplace update.'
+}
+
 if ($installedExtensions.Count -eq 0) {
-    throw "Raw Buffer Visualizer is not installed for any Visual Studio 2022 instance under $vsRoot."
+    throw "Raw Buffer Visualizer is not installed for any Visual Studio 2022 or Visual Studio 2026 instance under $vsRoot."
 }
 
 if ($legacySplitExtensions.Count -gt 0) {

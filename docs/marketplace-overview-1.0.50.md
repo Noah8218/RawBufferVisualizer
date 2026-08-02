@@ -1,12 +1,24 @@
 # Raw Buffer Visualizer 1.0.50 Marketplace Overview
 
+> Historical draft: this Overview was not uploaded with the public `1.0.50.0` package. The public package predates automatic Mat collection expansion and the in-product release-highlights banner. Use the `1.0.51` Overview for the current Marketplace update.
+
 Stop saving temporary images or adding debug-only conversion code. Inspect C# machine-vision images, discover compatible camera-frame wrappers, and diagnose raw-buffer layout mistakes while stopped at a breakpoint.
 
 Raw Buffer Visualizer is an Image Watch-style debugger tool for C# developers. It combines Bitmap, OpenCvSharp, Emgu CV, raw buffer, pointer, and image-collection visualizers with one docked image list inside Visual Studio 2022.
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
 
-## New In 1.0.50
+## What's New in 1.0.50
+
+This update makes breakpoint inspection safer and more useful in real C# machine-vision projects:
+
+- Automatically discover initialized OpenCvSharp and Emgu CV `Mat` values in the selected stack frame.
+- Optionally expand exact `Mat` lists and one-dimensional arrays, with independent success or failure for every element.
+- Keep valid images visible when another candidate is null, disposed, unsupported, or unreadable.
+- Complete debugger-to-viewer handoffs only after an explicit acknowledgement from the docked window.
+- Preserve aspect-correct Fit while keeping intentional manual zoom and pan stable.
+- Prevent duplicate Raw Buffer Visualizer commands in the Visual Studio View menu.
+- Show a concise summary once for this version, with a persistent **Dismiss** and a reusable **What's New** button.
 
 ### More useful Automatic Vision Inspector
 
@@ -39,9 +51,9 @@ The debugger visualizer and docked window now use an atomic request claim plus e
 
 The package uses a new command-table cache version and validates that the View menu contains exactly one `Raw Buffer Visualizer` command and one `Raw Buffer Visualizer: Scan Current Frame` command.
 
-### Release highlights inside the Tool Window
+### Release highlights without a repeated popup
 
-The first Tool Window open after this update shows a concise, non-modal summary of the `1.0.50` changes. Dismissing it is saved per user across Visual Studio restarts. **What's New** reopens the summary later, and neither action starts a scan or opens an image.
+The first Tool Window open after this update shows a concise, non-modal summary of the `1.0.50` changes. Selecting **Dismiss** marks this version as seen and keeps the summary hidden across Visual Studio restarts. It will not appear automatically again for `1.0.50`, but **What's New** can reopen it at any time. A future release can show its own new summary. Closing the Tool Window or Visual Studio without selecting **Dismiss** does not mark the summary as seen. Neither action starts a scan or opens an image.
 
 ## Vision Buffer Doctor
 
@@ -62,7 +74,7 @@ Smart Type Mapper does not dynamically register a debugger glyph for arbitrary C
 1. Install the extension and fully restart Visual Studio.
 2. Open `View > Raw Buffer Visualizer`.
 3. Start debugging and stop on a line after image assignment has completed.
-4. Let **Auto Inspect on Break** open initialized OpenCvSharp/Emgu Mats and safe unregistered wrappers.
+4. Let **Auto Inspect on Break** open initialized OpenCvSharp/Emgu Mats and safe unregistered wrappers. Enable the default-off **Mat collections** option when exact Mat lists or one-dimensional arrays should also expand automatically.
 5. For Bitmap and other registered types, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
 6. Select a thumbnail and inspect pixels, raw bytes, stride, format, and diagnostics.
 7. If the interpretation looks wrong, run **Diagnose Buffer** and select a candidate.

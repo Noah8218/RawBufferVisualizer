@@ -4,6 +4,7 @@ param(
     [string]$Framework = 'net472',
     [string]$Configuration = 'Release',
     [string]$ViewerFramework = 'net472',
+    [string]$PublishRoot = '',
     [switch]$NoZip
 )
 
@@ -11,7 +12,12 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $project = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
-$publishRoot = Join-Path $repoRoot 'artifacts\publish'
+if ([string]::IsNullOrWhiteSpace($PublishRoot)) {
+    $publishRoot = Join-Path $repoRoot 'artifacts\publish'
+}
+else {
+    $publishRoot = [IO.Path]::GetFullPath($PublishRoot)
+}
 $packageName = "RawBufferVisualizer-VisualStudioExtensibility-$Framework"
 $publishDir = Join-Path $publishRoot $packageName
 $zipPath = Join-Path $publishRoot "$packageName.zip"
@@ -141,7 +147,7 @@ function Assert-ModernCollectionRegistrationsOpen {
 function Assert-VssdkReferenceCompatibility {
     param([string]$AssemblyPath)
 
-    $maxThreadingVersion = [Version]'17.9.0.0'
+    $maxThreadingVersion = [Version]'17.14.0.0'
     $references = [Reflection.Assembly]::ReflectionOnlyLoadFrom($AssemblyPath).GetReferencedAssemblies()
     $threading = $references | Where-Object { $_.Name -eq 'Microsoft.VisualStudio.Threading' } | Select-Object -First 1
     if ($null -eq $threading) {
@@ -149,7 +155,7 @@ function Assert-VssdkReferenceCompatibility {
     }
 
     if ($threading.Version -gt $maxThreadingVersion) {
-        throw "VSSDK package references Microsoft.VisualStudio.Threading $($threading.Version), but Marketplace support starts at Visual Studio 2022 17.9. Build against 17.9-compatible VSSDK references."
+        throw "VSSDK package references Microsoft.VisualStudio.Threading $($threading.Version), but the 1.0.52 Marketplace support floor is Visual Studio 2022 17.14. Build against 17.14-compatible VSSDK references."
     }
 }
 
@@ -295,7 +301,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     '- Marketplace-installed debugger providers that forward inspected values to the same docked image list',
     '',
     'Manual validation prerequisites:',
-    '- Visual Studio 2022 17.9 or newer',
+    '- Visual Studio 2022 17.14 or newer, or Visual Studio 2026 18.x',
     '- Visual Studio extension development workload',
     '',
     'Close Visual Studio before installing, then restart Visual Studio before debugger testing.'

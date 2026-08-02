@@ -1,5 +1,7 @@
 # Raw Buffer Visualizer 1.0.50
 
+> Historical draft: these notes were not uploaded with the public `1.0.50.0` package. Automatic Mat collections and the in-product release-highlights banner are released as `1.0.51` so existing `1.0.50` users receive a higher-version update.
+
 Version `1.0.50` improves Automatic Vision Inspector, debugger handoff reliability, Visual Studio menu registration, and viewer Fit behavior.
 
 ## Improved

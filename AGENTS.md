@@ -18,6 +18,16 @@ If repository evidence differs from the handoff, trust the repository and curren
 
 The product is an Image Watch-style C# machine-vision debugger visualizer centered on one docked Visual Studio window. Vision Replay Debugger, camera control, acquisition orchestration, PLC/I/O, and recipe execution are separate products and remain out of scope. Rendering implementation names are internal details and must not appear in user-facing copy.
 
+## Visual Studio Compatibility Contract
+
+- Public support text must name both supported product generations: Visual Studio 2022 `17.9` or newer and stable Visual Studio 2026 `18.x`, Community/Professional/Enterprise x64.
+- Keep three different claims explicit: the technical/API floor is VS2022 `17.9`; the recommended serviced VS2022 baseline is `17.14`; and exact installed-VSIX versions actually tested belong in the current release-qualification document.
+- The VSIX manifest range `[17.9,18.0)` is intentional. Visual Studio 2026 uses the lower API-version bound for VSIX compatibility, supports Visual Studio API version 17.x, and ignores the upper bound. Do not change the manifest range merely to add VS2026 wording; changing it requires a new exact-package qualification.
+- Do not claim Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, or an untested exact VS2026 minor version as verified. Stable VS2026 `18.x` is a supported compatibility target; record the exact installed build only after the installed Tool Window, menu, debugger handoff, Automatic Inspector, and registered visualizer paths pass.
+- Before publishing a new release, run the installed-VSIX matrix on current serviced VS2022 and stable VS2026 when both environments are available. If one environment is unavailable, retain the support target but state the missing runtime qualification in the release record and Marketplace copy.
+- Before installing into VS2026, inspect both the per-user `18.0_<instance>\Extensions` root and the per-machine `Common7\IDE\VSExtensions` root for the Raw Buffer Visualizer extension ID. A migrated per-machine historical build must be removed or updated through Visual Studio Manage Extensions/Installer with administrator rights; never delete its `Program Files` directory manually or hide the conflict with a second extension ID.
+- Authoritative Microsoft compatibility reference: https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility?view=visualstudio
+
 ## README Image Gate
 
 Images used in `README.md`, Marketplace copy, or any first-impression GitHub documentation must pass a visual review before being committed or pushed.

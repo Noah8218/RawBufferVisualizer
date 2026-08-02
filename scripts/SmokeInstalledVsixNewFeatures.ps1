@@ -5,6 +5,9 @@ param(
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [string]$VisualStudioInstanceId = "",
+    [string]$OutputRoot = "",
+    [ValidatePattern('^\d+\.\d+\.\d+$')]
+    [string]$ExpectedReleaseVersion = "1.0.52",
     [switch]$NoBuild,
     [switch]$NoInstall,
     [switch]$KeepVisualStudio,
@@ -19,7 +22,17 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
-$outputRoot = Join-Path $repoRoot "artifacts\ui\installed-vsix-new-features"
+$defaultOutputRoot = Join-Path $repoRoot "artifacts\ui\installed-vsix-new-features"
+if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    $testDrive = Get-PSDrive -Name D -ErrorAction SilentlyContinue
+    if ($testDrive) {
+        $OutputRoot = "D:\OpenVisionLab-TestData\RawBufferVisualizer\installed-vsix-new-features"
+    }
+    else {
+        $OutputRoot = $defaultOutputRoot
+    }
+}
+$outputRoot = [IO.Path]::GetFullPath($OutputRoot)
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $sessionPath = Join-Path $outputRoot "$Scenario-session.json"
 $resultPath = Join-Path $outputRoot "$Scenario-installed-vsix.json"
@@ -69,11 +82,17 @@ function Find-VisualStudioInstance {
         return $selected
     }
 
-    $selected = $instances |
+    $selected2022 = $instances |
         Where-Object { $_.installationVersion -like "17.*" -and $_.isLaunchable -eq $true } |
         Select-Object -First 1
+    $selected2026 = $instances |
+        Where-Object { $_.installationVersion -like "18.*" -and $_.isLaunchable -eq $true } |
+        Select-Object -First 1
+    $selected = @($selected2022, $selected2026) |
+        Where-Object { $null -ne $_ } |
+        Select-Object -First 1
     if (-not $selected) {
-        throw "A launchable Visual Studio 2022 instance was not found."
+        throw "A launchable Visual Studio 2022 or Visual Studio 2026 instance was not found."
     }
 
     $selected
@@ -165,7 +184,8 @@ public static class RawBufferInstalledVsixRot {
                 continue;
             }
 
-            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                displayName.IndexOf("VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
                 object dte;
                 table.GetObject(monikers[0], out dte);
                 return dte;
@@ -216,13 +236,64 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
+function Get-LeftmostMonitor {
+    $screens = @([Windows.Forms.Screen]::AllScreens)
+    if ($screens.Count -eq 0) {
+        throw "No interactive monitor was reported for the installed VSIX smoke test."
+    }
+
+    $screen = $screens |
+        Sort-Object @{ Expression = { $_.Bounds.Left }; Ascending = $true },
+                    @{ Expression = { $_.Bounds.Top }; Ascending = $true } |
+        Select-Object -First 1
+
+    [pscustomobject]@{
+        DeviceName = [string]$screen.DeviceName
+        Bounds = $screen.Bounds
+        WorkingArea = $screen.WorkingArea
+        IsPrimary = [bool]$screen.Primary
+        IsSingleMonitorFallback = ($screens.Count -eq 1)
+    }
+}
+
+$script:TestMonitor = Get-LeftmostMonitor
+$script:LastWindowRect = $null
+
 function Focus-Window([IntPtr]$Handle, [int]$Width = 1920, [int]$Height = 1040) {
+    $bounds = $script:TestMonitor.Bounds
+    $targetX = $bounds.Left + 20
+    $targetY = $bounds.Top + 20
+    $targetWidth = [Math]::Max(320, [Math]::Min($Width, $bounds.Width - 40))
+    $targetHeight = [Math]::Max(240, [Math]::Min($Height, $bounds.Height - 40))
+
     [RawBufferInstalledVsixNative]::ShowWindow($Handle, 9) | Out-Null
-    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_TOPMOST, 20, 20, $Width, $Height, 0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_TOPMOST, $targetX, $targetY, $targetWidth, $targetHeight, 0x0040) | Out-Null
     [RawBufferInstalledVsixNative]::BringWindowToTop($Handle) | Out-Null
     [RawBufferInstalledVsixNative]::SetForegroundWindow($Handle) | Out-Null
     Start-Sleep -Milliseconds 250
-    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_NOTOPMOST, 20, 20, $Width, $Height, 0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_NOTOPMOST, $targetX, $targetY, $targetWidth, $targetHeight, 0x0040) | Out-Null
+
+    $rect = New-Object RawBufferInstalledVsixNative+RECT
+    if (-not [RawBufferInstalledVsixNative]::GetWindowRect($Handle, [ref]$rect)) {
+        throw "Visual Studio window bounds could not be read after monitor placement."
+    }
+
+    $intersects = $rect.Right -gt $bounds.Left -and
+        $rect.Left -lt $bounds.Right -and
+        $rect.Bottom -gt $bounds.Top -and
+        $rect.Top -lt $bounds.Bottom
+    if (-not $intersects) {
+        throw "Visual Studio window does not intersect the selected leftmost monitor $($script:TestMonitor.DeviceName)."
+    }
+
+    $script:LastWindowRect = [pscustomobject]@{
+        Left = $rect.Left
+        Top = $rect.Top
+        Right = $rect.Right
+        Bottom = $rect.Bottom
+        Width = $rect.Right - $rect.Left
+        Height = $rect.Bottom - $rect.Top
+    }
 }
 
 function Capture-Window([IntPtr]$Handle, [string]$Path) {
@@ -294,6 +365,57 @@ function Find-TreeItem([System.Windows.Automation.AutomationElement]$Root, [stri
     $null
 }
 
+function Find-LocalsTreeItem(
+    [System.Windows.Automation.AutomationElement]$Root,
+    [string]$Name) {
+    $item = Find-TreeItem $Root $Name
+    if ($item -and -not [bool]$item.Current.IsOffscreen) {
+        return $item
+    }
+
+    $anchor = Find-TreeItem $Root "caseNumber"
+    if (-not $anchor) {
+        $anchor = Get-ElementsByControlType $Root ([System.Windows.Automation.ControlType]::TreeItem) |
+            Where-Object { -not [bool]$_.Current.IsOffscreen } |
+            Select-Object -First 1
+        if (-not $anchor) {
+            return $null
+        }
+    }
+
+    $current = $anchor
+    $walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
+    while ($current) {
+        $scrollPattern = $null
+        if ($current.TryGetCurrentPattern(
+            [System.Windows.Automation.ScrollPattern]::Pattern,
+            [ref]$scrollPattern)) {
+            for ($attempt = 0; $attempt -lt 10; $attempt++) {
+                try {
+                    ([System.Windows.Automation.ScrollPattern]$scrollPattern).Scroll(
+                        [System.Windows.Automation.ScrollAmount]::NoAmount,
+                        [System.Windows.Automation.ScrollAmount]::LargeIncrement)
+                }
+                catch {
+                    return $null
+                }
+
+                Start-Sleep -Milliseconds 150
+                $item = Find-TreeItem $Root $Name
+                if ($item -and -not [bool]$item.Current.IsOffscreen) {
+                    return $item
+                }
+            }
+
+            return $null
+        }
+
+        $current = $walker.GetParent($current)
+    }
+
+    $null
+}
+
 function Get-ImageListItems([System.Windows.Automation.AutomationElement]$Root) {
     $imageList = Find-ElementByAutomationId $Root "ImageList"
     if (-not $imageList) {
@@ -339,13 +461,31 @@ function Select-ComboBoxItem(
     ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Collapse()
 }
 
-function Click-VisualizerGlyph([System.Windows.Automation.AutomationElement]$TreeItem) {
-    $rect = $TreeItem.Current.BoundingRectangle
-    if ($rect.Width -lt 80 -or $rect.Height -lt 8) {
-        throw "Variable row has invalid bounds: $($rect.Width) x $($rect.Height)"
+function Click-VisualizerGlyph(
+    [System.Windows.Automation.AutomationElement]$Root,
+    [System.Windows.Automation.AutomationElement]$TreeItem) {
+    $itemName = [string]$TreeItem.Current.Name
+    Select-AutomationItem $TreeItem
+    Start-Sleep -Milliseconds 250
+
+    # VS 2026 can virtualize and reposition a Locals row after SelectionItem.Select().
+    # Reacquire the live row before using its bounds so the glyph click cannot land on
+    # a child or neighboring variable.
+    $refreshedTreeItem = Find-LocalsTreeItem $Root $itemName
+    if ($refreshedTreeItem) {
+        $TreeItem = $refreshedTreeItem
     }
 
-    Select-AutomationItem $TreeItem
+    $rect = $TreeItem.Current.BoundingRectangle
+    if ($rect.Width -lt 80 -or $rect.Height -lt 8 -or [bool]$TreeItem.Current.IsOffscreen) {
+        throw "Variable row has invalid bounds after selection: $($rect.Width) x $($rect.Height)"
+    }
+
+    $glyphOffset = if ($rect.Width -lt 900) { 180 } elseif ($rect.Width -lt 1300) { 230 } else { 280 }
+    $hoverX = [int][Math]::Max($rect.Left + 20, $rect.Right - $glyphOffset)
+    $hoverY = [int]($rect.Top + $rect.Height / 2)
+    [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $hoverY) | Out-Null
+    Start-Sleep -Milliseconds 200
     $logPath = Join-Path $outputRoot "click-visualizer-glyph.log"
     $descendants = $TreeItem.FindAll(
         [System.Windows.Automation.TreeScope]::Descendants,
@@ -360,13 +500,36 @@ function Click-VisualizerGlyph([System.Windows.Automation.AutomationElement]$Tre
         }
     }
 
+    if (-not $viewElement) {
+        $desktopElements = $Root.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+        for ($index = 0; $index -lt $desktopElements.Count; $index++) {
+            $element = $desktopElements.Item($index)
+            if (@("View", "보기") -notcontains [string]$element.Current.Name) {
+                continue
+            }
+
+            $candidateRect = $element.Current.BoundingRectangle
+            $intersectsRow = $candidateRect.Right -gt $rect.Left -and
+                $candidateRect.Left -lt $rect.Right -and
+                $candidateRect.Bottom -gt $rect.Top -and
+                $candidateRect.Top -lt $rect.Bottom
+            if ($intersectsRow) {
+                $viewElement = $element
+                $elementLog += "root-match type=$($element.Current.ControlType.ProgrammaticName) name=$($element.Current.Name) id=$($element.Current.AutomationId) rect=$candidateRect"
+                break
+            }
+        }
+    }
+
     if ($viewElement) {
         $viewRect = $viewElement.Current.BoundingRectangle
         $x = [int]($viewRect.Left + $viewRect.Width / 2)
         $y = [int]($viewRect.Top + $viewRect.Height / 2)
     }
     else {
-        $x = [int][Math]::Max($rect.Left + 20, $rect.Right - 230)
+        $x = $hoverX
         $y = [int]($rect.Top + $rect.Height / 2)
     }
 
@@ -479,6 +642,17 @@ function Assert-RawBufferViewMenuContract(
     ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Expand()
     try {
         $menuItems = Wait-Until "Raw Buffer Visualizer View menu entries" {
+            try {
+                if (([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Current.ExpandCollapseState -ne
+                    [System.Windows.Automation.ExpandCollapseState]::Expanded) {
+                    ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Expand()
+                    Start-Sleep -Milliseconds 150
+                }
+            }
+            catch {
+                return $null
+            }
+
             $desktop = [System.Windows.Automation.AutomationElement]::RootElement
             $viewBounds = $viewMenu.Current.BoundingRectangle
             $menuItemTypeCondition = New-Object System.Windows.Automation.PropertyCondition(
@@ -513,7 +687,7 @@ function Assert-RawBufferViewMenuContract(
                 }
             }
             if ($visibleItems.Count -gt 0) { $visibleItems } else { $null }
-        } 15
+        } 45
 
         $menuItems = @($menuItems |
             Group-Object {
@@ -610,7 +784,7 @@ function Invoke-BufferDoctorScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
     $treeItem = Wait-Until "badStrideSnapshot in Locals" { Find-TreeItem (Get-AutomationRoot $MainHandle) "badStrideSnapshot" } 60
-    Click-VisualizerGlyph $treeItem
+    Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
     Start-Sleep -Milliseconds 500
     Dismiss-DebuggerEvaluationWarning | Out-Null
 
@@ -1155,11 +1329,11 @@ function Invoke-ReleaseAnnouncementScenario(
     Show-RawBufferToolWindow $Process.Id
     Start-Sleep -Milliseconds 750
     $root = Get-AutomationRoot $MainHandle
-    $title = Wait-Until "1.0.50 release announcement title" {
+    $title = Wait-Until "$ExpectedReleaseVersion release announcement title" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
     } 30
-    if (-not $title -or [string]$title.Current.Name -ne "New in Raw Buffer Visualizer 1.0.50") {
-        throw "The installed Tool Window did not expose the expected 1.0.50 release title."
+    if (-not $title -or [string]$title.Current.Name -ne "New in Raw Buffer Visualizer $ExpectedReleaseVersion") {
+        throw "The installed Tool Window did not expose the expected $ExpectedReleaseVersion release title."
     }
 
     $rowsBefore = @(Get-ImageListItems $root).Count
@@ -1181,7 +1355,7 @@ function Invoke-ReleaseAnnouncementScenario(
         }
         try {
             $saved = Get-Content -LiteralPath $releaseAnnouncementPreferencePath -Raw | ConvertFrom-Json
-            if ([string]$saved.lastSeenVersion -eq "1.0.50" -and
+            if ([string]$saved.lastSeenVersion -eq $ExpectedReleaseVersion -and
                 -not (Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle")) {
                 return $saved
             }
@@ -1346,9 +1520,9 @@ function Invoke-MultiLibraryHybridScenario(
         $variableName = [string]$entry.Key
         $sourceType = [string]$entry.Value
         $treeItem = Wait-Until "$variableName Locals row" {
-            Find-TreeItem (Get-AutomationRoot $MainHandle) $variableName
+            Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) $variableName
         } 60
-        Click-VisualizerGlyph $treeItem
+        Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
 
         Wait-Until "$sourceType registered visualizer handoff" {
             Dismiss-DebuggerEvaluationWarning | Out-Null
@@ -1436,7 +1610,7 @@ function Invoke-OpenVariableScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
     $treeItem = Wait-Until "companyFrameList in Locals" { Find-TreeItem (Get-AutomationRoot $MainHandle) "companyFrameList" } 60
-    Click-VisualizerGlyph $treeItem
+    Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
     Start-Sleep -Milliseconds 500
     Dismiss-DebuggerEvaluationWarning | Out-Null
 
@@ -1654,7 +1828,7 @@ try {
     ) -join " "
     $visualStudio = [Diagnostics.Process]::Start($psi)
 
-    $mainHandle = Wait-Until "Visual Studio 2022 main window" {
+    $mainHandle = Wait-Until "Visual Studio main window" {
         $visualStudio.Refresh()
         if ($visualStudio.HasExited) {
             throw "Visual Studio exited with code $($visualStudio.ExitCode)."
@@ -1677,6 +1851,7 @@ try {
         throw "Raw Buffer Visualizer tool window element was not found."
     }
     Start-Debugging $visualStudio.Id
+    Show-LocalsWindow $visualStudio.Id
 
     Wait-Until "debuggee break" {
         $root = Get-AutomationRoot $mainHandle
@@ -1687,7 +1862,7 @@ try {
             (Find-TreeItem $root "unmappedCompanyFrame") -ne $null
         }
         elseif ($Scenario -eq "MultiLibraryHybrid") {
-            (Find-TreeItem $root "openCvMat") -ne $null
+            (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
         elseif ($Scenario -eq "AutomaticCollections") {
             (Find-TreeItem $root "partialOpenCvMatList") -ne $null
@@ -1699,8 +1874,6 @@ try {
             (Find-TreeItem $root "companyFrameList") -ne $null
         }
     } 90 | Out-Null
-
-    Show-LocalsWindow $visualStudio.Id
 
     $scenarioResult = switch ($Scenario) {
         "BufferDoctor" { Invoke-BufferDoctorScenario $visualStudio $mainHandle }
@@ -1743,6 +1916,16 @@ try {
             instanceId = [string]$vsInstance.instanceId
             version = [string]$vsInstance.installationVersion
             processId = $visualStudio.Id
+        }
+        monitor = [ordered]@{
+            deviceName = $script:TestMonitor.DeviceName
+            left = $script:TestMonitor.Bounds.Left
+            top = $script:TestMonitor.Bounds.Top
+            width = $script:TestMonitor.Bounds.Width
+            height = $script:TestMonitor.Bounds.Height
+            isPrimary = $script:TestMonitor.IsPrimary
+            singleMonitorFallback = $script:TestMonitor.IsSingleMonitorFallback
+            verifiedWindowRect = $script:LastWindowRect
         }
         result = $scenarioResult
         viewMenu = $menuContract

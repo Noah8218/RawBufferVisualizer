@@ -1,5 +1,7 @@
 # Raw Buffer Visualizer AI 작업 인계
 
+> Historical handoff: 이 문서는 `1.0.50` 준비 당시의 작업 상태를 보존합니다. 현재 재개 지점과 릴리스 상태는 [MAINTAINER_HANDOFF.md](MAINTAINER_HANDOFF.md)와 [release-qualification-1.0.51.md](release-qualification-1.0.51.md)를 우선합니다.
+
 이 문서는 다음 작업자가 현재 제품 상태와 `1.0.50` 릴리스 후보의 검증 경계를 빠르게 복원하기 위한 인계 문서입니다.
 
 ## 1. 제품 정체성

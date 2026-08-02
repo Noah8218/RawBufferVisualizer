@@ -8,26 +8,28 @@
 
 **Stop saving temporary images or writing debug-only conversion code. Inspect C# image variables and diagnose raw-buffer mistakes directly at a breakpoint.**
 
-Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
+Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio 2022 or Visual Studio 2026 window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## 1.0.50 Candidate
+## 1.0.52 Candidate
 
-The public Marketplace version is `1.0.49.0`. On the same Windows 10 PC that reported the earlier `1.0.48.0` handoff failure, uninstalling the extension and reinstalling `1.0.49` restored normal operation. That is clean-reinstall evidence only; it does not prove an in-place update or the current `1.0.50` candidate.
+The public Marketplace version is `1.0.50.0`, published on 2026-07-29. The exact public package is 2,001,513 bytes with SHA-256 `2014AA8D679AF3D01F0B16CC304E77064ABCF0B0725BDC6BD543B7C08CDA397E`. It contains the direct-Mat, handoff, menu-registration, and Fit/Manual reliability baseline, but predates automatic Mat collection expansion and the in-product release-highlights banner.
 
-The `1.0.50.0` source candidate hardens four reported workflows:
+The `1.0.52.0` source candidate completes the work built after that public package:
 
-- debugger handoffs are published atomically, claimed once, and complete only after an explicit acknowledgement or rejection;
-- the View menu contract is exactly one `Raw Buffer Visualizer` command and one `Raw Buffer Visualizer: Scan Current Frame` command, backed by `Menus.ctmenu` resource version 2;
-- Fit and Manual are explicit viewer modes, so docking or resizing no longer changes image aspect or silently resets manual zoom and pan;
-- initialized OpenCvSharp `Mat` and Emgu CV `Mat` locals and arguments can open automatically on Break Mode or **Scan Now**.
+- optional, bounded automatic expansion for exact OpenCvSharp and Emgu CV `Mat` lists and one-dimensional arrays;
+- per-element failure isolation so null or disposed Mats do not hide valid images from the same collection;
+- a one-time non-modal release summary whose **Dismiss** state survives Visual Studio restarts;
+- stable Visual Studio 2026 registered debugger-visualizer activation through the current stable 17.14 Extensibility SDK;
+- per-document snapshot leases plus preview/full replacement cleanup;
+- refreshed Marketplace and GitHub release communication that matches the actual update.
 
-The package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}` introduced by `1.0.49` and the existing Marketplace extension ID. The current Automatic Mat collection package passed its dedicated local installed-VSIX scenario. Publication remains gated by the affected external Windows 10 PC updating from public `1.0.49` without uninstall, repair, or `/ResetSkipPkgs`.
+The original `1.0.51` package remains byte-for-byte preserved as failed VS2026 evidence and will not be published. The package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}` and the existing Marketplace extension ID, so `1.0.52` remains a normal update from public `1.0.50` on eligible IDEs. Local build/package and VS2022/VS2026 runtime qualification passed. Publication is gated by a separate-PC in-place update from exact public `1.0.50` without repair or `/ResetSkipPkgs`.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.50`, it shows a non-modal summary of the release. **Dismiss** is saved per user across Visual Studio restarts, and **What's New** reopens the current summary without starting a scan or opening an image. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.52`, it shows a non-modal summary of the release. **Dismiss** is saved per user across Visual Studio restarts, and **What's New** reopens the current summary without starting a scan or opening an image. See the complete [changelog](CHANGELOG.md).
 
 ### Automatic Vision Inspector
 
@@ -102,6 +104,17 @@ Other debugger visualizers have different feature sets. This comparison describe
 
 ## Install
 
+### Visual Studio compatibility
+
+| Product | Supported versions | Current qualification |
+| --- | --- | --- |
+| Visual Studio 2022 | `17.14` or newer, x64 | Exact `1.0.52` candidate passed the installed core matrix on Community `17.14.33` (`17.14.37314.3`); separate-PC public-package update remains pending. |
+| Visual Studio 2026 | Stable `18.x`, x64 | The same exact `1.0.52` candidate passed the installed core matrix on Community `18.8.2` (`18.8.12023.21`). |
+
+Community, Professional, and Enterprise editions are installation targets. Visual Studio 2019, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets.
+
+The manifest uses the API range `[17.14,18.0)`. This is compatible with Visual Studio 2026 because VS2026 supports Visual Studio API version 17.x and evaluates the lower bound while ignoring the old product-version upper bound. See [Microsoft's extension compatibility model](https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility?view=visualstudio).
+
 ### Visual Studio extension
 
 Install the Marketplace extension from Visual Studio:
@@ -117,7 +130,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Public `1.0.49.0` uses the current VSPackage identity; an external Windows 10 clean reinstall is reported working. The source is now `1.0.50.0`, which keeps that identity and adds handoff, menu, Fit, and automatic Mat hardening.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Public `1.0.50.0` uses the current VSPackage identity and contains the direct-Mat, handoff, menu, and Fit reliability baseline. The source is now `1.0.52.0`, which keeps that identity and adds automatic Mat collection inspection, in-product release highlights, VS2026 activation compatibility, and leased snapshot ownership.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -125,7 +138,7 @@ For local development builds, close every Visual Studio window and run this from
 powershell -ExecutionPolicy Bypass -File .\scripts\Install-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -Reinstall
 ```
 
-The script builds and reinstalls the single VSIX and removes obsolete Raw Buffer Visualizer Classic DLLs from `Documents\Visual Studio 2022\Visualizers`. It intentionally does not write VSSDK registration values; the installed VSIX must register the docked ToolWindow by itself. Restart Visual Studio after it finishes.
+The script builds and reinstalls the single VSIX and removes obsolete Raw Buffer Visualizer Classic DLLs from the Visual Studio 2022/2026 `Visualizers` folders. It intentionally does not write VSSDK registration values; the installed VSIX must register the docked ToolWindow by itself. Restart Visual Studio after it finishes.
 
 ### Update
 
@@ -133,7 +146,7 @@ Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the updat
 
 If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Current Marketplace packages publish the debugger providers and automatically close their temporary handoff host, so new invocations remain in the main docked viewer.
 
-For `1.0.48` and later, a release must not be qualified by manually writing a package `CodeBase`. Qualification of `1.0.50` requires a real update from public `1.0.49` without uninstall, repair, or `/ResetSkipPkgs`; a clean install alone is insufficient. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
+For `1.0.48` and later, a release must not be qualified by manually writing a package `CodeBase`. Qualification of `1.0.52` requires a real update from the exact public `1.0.50` package without uninstall, repair, or `/ResetSkipPkgs`; a clean install alone is insufficient. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
@@ -148,7 +161,7 @@ If the popup appears only when inspecting an image, check:
 %APPDATA%\Microsoft\VisualStudio\17.0_...\ActivityLog.xml
 ```
 
-Older `1.0.24.0` builds could require `Microsoft.VisualStudio.Threading 17.14.0.0` and fail on PCs that had not updated Visual Studio to 17.14. Version `1.0.25.0` and later target Visual Studio 2022 17.9-compatible references.
+Versions `1.0.25` through `1.0.51` retained the Visual Studio 2022 17.9 API floor. Version `1.0.52` intentionally moves the minimum to the serviced Visual Studio 2022 17.14 baseline because the newer Extensibility runtime is required for stable Visual Studio 2026 activation.
 
 ### Uninstall
 
@@ -228,7 +241,7 @@ The docked layout adapts to the available width:
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs instead of requiring the debuggee's OpenCvSharp package version. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
 | Image collections | Supported | Typed or mixed `List<T>`, `Dictionary<TKey, TValue>`, `ArrayList`, `Hashtable`, `object[]`, and supported image arrays. Up to 256 entries are processed per invocation. |
-| Automatic Mat collections | `1.0.50` candidate | Optional exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays; 8 items per collection, 16 items and 8 roots per scan. Bitmap and broad collections remain glyph-owned. Current local installed-VSIX qualification passed. |
+| Automatic Mat collections | `1.0.52` candidate | Optional exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays; 8 items per collection, 16 items and 8 roots per scan. Bitmap and broad collections remain glyph-owned. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
 
@@ -399,9 +412,10 @@ Version `1.0.27.0` and later include the following runtime safeguards:
 - Startup inbox polling now uses file-system events plus backoff polling instead of a fixed 500 ms background loop.
 - Payloads above 512 MB are opened as file-backed tiled sources instead of one large `byte[]`.
 - Stale owned snapshot folders are cleaned on later visualizer runs when they are older than 24 hours.
+- Every open owned snapshot holds a lease, so stale cleanup skips its payload until preview replacement, document removal, Clear, or Tool Window disposal releases it.
 - The package log is capped so repeated package-load diagnostics do not grow without bound.
 
-The 24-hour stale sweep does not yet hold an active-document lease. In an unusually long Visual Studio session, a file-backed image document that remains open for more than 24 hours could lose its payload to a later stale sweep. This is tracked technical debt rather than a `1.0.50` reliability claim.
+Preview-to-full replacement acquires the new snapshot lease before releasing the previous directory. Closing or removing a document releases and deletes its current owned snapshot; a crashed Visual Studio process leaves an unlocked marker that a later stale sweep can remove.
 
 If disk usage looks high after a crashed debug session, close Visual Studio and delete:
 
@@ -409,20 +423,21 @@ If disk usage looks high after a crashed debug session, close Visual Studio and 
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Recorded evidence is split between historical installed-VSIX runs and the current `1.0.50` source candidate:
+Recorded evidence is split between the public Marketplace baseline, the current `1.0.52` candidate, the preserved failed `1.0.51` candidate, and historical stress/compatibility runs:
 
 | Check | Result |
 | --- | --- |
-| Current `1.0.50` source build/self-tests | Automatic Mat collection policy, settings migration, per-element failure isolation, and registered `Bitmap[]`/Mat-array transfer regressions are included. Full Release solution build passed with 0 errors and the existing 18 `VSTHRD010` warnings; the final incremental/package build passed 0/0; self-tests passed. |
-| Current `1.0.50` release package | `artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`; 2,011,595 bytes; SHA-256 `E31F254EFCFD80D6F03FED3E453BEFC47CB4924D0FF853167AE7385F36B94D93`. Release communication, ordinary reinstall, installed What's New, Automatic Mat collections, and MultiLibraryHybrid passed. The collection scenario produced seven rows, five opens, two isolated failures, and a duplicate-free rescan; the hybrid scenario produced nine documents/zero errors. Every installed run reported one Open/Scan menu command each and zero protocol errors. |
-| Pre-collection `1.0.50` local installed-VSIX baseline | The 2,001,513-byte artifact on Windows 10 Pro / VS 17.14.37314.3 passed one Open command, one Scan command, automatic OpenCvSharp/Emgu, Bitmap glyph path, MultiLibrary 9 documents/0 errors, Automatic Inspector partial-failure isolation, duplicate-free rescan, and 0 protocol errors. This evidence does not qualify the newer collection package. |
+| Current exact `1.0.52` candidate | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. Release build, package/communication guards, aggregate self-tests, installed registration audit, and Marketplace dry run passed. Workspace lifecycle, snapshot lease/replacement, and handoff ACK/NACK tests are included. |
+| Current `1.0.52` installed runtime | The same package passed ReleaseAnnouncement, AutomaticCollections, and MultiLibraryHybrid on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`: 9 hybrid documents, 0 errors, one Open/Scan command each, and 0 protocol errors. Evidence: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52`. |
+| Preserved failed `1.0.51` package | 2,011,587 bytes; SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`. VS2022 passed, but stable VS2026 `18.8.2` could not activate the registered provider because the older Extensibility framework requested the unavailable host-contract assembly version `17.0.0.0`. |
+| Public Marketplace `1.0.50` baseline | Exact downloaded package: 2,001,513 bytes; SHA-256 `2014AA8D679AF3D01F0B16CC304E77064ABCF0B0725BDC6BD543B7C08CDA397E`. It predates automatic Mat collection expansion and the in-product release-highlights banner. |
 | Current-source Fit/Manual matrix | 540/900/1160 px passed with aspect errors 0, Fit margin 1.05, and Manual zoom/center delta 0. This is current-source view evidence, not an installed-VSIX Fit behavioral run. |
 | Full solution and unit-style self-tests (historical runtime line) | Passed for the declared `net472`, `netstandard2.0`, and .NET 8 targets. |
 | Legacy image libraries | Passed with five OpenCvSharp and five Emgu CV package versions plus .NET Framework Bitmap. |
 | Standalone viewer interactions | Passed open, pixel/GV read, Fit, 1:1, slider and wheel zoom, PNG/snapshot export, tabs, and linked views. |
 | VS2022 docked `5000 x 5000 Mono8` | Passed with `115.3 ms` open path, `1.24 ms` max wheel command, `0.77 ms` max drag command, and `33.94 ms` max frame. |
-| Installed VSIX, real `8192 x 8192` Mats (historical) | Passed in VS2022 17.14 with OpenCvSharp and Emgu CV, correct GV values, at most `1 MiB` per new preview file, and controlled `Unavailable` state after debuggee exit. This is not exact `1.0.50` evidence. |
-| Installed VSIX, hybrid current-frame session (historical) | Passed in VS2022 17.14 with real OpenCvSharp `4.13.0.20260627`, Emgu CV `4.13.0.5924`, and Bitmap values through registered visualizers plus six automatically opened pointer-backed camera-shape fixtures; 9 images, 0 errors, and no duplicate mapping rows for registered types. The exact `1.0.50` result is recorded in the current row above. |
+| Installed VSIX, real `8192 x 8192` Mats (historical) | Passed in VS2022 17.14 with OpenCvSharp and Emgu CV, correct GV values, at most `1 MiB` per new preview file, and controlled `Unavailable` state after debuggee exit. This is not exact `1.0.51` evidence. |
+| Installed VSIX, hybrid current-frame session | Exact `1.0.52` passed in VS2022 17.14 and VS2026 18.8 with OpenCvSharp, Emgu CV, Bitmap, and five pointer-backed camera-shape fixtures; 9 images, 0 errors, 8/8 automatic opens, and no duplicate registered-type rows. |
 | Dense file-backed `100000 x 100000 Mono8` | Passed with a non-sparse `10,000,000,000` byte payload, `1.73 s` first visible time, and `88.0 MB` working set. |
 | Dense file-backed `200000 x 200000 Mono8` | Passed with a non-sparse `40,000,000,000` byte payload, `1.94 s` first visible time, and `87.5 MB` working set. |
 | Docked accumulation and cleanup soak | Passed 240 repeated `2048 x 2048 Mono8` opens using both selected-item Delete and Clear, with no positive managed/private/working-set growth, no GDI/USER growth, and no owned temporary directories left behind. |
@@ -431,7 +446,7 @@ Recorded evidence is split between historical installed-VSIX runs and the curren
 
 Build prerequisites:
 
-- Visual Studio 2022 17.9 or newer with .NET desktop development.
+- Visual Studio 2022 17.14 or newer with .NET desktop development.
 - .NET 8 SDK or newer. The solution does not require the .NET 9 SDK.
 
 From a fresh clone, build the solution once before inspecting the generated VSIX payload:
@@ -509,18 +524,18 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Buffer Doctor ranked candidates and immediate descriptor application.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
-- Upgrade recovery: update a profile that runs public `1.0.49` to the exact `1.0.50` candidate, then prove the View command, Bitmap handoff, and automatic Mat workflow without uninstall, repair, or `/ResetSkipPkgs`.
+- Upgrade recovery: update a profile that runs the exact public `1.0.50` package to the exact `1.0.52` candidate, then prove the View command, Bitmap handoff, automatic Mat, and automatic Mat collection workflows without uninstall, repair, or `/ResetSkipPkgs`.
 - VSSDK package ownership: the generated `.pkgdef` must reference `RawBufferVisualizer.VisualStudio.Extensibility.dll`; the former split-project `.pkgdef` is prohibited.
-- VSPackage/menu identity: the `1.0.50` `.pkgdef` must contain `{1977574b-f107-465f-bfd1-5fc022907039}`, exactly one `Menus.ctmenu, 2` entry, and no retired `1.0.47`/`1.0.48` GUID.
+- VSPackage/menu identity: the `1.0.52` `.pkgdef` must contain `{1977574b-f107-465f-bfd1-5fc022907039}`, exactly one `Menus.ctmenu, 2` entry, and no retired `1.0.47`/`1.0.48` GUID.
 - View menu: exactly one open command and one current-frame scan command.
 - Fit/Manual: Fit remains aspect-correct after resize; wheel, pan, and 1:1 remain Manual and preserve center/scale.
-- VSSDK package compatibility: `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than `17.9.0.0`.
+- Hybrid package compatibility: `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than the declared Visual Studio 2022 `17.14` support floor.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview: [1.0.50 Overview](docs/marketplace-overview-1.0.50.md).
-Marketplace release text for this candidate: [1.0.50 release notes](docs/marketplace-release-notes-1.0.50.md).
-Complete user-visible history: [CHANGELOG](CHANGELOG.md). The `v1.0.50` GitHub Release uses the same curated 1.0.50 release notes and points Visual Studio users to Marketplace rather than attaching a second VSIX distribution.
+Marketplace feature Overview: [1.0.52 Overview](docs/marketplace-overview-1.0.52.md).
+Marketplace release text for this candidate: [1.0.52 release notes](docs/marketplace-release-notes-1.0.52.md).
+Complete user-visible history: [CHANGELOG](CHANGELOG.md). The future `v1.0.52` GitHub Release uses the same curated 1.0.52 release notes and points Visual Studio users to Marketplace rather than attaching a second VSIX distribution.
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License
