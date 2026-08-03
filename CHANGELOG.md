@@ -4,7 +4,33 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No user-visible changes are queued after `1.0.52`.
+No user-visible changes are queued after `1.0.53`.
+
+## [1.0.53] - 2026-08-03
+
+Release status: local development candidate. Marketplace publication and propagation are not complete.
+
+### Added
+
+- Added an **Environment** panel that checks the supported Visual Studio host, loaded extension version, and temporary-storage writability before showing optional contributor/media utilities.
+- Added explicit **Refresh** and **Copy diagnostic report** actions. The report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
+
+### Improved
+
+- Large pointer-backed sampled previews now use a bounded estimate of cold storage page reads. On the restored workstation, the final regression run's first benchmark-process access completed in `0.992 s` for the dense 100k fixture and `0.692 s` for the dense 200k fixture without changing the existing five-second gate.
+- Optional .NET 8, Visual Studio extension-workload, and FFmpeg actions require confirmation and open only Visual Studio Installer or official guidance; the extension never downloads or installs them silently.
+
+### Fixed
+
+- Updated the Automatic Vision Inspector layout check to use a narrow current-workspace diagnostic seam instead of reflecting a removed `_activeDocument` field.
+- Updated the Smart Type Mapper layout check to discover the newest restored `Microsoft.VSSDK.BuildTools` package instead of requiring historical package `17.9.3168`.
+- Environment Check now accepts the build-suffixed file-version text reported by installed Visual Studio hosts, so supported `17.14+` and `18.x` sessions are not mislabeled as unknown.
+- The Environment Check **Close** action now shares the wrapping action row with **Refresh** and **Copy diagnostic report**, keeping it visible in compact docked layouts.
+
+### Safety contract
+
+- Opening, refreshing, copying, or closing Environment Check does not scan the current frame, open an image, change the active document, install software, or modify VSPackage registration.
+- The existing explicit debugger visualizer, **Scan Now**, Fit/Manual, snapshot ownership, and preview-to-full handoff contracts remain unchanged.
 
 ## [1.0.52] - 2026-08-02
 
@@ -94,7 +120,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.52...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...HEAD
+[1.0.53]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.53
 [1.0.52]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.52
 [1.0.51]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.51
 [1.0.50]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.50

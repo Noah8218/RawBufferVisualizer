@@ -6,9 +6,9 @@
     <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
     <GeneratePkgDefFile>true</GeneratePkgDefFile>
     <UseCodebase>true</UseCodebase>
-    <AssemblyVersion>1.0.52.0</AssemblyVersion>
-    <FileVersion>1.0.52.0</FileVersion>
-    <Version>1.0.52</Version>
+    <AssemblyVersion>1.0.53.0</AssemblyVersion>
+    <FileVersion>1.0.53.0</FileVersion>
+    <Version>1.0.53</Version>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40254" PrivateAssets="all" />

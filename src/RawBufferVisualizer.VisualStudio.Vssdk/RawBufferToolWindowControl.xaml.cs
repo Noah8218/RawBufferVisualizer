@@ -53,6 +53,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             get { return _workspace.ActiveDocument; }
         }
+        internal object? ActiveDocumentForDiagnostics
+        {
+            get { return _activeDocument; }
+        }
         private bool _disposed;
         private LayoutMode _layoutMode = LayoutMode.Unknown;
         private bool _syncingZoomSlider;
@@ -88,6 +92,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ReleaseAnnouncementPreferencesStore.CreateDefault();
         private ReleaseAnnouncementPreferences _releaseAnnouncementPreferences =
             new ReleaseAnnouncementPreferences();
+        private VisualizerEnvironmentCheckResult? _environmentCheckResult;
         private EnvDTE80.DTE2? _dte;
 
         public void SetDte(EnvDTE80.DTE2 dte)
@@ -689,12 +694,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             ReleaseAnnouncementTitleText.Text =
                 "New in Raw Buffer Visualizer " + ReleaseAnnouncementCatalog.CurrentVersion;
-            ReleaseAnnouncementAutomaticCollectionsText.Text =
-                "• " + ReleaseAnnouncementCatalog.HighlightAutomaticCollections;
-            ReleaseAnnouncementFailureIsolationText.Text =
-                "• " + ReleaseAnnouncementCatalog.HighlightFailureIsolation;
-            ReleaseAnnouncementViewerReliabilityText.Text =
-                "• " + ReleaseAnnouncementCatalog.HighlightViewerReliability;
+            ReleaseAnnouncementHighlightOneText.Text =
+                "- " + ReleaseAnnouncementCatalog.HighlightEnvironmentCheck;
+            ReleaseAnnouncementHighlightTwoText.Text =
+                "- " + ReleaseAnnouncementCatalog.HighlightColdPreview;
+            ReleaseAnnouncementHighlightThreeText.Text =
+                "- " + ReleaseAnnouncementCatalog.HighlightSafeUtilityLinks;
 
             _releaseAnnouncementPreferences = _releaseAnnouncementPreferencesStore.Load();
             ReleaseAnnouncementBanner.Visibility = ReleaseAnnouncementCatalog.ShouldShow(
@@ -742,6 +747,185 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void DismissReleaseAnnouncement_Click(object sender, RoutedEventArgs e)
         {
             MarkCurrentReleaseSeen();
+        }
+
+        private void EnvironmentCheck_Click(object sender, RoutedEventArgs e)
+        {
+            EnvironmentCheckPanel.Visibility = Visibility.Visible;
+            RefreshEnvironmentCheck();
+        }
+
+        private void RefreshEnvironmentCheck_Click(object sender, RoutedEventArgs e)
+        {
+            RefreshEnvironmentCheck();
+        }
+
+        private void RefreshEnvironmentCheck()
+        {
+            try
+            {
+                _environmentCheckResult = VisualizerEnvironmentCheck.Capture(
+                    GetExtensionVersion(),
+                    GetVisualStudioVersion(),
+                    GetVisualStudioInstallationPath(),
+                    VisualStudioTempStore.RootDirectory);
+                SetEnvironmentItemText(
+                    EnvironmentVisualStudioText,
+                    _environmentCheckResult.Required[0]);
+                SetEnvironmentItemText(
+                    EnvironmentExtensionText,
+                    _environmentCheckResult.Required[1]);
+                SetEnvironmentItemText(
+                    EnvironmentTempStorageText,
+                    _environmentCheckResult.Required[2]);
+                SetEnvironmentItemText(
+                    EnvironmentDotNetText,
+                    _environmentCheckResult.Optional[0]);
+                SetEnvironmentItemText(
+                    EnvironmentVisualStudioWorkloadText,
+                    _environmentCheckResult.Optional[1]);
+                SetEnvironmentItemText(
+                    EnvironmentFfmpegText,
+                    _environmentCheckResult.Optional[2]);
+                SetTransientStatus("Environment check refreshed");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: environment check failed. " + ex.Message);
+                SetTransientStatus("Environment check failed");
+            }
+        }
+
+        private void CloseEnvironmentCheck_Click(object sender, RoutedEventArgs e)
+        {
+            EnvironmentCheckPanel.Visibility = Visibility.Collapsed;
+            SetTransientStatus("Environment check closed");
+        }
+
+        private void CopyEnvironmentReport_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                if (_environmentCheckResult == null)
+                {
+                    RefreshEnvironmentCheck();
+                }
+
+                if (_environmentCheckResult == null)
+                {
+                    throw new InvalidOperationException("Environment results are unavailable.");
+                }
+
+                Clipboard.SetText(_environmentCheckResult.CreateDiagnosticReport());
+                SetTransientStatus("Environment report copied");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: environment report copy failed. " + ex.Message);
+                SetTransientStatus("Environment report copy failed");
+            }
+        }
+
+        private void OpenDotNetDownload_Click(object sender, RoutedEventArgs e)
+        {
+            ConfirmAndOpenOfficialPage(
+                ".NET 8 SDK",
+                "This opens the official .NET 8 download page in your browser. Raw Buffer Visualizer will not download or install software.",
+                VisualizerEnvironmentCheck.DotNet8DownloadUrl);
+        }
+
+        private void OpenFfmpegGuide_Click(object sender, RoutedEventArgs e)
+        {
+            ConfirmAndOpenOfficialPage(
+                "FFmpeg installation guide",
+                "This opens the official FFmpeg download page in your browser. FFmpeg is optional and used only for demo media.",
+                VisualizerEnvironmentCheck.FfmpegDownloadUrl);
+        }
+
+        private void OpenVisualStudioInstaller_Click(object sender, RoutedEventArgs e)
+        {
+            var confirmation = MessageBox.Show(
+                "This opens Visual Studio Installer. Raw Buffer Visualizer will not select workloads or start an installation. Continue?",
+                "Open Visual Studio Installer",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                var installerPath = _environmentCheckResult == null
+                    ? string.Empty
+                    : _environmentCheckResult.Snapshot.VisualStudioInstallerPath;
+                if (!string.IsNullOrWhiteSpace(installerPath) && File.Exists(installerPath))
+                {
+                    OpenShellTarget(installerPath);
+                    SetTransientStatus("Visual Studio Installer opened");
+                    return;
+                }
+
+                OpenShellTarget(VisualizerEnvironmentCheck.VisualStudioModifyUrl);
+                SetTransientStatus("Visual Studio installation guide opened");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: Visual Studio Installer could not be opened. " + ex.Message);
+                SetTransientStatus("Open Visual Studio Installer failed");
+            }
+        }
+
+        private void ConfirmAndOpenOfficialPage(string title, string message, string url)
+        {
+            var confirmation = MessageBox.Show(
+                message + " Continue?",
+                title,
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Information,
+                MessageBoxResult.No);
+            if (confirmation != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                OpenShellTarget(url);
+                SetTransientStatus(title + " opened");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: " + title + " could not be opened. " + ex.Message);
+                SetTransientStatus("Open failed");
+            }
+        }
+
+        private static void OpenShellTarget(string target)
+        {
+            Process.Start(new ProcessStartInfo
+            {
+                FileName = target,
+                UseShellExecute = true
+            });
+        }
+
+        private void SetEnvironmentItemText(
+            TextBlock textBlock,
+            VisualizerEnvironmentCheckItem item)
+        {
+            textBlock.Text = (item.State == VisualizerEnvironmentCheckState.Ready
+                    ? "[Ready] "
+                    : "[Action] ")
+                + item.Name
+                + " - "
+                + item.Detail;
+            textBlock.SetResourceReference(
+                TextBlock.ForegroundProperty,
+                item.State == VisualizerEnvironmentCheckState.Ready
+                    ? "SuccessTextBrush"
+                    : "AttentionTextBrush");
         }
 
         private void MarkCurrentReleaseSeen()
@@ -2742,6 +2926,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             return "Unknown";
+        }
+
+        private static string GetVisualStudioInstallationPath()
+        {
+            try
+            {
+                using (var process = Process.GetCurrentProcess())
+                {
+                    var executablePath = process.MainModule?.FileName;
+                    var ideDirectory = string.IsNullOrWhiteSpace(executablePath)
+                        ? null
+                        : Directory.GetParent(executablePath!);
+                    var common7Directory = ideDirectory?.Parent;
+                    return common7Directory?.Parent?.FullName ?? string.Empty;
+                }
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static string GetLatestActivityLogPath()

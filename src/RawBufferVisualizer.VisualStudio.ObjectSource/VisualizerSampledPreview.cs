@@ -7,6 +7,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         public const int DefaultMaximumDimension = 512;
         private const int MaximumAllowedDimension = 2048;
+        private const long LargePointerSourceThresholdBytes = 512L * 1024L * 1024L;
+        private const int MaximumEstimatedColdPageReads = 3072;
+        private const int MinimumLargeSourcePreviewRows = 32;
 
         public static VisualizerSnapshotTransfer Create(
             byte[] buffer,
@@ -79,9 +82,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             ValidateMaximumDimension(maximumWidth, nameof(maximumWidth));
             ValidateMaximumDimension(maximumHeight, nameof(maximumHeight));
 
-            var horizontalStep = DivideRoundUp(descriptor.Width, maximumWidth);
-            var verticalStep = DivideRoundUp(descriptor.Height, maximumHeight);
-            var sampleStep = Math.Max(1, Math.Max(horizontalStep, verticalStep));
+            var sampleStep = CalculateSampleStep(
+                source,
+                descriptor,
+                maximumWidth,
+                maximumHeight);
             var previewWidth = DivideRoundUp(descriptor.Width, sampleStep);
             var previewHeight = DivideRoundUp(descriptor.Height, sampleStep);
             var pixels = new byte[checked(previewWidth * previewHeight * 4)];
@@ -366,6 +371,38 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return (int)(((long)value + divisor - 1) / divisor);
         }
 
+        private static int CalculateSampleStep(
+            RawByteAccessor source,
+            RawImageDescriptor descriptor,
+            int maximumWidth,
+            int maximumHeight)
+        {
+            var horizontalStep = DivideRoundUp(descriptor.Width, maximumWidth);
+            var verticalStep = DivideRoundUp(descriptor.Height, maximumHeight);
+            var sampleStep = Math.Max(1, Math.Max(horizontalStep, verticalStep));
+            if (!source.IsPointer || source.Length < LargePointerSourceThresholdBytes)
+            {
+                return sampleStep;
+            }
+
+            var previewWidth = DivideRoundUp(descriptor.Width, sampleStep);
+            var previewHeight = DivideRoundUp(descriptor.Height, sampleStep);
+            var sourcePagesPerRow = Math.Max(
+                1,
+                DivideRoundUp(source.LogicalStride, Environment.SystemPageSize));
+            var estimatedPagesPerSampledRow = Math.Min(sourcePagesPerRow, previewWidth);
+            var estimatedPageReads = (long)estimatedPagesPerSampledRow * previewHeight;
+            if (estimatedPageReads <= MaximumEstimatedColdPageReads)
+            {
+                return sampleStep;
+            }
+
+            var pageBudgetRows = Math.Max(
+                MinimumLargeSourcePreviewRows,
+                MaximumEstimatedColdPageReads / estimatedPagesPerSampledRow);
+            return Math.Max(sampleStep, DivideRoundUp(descriptor.Height, pageBudgetRows));
+        }
+
         private readonly struct RawByteAccessor
         {
             private readonly byte[]? _buffer;
@@ -427,6 +464,21 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     descriptor.Stride,
                     sourceStride,
                     descriptor.Height);
+            }
+
+            public bool IsPointer
+            {
+                get { return _buffer == null; }
+            }
+
+            public long Length
+            {
+                get { return _length; }
+            }
+
+            public int LogicalStride
+            {
+                get { return _logicalStride; }
             }
 
             public byte Read(int y, int rowOffset)

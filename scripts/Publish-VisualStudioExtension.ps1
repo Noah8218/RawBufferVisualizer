@@ -82,6 +82,35 @@ function Assert-DebuggerVisualizerTargetTypes {
     }
 }
 
+function Get-VsixEntryText {
+    param(
+        [string]$Path,
+        [string]$EntryName
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $entry = $zip.Entries |
+            Where-Object { $_.FullName -eq $EntryName } |
+            Select-Object -First 1
+        if ($null -eq $entry) {
+            throw "VSIX entry was not found: $EntryName"
+        }
+
+        $reader = New-Object IO.StreamReader($entry.Open())
+        try {
+            return $reader.ReadToEnd()
+        }
+        finally {
+            $reader.Dispose()
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+
 function Assert-ModernDebuggerVisualizerProvidersPresent {
     param([string]$ExtensionJsonPath)
 
@@ -248,6 +277,14 @@ $manifestPath = Join-Path $buildOutput 'extension.vsixmanifest'
 Assert-FileExists -Path $manifestPath -Message 'Visual Studio extension manifest was not created'
 
 [xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath
+$sourceManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest'
+[xml]$sourceManifest = Get-Content -Raw -LiteralPath $sourceManifestPath
+$generatedVersion = [string]$manifest.PackageManifest.Metadata.Identity.Version
+$sourceVersion = [string]$sourceManifest.PackageManifest.Metadata.Identity.Version
+if ($generatedVersion -ne $sourceVersion) {
+    throw "Generated VSIX manifest version $generatedVersion does not match source manifest version $sourceVersion. Clean the hybrid extension project before packaging; do not publish the stale VSIX."
+}
+
 $extensionType = $manifest.PackageManifest.Installation.ExtensionType
 if ($extensionType -ne 'VSSDK+VisualStudio.Extensibility') {
     throw "Expected a hybrid VSSDK+VisualStudio.Extensibility VSIX, but found '$extensionType'."
@@ -256,7 +293,7 @@ if ($extensionType -ne 'VSSDK+VisualStudio.Extensibility') {
 Assert-HybridVssdkRegistration `
     -PkgdefPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') `
     -GeneratedManifestPath $manifestPath `
-    -SourceManifestPath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest')
+    -SourceManifestPath $sourceManifestPath
 
 $entryNames = Get-VsixEntryNames -Path $vsixPath
 $requiredEntries = @(
@@ -282,6 +319,12 @@ if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Classic.dll') {
 
 if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') {
     throw 'VSIX must not contain the obsolete split-project VSSDK pkgdef.'
+}
+
+[xml]$packagedManifest = Get-VsixEntryText -Path $vsixPath -EntryName 'extension.vsixmanifest'
+$packagedVersion = [string]$packagedManifest.PackageManifest.Metadata.Identity.Version
+if ($packagedVersion -ne $sourceVersion) {
+    throw "Packaged VSIX manifest version $packagedVersion does not match source manifest version $sourceVersion. Do not publish or install the stale VSIX."
 }
 
 Get-ChildItem -LiteralPath $buildOutput -Force |

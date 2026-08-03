@@ -3,6 +3,7 @@ param(
     [string]$Framework = "net472",
     [string]$OutputDir = "artifacts\ui\automatic-vision-inspector\layout-smoke",
     [int]$WindowWidth = 1160,
+    [switch]$VerifyDiagnosticSeamOnly,
     [switch]$NoBuild
 )
 
@@ -16,6 +17,27 @@ if (-not $NoBuild) {
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed with exit code $LASTEXITCODE."
     }
+}
+
+if ($VerifyDiagnosticSeamOnly) {
+    $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
+    if (-not (Test-Path -LiteralPath $assemblyPath -PathType Leaf)) {
+        throw "ToolWindow assembly was not found: $assemblyPath"
+    }
+
+    $assembly = [Reflection.Assembly]::LoadFrom($assemblyPath)
+    $controlType = $assembly.GetType(
+        "RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl",
+        $true)
+    $property = $controlType.GetProperty(
+        "ActiveDocumentForDiagnostics",
+        [Reflection.BindingFlags]"Instance,NonPublic")
+    if ($null -eq $property -or $property.PropertyType -ne [object]) {
+        throw "The ToolWindow diagnostic active-document seam is missing or has changed type."
+    }
+
+    Write-Host "Automatic Vision Inspector diagnostic seam validation passed: $($property.Name)"
+    return
 }
 
 $outputRoot = Join-Path $repoRoot $OutputDir
@@ -159,7 +181,16 @@ $members.Stride = "Info.Stride"
 $members.PixelFormat = "Info.PixelFormat"
 
 $bindingFlags = [Reflection.BindingFlags]"Instance,NonPublic"
-$document = $control.GetType().GetField("_activeDocument", $bindingFlags).GetValue($control)
+$activeDocumentProperty = $control.GetType().GetProperty(
+    "ActiveDocumentForDiagnostics",
+    $bindingFlags)
+if ($null -eq $activeDocumentProperty) {
+    throw "The ToolWindow diagnostic active-document seam was not found."
+}
+$document = $activeDocumentProperty.GetValue($control)
+if ($null -eq $document) {
+    throw "The ToolWindow did not expose an active document after opening the smoke input."
+}
 $setInspection = $document.GetType().GetMethod("SetAutomaticInspection", [Reflection.BindingFlags]"Instance,Public")
 $arguments = New-Object object[] 8
 $arguments[0] = 96

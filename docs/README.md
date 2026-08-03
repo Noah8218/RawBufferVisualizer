@@ -4,9 +4,11 @@ This directory is the entry point for continuing Raw Buffer Visualizer work in a
 
 ## Current Resume Point
 
-As of 2026-08-02 KST, source and the exact local candidate are `1.0.52.0`, while the public Marketplace still serves `1.0.50.0`. The preserved `1.0.51.0` VSIX is a failed candidate: after a user-approved full VS2026 reinstall removed the historical per-machine conflict, its registered Bitmap provider could not activate on stable VS2026 `18.8.2`. Do not publish or overwrite that original artifact. Read [MAINTAINER_HANDOFF.md](MAINTAINER_HANDOFF.md), [release-qualification-1.0.51.md](release-qualification-1.0.51.md), and [release-qualification-1.0.52.md](release-qualification-1.0.52.md) before release work.
+As of 2026-08-03 KST, source is the local `1.0.53.0` development candidate while Visual Studio Marketplace remains exact public `1.0.52.0`. The public VSIX is 1,902,513 bytes with SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`; do not rebuild or upload another binary under that version. Read [MAINTAINER_HANDOFF.md](MAINTAINER_HANDOFF.md), [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md), and [release-qualification-1.0.52.md](release-qualification-1.0.52.md) before release work.
 
-The exact `1.0.52` candidate uses the stable `17.14` Extensibility SDK and declares Visual Studio 2022 `17.14+` plus stable Visual Studio 2026 `18.x`. The same SHA-256 package passed ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, registration, and protocol checks on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`. Document activation/removal/disposal now belongs to `RawBufferDocumentWorkspace`, claimed handoff terminal policy belongs to `ClaimedHandoffOpenCoordinator`, and active file-backed documents hold snapshot-directory leases. Marketplace metadata and the dry run are ready. Publication remains blocked until a separate PC proves an update from exact public `1.0.50.0` to the unchanged `1.0.52` VSIX without uninstall, repair, or `/ResetSkipPkgs`.
+The exact public `1.0.52` package uses the stable `17.14` Extensibility SDK and declares Visual Studio 2022 `17.14+` plus stable Visual Studio 2026 `18.x`. The same SHA-256 package passed ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, registration, and protocol checks on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`. Document activation/removal/disposal belongs to `RawBufferDocumentWorkspace`, claimed handoff terminal policy belongs to `ClaimedHandoffOpenCoordinator`, and active file-backed documents hold snapshot-directory leases. The separate-PC in-place update from exact public `1.0.50.0` was not recorded before publication and remains post-public validation debt.
+
+The Windows-reinstall functional recheck is recorded separately in [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md). Owner-approved `1.0.53` work repairs the two stale layout harness assumptions, adds page-budgeted large sampled previews, and implements the reviewed Environment Check. Required and optional utilities plus the in-product behavior contract are listed in [development-prerequisites.md](development-prerequisites.md).
 
 ## Required Reading Order
 
@@ -22,13 +24,14 @@ After those four documents, read only the task-specific references below.
 | Task | Read |
 | --- | --- |
 | Build, install, or debug the Visual Studio extension | [visual-studio-integration.md](visual-studio-integration.md), [visual-studio-debug-test-scenarios.md](visual-studio-debug-test-scenarios.md), [vsix-package-registration.md](vsix-package-registration.md) |
+| Restore a development PC or check required utilities | [development-prerequisites.md](development-prerequisites.md), [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md) |
 | Prepare or publish a Marketplace update | [release-runbook.md](release-runbook.md), [marketplace-checklist.md](marketplace-checklist.md) |
-| Review the current 1.0.52 candidate and release evidence | [release-qualification-1.0.52.md](release-qualification-1.0.52.md), then the preserved failed [1.0.51 record](release-qualification-1.0.51.md) |
+| Review public 1.0.52 evidence or the current 1.0.53 candidate | [release-qualification-1.0.52.md](release-qualification-1.0.52.md), [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md), then the preserved failed [1.0.51 record](release-qualification-1.0.51.md) |
 | Validate or generate very large images | [large-image-samples.md](large-image-samples.md) |
 | Research, qualify, or add a camera/frame-grabber integration | [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md), [sdk-adapter-roadmap.md](sdk-adapter-roadmap.md) |
 | Review Image Watch-inspired UX | [image-watch-ux-analysis.md](image-watch-ux-analysis.md) |
 | Prepare a short demo | [demo-recording-guide.md](demo-recording-guide.md) |
-| Check the current release text | [marketplace-overview-1.0.52.md](marketplace-overview-1.0.52.md), [marketplace-release-notes-1.0.52.md](marketplace-release-notes-1.0.52.md) |
+| Check the current candidate release text | [marketplace-overview-1.0.53.md](marketplace-overview-1.0.53.md), [marketplace-release-notes-1.0.53.md](marketplace-release-notes-1.0.53.md) |
 | Work on buffer interpretation diagnosis | [buffer-doctor-design.md](buffer-doctor-design.md) |
 | Work on user type mapping | [smart-type-mapper-design.md](smart-type-mapper-design.md) |
 | Work on automatic discovery of unregistered image types | [automatic-vision-inspector.md](automatic-vision-inspector.md) |

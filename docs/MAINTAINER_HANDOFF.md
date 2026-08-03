@@ -6,16 +6,16 @@ This is the canonical continuation document for the next conversation. Read it a
 
 | Item | Verified state |
 | --- | --- |
-| Last verified | 2026-08-02 KST |
+| Last verified | 2026-08-03 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | `8fe40a2` (`Guard Marketplace VSIX selection`) plus the immediately following documentation checkpoint on `origin/main`; exact candidate source remains `854cb67` |
-| Source and VSIX version | `1.0.52` / `1.0.52.0`; public Marketplace line is `1.0.50.0`; preserved `1.0.51.0` is a failed unpublished candidate |
-| Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. Exact `1.0.52` installed runtime passed on Community `17.14.33` and `18.8.2`; manifest range is `[17.14,18.0)` |
-| Public Marketplace version | `1.0.50.0`; published 2026-07-29 13:09:54 KST, 2,001,513 bytes, SHA-256 `2014AA8D679AF3D01F0B16CC304E77064ABCF0B0725BDC6BD543B7C08CDA397E` |
+| Implementation baseline | Qualified `1.0.53` release change set based on `acc467f`; use `git log -1` for the final pushed commit. Exact qualified/public `1.0.52` source remains `854cb67` |
+| Source and VSIX version | Source/candidate `1.0.53` / `1.0.53.0`; public Marketplace remains exact `1.0.52.0`; preserved `1.0.51.0` is a failed unpublished candidate |
+| Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. Exact final `1.0.53` installed runtime passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)` |
+| Public Marketplace version | `1.0.52.0`; Gallery updated `2026-08-02T09:05:21.537Z`; public VSIX 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview; exact `1.0.52` local packaging and VS2022/VS2026 runtime qualification passed. Marketplace publication is blocked by the separate-PC public `1.0.50 -> 1.0.52` update gate |
-| Working tree | The intended `1.0.52` implementation, version, release-document, and test-infrastructure changes are committed; only the explicitly excluded pre-existing untracked paths below remain local |
+| Product stage | Public Marketplace Preview `1.0.52`; local `1.0.53` candidate adds Environment Check and bounded cold-page preview sampling. Marketplace `1.0.53` publication has not occurred. |
+| Commit scope | The `1.0.53` implementation/tests/release communication and 2026-08-03 audit documents belong to the release commit. The explicitly excluded pre-existing untracked paths below do not. |
 
 Public links:
 
@@ -23,19 +23,19 @@ Public links:
 - Repository: https://github.com/Noah8218/RawBufferVisualizer
 - CI evidence: https://github.com/Noah8218/RawBufferVisualizer/actions/runs/29512606667
 
-The public Marketplace package is `1.0.50.0`. The Gallery API was rechecked on 2026-08-02 and still reports only `1.0.50.0`, last updated `2026-07-29T04:09:54.877Z`; the rendered public overview is still titled `Raw Buffer Visualizer 1.0.47 Marketplace Overview`. The original `1.0.51` candidate remains at the repository publish path, 2,011,587 bytes, SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`; it failed stable VS2026 registered-provider activation and must not be published or overwritten. The exact current `1.0.52` candidate is on `D:`, 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. It passed the core installed runtime matrix on VS2022 `17.14.33` and VS2026 `18.8.2`. Full current evidence: `docs/release-qualification-1.0.52.md` and `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52`.
+The public Marketplace package is `1.0.52.0`. The Gallery API was rechecked on 2026-08-03 KST and reports last update `2026-08-02T09:05:21.537Z`; the downloadable public asset is 1,902,513 bytes with SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`, exactly matching the qualified candidate, and the rendered public Overview is titled `Raw Buffer Visualizer 1.0.52 Marketplace Overview`. The original `1.0.51` candidate remains at the repository publish path, 2,011,587 bytes, SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`; it failed stable VS2026 registered-provider activation and must not be published or overwritten. The exact public/qualified `1.0.52` candidate passed the historical core installed runtime matrix on VS2022 `17.14.33` and VS2026 `18.8.2`. The original D-drive runtime folders were not recovered; a verified public copy restored the exact candidate binary to its canonical D path, while `docs/release-qualification-1.0.52.md` remains the durable historical result.
 
-## Committed Change Set And Ownership
+## Current Change Set And Ownership
 
 The `1.0.52` source, tests, scripts, and release documents below are committed at `854cb67`. Continue from `origin/main`; do not replace them with the older `43e347c` tree.
 
-Current intended changes:
+Current public `1.0.52` ownership remains unchanged. The uncommitted `1.0.53` change set adds:
 
-- release/version alignment: `CHANGELOG.md`, `README.md`, both Visual Studio project versions, VSIX manifest/package version and `17.14` floor, embedded release notes, `ReleaseAnnouncement.cs`, and its tests;
-- current public copy: `docs/marketplace-overview-1.0.52.md`, `docs/marketplace-release-notes-1.0.52.md`, `docs/release-qualification-1.0.52.md`, plus the preserved failed `1.0.51` record;
-- maintainer state: `AGENTS.md`, `docs/README.md`, this handoff, architecture, product direction, Marketplace checklist, and release runbook;
-- release/test infrastructure: mandatory exact Marketplace `-VsixPath` plus source/manifest version rejection, custom D-drive publish root, D-drive output routing, leftmost-monitor evidence, VS2026 UI Automation handling, VS2022/VS2026 instance discovery, and per-machine extension-conflict detection in the modified PowerShell scripts;
-- ToolWindow lifetime/ownership: document workspace, claimed-handoff coordinator, snapshot-directory leases, ToolWindow disposal, and focused aggregate self-tests.
+- `VisualizerEnvironmentCheck` plus the approved required-first/optional-second ToolWindow panel, confirmation-only official actions, and privacy-bounded report;
+- large pointer-preview page budgeting and phase/cache-state performance evidence without relaxing the five-second threshold;
+- current-workspace Automatic Inspector diagnostic seam and newest-restored VSSDK discovery for Smart Type Mapper;
+- version `1.0.53`, release announcement, changelog, README, Marketplace Overview/notes, embedded notes, utility recovery documentation, and safety-contract tests;
+- package guards that invalidate version-bump outputs and reject stale generated/packaged VSIX manifests.
 
 Do not stage, commit, delete, or treat these pre-existing untracked paths as part of the release without separate inspection and user authorization:
 
@@ -46,7 +46,7 @@ add-command-id.ps1
 add-scan-locals-command.ps1
 ```
 
-No current product-feature implementation file is awaiting a hidden partial edit. The remaining release blocker is external: a separate eligible PC must update from exact public `1.0.50` to the unchanged `1.0.52` candidate without repair or reinstall.
+No current product-feature implementation file is awaiting a hidden partial edit. Exact public/current-candidate installation and UI verification completed after the owner resolved the unrelated editor state; both IDEs were stopped and closed normally.
 
 ## Windows Reinstall Checkpoint
 
@@ -58,7 +58,15 @@ D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52
 
 If the reinstall preserves `D:`, keep this directory unchanged. If the operation repartitions, formats, or otherwise replaces `D:`, copy the entire directory to external storage first and verify that the candidate is still 1,902,513 bytes with SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. A Git clone restores the source and documentation but does not restore this immutable VSIX or its installed-runtime evidence.
 
-After reinstall, do not rebuild the qualified candidate for the remaining gate. On a separate serviced VS2022 `17.14+` or stable VS2026 profile, install or retain exact public Marketplace `1.0.50.0`, then update directly to the unchanged `1.0.52.0` VSIX without uninstall, repair, `/ResetSkipPkgs`, or manual registration repair. Restart Visual Studio and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, registration, and protocol checks. Marketplace publication is allowed only after that update passes.
+After reinstall, do not rebuild the qualified/public candidate for the remaining migration check. On a separate serviced VS2022 `17.14+` or stable VS2026 profile that retains exact public Marketplace `1.0.50.0`, update directly to the unchanged `1.0.52.0` VSIX without uninstall, repair, `/ResetSkipPkgs`, or manual registration repair. Restart Visual Studio and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, registration, and protocol checks. Publication already occurred; this remains post-public validation debt rather than a pending upload step.
+
+### Post-reinstall audit - 2026-08-03
+
+Windows and the repository were restored successfully. Git, Windows PowerShell 5.1, .NET 8/9/10 SDKs, VS2022 Community `17.14.37516.0`, VS2026 Community `18.8.12023.21`, the .NET desktop workload, `vswhere`, and the NuGet-restored `VsixPublisher.exe` are available. FFmpeg is absent and remains optional/demo-only. The verified role matrix and recovery commands are in [development-prerequisites.md](development-prerequisites.md).
+
+The full evidence and boundaries are in [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md). Restore/build/core tests, package/registration checks, compatibility checks, preview replacement, Buffer Doctor, docked layouts, warm preview, and memory soak passed. The approved correction passes Automatic Inspector seam validation, VSSDK `17.14.2094` discovery, Environment Check unit/static safety contracts, and final-regression first benchmark-process sampled-preview access (`992 ms` for 100k; `692 ms` for 200k). Exact-public `1.0.52` and exact final-candidate `1.0.53` installed checks passed in both VS2022 and VS2026.
+
+The diagnostic VSIX produced after reinstall is `1,902,521` bytes with SHA-256 `95395489AF7427B8CE6C15BE8E9236C21B87153C1C340BF3B960D100523E79C8`. It proves fresh-machine packaging only. It does not replace the immutable release candidate above and must not be used for the public-update gate.
 
 ## Product Identity
 
@@ -244,20 +252,21 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 | Pan maximum frame | 21.951 ms | 17.056 ms | 22.3% lower |
 | Pan average tile upload | 20.410 ms | 15.211 ms | 25.5% lower |
 
-## Incomplete Or Unverified
+## Remaining External Or Release Work
 
-1. Marketplace serves `1.0.50.0`; exact local `1.0.52.0` passed VS2022 and VS2026 qualification but has not been uploaded or observed after propagation.
-2. A separate serviced VS2022 `17.14+` or stable VS2026 PC has not yet updated from exact public `1.0.50` to exact candidate `1.0.52` without uninstall, repair, or `/ResetSkipPkgs`. Local reinstall compatibility does not replace this external-PC update gate.
-3. Local installed screenshots provide visual aspect evidence only. The full 540/900/1160 Fit/Manual assertions are current-source view evidence, not an installed-VSIX behavioral matrix.
-4. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual next publication decision instead of presenting the historical draft as current.
-5. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
-6. The Release build still reports 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` for EnvDTE access. They remain technical debt and must not be described as zero-warning output.
-7. Vendor-specific SDK adapters are not implemented. `RawBufferView` and safe structural discovery are the generic supported answers; the exact ImagePtr registration remains a compatibility exception.
-8. Basler pylon, Spinnaker, and Vimba X assemblies/live objects, drivers, emulators, cameras, and representative lifetime cases are missing. Fixture results are not vendor certification.
-9. Stable Visual Studio 2026 `18.x` is a supported compatibility target under Microsoft's VSIX API-version model. Exact `1.0.52` runtime qualification passed on Community `18.8.2`; VS2022 qualification passed on Community `17.14.33`. Preview/Insiders and explicit standalone .NET 9/10 matrices are not current support claims.
-10. Large 100k/200k evidence is file-backed raw-image evidence, not proof that a debuggee can safely allocate a fully decoded 100k/200k `Mat`.
-11. Smart Type Mapper **Open Variable** handles the no-debug-session case, but its individual pointer-backed live-open path does not have the same installed-VSIX automation depth as the automatic fallback path.
-12. The top `Inspector` button is intentionally visible only in narrow layout. Medium and wide layouts expose the Inspector panel directly; a consistent always-present toggle would be a separate approved UX change, not a release-fix requirement.
+The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery, sampled-preview cold-page budget, exact-public runtime, and final `1.0.53` installed checks all passed. See [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md).
+
+1. Marketplace serves the exact qualified `1.0.52.0` asset and the rendered 1.0.52 Overview, but a separate serviced VS2022 `17.14+` or stable VS2026 profile has not yet updated from exact public `1.0.50` to that package without uninstall, repair, or `/ResetSkipPkgs`. Local reinstall compatibility and public asset equality do not replace the profile-migration check.
+2. Local installed screenshots provide visual aspect evidence only. The full 540/900/1160 Fit/Manual assertions are current-source view evidence, not an installed-VSIX behavioral matrix.
+3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual next publication decision instead of presenting the historical draft as current.
+4. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
+5. The Release build still reports 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` for EnvDTE access. They remain technical debt and must not be described as zero-warning output.
+6. Vendor-specific SDK adapters are not implemented. `RawBufferView` and safe structural discovery are the generic supported answers; the exact ImagePtr registration remains a compatibility exception.
+7. Basler pylon, Spinnaker, and Vimba X assemblies/live objects, drivers, emulators, cameras, and representative lifetime cases are missing. Fixture results are not vendor certification.
+8. Stable Visual Studio 2026 `18.x` is a supported compatibility target under Microsoft's VSIX API-version model. Exact `1.0.52` runtime qualification passed on Community `18.8.2`; VS2022 qualification passed on Community `17.14.33`. Preview/Insiders and explicit standalone .NET 9/10 matrices are not current support claims.
+9. Large 100k/200k evidence is file-backed raw-image evidence, not proof that a debuggee can safely allocate a fully decoded 100k/200k `Mat`.
+10. Smart Type Mapper **Open Variable** handles the no-debug-session case, but its individual pointer-backed live-open path does not have the same installed-VSIX automation depth as the automatic fallback path.
+11. The top `Inspector` button is intentionally visible only in narrow layout. Medium and wide layouts expose the Inspector panel directly; a consistent always-present toggle would be a separate approved UX change, not a release-fix requirement.
 
 ## Known Limits
 
@@ -326,19 +335,23 @@ Same-machine before/current comparison for dense 5000 x 5000 Mono8:
 
 ## Next Priorities
 
-1. Validate public `1.0.50 -> 1.0.52` on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+1. Decide whether to publish exact local `1.0.53` to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+   Prerequisite: explicit owner approval for the external Marketplace write. Use only the immutable candidate hash recorded below; run the documented dry run immediately before any upload and perform public read-back afterward.
+
+2. Run any additionally requested current-source visual harness group | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+   Prerequisite: an unobstructed leftmost monitor and no competing Windows automation controller. Run Automatic Vision Inspector, Smart Type Mapper, and Environment/docked 540/900/1160 visual checks from the current Release assembly; store new artifacts on `D:`.
+
+3. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
    Prerequisite: a separate serviced VS2022 `17.14+` or stable VS2026 PC that currently runs the exact public `1.0.50.0` package. Install the unchanged candidate SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` as an update without uninstall, repair, `/ResetSkipPkgs`, or manual registration changes; restart and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, and protocol checks. Do not spend model tokens on repeated local reinstall testing when this prerequisite is unavailable.
 
-2. Publish exact `1.0.52` to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
-
-   Prerequisite: priority 1 passes and Marketplace publisher credentials/environment approval are available. Upload the unchanged D-drive candidate, use `docs/marketplace-overview-1.0.52.md` plus `docs/marketplace-release-notes-1.0.52.md`, and confirm the Gallery API and rendered Overview after propagation. Never upload preserved `1.0.51`.
-
-3. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
+4. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
    Prerequisite: current Basler pylon, Spinnaker, and Vimba X SDK installations or legal qualification machines, representative camera/emulator objects, and lifetime rules. Follow `docs/industrial-camera-compatibility-validation.md`; do not make vendor support claims from fixtures alone.
 
-4. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+5. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
    Current evidence proves the button/panel switch is responsive behavior, not intermittent registration. Any change requires a written UI description, a text mockup, and explicit owner approval before implementation.
 
@@ -355,19 +368,21 @@ git log --oneline -5
 git branch --show-current
 
 $failed = 'C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
-$candidate = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
-Get-Item -LiteralPath $failed, $candidate | Select-Object FullName, Length
-Get-FileHash -LiteralPath $failed, $candidate -Algorithm SHA256
+$public = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+$candidate = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+Get-Item -LiteralPath $failed, $public, $candidate | Select-Object FullName, Length
+Get-FileHash -LiteralPath $failed, $public, $candidate -Algorithm SHA256
 ```
 
 Expected:
 
 - failed `1.0.51`: 2,011,587 bytes, `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`;
-- current `1.0.52`: 1,902,513 bytes, `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`.
+- public `1.0.52`: 1,902,513 bytes, `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`;
+- local `1.0.53`: 1,911,715 bytes, `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`, manifest `1.0.53.0`.
 
-Do not rebuild or overwrite either file during exact-package qualification. Read `docs/release-qualification-1.0.52.md`, then obtain the external prerequisite: a separate serviced VS2022 `17.14+` or stable VS2026 PC currently running exact public `1.0.50.0`. Update that profile to the unchanged candidate without uninstall, repair, `/ResetSkipPkgs`, or manual registration repair. Restart and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, and protocol checks. Store evidence on that machine's D-drive test root where available.
+Do not rebuild or overwrite the preserved failed/public artifacts during exact-package qualification. Read `docs/post-reinstall-validation-2026-08-03.md` first. Exact public `1.0.52` and final local `1.0.53` runtime checks passed in VS2022 and VS2026. Marketplace still serves `1.0.52`; publication of `1.0.53` requires a separate explicit owner decision.
 
-Only after the external update passes should Marketplace publication proceed. Use the prepared `1.0.52` Overview/release notes and the existing dry-run manifest. Confirm the public Gallery API reports `1.0.52.0` and the rendered Overview has updated after propagation. The source checkpoint is commit `854cb67`; tag, GitHub Release, and Marketplace publication still require explicit user instruction/credentials.
+Marketplace publication has completed and read-back confirms the exact qualified asset plus the 1.0.52 Overview. Do not upload another binary under version `1.0.52.0`. The source checkpoint is commit `854cb67`; a current tag or GitHub Release still requires explicit user instruction.
 
 ## Current Release Artifact
 
@@ -375,7 +390,7 @@ Only after the external update passes should Marketplace publication proceed. Us
 D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
-Current exact local candidate (VS2022/VS2026 qualified; external update gate pending):
+Current exact local and public candidate (VS2022/VS2026 qualified; separate-profile migration check pending):
 
 ```text
 Version: 1.0.52.0
@@ -384,7 +399,19 @@ SHA256: 3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F
 Source: commit 854cb67
 ```
 
-This artifact passed installed `ReleaseAnnouncement`, `AutomaticCollections`, and `MultiLibraryHybrid` on VS2022 `17.14.33` and VS2026 `18.8.2`. Rebuilding changes the VSIX hash and invalidates the exact record. Do not upload until the separate-PC public `1.0.50 -> 1.0.52` update gate passes. The repository publish path intentionally remains occupied by the byte-preserved failed `1.0.51`; do not overwrite or publish it. The last Marketplace-published binary is `1.0.50.0`.
+This artifact passed installed `ReleaseAnnouncement`, `AutomaticCollections`, and `MultiLibraryHybrid` on VS2022 `17.14.33` and VS2026 `18.8.2`. Rebuilding changes the VSIX hash and invalidates the exact record. Marketplace already serves this exact binary; do not rebuild or re-upload it under the same version. The repository publish path intentionally remains occupied by the byte-preserved failed `1.0.51`; do not overwrite or publish it. The current Marketplace-published binary is `1.0.52.0`.
+
+## Local 1.0.53 Candidate
+
+```text
+Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+Version: 1.0.53.0
+Size: 1,911,715 bytes
+SHA256: EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534
+Source baseline: acc467f plus the qualified 1.0.53 release change set; use git log for the pushed commit
+```
+
+Internal package inspection found 94 entries, manifest `1.0.53.0`, and embedded `Raw Buffer Visualizer 1.0.53` notes. The first incremental package attempt exposed a stale generated `1.0.52.0` manifest; that artifact was rejected. `Bump-VisualStudioExtensionVersion.ps1` now invalidates generated manifests/VSIX outputs, and `Publish-VisualStudioExtension.ps1` rejects generated or packaged versions that differ from the source manifest. Actual VS2022 review then found and corrected build-suffixed host-version parsing and a compact-width Close action clipping defect; the hash above is the post-correction package.
 
 ### Automatic Mat collection locally qualified candidate (2026-07-31)
 
@@ -404,9 +431,9 @@ The Kimi/embedded Git Bash environment on this machine starts without standard W
 
 ## Current Task Closure
 
-Status: Blocked
-Scope: Local `1.0.52` implementation, packaging, ToolWindow ownership/lease hardening, VS2022/VS2026 installed-runtime qualification, and Marketplace metadata preparation
-Acceptance criteria: All local build, test, package, registration, and runtime criteria passed; the required separate-PC public `1.0.50 -> 1.0.52` update criterion is waiting on an external eligible machine
-Verification: Exact artifact/hash and payload inspection; Release build; aggregate self-tests; release communication; VS2022 `17.14.33` and VS2026 `18.8.2` three-scenario runtime matrix; registration audit; Marketplace dry run; explicit-path/source-version Marketplace safety checks; public Gallery query; `git diff --check`; candidate source commit `854cb67`, safety commit `8fe40a2`, and `origin/main` push verification
-Evidence: `docs/release-qualification-1.0.52.md`, exact VSIX SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`, and `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52`
-Boundary / next dependency: A separate serviced VS2022 `17.14+` or stable VS2026 PC currently running exact public `1.0.50.0`, followed by an unchanged-candidate update and runtime matrix without uninstall, repair, or `/ResetSkipPkgs`; Marketplace publisher credentials/approval are needed only after that gate passes
+Status: Complete
+Scope: Post-Windows-reinstall recovery plus approved `1.0.53` harness/performance/Environment Check implementation, packaging, deterministic tests, exact artifact installation, and actual VS2022/VS2026 Compact/Wide/debug evidence
+Acceptance criteria: Source build, aggregate tests, release communication, package guard, harness seam/discovery, Environment safety contracts, first-access sampled preview, exact-public VS2022/VS2026 rechecks, and final-hash `1.0.53` installed Environment/debug checks all pass
+Verification: `1.0.53` Release build/package, self-tests, release communication, Environment contract test, seam/VSSDK verification modes, two-run dense sampled-preview benchmark, internal VSIX and installed-payload hash inspection, exact-public and final-candidate VS2022/VS2026 break/visualizer checks, Environment Refresh/report-copy/Close, and compact/wide current UI captures
+Evidence: `docs/post-reinstall-validation-2026-08-03.md`; candidate `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53`; final UI evidence under the post-reinstall `ui\environment-check\final` directory
+Boundary / next dependency: Marketplace still serves immutable public `1.0.52`; `1.0.53` has not been uploaded. A separate explicit owner approval is required before that external write. The separate-PC exact-public `1.0.50 -> 1.0.52` profile-migration debt also remains external to this restored-PC closure.
