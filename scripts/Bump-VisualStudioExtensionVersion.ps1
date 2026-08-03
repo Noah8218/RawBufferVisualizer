@@ -119,6 +119,18 @@ $packageSource = Replace-One `
     -Description 'InstalledProductRegistration version'
 Write-Utf8NoBom -Path $PackageSourcePath -Content $packageSource
 
+$generatedManifestRoot = Join-Path $repoRoot '.build\intermediate\RawBufferVisualizer.VisualStudio.Extensibility'
+if (Test-Path -LiteralPath $generatedManifestRoot -PathType Container) {
+    Get-ChildItem -LiteralPath $generatedManifestRoot -Filter 'extension.vsixmanifest' -File -Recurse |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+}
+
+$builtVsixRoot = Join-Path $repoRoot '.build\bin\RawBufferVisualizer.VisualStudio.Extensibility'
+if (Test-Path -LiteralPath $builtVsixRoot -PathType Container) {
+    Get-ChildItem -LiteralPath $builtVsixRoot -Filter 'RawBufferVisualizer.VisualStudio.Extensibility.vsix' -File -Recurse |
+        ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
+}
+
 Write-Host "Updated Visual Studio extension version:"
 Write-Host "  Package:  $($versions.Package)"
 Write-Host "  Assembly: $($versions.Assembly)"
@@ -126,5 +138,6 @@ Write-Host "  Project:  $ProjectPath"
 Write-Host "  Classic:  $ClassicProjectPath"
 Write-Host "  Manifest: $ManifestPath"
 Write-Host "  VSSDK:    $PackageSourcePath"
+Write-Host "Invalidated generated manifests and VSIX outputs so the next package cannot reuse the prior version."
 Write-Host "Release communication is intentionally not rewritten by this script."
 Write-Host "Update CHANGELOG, Marketplace overview/notes, embedded VSIX notes, and ReleaseAnnouncement.cs, then run Test-ReleaseCommunication.ps1."

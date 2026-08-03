@@ -104,6 +104,7 @@ namespace RawBufferVisualizer.Tests
                 AutomaticInspectionPreferencesTests.RunAll();
                 AutomaticImageCollectionPolicyTests.RunAll();
                 ReleaseAnnouncementTests.RunAll();
+                VisualizerEnvironmentCheckTests.RunAll();
                 IndustrialCameraContractTests.RunAll();
                 WorkspaceAndHandoffCoordinatorTests.RunAll();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");

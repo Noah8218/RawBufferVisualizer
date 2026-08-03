@@ -8,16 +8,16 @@ Build a Release VSIX:
 
 ```powershell
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.52
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.53
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate
 ```
 
 Expected output:
 
 ```text
-D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\
-D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
-D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472.zip
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 ```
 
 ## Listing Metadata
@@ -45,7 +45,7 @@ Every Overview must distinguish the technical support range from exact runtime e
 - exact installed IDE builds: list only versions that passed the current installed-VSIX matrix;
 - excluded release targets: Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, and Preview/Insiders builds.
 
-The `1.0.52` manifest range `[17.14,18.0)` is valid for VS2026 because VS2026 supports API version 17.x and ignores the upper bound. The `17.14` lower bound is intentional and matches the Extensibility runtime dependency; any later manifest edit produces a new exact package and requires full requalification.
+The `1.0.53` manifest range `[17.14,18.0)` is valid for VS2026 because VS2026 supports API version 17.x and ignores the upper bound. The `17.14` lower bound is intentional and matches the Extensibility runtime dependency; any later manifest edit produces a new exact package and requires full requalification.
 
 For every update, the binary version, `CHANGELOG.md`, dedicated Marketplace Overview, Marketplace/GitHub release notes, embedded VSIX `ReleaseNotes.txt`, and in-product `ReleaseAnnouncement.cs` version must agree. The communication test above enforces that contract. Confirm the first Tool Window open shows the current non-modal highlights, **Dismiss** survives a Visual Studio restart, and **What's New** can reopen them without triggering a scan.
 
@@ -71,7 +71,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-For the `1.0.52` update, use [marketplace-release-notes-1.0.52.md](marketplace-release-notes-1.0.52.md). Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+For the `1.0.53` candidate, use [marketplace-release-notes-1.0.53.md](marketplace-release-notes-1.0.53.md) only after installed qualification and explicit publish approval. Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 The GitHub tag workflow uses that same file as its curated Release body. It attaches only the standalone viewer; do not attach the Visual Studio VSIX to GitHub Releases.
 
@@ -105,9 +105,9 @@ Lead with the debugger workflow, not the large-image benchmark. Publish only in 
 
 Current Overview copy:
 
-[Raw Buffer Visualizer 1.0.52 Marketplace Overview](marketplace-overview-1.0.52.md)
+[Raw Buffer Visualizer 1.0.53 Marketplace Overview](marketplace-overview-1.0.53.md)
 
-The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.52`.
+The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.53`.
 
 Historical 1.0.45 Overview copy:
 
@@ -352,12 +352,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.52.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 1.0.53.0
 ```
 
 ## Release Notes Template
 
-For the current update, paste [marketplace-release-notes-1.0.52.md](marketplace-release-notes-1.0.52.md) into the Marketplace release notes field.
+For the current candidate, paste [marketplace-release-notes-1.0.53.md](marketplace-release-notes-1.0.53.md) into the Marketplace release notes field only after installed qualification and explicit publish approval.
 
 ## Evidence Artifacts
 
@@ -368,7 +368,7 @@ artifacts\perf\vs-docked\visual-studio-docked-performance.json
 artifacts\perf\vs-docked\visual-studio-docked-session.json
 artifacts\perf\vs-docked\visual-studio-docked-session.png
 artifacts\perf\vs-docked\visual-studio-docked-framebuffer.png
-D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\fit-stability\layout-widths.json
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\fit-stability\layout-widths.json
 artifacts\ui\installed-vsix-new-features\AutomaticVisionInspector-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\AutomaticCollections-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\BufferDoctor-installed-vsix.json

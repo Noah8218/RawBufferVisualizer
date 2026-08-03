@@ -2,6 +2,8 @@
 
 > Current-state record: 2026-08-02 KST. This record covers the exact local `1.0.52.0` candidate below. Local packaging and installed runtime qualification passed on serviced VS2022 and stable VS2026. Marketplace publication is blocked until a separate PC proves an in-place update from the exact public `1.0.50.0` package to this unchanged candidate.
 
+> Post-public note, 2026-08-03 KST: Visual Studio Marketplace now serves `1.0.52.0`. The Gallery asset is 1,902,513 bytes with SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`, exactly matching this qualified candidate, and the rendered Overview is the `1.0.52` document. The original pre-reinstall D-drive runtime folders were not recovered. A fresh public download was hash-verified and copied back to the canonical candidate path without rebuilding; this restores the exact binary, not the missing historical logs/screenshots. The separate-PC `1.0.50 -> 1.0.52` in-place update was not recorded before upload and remains post-public validation debt. The original closure below is retained as the historical pre-publication record.
+
 ## Scope
 
 Included:

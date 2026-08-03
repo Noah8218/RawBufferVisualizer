@@ -2,6 +2,7 @@ param(
     [string]$Configuration = "Release",
     [string]$Framework = "net472",
     [string]$OutputDir = "artifacts\ui\smart-type-mapper",
+    [switch]$VerifyVssdkDiscoveryOnly,
     [switch]$NoBuild
 )
 
@@ -10,11 +11,51 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
+function Find-VssdkToolsPath {
+    $nugetPackagesRoot = if ([string]::IsNullOrWhiteSpace($env:NUGET_PACKAGES)) {
+        Join-Path $env:USERPROFILE ".nuget\packages"
+    } else {
+        $env:NUGET_PACKAGES
+    }
+    $vssdkPackageRoot = Join-Path $nugetPackagesRoot "microsoft.vssdk.buildtools"
+    if (-not (Test-Path -LiteralPath $vssdkPackageRoot -PathType Container)) {
+        throw "Microsoft.VSSDK.BuildTools was not found below $nugetPackagesRoot. Restore the solution first."
+    }
+
+    $resolvedPath = Get-ChildItem -LiteralPath $vssdkPackageRoot -Directory |
+        Sort-Object @{ Expression = { [version]$_.Name }; Descending = $true } |
+        ForEach-Object { Join-Path $_.FullName "tools\vssdk" } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Container } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($resolvedPath)) {
+        throw "No restored Microsoft.VSSDK.BuildTools package contains tools\vssdk. Restore the solution first."
+    }
+
+    return $resolvedPath
+}
+
 if (-not $NoBuild) {
     dotnet build .\RawBufferVisualizer.sln --configuration $Configuration | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed with exit code $LASTEXITCODE."
     }
+}
+
+if ($VerifyVssdkDiscoveryOnly) {
+    $verifiedVssdkToolsPath = Find-VssdkToolsPath
+    foreach ($assemblyName in @(
+        "Microsoft.VisualStudio.Validation.dll",
+        "Microsoft.VisualStudio.Threading.dll",
+        "Microsoft.VisualStudio.Shell.Framework.dll",
+        "Microsoft.VisualStudio.Shell.15.0.dll")) {
+        $dependencyPath = Join-Path $verifiedVssdkToolsPath $assemblyName
+        if (-not (Test-Path -LiteralPath $dependencyPath -PathType Leaf)) {
+            throw "$assemblyName was not found at $verifiedVssdkToolsPath."
+        }
+    }
+
+    Write-Host "Smart Type Mapper VSSDK discovery validation passed: $verifiedVssdkToolsPath"
+    return
 }
 
 $outputRoot = Join-Path $repoRoot $OutputDir
@@ -48,12 +89,7 @@ foreach ($assemblyName in @(
     }
 }
 
-$nugetPackagesRoot = if ([string]::IsNullOrWhiteSpace($env:NUGET_PACKAGES)) {
-    Join-Path $env:USERPROFILE ".nuget\packages"
-} else {
-    $env:NUGET_PACKAGES
-}
-$vssdkToolsPath = Join-Path $nugetPackagesRoot "microsoft.vssdk.buildtools\17.9.3168\tools\vssdk"
+$vssdkToolsPath = Find-VssdkToolsPath
 foreach ($assemblyName in @(
     "Microsoft.VisualStudio.Validation.dll",
     "Microsoft.VisualStudio.Threading.dll",

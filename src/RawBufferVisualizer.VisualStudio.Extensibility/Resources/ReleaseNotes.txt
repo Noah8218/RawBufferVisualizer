@@ -1,19 +1,18 @@
-Raw Buffer Visualizer 1.0.52
+Raw Buffer Visualizer 1.0.53
 
 NEW
-- Automatic Vision Inspector can inspect exact OpenCvSharp and Emgu CV Mat lists and one-dimensional arrays when the saved Mat collections option is enabled.
-- Collection elements fail independently, so null or disposed Mats do not hide valid images.
+- Environment Check reports the current Visual Studio host, loaded extension version, and temporary-storage writability before optional contributor/media tools.
+- Refresh and diagnostic-report copy do not scan a frame, open an image, install software, or change registration.
 
 FIXED
-- Updated the stable Visual Studio Extensibility SDK so registered debugger visualizers activate on Visual Studio 2026 18.x.
-- Open file-backed snapshots now hold a lease so the 24-hour stale sweep cannot remove data that is still displayed.
-- Preview-to-full handoff replacement releases the prior payload, and closing/removing a document releases its current payload.
+- Large pointer-backed previews use a bounded cold-page-read budget, keeping first access to dense 100k/200k fixtures below the existing five-second gate on the restored workstation.
+- Automatic Vision Inspector and Smart Type Mapper layout checks now follow the current workspace seam and newest restored VSSDK package instead of stale implementation/package paths.
 
 IMPROVED
-- Claimed handoff ACK/NACK coordination and document activation/removal/disposal now have independent tested owners.
-- New and selected images keep an aspect-correct Fit; manual zoom and pan remain stable.
+- Optional .NET, Visual Studio workload, and FFmpeg actions require confirmation and open only Visual Studio Installer or official guidance. Nothing is installed silently.
+- The environment report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
 
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. Use What's New to reopen them later.
 
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1052
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1053
