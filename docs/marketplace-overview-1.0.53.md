@@ -8,14 +8,13 @@ Raw Buffer Visualizer is an Image Watch-style debugger tool for C# developers. I
 
 ## What's New in 1.0.53
 
-- **Basler pylon .NET 2D support** adds a dependency-free registered debugger path for supported live `IGrabResult` values. The user's Basler application supplies pylon; the VSIX does not package or install it.
 - **Environment Check** reports only the current Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
 - **Refresh** and **Copy diagnostic report** do not scan a frame, open an image, install software, or change registration.
 - Select **Environment** again to close the panel; contributor and demo-media tools stay in the development documentation.
 - Select **What's New** again to close the release highlights. **Dismiss** additionally saves the version as seen.
 - Large pointer-backed previews use a bounded cold-page-read estimate so first preview remains responsive for dense 100k/200k sources.
 
-The current public predecessor is `1.0.52`. Version `1.0.53` keeps its Visual Studio 2026 activation, automatic Mat collection, snapshot lease, and handoff-reliability baseline.
+The current public predecessor is `1.0.52`. Version `1.0.53` keeps its Visual Studio 2026 activation, automatic Mat collection, snapshot lease, and handoff-reliability baseline. Proprietary vendor-named direct adapters are excluded from release claims until the project's vendor SDK license gate passes.
 
 ## Core Workflow
 
@@ -80,9 +79,9 @@ Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, and
 - Stop after assignment; a breakpoint on the assignment statement can expose the previous or null value.
 - Automatic discovery is bounded to direct and one-level nested members.
 - A raw pointer without valid dimensions, stride/length, format, and lifetime cannot be opened safely.
-- The Basler development path passed pylon `26.07.2.18500` camera emulation and an installed-VSIX Mono12 debugger open. This is not physical-camera, lighting, acquisition, or general vendor-SDK certification.
-- Vendor camera SDKs and drivers remain the user's application responsibility and are not installed by Raw Buffer Visualizer.
+- Vendor camera SDKs and drivers remain the user's application responsibility and are not installed by Raw Buffer Visualizer. Generic buffer inspection is not vendor certification.
+- No direct proprietary camera-SDK adapter is advertised or approved for this release until written vendor permission and required legal review are recorded.
 
 ## License
 
-Raw Buffer Visualizer is licensed under the MIT License. External libraries retain their own licenses; see `THIRD-PARTY-NOTICES.md` in the source repository.
+Raw Buffer Visualizer is licensed under the MIT License. External libraries retain their own licenses; see `THIRD-PARTY-NOTICES.md` and `docs/vendor-sdk-license-policy.md` in the source repository.

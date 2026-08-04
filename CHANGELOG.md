@@ -8,11 +8,10 @@ No user-visible changes are queued after `1.0.53`.
 
 ## [1.0.53] - 2026-08-03
 
-Release status: local development candidate. Marketplace publication and propagation are not complete.
+Release status: local development candidate. The uncleared proprietary vendor adapter has been removed; a new immutable package has not yet been created or qualified for Marketplace publication.
 
 ### Added
 
-- Added a dependency-free debugger-visualizer provider and ObjectSource for supported 2D Basler pylon .NET `IGrabResult` values. It uses Basler's exact nullable `ComputeStride(IImage)` contract, exposes only the 2D image range, and leaves clone/dispose ownership with the debugged application.
 - Added an **Environment** panel that checks only the supported Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
 - Added explicit **Refresh** and **Copy diagnostic report** actions. The report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
 
@@ -32,7 +31,7 @@ Release status: local development candidate. Marketplace publication and propaga
 
 ### Safety contract
 
-- Basler support rejects failed/disposed results, non-image or bottom-up payloads, unsupported formats, and undersized payloads. The development candidate passed installed pylon `26.07.2.18500` camera emulation for 11 supported 2D formats and an installed-VSIX Mono12 debugger open; physical-camera behavior and packed `Mono10p`/`Mono12p` remain separate evidence.
+- Removed the uncleared proprietary vendor adapter, its exact-type registration, SDK audit script, and vendor-named test fixtures. Vendor-neutral buffer inspection remains available.
 - Opening, refreshing, copying, or toggling Environment Check does not scan the current frame, open an image, change the active document, install software, or modify VSPackage registration.
 - The existing explicit debugger visualizer, **Scan Now**, Fit/Manual, snapshot ownership, and preview-to-full handoff contracts remain unchanged.
 

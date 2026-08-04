@@ -106,7 +106,6 @@ namespace RawBufferVisualizer.Tests
                 ReleaseAnnouncementTests.RunAll();
                 VisualizerEnvironmentCheckTests.RunAll();
                 IndustrialCameraContractTests.RunAll();
-                BaslerPylonGrabResultVisualizerTests.RunAll();
                 WorkspaceAndHandoffCoordinatorTests.RunAll();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;

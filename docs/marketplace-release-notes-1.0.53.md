@@ -1,10 +1,9 @@
 # Raw Buffer Visualizer 1.0.53
 
-Version `1.0.53` is a local development candidate based on the public `1.0.52` package. Marketplace publication and propagation are not complete.
+Version `1.0.53` is a local development candidate based on the public `1.0.52` package. The uncleared proprietary vendor adapter was removed; a new immutable package has not yet been created or qualified for Marketplace publication.
 
 ## Added
 
-- Added a registered 2D debugger visualizer for supported Basler pylon .NET `IGrabResult` values without packaging Basler assemblies in the VSIX. The development candidate passed pylon `26.07.2.18500` camera emulation and an installed-VSIX Mono12 debugger open; physical-camera qualification remains separate.
 - Added **Environment Check** to show supported Visual Studio host state, the extension version loaded in the current session, and temporary-storage writability.
 - Added **Refresh** and **Copy diagnostic report**. The report contains no credentials, environment-variable values, or image payloads and warns when local paths are included.
 
@@ -26,6 +25,7 @@ Version `1.0.53` is a local development candidate based on the public `1.0.52` p
 
 - Opening, refreshing, copying, or toggling Environment Check does not scan the current frame, open an image, change the active document, install software, or modify registration.
 - Existing automatic Mat discovery, registered Bitmap visualizer, Buffer Doctor, Smart Type Mapper, Fit/Manual navigation, snapshot lease, and preview-to-full handoff contracts remain in place.
+- Direct proprietary camera-SDK adapters are not part of the approved release claim while the vendor license gate is blocked.
 - Supports Visual Studio 2022 `17.14` or newer and stable Visual Studio 2026 `18.x` on x64 Community, Professional, and Enterprise editions.
 
 After installing or updating, close every Visual Studio window and restart Visual Studio.
