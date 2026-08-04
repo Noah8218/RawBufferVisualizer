@@ -52,6 +52,8 @@ $projectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensi
 $classicProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj'
 $packageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizerPackage.cs'
 $announcementPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio\ReleaseAnnouncement.cs'
+$toolWindowXamlPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferToolWindowControl.xaml'
+$toolWindowCodePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferToolWindowControl.xaml.cs'
 $changeLogPath = Join-Path $repoRoot 'CHANGELOG.md'
 $readmePath = Join-Path $repoRoot 'README.md'
 $releaseWorkflowPath = Join-Path $repoRoot '.github\workflows\release.yml'
@@ -62,6 +64,8 @@ foreach ($requiredPath in @(
     $classicProjectPath,
     $packageSourcePath,
     $announcementPath,
+    $toolWindowXamlPath,
+    $toolWindowCodePath,
     $changeLogPath,
     $readmePath,
     $releaseWorkflowPath)) {
@@ -93,6 +97,10 @@ Assert-Contains $projectPath "<AssemblyVersion>$escapedAssemblyVersion</Assembly
 Assert-Contains $classicProjectPath "<Version>$escapedPackageVersion</Version>" 'Classic project package version'
 Assert-Contains $packageSourcePath ('InstalledProductRegistration\([^\r\n]+"' + $escapedPackageVersion + '"\)') 'Installed product version'
 Assert-Contains $announcementPath ('CurrentVersion\s*=\s*"' + $escapedPackageVersion + '"') 'In-product announcement version'
+Assert-Contains $toolWindowXamlPath '<ToggleButton x:Name="WhatsNewButton"[\s\S]*?AutomationProperties\.AutomationId="ReleaseAnnouncementOpenButton"[\s\S]*?Click="WhatsNew_Click"' "What's New toggle control"
+Assert-Contains $toolWindowCodePath 'WhatsNewButton\.IsChecked\s*=\s*shouldShow' "What's New initial toggle state"
+Assert-Contains $toolWindowCodePath 'private void WhatsNew_Click[\s\S]*?WhatsNewButton\.IsChecked != true[\s\S]*?ReleaseAnnouncementBanner\.Visibility = Visibility\.Collapsed[\s\S]*?Release highlights closed' "What's New repeated-click close behavior"
+Assert-Contains $toolWindowCodePath 'private void MarkCurrentReleaseSeen[\s\S]*?ReleaseAnnouncementBanner\.Visibility = Visibility\.Collapsed;[\s\S]*?WhatsNewButton\.IsChecked = false;' "What's New dismissed-state synchronization"
 Assert-Contains $changeLogPath "(?m)^## \[$escapedPackageVersion\]" 'CHANGELOG entry'
 Assert-Contains $overviewPath "(?m)^# Raw Buffer Visualizer $escapedPackageVersion Marketplace Overview$" 'Marketplace overview heading'
 Assert-Contains $marketplaceNotesPath "(?m)^# Raw Buffer Visualizer $escapedPackageVersion$" 'Marketplace release-notes heading'

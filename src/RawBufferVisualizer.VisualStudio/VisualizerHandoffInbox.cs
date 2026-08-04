@@ -524,11 +524,7 @@ namespace RawBufferVisualizer.VisualStudio
         {
             var inboxDirectory = GetInboxDirectory(visualStudioProcessId);
             Directory.CreateDirectory(inboxDirectory);
-            var fileName = string.Format(
-                CultureInfo.InvariantCulture,
-                "{0}_{1:N}.rbuf-handoff",
-                DateTime.UtcNow.ToString("yyyyMMddHHmmssfffffff", CultureInfo.InvariantCulture),
-                Guid.NewGuid());
+            var fileName = Guid.NewGuid().ToString("N").Substring(0, 24) + RequestSuffix;
             var requestPath = Path.Combine(inboxDirectory, fileName);
             var publishingPath = requestPath
                 + PublishingSuffix

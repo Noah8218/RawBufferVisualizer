@@ -300,6 +300,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void OnHandoffCreated(object sender, FileSystemEventArgs e)
         {
+            if (!IsPublishedHandoffPath(e.FullPath))
+            {
+                return;
+            }
+
             WriteAutomationLog("Created " + e.FullPath);
             _inboxPollInterval = InboxPollMinInterval;
             QueueOpenHandoff(e.FullPath);
@@ -308,9 +313,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void OnHandoffRenamed(object sender, RenamedEventArgs e)
         {
-            if (!e.FullPath.EndsWith(
-                    ".rbuf-handoff",
-                    StringComparison.OrdinalIgnoreCase))
+            if (!IsPublishedHandoffPath(e.FullPath))
             {
                 return;
             }
@@ -319,6 +322,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _inboxPollInterval = InboxPollMinInterval;
             QueueOpenHandoff(e.FullPath);
             ScheduleInboxPoll(InboxPollMinInterval);
+        }
+
+        private static bool IsPublishedHandoffPath(string path)
+        {
+            return path.EndsWith(".rbuf-handoff", StringComparison.OrdinalIgnoreCase);
         }
 
         private void QueueOpenHandoff(string requestPath)

@@ -10,6 +10,8 @@ The exact public `1.0.52` package uses the stable `17.14` Extensibility SDK and 
 
 The Windows-reinstall functional recheck is recorded separately in [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md). Owner-approved `1.0.53` work repairs the two stale layout harness assumptions, adds page-budgeted large sampled previews, and implements the reviewed Environment Check. Required and optional utilities plus the in-product behavior contract are listed in [development-prerequisites.md](development-prerequisites.md).
 
+The first 2D camera-SDK vertical slice is now runtime-qualified at exact pylon Software Suite `8.1.0.16743` and `26.07.2.18500` test points: both passed 11 emulator formats and an installed `1.0.53.0` development VSIX opened a real emulated Mono12 `Basler.Pylon.GrabResult` through the registered direct visualizer. Read [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md) for exact evidence and boundaries; this is not every-version, physical-camera, or general vendor-SDK certification.
+
 ## Required Reading Order
 
 1. [AGENTS.md](../AGENTS.md) - repository rules and new-session orientation.
@@ -29,6 +31,7 @@ After those four documents, read only the task-specific references below.
 | Review public 1.0.52 evidence or the current 1.0.53 candidate | [release-qualification-1.0.52.md](release-qualification-1.0.52.md), [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md), then the preserved failed [1.0.51 record](release-qualification-1.0.51.md) |
 | Validate or generate very large images | [large-image-samples.md](large-image-samples.md) |
 | Research, qualify, or add a camera/frame-grabber integration | [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md), [sdk-adapter-roadmap.md](sdk-adapter-roadmap.md) |
+| Implement or qualify the Basler pylon .NET 2D path | [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md) |
 | Review Image Watch-inspired UX | [image-watch-ux-analysis.md](image-watch-ux-analysis.md) |
 | Prepare a short demo | [demo-recording-guide.md](demo-recording-guide.md) |
 | Check the current candidate release text | [marketplace-overview-1.0.53.md](marketplace-overview-1.0.53.md), [marketplace-release-notes-1.0.53.md](marketplace-release-notes-1.0.53.md) |

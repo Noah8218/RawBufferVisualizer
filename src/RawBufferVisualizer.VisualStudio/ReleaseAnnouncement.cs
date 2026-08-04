@@ -12,13 +12,13 @@ namespace RawBufferVisualizer.VisualStudio
             "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1053";
 
         public const string HighlightEnvironmentCheck =
-            "Environment Check separates required runtime state from optional tools";
+            "Environment Check shows only the runtime state the extension needs";
 
         public const string HighlightColdPreview =
             "Large sampled previews use a bounded cold-page budget";
 
-        public const string HighlightSafeUtilityLinks =
-            "Official utility links require confirmation and never install silently";
+        public const string HighlightPanelToggles =
+            "Select Environment or What's New again to close its panel";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

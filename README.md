@@ -10,6 +10,8 @@
 
 Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio 2022 or Visual Studio 2026 window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
 
+Current development is 2D camera-SDK first: Basler pylon .NET `IGrabResult` is the first direct vendor target, while `RawBufferView` remains the common adapter for other SDKs. Camera acquisition/control and all 3D point-cloud or depth-container visualization remain out of scope. See the [SDK adapter roadmap](docs/sdk-adapter-roadmap.md) and [Basler 2D contract](docs/basler-pylon-2d-adapter.md).
+
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
@@ -20,24 +22,23 @@ Visual Studio Marketplace still serves exact public `1.0.52.0`. The Gallery API 
 
 The `1.0.53.0` candidate adds:
 
-- an **Environment** panel that reports required host/extension/temp-storage state before optional contributor/media utilities;
-- confirmation-only links to Visual Studio Installer and official .NET/FFmpeg guidance, with no silent download or installation;
+- a dependency-free direct debugger target for supported 2D Basler pylon .NET `IGrabResult` values; the development candidate passed 11-format camera-emulator coverage and a direct Mono12 debugger open on exact pylon Software Suite `8.1.0.16743` and `26.07.2.18500` test points;
+- an **Environment** panel that reports only required host/extension/temp-storage state;
 - a privacy-bounded diagnostic report that excludes credentials, environment-variable values, and image payloads;
 - bounded cold-page sampling for faster first preview of dense 100k/200k pointer-backed sources;
 - repaired Automatic Vision Inspector and Smart Type Mapper layout checks that follow the current workspace and restored VSSDK package.
 
 The candidate keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, the existing Marketplace extension ID, and the `1.0.52` Visual Studio 2026/automatic Mat collection/snapshot lease baseline. Public `1.0.52` remains the immutable release asset; do not rebuild or upload another binary under that version.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.53`, it shows a non-modal summary of the candidate. **Dismiss** is saved per user across Visual Studio restarts, and **What's New** reopens it without starting a scan or opening an image. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.53`, it shows a non-modal summary of the candidate. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
 ### Environment Check
 
-Use **Environment** in the Tool Window toolbar after a Windows reinstall or when the extension/host setup is uncertain. It lists required runtime checks first—supported Visual Studio host, loaded extension version, and writable temporary storage—then clearly labels .NET 8 SDK, Visual Studio extension workload, and FFmpeg as optional contributor/media tools.
+Use **Environment** in the Tool Window toolbar after a Windows reinstall or when the extension/host setup is uncertain. It lists only the supported Visual Studio host, loaded extension version, and writable temporary storage required by the extension.
 
 - **Refresh** rechecks environment state only. It does not scan the debugger frame, open an image, or modify registration.
 - **Copy diagnostic report** excludes credentials, environment-variable values, and image payloads. Review local paths before sharing.
-- **Close** stays in the wrapping action row so the panel can be dismissed at compact Tool Window widths.
-- External actions require confirmation and open only Visual Studio Installer or official .NET/FFmpeg guidance. Raw Buffer Visualizer never downloads or installs these utilities silently.
+- Select **Environment** again to close the panel without changing registration, starting a scan, or opening an image.
 - A normal Marketplace user needs only a supported x64 Visual Studio installation and the VSIX. OpenCV NuGet packages, camera SDKs/drivers, .NET SDK, VSSDK workload, and FFmpeg are not additional extension runtime dependencies.
 
 Contributor and recovery details are in [Development Prerequisites And Utility Recovery](docs/development-prerequisites.md).
@@ -129,6 +130,8 @@ The manifest uses the API range `[17.14,18.0)`. This is compatible with Visual S
 ### Required software and optional utilities
 
 Normal extension users need only a supported x64 Visual Studio installation and the Raw Buffer Visualizer VSIX. The VSIX is self-contained for its debugger and viewer features: do **not** install the .NET SDK, OpenCvSharp, Emgu CV, SharpGL, FFmpeg, or a camera SDK just to use the extension. OpenCvSharp, Emgu CV, and camera libraries remain dependencies of the application being debugged, when that application uses them.
+
+The in-product **Environment** panel therefore shows only the Visual Studio host, loaded extension version, and writable temporary storage. Select **Environment** again to close it. Contributor and demo-media utilities stay in the development documentation below and are not presented as runtime requirements.
 
 Contributors and release maintainers use additional tools:
 
@@ -455,6 +458,7 @@ Recorded evidence is split between the current public `1.0.52` package, its prev
 
 | Check | Result |
 | --- | --- |
+| Basler pylon `1.0.53` development qualification | Exact pylon Software Suite `8.1.0.16743` and `26.07.2.18500` each passed 11 supported 2D camera-emulator formats and a registered direct `Basler.Pylon.GrabResult` Mono12 128 x 96 debugger open in Visual Studio Community 2026 `18.8.12023.21`. The same 26.07 assembly had already passed the direct path in VS2022. These are tested compatibility points, not a claim for every intervening pylon release or physical camera. Physical hardware, `Mono10p`/`Mono12p` emulator availability, and generic Automatic Inspector support remain outside this result. See [Basler pylon .NET 2D Adapter](docs/basler-pylon-2d-adapter.md). |
 | Current public `1.0.52` package | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. The Gallery API, downloadable VSIX, and rendered 1.0.52 Overview were rechecked on 2026-08-03 KST. The public asset exactly matches the qualified candidate. |
 | Current `1.0.52` installed runtime | The same package passed ReleaseAnnouncement, AutomaticCollections, and MultiLibraryHybrid on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`: 9 hybrid documents, 0 errors, one Open/Scan command each, and 0 protocol errors. The durable result is recorded in [release-qualification-1.0.52.md](docs/release-qualification-1.0.52.md); the original pre-reinstall D-drive runtime folders were not recovered. |
 | Preserved failed `1.0.51` package | 2,011,587 bytes; SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`. VS2022 passed, but stable VS2026 `18.8.2` could not activate the registered provider because the older Extensibility framework requested the unavailable host-contract assembly version `17.0.0.0`. |

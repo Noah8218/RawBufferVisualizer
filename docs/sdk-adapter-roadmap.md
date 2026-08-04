@@ -1,6 +1,6 @@
 # SDK Adapter Roadmap
 
-The first-class extension target for arbitrary acquisition SDKs is `RawBufferView`.
+The first-class extension target for arbitrary acquisition SDKs remains `RawBufferView`. The first direct SDK path is the 2D-only Basler pylon .NET `IGrabResult` adapter described in [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md).
 
 ```csharp
 var view = new RawBufferView
@@ -36,7 +36,7 @@ Direct vendor adapters are possible, but should be added only when a public-prop
 
 | Vendor / SDK | Current automatic-contract position | Adapter direction |
 | --- | --- | --- |
-| Basler pylon .NET | `PixelDataPointer` is safe only with zero `PaddingX` and exact contiguous `PayloadSize`; `ComputeStride()` is a method and is not invoked | A small user-side wrapper can call `ComputeStride()` and expose `RawBufferView`; snapshot if grab-result ownership cannot span the paused read |
+| Basler pylon .NET | Generic Automatic Inspector remains limited to zero `PaddingX` and exact contiguous `PayloadSize`; it is not the qualified path | First-party `IGrabResult` adapter calls exact `ComputeStride()`, supports selected 2D formats, and leaves ownership with the application; pylon `26.07.2.18500` emulator and installed-VSIX Mono12 direct-open qualification passed |
 | Teledyne FLIR Spinnaker | `DataPtr` + explicit `Stride` is structurally supported; runtime/lifetime unverified | Keep the managed image alive through the read or snapshot before release |
 | Allied Vision Vimba X | `ImageData` is preferred over `Buffer`; differing addresses are rejected as a chunk/image offset | Adapter must compute the image-data length after the offset and retain/requeue `IFrame` correctly |
 | IDS peak ICV | `Data`, width, height, pixel format, exact `SizeInBytes` contract tested; assembly metadata verified for ICV 1.4.0 | Expose explicit stride when runtime buffers are padded; retain the disposable image |
@@ -72,6 +72,7 @@ Vendor-specific adapters should fail clearly when an SDK reports unsupported pla
 - The adapter documents source buffer lifetime. If the SDK owns the memory only until the next grab callback, the adapter must snapshot immediately or keep the SDK buffer pinned/owned until transfer completes.
 - Tests cover descriptor mapping and at least one chunked pointer read path.
 - Installed-VSIX evidence uses a real SDK object or an official vendor emulator, not only a class with similar member names.
+- 3D, multi-component, compressed, and otherwise unsupported payloads are rejected explicitly instead of being flattened into a guessed 2D image.
 
 ## References Checked
 
