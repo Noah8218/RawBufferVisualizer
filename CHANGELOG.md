@@ -12,24 +12,28 @@ Release status: local development candidate. Marketplace publication and propaga
 
 ### Added
 
-- Added an **Environment** panel that checks the supported Visual Studio host, loaded extension version, and temporary-storage writability before showing optional contributor/media utilities.
+- Added a dependency-free debugger-visualizer provider and ObjectSource for supported 2D Basler pylon .NET `IGrabResult` values. It uses Basler's exact nullable `ComputeStride(IImage)` contract, exposes only the 2D image range, and leaves clone/dispose ownership with the debugged application.
+- Added an **Environment** panel that checks only the supported Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
 - Added explicit **Refresh** and **Copy diagnostic report** actions. The report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
 
 ### Improved
 
 - Large pointer-backed sampled previews now use a bounded estimate of cold storage page reads. On the restored workstation, the final regression run's first benchmark-process access completed in `0.992 s` for the dense 100k fixture and `0.692 s` for the dense 200k fixture without changing the existing five-second gate.
-- Optional .NET 8, Visual Studio extension-workload, and FFmpeg actions require confirmation and open only Visual Studio Installer or official guidance; the extension never downloads or installs them silently.
+- Contributor and demo-media utilities remain documented in the development prerequisites instead of being presented as product runtime requirements.
+- Selecting **Environment** again closes the panel; the redundant in-panel **Close** action was removed.
+- Selecting **What's New** again closes the release highlights. **Dismiss** still records the version as seen, while a simple toggle close does not change that saved preference.
 
 ### Fixed
 
 - Updated the Automatic Vision Inspector layout check to use a narrow current-workspace diagnostic seam instead of reflecting a removed `_activeDocument` field.
 - Updated the Smart Type Mapper layout check to discover the newest restored `Microsoft.VSSDK.BuildTools` package instead of requiring historical package `17.9.3168`.
 - Environment Check now accepts the build-suffixed file-version text reported by installed Visual Studio hosts, so supported `17.14+` and `18.x` sessions are not mislabeled as unknown.
-- The Environment Check **Close** action now shares the wrapping action row with **Refresh** and **Copy diagnostic report**, keeping it visible in compact docked layouts.
+- Environment Check now labels unavailable required state as **Attention** rather than suggesting an unrelated install action.
 
 ### Safety contract
 
-- Opening, refreshing, copying, or closing Environment Check does not scan the current frame, open an image, change the active document, install software, or modify VSPackage registration.
+- Basler support rejects failed/disposed results, non-image or bottom-up payloads, unsupported formats, and undersized payloads. The development candidate passed installed pylon `26.07.2.18500` camera emulation for 11 supported 2D formats and an installed-VSIX Mono12 debugger open; physical-camera behavior and packed `Mono10p`/`Mono12p` remain separate evidence.
+- Opening, refreshing, copying, or toggling Environment Check does not scan the current frame, open an image, change the active document, install software, or modify VSPackage registration.
 - The existing explicit debugger visualizer, **Scan Now**, Fit/Manual, snapshot ownership, and preview-to-full handoff contracts remain unchanged.
 
 ## [1.0.52] - 2026-08-02

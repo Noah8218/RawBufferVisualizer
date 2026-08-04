@@ -106,6 +106,7 @@ namespace RawBufferVisualizer.Tests
                 ReleaseAnnouncementTests.RunAll();
                 VisualizerEnvironmentCheckTests.RunAll();
                 IndustrialCameraContractTests.RunAll();
+                BaslerPylonGrabResultVisualizerTests.RunAll();
                 WorkspaceAndHandoffCoordinatorTests.RunAll();
                 Console.WriteLine("RawBufferVisualizer self-tests passed.");
                 return 0;
@@ -1777,6 +1778,9 @@ namespace RawBufferVisualizer.Tests
                 var liveRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(liveRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
+                Assert(
+                    Path.GetFileName(requestPath).Length <= 48,
+                    "Handoff request names must stay short enough for long Visual Studio TEMP paths.");
                 Assert(Path.GetDirectoryName(requestPath) == firstInbox, "Handoff request was not routed to the first Visual Studio inbox.");
                 Assert(Path.GetDirectoryName(typedRequestPath) == secondInbox, "Handoff request was not routed to the second Visual Studio inbox.");
                 Assert(!string.Equals(firstInbox, secondInbox, StringComparison.OrdinalIgnoreCase), "Visual Studio inboxes must be isolated.");

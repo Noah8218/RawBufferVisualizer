@@ -18,6 +18,7 @@ Use this checklist after a Windows reinstall, on a new contributor PC, or before
 | FFmpeg | No | No | No | No | Optional, required only by `tools\Create-DemoMedia.ps1` |
 | OpenCvSharp, Emgu CV, SharpGL, VSSDK NuGet packages | No separate product install | Restored automatically by NuGet | Restored automatically for samples/tests | Restored automatically | Restored automatically when needed |
 | Vendor camera SDKs/drivers | Only when the user's own application requires them | Optional qualification inputs | Optional qualification inputs | No | No |
+| Basler pylon Software Suite | Only when the user's own Basler application requires it | Optional qualification input | Required only for the Basler emulator matrix | No | No |
 
 ## End-User Requirement
 
@@ -100,6 +101,35 @@ powershell -ExecutionPolicy Bypass -File .\tools\Create-DemoMedia.ps1 -InputPath
 
 Installation is intentionally manual. Follow [demo-recording-guide.md](demo-recording-guide.md), visually review the source capture, and do not treat generated media as functional-test evidence.
 
+## Optional Basler Qualification Runtime
+
+Basler pylon is not a Raw Buffer Visualizer runtime dependency. Install the official pylon Software Suite only on a machine that builds or qualifies a Basler application, after reviewing Basler's installer and EULA. Do not add `Basler.Pylon.dll` or pylon native binaries to the Raw Buffer Visualizer VSIX.
+
+Current qualification workstation checkpoint (2026-08-04): pylon Software Suite `26.07.2.18500` is installed with the Developer profile and Camera Emulation Support, with physical camera interfaces set to `None`. The x64 managed assembly is `Basler.Pylon, Version=1.2.0.0, Culture=neutral, PublicKeyToken=e389355f398382ab`, file version `9.1.0.1300`, SHA-256 `588FDD275EE2F9BE3FD6EF57A5BC99FB70793C3407806E9D18D9B86D1DA2D8DC`. This machine-specific qualification setup is not an end-user prerequisite.
+
+The same source and development VSIX were also tested by temporarily replacing 26.07 with exact pylon `8.1.0.16743`. pylon 8.1 passed the assembly contract, all 11 formats offered by `BaslerCamEmu`, and the registered direct Mono12 debugger visualizer in VS Community 2026 `18.8.12023.21`. pylon 8.1 was then removed and 26.07 was restored; the same three gates passed again. The durable report is `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\BASLER_PYLON_8.1_AND_26.07_QUALIFICATION_2026-08-04.md`. These are exact tested versions, not an instruction for normal extension users to install or downgrade pylon.
+
+Check whether the runtime is already present:
+
+```powershell
+Get-ChildItem 'C:\Program Files\Basler' -Recurse -Filter Basler.Pylon.dll -File -ErrorAction SilentlyContinue
+Get-ChildItem 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall', `
+    'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+    Get-ItemProperty |
+    Where-Object { $_.DisplayName -match 'Basler|pylon' } |
+    Select-Object DisplayName, DisplayVersion, InstallLocation
+```
+
+Audit an explicit managed assembly without changing the system installation:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-IndustrialCameraSdkContracts.ps1 `
+    -BaslerPylonAssembly '<path-to-Basler.Pylon.dll>' `
+    -OutputPath 'D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\official-basler-contracts.json'
+```
+
+For emulator qualification, use Basler's documented camera-emulation transport and set `PYLON_CAMEMU` only for the test process or qualification profile. Record the pylon suite version, managed assembly hash, emulator pixel type, and installed-VSIX result. Metadata-only or deterministic fixture tests are not emulator evidence.
+
 ## Test Storage
 
 On the project Windows workstation, store generated test data and evidence under:
@@ -120,21 +150,14 @@ The panel reports required runtime state first:
 2. Raw Buffer Visualizer version loaded in the current Visual Studio session.
 3. A create/write/delete probe below the extension's temporary-storage root.
 
-It then reports optional contributor/media utilities:
-
-- .NET 8 SDK: detected below `%ProgramFiles%\dotnet\sdk\8.*`.
-- Visual Studio extension-development workload: detected through the current installation's `VSSDK` directory.
-- FFmpeg: detected as `ffmpeg.exe` on `PATH`; it remains demo-media-only.
-
 Actions follow these rules:
 
-- **Refresh**, **Copy diagnostic report**, and **Close** do not scan a debugger frame, open an image, change the active document, install software, or modify VSPackage registration.
-- **Open VS Installer**, **Official download**, and **Installation guide** require a visible Yes/No confirmation.
-- The extension opens Visual Studio Installer or the official .NET, Microsoft Learn, or FFmpeg page. It does not download installers, select workloads, or run package-manager commands.
+- **Refresh**, **Copy diagnostic report**, and the **Environment** open/close toggle do not scan a debugger frame, open an image, change the active document, install software, or modify VSPackage registration.
+- Selecting **Environment** again closes the panel; there is no redundant in-panel Close action.
 - The report excludes credentials, environment-variable values, and image payloads. It explicitly warns that local paths are present and must be reviewed before sharing.
 - Vendor SDKs/drivers and Marketplace publisher credentials remain outside the feature.
 
-A normal extension user still has no extra utility to install beyond a supported Visual Studio and the VSIX.
+A normal extension user still has no extra utility to install beyond a supported Visual Studio and the VSIX. Contributor and demo-media utilities remain documented in the role matrix and setup sections above; they are not product runtime checks.
 
 Source/markup safety contracts can be rechecked without launching an IDE:
 
@@ -153,3 +176,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-EnvironmentCh
 | `VsixPublisher.exe` is missing | Restore the solution or install the VSSDK workload only for release tooling |
 | FFmpeg is missing | Ignore unless producing demo media; install manually from the documented source when needed |
 | Vendor SDK test is blocked | Obtain the legal SDK/hardware/emulator prerequisite; fixture evidence is not certification |
+| Basler qualification must be reproduced | Confirm the approved pylon suite is present, enable `PYLON_CAMEMU` only for the test process, and follow [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md); do not infer hardware support from the emulator result |

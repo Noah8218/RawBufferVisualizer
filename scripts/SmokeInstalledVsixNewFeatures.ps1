@@ -1366,14 +1366,37 @@ function Invoke-ReleaseAnnouncementScenario(
     } 30 | Out-Null
 
     $openButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
-    $openPattern = $null
+    $togglePattern = $null
     if (-not $openButton -or -not $openButton.TryGetCurrentPattern(
-        [System.Windows.Automation.InvokePattern]::Pattern,
-        [ref]$openPattern)) {
-        throw "The What's New button does not support InvokePattern."
+        [System.Windows.Automation.TogglePattern]::Pattern,
+        [ref]$togglePattern)) {
+        throw "The What's New button does not support TogglePattern."
     }
-    ([System.Windows.Automation.InvokePattern]$openPattern).Invoke()
+    $togglePattern = [System.Windows.Automation.TogglePattern]$togglePattern
+    if ($togglePattern.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) {
+        throw "The dismissed What's New toggle is not off."
+    }
+    $togglePattern.Toggle()
     Wait-Until "reopened release announcement" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
+    } 30 | Out-Null
+    $togglePattern.Toggle()
+    Wait-Until "closed release announcement from What's New" {
+        $currentButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
+        $currentPattern = $null
+        if (-not $currentButton -or -not $currentButton.TryGetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern,
+            [ref]$currentPattern)) {
+            return $null
+        }
+        if (-not (Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle") -and
+            ([System.Windows.Automation.TogglePattern]$currentPattern).Current.ToggleState -eq [System.Windows.Automation.ToggleState]::Off) {
+            return $true
+        }
+        $null
+    } 30 | Out-Null
+    $togglePattern.Toggle()
+    Wait-Until "reopened release announcement after toggle close" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
     } 30 | Out-Null
 
@@ -1388,6 +1411,7 @@ function Invoke-ReleaseAnnouncementScenario(
         title = [string]$title.Current.Name
         dismissalPersisted = $true
         reopenedFromWhatsNew = $true
+        closedFromWhatsNew = $true
         imageRowsBefore = $rowsBefore
         imageRowsAfter = $rowsAfter
         inspectionSideEffectFree = ($rowsBefore -eq $rowsAfter)

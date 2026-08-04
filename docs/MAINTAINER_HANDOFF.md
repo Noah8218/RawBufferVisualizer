@@ -6,16 +6,16 @@ This is the canonical continuation document for the next conversation. Read it a
 
 | Item | Verified state |
 | --- | --- |
-| Last verified | 2026-08-03 KST |
+| Last verified | 2026-08-04 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | Qualified `1.0.53` release change set based on `acc467f`; use `git log -1` for the final pushed commit. Exact qualified/public `1.0.52` source remains `854cb67` |
-| Source and VSIX version | Source/candidate `1.0.53` / `1.0.53.0`; public Marketplace remains exact `1.0.52.0`; preserved `1.0.51.0` is a failed unpublished candidate |
-| Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. Exact final `1.0.53` installed runtime passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)` |
+| Implementation baseline | Pushed `1.0.53` release preparation is `bb23756`; current uncommitted follow-up removes non-runtime Environment utilities and gives Environment and What's New consistent same-button close behavior. Exact qualified/public `1.0.52` source remains `854cb67` |
+| Source and VSIX version | Current source/development package `1.0.53` / `1.0.53.0`; public Marketplace remains exact `1.0.52.0`; preserved `EB94CCE...20534` is now historical because it predates the essential-only Environment feedback; preserved `1.0.51.0` is a failed unpublished candidate |
+| Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. Essential-only Environment and panel-toggle current-source UI passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)` |
 | Public Marketplace version | `1.0.52.0`; Gallery updated `2026-08-02T09:05:21.537Z`; public VSIX 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview `1.0.52`; local `1.0.53` candidate adds Environment Check and bounded cold-page preview sampling. Marketplace `1.0.53` publication has not occurred. |
-| Commit scope | The `1.0.53` implementation/tests/release communication and 2026-08-03 audit documents belong to the release commit. The explicitly excluded pre-existing untracked paths below do not. |
+| Product stage | Public Marketplace Preview `1.0.52`; current local `1.0.53` source has essential-only Environment and consistent panel toggles plus bounded cold-page preview sampling. Marketplace `1.0.53` publication has not occurred, and preserved pre-feedback/intermediate candidates must not be uploaded. |
+| Commit scope | The essential-only Environment and panel-toggle consistency source/tests/release communication plus updated 2026-08-03 audit documents belong to the next intentional commit. The explicitly excluded pre-existing untracked paths below do not. |
 
 Public links:
 
@@ -27,13 +27,15 @@ The public Marketplace package is `1.0.52.0`. The Gallery API was rechecked on 2
 
 ## Current Change Set And Ownership
 
-The `1.0.52` source, tests, scripts, and release documents below are committed at `854cb67`. Continue from `origin/main`; do not replace them with the older `43e347c` tree.
+The `1.0.53` release preparation is committed at `bb23756`. Continue from `origin/main`; do not replace it with an older tree.
 
-Current public `1.0.52` ownership remains unchanged. The uncommitted `1.0.53` change set adds:
+Current public `1.0.52` ownership remains unchanged. Commit `bb23756` contains the broader `1.0.53` work below, while the current uncommitted follow-up narrows the Environment product surface, aligns its panel-toggle interaction, and completes the first Basler pylon 2D SDK vertical slice:
 
-- `VisualizerEnvironmentCheck` plus the approved required-first/optional-second ToolWindow panel, confirmation-only official actions, and privacy-bounded report;
+- `VisualizerEnvironmentCheck` now reports only Visual Studio host, loaded extension registration, and temporary storage; the Environment ToggleButton opens and closes the panel, and development/media utilities remain documentation-only;
+- What's New is now a ToggleButton: repeated selection closes the banner without changing the release-seen preference, while Dismiss closes it, clears the checked state, and persists the preference; the narrow-layout Inspector control was already a toggle;
 - large pointer-preview page budgeting and phase/cache-state performance evidence without relaxing the five-second threshold;
 - current-workspace Automatic Inspector diagnostic seam and newest-restored VSSDK discovery for Smart Type Mapper;
+- dependency-free Basler `IGrabResult` ObjectSource/provider, exact runtime-type registration, deterministic and official-emulator coverage, and long-TEMP handoff hardening;
 - version `1.0.53`, release announcement, changelog, README, Marketplace Overview/notes, embedded notes, utility recovery documentation, and safety-contract tests;
 - package guards that invalidate version-bump outputs and reject stale generated/packaged VSIX manifests.
 
@@ -46,7 +48,7 @@ add-command-id.ps1
 add-scan-locals-command.ps1
 ```
 
-No current product-feature implementation file is awaiting a hidden partial edit. Exact public/current-candidate installation and UI verification completed after the owner resolved the unrelated editor state; both IDEs were stopped and closed normally.
+No current product-feature implementation file is awaiting a hidden partial edit. The newest development VSIX was installed into both IDEs; VS2022 Wide and VS2026 Compact proved the three-row Environment panel, repeated-button close for both panels, and What's New Dismiss state synchronization. Both IDEs stopped and closed normally.
 
 ## Windows Reinstall Checkpoint
 
@@ -64,7 +66,7 @@ After reinstall, do not rebuild the qualified/public candidate for the remaining
 
 Windows and the repository were restored successfully. Git, Windows PowerShell 5.1, .NET 8/9/10 SDKs, VS2022 Community `17.14.37516.0`, VS2026 Community `18.8.12023.21`, the .NET desktop workload, `vswhere`, and the NuGet-restored `VsixPublisher.exe` are available. FFmpeg is absent and remains optional/demo-only. The verified role matrix and recovery commands are in [development-prerequisites.md](development-prerequisites.md).
 
-The full evidence and boundaries are in [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md). Restore/build/core tests, package/registration checks, compatibility checks, preview replacement, Buffer Doctor, docked layouts, warm preview, and memory soak passed. The approved correction passes Automatic Inspector seam validation, VSSDK `17.14.2094` discovery, Environment Check unit/static safety contracts, and final-regression first benchmark-process sampled-preview access (`992 ms` for 100k; `692 ms` for 200k). Exact-public `1.0.52` and exact final-candidate `1.0.53` installed checks passed in both VS2022 and VS2026.
+The full evidence and boundaries are in [post-reinstall-validation-2026-08-03.md](post-reinstall-validation-2026-08-03.md). Restore/build/core tests, package/registration checks, compatibility checks, preview replacement, Buffer Doctor, docked layouts, warm preview, and memory soak passed. The approved correction passes Automatic Inspector seam validation, VSSDK `17.14.2094` discovery, Environment Check unit/static safety contracts, and final-regression first benchmark-process sampled-preview access (`992 ms` for 100k; `692 ms` for 200k). Exact-public `1.0.52` and the historical pre-feedback `1.0.53` candidate passed their recorded installed checks; the newest panel-consistency current-source development package also passed the changed UI workflow in VS2022 and VS2026.
 
 The diagnostic VSIX produced after reinstall is `1,902,521` bytes with SHA-256 `95395489AF7427B8CE6C15BE8E9236C21B87153C1C340BF3B960D100523E79C8`. It proves fresh-machine packaging only. It does not replace the immutable release candidate above and must not be used for the public-update gate.
 
@@ -101,7 +103,7 @@ Keep these out of scope unless the user explicitly starts a separate project:
 - generic media editing or labeling;
 - a user-facing dependency on a rendering implementation name.
 
-For Basler, HIKROBOT, Spinnaker, eGrabber, Sapera, and MIL/Aurora, prefer `RawBufferView` first. Direct SDK adapters are later, optional work that must not add vendor dependencies to the core package.
+Basler is the first approved direct 2D SDK adapter. It must keep pylon out of the VSIX and leave `IGrabResult` ownership with the debugged application. For HIKROBOT, Spinnaker, eGrabber, Sapera, MIL/Aurora, and other vendors, continue to prefer `RawBufferView` until an exact runtime/lifetime contract justifies another direct adapter.
 
 ## Completed Work
 
@@ -239,7 +241,7 @@ These are recorded regression results, not performance promises for every PC.
 | Installed VSIX Automatic Vision Inspector | VS2022 17.14 automation passed on 2026-07-28: a function argument plus five locals opened, one incomplete shape remained `[Map]`, and one null-pointer shape remained `[Failed]`; the six successful images stayed usable and repeated **Scan Now** did not duplicate rows. A second VS session restored the disabled preference, manual **Scan Now** still passed, and the pre-test user setting was restored. Evidence: `artifacts/ui/automatic-inspector-workflow/2026-07-28-final/`. |
 | Installed VSIX Smart Type Mapper fallback | VS2022 17.14 automation passed on 2026-07-28: an unregistered `UnmappedCompanyFrame` remained an 88% `MappingRequired` candidate, `Mono12PackedLsb` rendered from live debuggee memory, Save wrote the inferred roles/value mapping, and automatic rescan reopened it as 640 x 484, stride 960, live source with zero final errors. The pre-existing user mapping was restored. Evidence: `artifacts/ui/installed-vsix-new-features/SmartTypeMapper-installed-vsix.json` and the three `smart-type-mapper-*.png` captures. |
 | Installed VSIX registered/automatic hybrid (historical) | Real OpenCvSharp, Emgu CV, and Bitmap values opened through registered visualizers; `RawBufferSnapshot`/`RawBufferView` and all registered types were absent from automatic rows; six camera-shape fixtures opened automatically. Final state: nine images, zero errors. The exact `1.0.50` rerun is recorded in the local release-qualification row above and replaced this file with fresh evidence. |
-| Industrial SDK contract hardening | Official contracts for PFNC, Basler, Spinnaker, Vimba X, IDS peak, Euresys, HIKROBOT, Sapera, Zebra, and Zivid were reviewed. Deterministic padding/payload/offset/PFNC tests passed. IDS peak ICV 1.4.0 assembly metadata passed. Basler pylon, Spinnaker, and Vimba X were not installed. General vendor-runtime/hardware support is not proven. Evidence: `docs/industrial-camera-compatibility-validation.md` and `artifacts/validation/industrial-camera-sdk-contracts-20260728.json`. |
+| Industrial SDK contract hardening | Official contracts for PFNC, Basler, Spinnaker, Vimba X, IDS peak, Euresys, HIKROBOT, Sapera, Zebra, and Zivid were reviewed. Deterministic padding/payload/offset/PFNC tests passed. IDS peak ICV 1.4.0 assembly metadata passed. Exact Basler pylon `8.1.0.16743` and `26.07.2.18500` test points each passed installed assembly audit, 11-format official camera emulation, and a real installed-VSIX Mono12 direct debugger open. General vendor-runtime, untested pylon releases, and physical hardware are not proven. Evidence: `docs/industrial-camera-compatibility-validation.md` and `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\BASLER_PYLON_8.1_AND_26.07_QUALIFICATION_2026-08-04.md`. |
 | Responsive Inspector affordance | Fresh 540/900/1160 px captures passed. The top `Inspector` button appears only below 760 px; medium layout exposes the bottom Inspector and wide layout exposes the right Inspector. Evidence: `artifacts/ui/inspector-button-visibility/2026-07-28/before/`. |
 
 Same-machine before/current comparison for dense 5000 x 5000 Mono8:
@@ -260,9 +262,9 @@ The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery,
 2. Local installed screenshots provide visual aspect evidence only. The full 540/900/1160 Fit/Manual assertions are current-source view evidence, not an installed-VSIX behavioral matrix.
 3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual next publication decision instead of presenting the historical draft as current.
 4. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
-5. The Release build still reports 18 `VSTHRD010` warnings in `ImageTypeRecognizer.cs` for EnvDTE access. They remain technical debt and must not be described as zero-warning output.
-6. Vendor-specific SDK adapters are not implemented. `RawBufferView` and safe structural discovery are the generic supported answers; the exact ImagePtr registration remains a compatibility exception.
-7. Basler pylon, Spinnaker, and Vimba X assemblies/live objects, drivers, emulators, cameras, and representative lifetime cases are missing. Fixture results are not vendor certification.
+5. A new immutable release candidate has not been created from the complete Environment/panel and Basler follow-up source. The installed Basler candidate is qualification evidence, not a publishable release artifact.
+6. Basler is the only implemented direct vendor SDK adapter. `RawBufferView` and safe structural discovery remain the generic answers for other vendors; the exact ImagePtr registration remains a compatibility exception.
+7. Spinnaker and Vimba X assemblies/live objects, emulators, cameras, and representative lifetime cases are missing. Basler physical-camera drivers, transport behavior, requeue/disposal transitions, and packed `Mono10p`/`Mono12p` emulator coverage are also unverified.
 8. Stable Visual Studio 2026 `18.x` is a supported compatibility target under Microsoft's VSIX API-version model. Exact `1.0.52` runtime qualification passed on Community `18.8.2`; VS2022 qualification passed on Community `17.14.33`. Preview/Insiders and explicit standalone .NET 9/10 matrices are not current support claims.
 9. Large 100k/200k evidence is file-backed raw-image evidence, not proof that a debuggee can safely allocate a fully decoded 100k/200k `Mat`.
 10. Smart Type Mapper **Open Variable** handles the no-debug-session case, but its individual pointer-backed live-open path does not have the same installed-VSIX automation depth as the automatic fallback path.
@@ -332,26 +334,65 @@ The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery,
 - Delayed cleanup removes only ACK/NACK/conflict terminal artifacts and never deletes Ready/Processing on timeout.
 - `Menus.ctmenu, 2` and exactly one instance of each Raw Buffer Visualizer View command remain in the generated package.
 - Fit preserves aspect ratio with the whole image visible; wheel/pan/1:1 switch to Manual and preserve the user's zoom/center.
+- Basler direct support remains exact `Basler.Pylon.IGrabResult` only, has no packaged pylon dependency, invokes only documented `ComputeStride(IImage)`, and never clones or disposes the application-owned result.
+
+## Basler pylon 2D Runtime-Qualified Checkpoint (2026-08-04)
+
+The approved product direction is now 2D camera-SDK first; 3D point clouds, depth/coordinate containers, camera acquisition/control, and PLC/I/O remain out of scope. The first direct SDK target is exact `Basler.Pylon.IGrabResult, Basler.Pylon`.
+
+Implemented:
+
+- dependency-free Extensibility provider and debuggee-side ObjectSource;
+- exact `Image`/`TopDown`/live-pointer gates and official nullable `ComputeStride(IImage)` reflection;
+- Mono8, unpacked Mono10/12/16, PFNC Mono10p/12p, Bayer 8-bit phases, RGB8/BGR8/BGRA8 mappings;
+- explicit rejection of legacy packed, signed, planar, YUV, compressed, bottom-up, failed/disposed, GenDC/3D, and undersized payload shapes;
+- deterministic padded-stride, payload, format, chunk/preview, and no-clone/no-dispose tests;
+- SDK audit repair for inherited interface properties and Basler `ComputeStride` signature verification.
+
+Evidence:
+
+- Release self-tests: passed;
+- Release solution build: passed; the final restored-runtime rerun reported the same 18 existing `VSTHRD010` warnings in `ImageTypeRecognizer.cs` and 0 errors;
+- packaged `.vsextension/extension.json`: full assembly-qualified `IGrabResult` and concrete `GrabResult` targets plus ObjectSource present;
+- official Basler-owned NuGet package `10.3.2.636`: package SHA-256 `2FCDFFFCA338EE3393962398A25D33F9B8A79E7D2C4C76F9548C44CC9BC83D38`;
+- contained `Basler.Pylon.dll`: assembly `1.2.0.0`, SHA-256 `C20A5F8D8140FE6C920850431EF07127C80DD5ED2B4C991A6858A102D8451F89`, metadata contract passed;
+- installed pylon Software Suite `26.07.2.18500`: x64 assembly file version `9.1.0.1300`, SHA-256 `588FDD275EE2F9BE3FD6EF57A5BC99FB70793C3407806E9D18D9B86D1DA2D8DC`, metadata contract passed;
+- official `BaslerCamEmu`: 11 supported 2D formats passed official-stride, lifetime, direct-memory, preview, and pointer-chunk checks;
+- installed candidate VSIX SHA-256 `608A9327F0261079A95F3B7F6FB864965135BFA00105D2272D5D487A23F1EFAD`: real concrete Mono12 `GrabResult` opened at 128 x 96 in VS2022 `17.14.37516.0`;
+- pylon `8.1.0.16743`: x64 assembly file version `8.1.0.471`, SHA-256 `9499FD0EE33C1156262B2BDDF1512616F7E33CE5EE3E341E4E443B9A543D69F7`; contract, 11/11 emulator frames, and a real direct Mono12 `GrabResult` open passed in VS2026 `18.8.12023.21`;
+- restored pylon `26.07.2.18500`: contract, 11/11 emulator frames, and the same direct Mono12 scenario passed again in VS2026 after 8.1 removal; combined report `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\BASLER_PYLON_8.1_AND_26.07_QUALIFICATION_2026-08-04.md`;
+- long `D:` TEMP path: actual handoff log passed `Published -> Queue -> Open start -> Open end` after short request IDs and final-name watcher filtering;
+- physical evidence root: `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\installed-pylon-26.07.2`.
+
+Boundary: the direct registered debugger visualizer is qualified; generic Automatic Inspector remains slow and mapping-required for this Basler frame. `Mono10p`/`Mono12p` were unavailable from the emulator profile, and no physical camera, transport driver, requeue/disposal across resume, or 3D claim has passed.
 
 ## Next Priorities
 
-1. Decide whether to publish exact local `1.0.53` to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+1. Commit and push the Environment/panel-toggle and Basler 2D changes when the owner requests `PUSH` | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-   Prerequisite: explicit owner approval for the external Marketplace write. Use only the immutable candidate hash recorded below; run the documented dry run immediately before any upload and perform public read-back afterward.
+   Scope only the intended tracked source/test/document changes. Keep `.tmp/` and the three root helper scripts excluded.
 
-2. Run any additionally requested current-source visual harness group | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+2. Choose the release version and create a new immutable candidate from the committed and runtime-qualified source | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Prerequisite: an unobstructed leftmost monitor and no competing Windows automation controller. Run Automatic Vision Inspector, Smart Type Mapper, and Environment/docked 540/900/1160 visual checks from the current Release assembly; store new artifacts on `D:`.
+   Prerequisite: owner decision to retain unpublished `1.0.53` or bump again. Do not overwrite or publish historical `EB94CCE...20534` or intermediate `297A011...CF9`; the installed Basler VSIX `608A932...EFAD` is development qualification evidence, not the canonical release candidate.
 
-3. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+3. Publish the newly qualified candidate to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+   Prerequisite: explicit owner approval for the external Marketplace write and a newly qualified immutable candidate from priority 2. Run the documented dry run immediately before upload and perform public asset, version, Overview, and release-note read-back afterward.
+
+4. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
    Prerequisite: a separate serviced VS2022 `17.14+` or stable VS2026 PC that currently runs the exact public `1.0.50.0` package. Install the unchanged candidate SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` as an update without uninstall, repair, `/ResetSkipPkgs`, or manual registration changes; restart and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, and protocol checks. Do not spend model tokens on repeated local reinstall testing when this prerequisite is unavailable.
 
-4. Complete the industrial camera release-qualification matrix | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
+5. Decide the Basler Automatic Inspector policy before changing it | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
 
-   Prerequisite: current Basler pylon, Spinnaker, and Vimba X SDK installations or legal qualification machines, representative camera/emulator objects, and lifetime rules. Follow `docs/industrial-camera-compatibility-validation.md`; do not make vendor support claims from fixtures alone.
+   Current evidence exposes a concrete gap: the registered direct provider opens immediately, while generic automatic scanning spends about 100 seconds and leaves the same value mapping-required. Decide whether registered Basler values should be skipped quickly or integrated through a bounded automatic path; preserve explicit debugger actions and do not invoke arbitrary SDK methods.
 
-5. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+6. Begin the Vimba X 2D adapter only after its official runtime prerequisite exists | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
+
+   Prerequisite: an official Vimba X runtime/camera simulator. The Basler gate is complete, but do not spend implementation tokens or make vendor claims until the Vimba runtime/lifetime object can be exercised legally.
+
+7. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
    Current evidence proves the button/panel switch is responsive behavior, not intermittent registration. Any change requires a written UI description, a text mockup, and explicit owner approval before implementation.
 
@@ -370,17 +411,20 @@ git branch --show-current
 $failed = 'C:\Git\RawBufferVisualizer\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
 $public = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.52\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
 $candidate = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
-Get-Item -LiteralPath $failed, $public, $candidate | Select-Object FullName, Length
-Get-FileHash -LiteralPath $failed, $public, $candidate -Algorithm SHA256
+$currentDev = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\current-source-vsix\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+Get-Item -LiteralPath $failed, $public, $candidate, $currentDev | Select-Object FullName, Length
+Get-FileHash -LiteralPath $failed, $public, $candidate, $currentDev -Algorithm SHA256
 ```
 
 Expected:
 
 - failed `1.0.51`: 2,011,587 bytes, `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`;
 - public `1.0.52`: 1,902,513 bytes, `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`;
-- local `1.0.53`: 1,911,715 bytes, `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`, manifest `1.0.53.0`.
+- historical pre-feedback `1.0.53`: 1,911,715 bytes, `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`, manifest `1.0.53.0`; do not publish it;
+- intermediate essential-only development `1.0.53`: 1,907,942 bytes, `297A01104993CB7C524EE418759FDF0EAB41D07A0766A018B1A475F793219CF9`, manifest `1.0.53.0`; superseded by the panel-consistency follow-up;
+- newest panel-consistency development `1.0.53`: 1,908,045 bytes, `5EC07758A9592F9F47C7479B005E205AA255A60D6F1400586A37F5B3B8024C23`, manifest `1.0.53.0`; installed UI evidence only, not yet canonical.
 
-Do not rebuild or overwrite the preserved failed/public artifacts during exact-package qualification. Read `docs/post-reinstall-validation-2026-08-03.md` first. Exact public `1.0.52` and final local `1.0.53` runtime checks passed in VS2022 and VS2026. Marketplace still serves `1.0.52`; publication of `1.0.53` requires a separate explicit owner decision.
+Do not rebuild or overwrite preserved artifacts during exact-package qualification. Read `docs/post-reinstall-validation-2026-08-03.md` first. Marketplace still serves `1.0.52`; publication requires committed source, a new immutable candidate that includes the essential-only follow-up, qualification, and separate explicit owner approval.
 
 Marketplace publication has completed and read-back confirms the exact qualified asset plus the 1.0.52 Overview. Do not upload another binary under version `1.0.52.0`. The source checkpoint is commit `854cb67`; a current tag or GitHub Release still requires explicit user instruction.
 
@@ -401,7 +445,7 @@ Source: commit 854cb67
 
 This artifact passed installed `ReleaseAnnouncement`, `AutomaticCollections`, and `MultiLibraryHybrid` on VS2022 `17.14.33` and VS2026 `18.8.2`. Rebuilding changes the VSIX hash and invalidates the exact record. Marketplace already serves this exact binary; do not rebuild or re-upload it under the same version. The repository publish path intentionally remains occupied by the byte-preserved failed `1.0.51`; do not overwrite or publish it. The current Marketplace-published binary is `1.0.52.0`.
 
-## Local 1.0.53 Candidate
+## Historical Local 1.0.53 Candidate
 
 ```text
 Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
@@ -411,7 +455,31 @@ SHA256: EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534
 Source baseline: acc467f plus the qualified 1.0.53 release change set; use git log for the pushed commit
 ```
 
-Internal package inspection found 94 entries, manifest `1.0.53.0`, and embedded `Raw Buffer Visualizer 1.0.53` notes. The first incremental package attempt exposed a stale generated `1.0.52.0` manifest; that artifact was rejected. `Bump-VisualStudioExtensionVersion.ps1` now invalidates generated manifests/VSIX outputs, and `Publish-VisualStudioExtension.ps1` rejects generated or packaged versions that differ from the source manifest. Actual VS2022 review then found and corrected build-suffixed host-version parsing and a compact-width Close action clipping defect; the hash above is the post-correction package.
+Internal package inspection found 94 entries, manifest `1.0.53.0`, and embedded `Raw Buffer Visualizer 1.0.53` notes. The first incremental package attempt exposed a stale generated `1.0.52.0` manifest; that artifact was rejected. `Bump-VisualStudioExtensionVersion.ps1` now invalidates generated manifests/VSIX outputs, and `Publish-VisualStudioExtension.ps1` rejects generated or packaged versions that differ from the source manifest. Actual VS2022 review then found and corrected build-suffixed host-version parsing and a compact-width Close action clipping defect. This package subsequently became historical when owner feedback removed optional utility rows/actions and the separate Close button. Preserve it as evidence, but do not publish it.
+
+## Intermediate Essential-Only 1.0.53 Development Package
+
+```text
+Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\current-source-vsix\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+Version: 1.0.53.0
+Size: 1,907,942 bytes
+SHA256: 297A01104993CB7C524EE418759FDF0EAB41D07A0766A018B1A475F793219CF9
+Source baseline: bb23756 plus the uncommitted essential-only Environment follow-up
+```
+
+VS2022 installed it under `17.0_f2675563\Extensions\i00kqfbx.m2v`; VS2026 installed it under `18.0_19923728\Extensions\d4t0qvg1.cnd`. Both manifests report `1.0.53.0`, and both product assembly hashes match the VSIX payload. VS2022 Wide and VS2026 Compact showed only host/extension/temp, Refresh, and Copy; no .NET/VSSDK/FFmpeg or installer surface remained; repeated Environment selection closed the panel and reported `Environment check closed`. Evidence is under `D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle`. The later panel-consistency package below supersedes this intermediate development package.
+
+## Panel-Consistency 1.0.53 Development Package
+
+```text
+Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\current-source-vsix\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+Version: 1.0.53.0
+Size: 1,908,045 bytes
+SHA256: 5EC07758A9592F9F47C7479B005E205AA255A60D6F1400586A37F5B3B8024C23
+Source baseline: bb23756 plus the uncommitted essential-only Environment and panel-toggle consistency follow-ups
+```
+
+VS2022 installed it under `17.0_f2675563\Extensions\vxty5daa.2d4`; VS2026 installed it under `18.0_19923728\Extensions\nmzdwcrf.z0i`. Both manifests report `1.0.53.0`. The VSIX and both installations contain `RawBufferVisualizer.VisualStudio.dll` SHA-256 `8AB612A6...6FD636` and `RawBufferVisualizer.VisualStudio.Vssdk.dll` SHA-256 `95B424C4...0FB65` at matching lengths. Actual VS2022 Wide and VS2026 Compact interactions proved What's New first-open, repeated-button close, reopen, and Dismiss close with an unchecked final state. Evidence is under `D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency`. This is current-source validation evidence, not the canonical Marketplace candidate.
 
 ### Automatic Mat collection locally qualified candidate (2026-07-31)
 
@@ -432,8 +500,8 @@ The Kimi/embedded Git Bash environment on this machine starts without standard W
 ## Current Task Closure
 
 Status: Complete
-Scope: Post-Windows-reinstall recovery plus approved `1.0.53` harness/performance/Environment Check implementation, packaging, deterministic tests, exact artifact installation, and actual VS2022/VS2026 Compact/Wide/debug evidence
-Acceptance criteria: Source build, aggregate tests, release communication, package guard, harness seam/discovery, Environment safety contracts, first-access sampled preview, exact-public VS2022/VS2026 rechecks, and final-hash `1.0.53` installed Environment/debug checks all pass
-Verification: `1.0.53` Release build/package, self-tests, release communication, Environment contract test, seam/VSSDK verification modes, two-run dense sampled-preview benchmark, internal VSIX and installed-payload hash inspection, exact-public and final-candidate VS2022/VS2026 break/visualizer checks, Environment Refresh/report-copy/Close, and compact/wide current UI captures
-Evidence: `docs/post-reinstall-validation-2026-08-03.md`; candidate `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53`; final UI evidence under the post-reinstall `ui\environment-check\final` directory
-Boundary / next dependency: Marketplace still serves immutable public `1.0.52`; `1.0.53` has not been uploaded. A separate explicit owner approval is required before that external write. The separate-PC exact-public `1.0.50 -> 1.0.52` profile-migration debt also remains external to this restored-PC closure.
+Scope: First direct Basler pylon .NET 2D adapter through source/package implementation; exact pylon `8.1.0.16743` and `26.07.2.18500` installed assembly, 11-format emulator, and actual registered debugger visualizer qualification; long `D:` TEMP handoff repair; and reusable documentation.
+Acceptance criteria: deterministic Basler and aggregate tests -> pass; Release solution build -> pass with 18 existing `VSTHRD010` warnings and 0 errors; full assembly-qualified interface/concrete provider registration -> pass; pylon 8.1 and 26.07 installed assembly contracts -> pass; emulator supported formats -> 11/11 on each; installed VSIX concrete `GrabResult` direct open -> Mono12 128 x 96 on each; restored 26.07 regression -> pass; long TEMP publish/claim/open -> pass; Auto Inspect user preference -> restored enabled.
+Verification: self-tests under intentionally long `D:` TEMP, full Release solution build, SDK contract script, Environment contract script, release communication script, pylon runtime harness, generated extension registration inspection, actual VS2022 baseline interaction plus VS2026 pylon 8.1/restored-26.07 interactions, package-log inspection, and fresh version-swap screenshots on active leftmost `\\.\DISPLAY2` bounds `-1920,365,1920,1080`.
+Evidence: [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md), [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md), installed candidate VSIX SHA-256 `608A9327...EFAD`, and `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\BASLER_PYLON_8.1_AND_26.07_QUALIFICATION_2026-08-04.md`.
+Boundary / next dependency: This completion covers the registered Basler emulator path on two exact pylon suites only. Untested pylon releases, physical cameras/drivers, packed `Mono10p`/`Mono12p` emulator coverage, generic Automatic Inspector integration, and other vendor SDKs remain separate. Marketplace still serves immutable public `1.0.52`; commit/push and any Marketplace write require explicit owner instruction.

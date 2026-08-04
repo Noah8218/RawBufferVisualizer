@@ -120,9 +120,8 @@ Current maturity gaps:
 
 - the public ImagePtr-style claim is broader than the current exact `Cressem.ImageModel.ImagePtr` provider registration;
 - public-update smoke evidence and Marketplace copy must be kept synchronized per release;
-- VSSDK threading warnings remain;
 - GitHub tags/releases are not yet used;
-- direct vendor SDK adapters and Visual Studio 18/.NET 9/10 matrices are not current commitments;
+- Basler is emulator-qualified, but physical hardware and every additional vendor still need their own runtime/lifetime evidence before becoming compatibility claims;
 - real long-running team usage is still the best source for remaining leaks, package-load edge cases, and unsupported type reports.
 
 ## Scope
@@ -135,10 +134,10 @@ Current maturity gaps:
 - large-image responsiveness and bounded memory/storage;
 - compatibility, packaging, update, repair, diagnostics, and support evidence;
 - comparison features that help before/after inspection.
+- focused 2D adapters for camera SDK image-result objects when the exact type, memory layout, and lifetime can be tested without adding a vendor runtime dependency to the VSIX.
 
 ### Later, only with evidence
 
-- direct adapters for a specific vendor SDK;
 - additional industrial formats such as signed, planar, YUV, or packed Bayer variants;
 - broader Visual Studio/runtime support matrices;
 - richer comparison operators when a real workflow exposes a gap;
@@ -146,6 +145,7 @@ Current maturity gaps:
 
 ### Out of scope
 
+- 3D point clouds, depth/coordinate containers, and 3D camera visualization;
 - Vision Replay Debugger;
 - camera discovery, grabbing, trigger, exposure, lighting, PLC, and I/O control;
 - production acquisition pipelines;
@@ -156,14 +156,16 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Now: publish and externally verify the 1.0.51 update
+### Now: stabilize 1.0.53 after completing the first 2D SDK vertical slice
 
-1. Publish the exact qualified `1.0.51` SHA without rebuilding it.
-2. Update another PC from public `1.0.50` to Marketplace `1.0.51` without uninstall, repair, or `/ResetSkipPkgs`.
-3. Repeat menu, ToolWindow, Automatic Inspector, automatic Mat collections, registered Bitmap, explicit handoff completion, and Fit checks on that external profile.
-4. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
+1. Keep public Marketplace `1.0.52.0` immutable while `1.0.53.0` remains a local development candidate.
+2. Complete: Basler pylon .NET `IGrabResult` is the first direct 2D SDK target and no Basler assembly is packaged in the VSIX.
+3. Complete: deterministic tests prove descriptor mapping, padded stride, payload bounds, unsupported-format rejection, and non-ownership of the grab result.
+4. Complete: exact installed pylon `8.1.0.16743` and `26.07.2.18500` test points each passed 11-format camera emulation and an actual installed-VSIX Mono12 debugger open for the direct registered path. This is not a blanket claim for every intervening pylon version.
+5. Before starting another adapter, preserve the Basler evidence boundary: physical hardware, packed `Mono10p`/`Mono12p`, and generic Automatic Inspector integration are not part of the completed emulator claim.
+6. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
 
-Public Marketplace `1.0.50.0` is the early 2,001,513-byte baseline. The exact local `1.0.51.0` package passed an in-place update from that downloaded baseline plus installed runtime checks on Windows 10 Pro / VS2022. Marketplace publication, post-propagation verification on another PC, and live vendor hardware remain separate qualification scopes.
+Public Marketplace `1.0.52.0` remains the published baseline. Source `1.0.53.0` includes the Basler direct path, but the official emulator proof remains development qualification until a new immutable candidate is created and published. Physical-camera proof is a separate scope.
 
 Exit criteria:
 
@@ -171,6 +173,7 @@ Exit criteria:
 - exactly one View open command and one current-frame scan command;
 - debugger handoff success requires an explicit ACK and rejection surfaces its reason;
 - primary individual/collection providers appear and open;
+- the Basler `IGrabResult`/concrete `GrabResult` registered provider opens a real emulator value without adding pylon to the VSIX;
 - initialized OpenCvSharp/Emgu Mats open automatically without creating duplicate rows, while Bitmap stays glyph-owned;
 - Fit and Manual mode behavior remains stable across resize;
 - pointer support claims match exact provider registrations and samples;
@@ -195,18 +198,16 @@ Exit criteria for a new adapter/type:
 - unsupported shapes fail visibly;
 - no core dependency on a vendor package is introduced without approval.
 
-### Later: vendor-specific adapters
+### Next: 2D vendor SDK adapters
 
-Candidate order remains driven by actual users and available SDK samples, not a speculative checklist:
+The current evidence-driven order is:
 
-- Euresys eGrabber;
-- Teledyne DALSA Sapera LT;
-- Basler pylon .NET;
-- HIKROBOT MVS;
-- Teledyne FLIR Spinnaker;
-- Zebra Aurora/MIL.
+1. Basler pylon .NET, because official camera emulation can exercise `IGrabResult` without physical hardware.
+2. Allied Vision Vimba X, because the official camera simulator can exercise `IFrame` and its image-data offset/lifetime contract.
+3. IDS peak, building on the already audited managed assembly metadata and adding an official runtime or real camera.
+4. Teledyne FLIR Spinnaker, after an official runtime and representative managed-image lifetime scenario are available.
 
-The default solution remains a small user-side adapter that exposes `RawBufferView`. A first-party direct adapter is justified only when that path is insufficient and the SDK can be tested legally and repeatably.
+HIKROBOT MVS, Euresys eGrabber, Teledyne DALSA Sapera LT, and Zebra Aurora remain evidence-gated candidates. A user-owned device or SDK that is available for repeatable testing can override this order. `RawBufferView` remains the public escape hatch for all other SDKs.
 
 ## Prioritization Rule
 

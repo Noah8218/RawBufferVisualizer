@@ -10,6 +10,58 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Get-ContractProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Type]$Type,
+        [Parameter(Mandatory = $true)]
+        [string]$PropertyName
+    )
+
+    $property = $Type.GetProperty(
+        $PropertyName,
+        [Reflection.BindingFlags]"Instance,Public")
+    if ($property) {
+        return $property
+    }
+
+    foreach ($interface in $Type.GetInterfaces()) {
+        $property = Get-ContractProperty -Type $interface -PropertyName $PropertyName
+        if ($property) {
+            return $property
+        }
+    }
+
+    return $null
+}
+
+function Test-BaslerComputeStrideContract {
+    param(
+        [Parameter(Mandatory = $true)]
+        [Reflection.Assembly]$Assembly
+    )
+
+    $extensionsType = $Assembly.GetType("Basler.Pylon.IImageExtensions", $false, $false)
+    if (-not $extensionsType) {
+        return $false
+    }
+
+    foreach ($method in $extensionsType.GetMethods([Reflection.BindingFlags]"Public,Static")) {
+        $parameters = $method.GetParameters()
+        $returnType = $method.ReturnType
+        if ($method.Name -eq "ComputeStride" -and
+            $parameters.Count -eq 1 -and
+            $parameters[0].ParameterType.FullName -eq "Basler.Pylon.IImage" -and
+            $returnType.IsGenericType -and
+            $returnType.GetGenericTypeDefinition().FullName -eq "System.Nullable``1" -and
+            $returnType.GetGenericArguments()[0] -eq [int]) {
+            return $true
+        }
+    }
+
+    return $false
+}
+
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $repoRoot "artifacts\validation\industrial-camera-sdk-contracts.json"
@@ -42,7 +94,20 @@ $contracts = @(
         Sdk = "pylon .NET"
         AssemblyPath = $BaslerPylonAssembly
         TypeNames = @("Basler.Pylon.IGrabResult")
-        RequiredProperties = @("PixelDataPointer", "Width", "Height", "PaddingX", "PayloadSize", "PixelTypeValue")
+        RequiredProperties = @(
+            "GrabSucceeded",
+            "IsValid",
+            "PixelDataPointer",
+            "Width",
+            "Height",
+            "PaddingX",
+            "PaddingY",
+            "PayloadSize",
+            "PayloadTypeValue",
+            "PixelTypeValue",
+            "Orientation"
+        )
+        RequiredMethods = @("Basler.Pylon.IImageExtensions.ComputeStride(Basler.Pylon.IImage): System.Nullable<System.Int32>")
     },
     @{
         Vendor = "Teledyne FLIR"
@@ -50,6 +115,7 @@ $contracts = @(
         AssemblyPath = $SpinnakerNetAssembly
         TypeNames = @("SpinnakerNET.IManagedImage")
         RequiredProperties = @("DataPtr", "Width", "Height", "Stride", "PixelFormat")
+        RequiredMethods = @()
     },
     @{
         Vendor = "Allied Vision"
@@ -57,6 +123,7 @@ $contracts = @(
         AssemblyPath = $VimbaNetAssembly
         TypeNames = @("VmbNET.IFrame")
         RequiredProperties = @("Buffer", "BufferSize", "ImageData", "Width", "Height", "PixelFormat")
+        RequiredMethods = @()
     },
     @{
         Vendor = "IDS Imaging"
@@ -64,6 +131,7 @@ $contracts = @(
         AssemblyPath = $IdsPeakIcvAssembly
         TypeNames = @("IDSImaging.Peak.ICV.Types.Image")
         RequiredProperties = @("Data", "Width", "Height", "PixelFormat", "SizeInBytes")
+        RequiredMethods = @()
     }
 )
 
@@ -82,6 +150,8 @@ foreach ($contract in $contracts) {
             typeName = $null
             requiredProperties = $contract.RequiredProperties
             missingProperties = @()
+            requiredMethods = $contract.RequiredMethods
+            missingMethods = @()
         }
         if ($RequireAll) {
             $hasFailure = $true
@@ -101,6 +171,8 @@ foreach ($contract in $contracts) {
             typeName = $null
             requiredProperties = $contract.RequiredProperties
             missingProperties = $contract.RequiredProperties
+            requiredMethods = $contract.RequiredMethods
+            missingMethods = $contract.RequiredMethods
         }
         continue
     }
@@ -117,20 +189,24 @@ foreach ($contract in $contracts) {
         }
 
         $missing = @()
+        $missingMethods = @()
         if ($type) {
             foreach ($propertyName in $contract.RequiredProperties) {
-                if (-not $type.GetProperty(
-                    $propertyName,
-                    [Reflection.BindingFlags]"Instance,Public")) {
+                if (-not (Get-ContractProperty -Type $type -PropertyName $propertyName)) {
                     $missing += $propertyName
                 }
+            }
+
+            if ($contract.Vendor -eq "Basler" -and -not (Test-BaslerComputeStrideContract -Assembly $assembly)) {
+                $missingMethods += $contract.RequiredMethods
             }
         }
         else {
             $missing = $contract.RequiredProperties
+            $missingMethods = $contract.RequiredMethods
         }
 
-        $status = if ($type -and $missing.Count -eq 0) { "Passed" } else { "ContractMismatch" }
+        $status = if ($type -and $missing.Count -eq 0 -and $missingMethods.Count -eq 0) { "Passed" } else { "ContractMismatch" }
         if ($status -ne "Passed") {
             $hasFailure = $true
         }
@@ -145,6 +221,8 @@ foreach ($contract in $contracts) {
             typeName = if ($type) { $type.FullName } else { $null }
             requiredProperties = $contract.RequiredProperties
             missingProperties = $missing
+            requiredMethods = $contract.RequiredMethods
+            missingMethods = $missingMethods
         }
     }
     catch {
@@ -159,6 +237,8 @@ foreach ($contract in $contracts) {
             typeName = $null
             requiredProperties = $contract.RequiredProperties
             missingProperties = $contract.RequiredProperties
+            requiredMethods = $contract.RequiredMethods
+            missingMethods = $contract.RequiredMethods
             error = $_.Exception.Message
         }
     }
