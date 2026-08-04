@@ -164,7 +164,7 @@ Current maturity gaps:
 
 `1.0.53` is the planned 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the already-qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation to users of public `1.0.52` without claiming a breaking platform transition.
 
-Do not relabel the exact qualified `1.0.53` VSIX as `2.0.0`; changing its version changes the package bytes and invalidates its installed qualification. Publish the unchanged `1.0.53` candidate first after source commit and explicit Marketplace approval. Then start the 2.0 development line with the vendor-neutral camera/frame-grabber buffer-shape matrix, corresponding onboarding/support contract, and a separately built and qualified `2.0.0` candidate.
+Do not relabel the exact qualified `1.0.53` VSIX as `2.0.0`; changing its version changes the package bytes and invalidates its installed qualification. Matching source/evidence commit `7ab84b7` is pushed; publish the unchanged `1.0.53` candidate only after explicit Marketplace approval. Then start the 2.0 development line with the vendor-neutral camera/frame-grabber buffer-shape matrix, corresponding onboarding/support contract, and a separately built and qualified `2.0.0` candidate.
 
 ### 2.0 first vertical slice: Connect Your Buffer
 

@@ -405,11 +405,11 @@ Full publication steps and the environment-gated CD flow are in [release-runbook
 Exact local `1.0.53.0` vendor-safe release candidate, qualified 2026-08-05:
 
 - artifact size 1,914,615 bytes, SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`;
-- source boundary is commit `af48a4f` plus the then-current tracked `1.0.53` product working tree; a matching source commit has not yet been made;
+- matching product source, qualification harness, and evidence are in pushed commit `7ab84b7`;
 - Release solution build, aggregate self-tests, communication/environment checks, package guards, layout, memory soak, registration audit, installed-file equality, and Marketplace dry run passed;
 - the same exact candidate passed ReleaseAnnouncement, EnvironmentCheck, AutomaticCollections, MultiLibraryHybrid, SmartTypeMapper, SmartTypeMapperPersisted, exact menu counts, installed registration, and protocol diagnostics on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21`;
 - BufferDoctor, AutomaticVisionInspector, and OpenVariable also passed the exact candidate on VS2022;
-- public Marketplace remains the immutable exact `1.0.52.0` package; Git commit/push and Marketplace upload were not performed;
+- public Marketplace remains the immutable exact `1.0.52.0` package; matching source/evidence were pushed at `7ab84b7`, while Marketplace upload was not performed;
 - the exact artifact, criteria, commands, and D-drive evidence are recorded in [release-qualification-1.0.53.md](release-qualification-1.0.53.md).
 
 The sections below preserve historical validation baselines for regression context. They are not the current release status.

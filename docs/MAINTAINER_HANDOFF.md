@@ -9,12 +9,12 @@ This is the canonical continuation document for the next conversation. Read it a
 | Last verified | 2026-08-05 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | `agent/basler-environment-1.0.53` / `origin/agent/basler-environment-1.0.53`; repository `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | `af48a4f` removes the rejected direct vendor adapters and applies the vendor SDK license gate. The qualified `1.0.53` candidate includes the then-current tracked product working tree above that commit; those product changes still require an intentional matching source commit. Exact qualified/public `1.0.52` source remains `854cb67`. |
+| Implementation baseline | `7ab84b7` contains the vendor-safe `1.0.53` product source, Connect Your Buffer workflow, qualification harness corrections, and durable evidence; it is pushed to `origin/agent/basler-environment-1.0.53`. Exact qualified/public `1.0.52` source remains `854cb67`. |
 | Source and VSIX version | Current source/development package `1.0.53` / `1.0.53.0`; public Marketplace remains exact `1.0.52.0`; preserved `EB94CCE...20534` is now historical because it predates the essential-only Environment feedback; preserved `1.0.51.0` is a failed unpublished candidate |
 | Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. Exact `1.0.53` installed qualification passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)`. |
 | Public Marketplace version | `1.0.52.0`; Gallery updated `2026-08-02T09:05:21.537Z`; public VSIX 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview `1.0.52`; exact local vendor-safe `1.0.53` is qualified with essential-only Environment, consistent panel toggles, bounded cold-page sampling, no active proprietary vendor adapter, and installed-verified Connect Your Buffer. Git commit/push and Marketplace publication have not been performed. |
+| Product stage | Public Marketplace Preview `1.0.52`; exact local vendor-safe `1.0.53` is qualified with essential-only Environment, consistent panel toggles, bounded cold-page sampling, no active proprietary vendor adapter, and installed-verified Connect Your Buffer. Matching source/evidence commit `7ab84b7` is pushed; Marketplace publication has not been performed. |
 | Commit scope | Baseline `af48a4f` removed uncleared direct vendor adapters. Current tracked edits add the Connect Your Buffer UI, neutral RawBufferView template generator/tests, current-source UI smoke coverage, and aligned product/maintainer documentation. The explicitly excluded pre-existing untracked paths below do not belong to this work. |
 
 Public links:
@@ -264,7 +264,7 @@ The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery,
 2. Local installed screenshots provide visual aspect evidence only. The full 540/900/1160 Fit/Manual assertions are current-source view evidence, not an installed-VSIX behavioral matrix.
 3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual next publication decision instead of presenting the historical draft as current.
 4. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
-5. The exact vendor-safe `1.0.53` candidate is locally qualified: 1,914,615 bytes, SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Its matching product source is still an uncommitted working tree, and Marketplace publication requires an intentional source commit plus explicit owner approval. The historical Basler candidate remains non-publishable.
+5. The exact vendor-safe `1.0.53` candidate is locally qualified: 1,914,615 bytes, SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Matching source/evidence commit `7ab84b7` is pushed. Marketplace publication requires explicit owner approval. The historical Basler candidate remains non-publishable.
 6. No active direct proprietary camera or frame-grabber/board adapter remains. `RawBufferView` and safe structural discovery are the vendor-neutral paths.
 7. Current Vimba X and IDS peak terms exclude consumers; current Spinnaker terms require owned qualifying hardware/images; current Basler terms introduce purpose, marketing, derivative-distribution, indemnity, record, and audit conditions. Other proprietary camera/board SDKs are blocked by default. Do not download, test, implement, publish, or advertise a direct path without the clearance defined in [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md).
 8. Stable Visual Studio 2026 `18.x` is a supported compatibility target under Microsoft's VSIX API-version model. Exact `1.0.53` runtime qualification passed on Community `18.8.12023.21`; VS2022 qualification passed on Community `17.14.37516.0`. Preview/Insiders and explicit standalone .NET 9/10 matrices are not current support claims.
@@ -372,23 +372,19 @@ Boundary: the removed direct debugger visualizer passed a technical experiment o
 
 ## Next Priorities
 
-1. Commit and push the source and qualification record matching the exact vendor-safe `1.0.53` candidate | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+1. Publish the unchanged qualified `1.0.53` candidate to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Prerequisite: explicit owner instruction for the Git commit/push. Preserve the candidate hash and exclude the pre-existing untracked scripts and `.tmp` directory.
+   Prerequisite: explicit owner approval for the external Marketplace write. Matching source/evidence commit `7ab84b7` is already pushed. `1.0.53` is the 1.x stabilization bridge before the separate 2.0 development line.
 
-2. Publish the unchanged qualified `1.0.53` candidate to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
-
-   Prerequisite: the matching source commit from priority 1 and explicit owner approval for the external Marketplace write. `1.0.53` is the 1.x stabilization bridge before the separate 2.0 development line.
-
-3. Start the 2.0 line by extending the vendor-neutral camera/frame-grabber compatibility matrix with public buffer-shape fixtures | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+2. Start the 2.0 line by extending the vendor-neutral camera/frame-grabber compatibility matrix with public buffer-shape fixtures | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
    Keep proprietary SDK binaries, direct adapters, acquisition, device control, and support claims out of scope. Use public documentation only to model pointer/array, dimensions, stride, buffer length, byte order, and pixel-format enum shapes; qualify through Connect Your Buffer and neutral RawBufferView/RawBufferSnapshot contracts.
 
-4. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+3. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
    Prerequisite: a separate serviced VS2022 `17.14+` or stable VS2026 PC that currently runs the exact public `1.0.50.0` package. Install the unchanged candidate SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` as an update without uninstall, repair, `/ResetSkipPkgs`, or manual registration changes; restart and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, and protocol checks. Do not spend model tokens on repeated local reinstall testing when this prerequisite is unavailable.
 
-5. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+4. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
    Current evidence proves the button/panel switch is responsive behavior, not intermittent registration. Any change requires a written UI description, a text mockup, and explicit owner approval before implementation.
 
@@ -452,10 +448,10 @@ Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\candidate-ven
 Version: 1.0.53.0
 Size: 1,914,615 bytes
 SHA256: E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3
-Source boundary: af48a4f plus the then-current tracked 1.0.53 product working tree
+Source: commit 7ab84b7
 ```
 
-The exact package passed ReleaseAnnouncement, EnvironmentCheck, AutomaticCollections, MultiLibraryHybrid, SmartTypeMapper, and SmartTypeMapperPersisted on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`. BufferDoctor, AutomaticVisionInspector, and OpenVariable also passed on VS2022. Five package-owned files matched the installed payload by length and SHA-256 in both IDE profiles; registration audit, release/environment contracts, layout, memory soak, Marketplace Dry Run, parser, and diff checks passed. Full evidence is [release-qualification-1.0.53.md](release-qualification-1.0.53.md). Do not rebuild it. Git commit/push and Marketplace upload remain separate owner-approved actions.
+The exact package passed ReleaseAnnouncement, EnvironmentCheck, AutomaticCollections, MultiLibraryHybrid, SmartTypeMapper, and SmartTypeMapperPersisted on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`. BufferDoctor, AutomaticVisionInspector, and OpenVariable also passed on VS2022. Five package-owned files matched the installed payload by length and SHA-256 in both IDE profiles; registration audit, release/environment contracts, layout, memory soak, Marketplace Dry Run, parser, and diff checks passed. Full evidence is [release-qualification-1.0.53.md](release-qualification-1.0.53.md). Do not rebuild it. Commit `7ab84b7` is pushed; Marketplace upload remains a separate owner-approved action.
 
 ## Historical Local 1.0.53 Candidate
 
