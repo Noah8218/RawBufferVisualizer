@@ -23,6 +23,7 @@ Visual Studio Marketplace still serves exact public `1.0.52.0`. The Gallery API 
 The `1.0.53.0` candidate adds:
 
 - removal of the uncleared proprietary vendor-adapter experiment while retaining vendor-neutral raw-buffer inspection;
+- **Connect Your Buffer**, the vendor-neutral mapping workflow for existing camera and frame-grabber objects;
 - an **Environment** panel that reports only required host/extension/temp-storage state;
 - a privacy-bounded diagnostic report that excludes credentials, environment-variable values, and image payloads;
 - bounded cold-page sampling for faster first preview of dense 100k/200k pointer-backed sources;
@@ -54,6 +55,20 @@ Open the docked Tool Window once, leave `Auto Inspect on Break` enabled, and sto
 - `Auto Inspect on Break` is a per-user preference that persists across Visual Studio restarts. `Scan Now` still works while automatic scanning is off.
 
 Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values can use Automatic Inspector's validated live-memory path and still retain their debugger-visualizer icons. An optional persisted **Mat collections** mode expands exact Mat `List<T>` and one-dimensional arrays with bounded per-element success/failure rows. `System.Drawing.Bitmap`, `RawBufferSnapshot`, `RawBufferView`, and other registered collections remain on their registered visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which Automatic Inspector deliberately does not inject or invoke.
+
+### Connect Your Buffer
+
+When Automatic Inspector finds an image-like application object but cannot safely decide which members hold its pointer, dimensions, stride, or pixel format, open **Connect Your Buffer** from the `[Map]` result or error-row menu.
+
+1. Review the suggested Data, Width, Height, Stride, Buffer Length, Pixel Format, Valid Bits, and Byte Order roles.
+2. Map vendor or application enum values to Raw Buffer Visualizer formats.
+3. Select **Preview** to read the current stopped-process buffer. Opening the dialog alone never reads it.
+4. Select **Save Mapping** to persist the mapping for the next equivalent break. **Use Suggested Roles** resets only the visible choices; it does not save, scan, or open an image.
+
+To review a saved automatic mapping later, select its image and open **Inspector > Interpret > Edit Mapping**. The same action is available in Compact and Wide layouts.
+5. Optionally select **Copy RawBufferView Template** when the project already references `RawBufferVisualizer.Sdk`. The generated code is a starting point; the application remains responsible for buffer lifetime and runtime pixel-format changes.
+
+The normal no-code route is **Save Mapping**. It adds no camera SDK or project dependency, invokes no object methods, and stores per-user mappings in `%APPDATA%\RawBufferVisualizer\type-mappings.json`. A solution may provide a source-controlled `.rawbuffervisualizer.json`, which takes precedence. FFmpeg, a camera SDK, the .NET SDK, and the Visual Studio extension workload are not Raw Buffer Visualizer runtime requirements; a vendor runtime is needed only when the debugged application itself needs it to acquire the buffer.
 
 Visual Studio stops before executing the highlighted breakpoint statement. If the breakpoint is on `Bitmap bitmap = new Bitmap(...)`, `bitmap` is not initialized yet. Stop on the next executable line, or use **Scan Now** only after the image object exists in the selected stack frame.
 
@@ -98,7 +113,7 @@ Other debugger visualizers have different feature sets. This comparison describe
 ## Key Features
 
 - Automatic Vision Inspector for safe image-like locals and arguments, with isolated `[Auto]`, `[Map]`, and `[Failed]` outcomes.
-- Smart Type Mapper as the recovery path for ambiguous company-specific image wrappers.
+- Connect Your Buffer (Smart Type Mapper) as the one-time recovery path for ambiguous company-specific image wrappers.
 - Vision Buffer Doctor with ranked, immediately applicable raw-buffer interpretations.
 - Single docked Visual Studio window where inspected images accumulate in an `Images` list.
 - Open a typed or mixed image list, dictionary, or array once to append its image entries to that same list.

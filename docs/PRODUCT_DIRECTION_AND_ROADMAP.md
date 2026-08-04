@@ -6,7 +6,7 @@ Raw Buffer Visualizer is a Visual Studio debugger tool for C# machine-vision dev
 
 The product promise is:
 
-> Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, pointer-backed images, raw buffers, and supported image collections directly inside one docked Visual Studio window.
+> Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, pointer-backed images, raw buffers, supported image collections, and user-mapped application buffer objects directly inside one docked Visual Studio window.
 
 Registered debugger visualizers remain available. Automatic Vision Inspector also opens initialized exact OpenCvSharp and Emgu CV Mats through a validated live-memory path, while safe unregistered company-frame shapes use structural discovery and Smart Type Mapper only when inference is ambiguous. Bitmap remains on its registered visualizer path. The workflow should remove debug-only code such as temporary image saves, `ImShow`, conversion helpers, and ad hoc pointer dumps.
 
@@ -38,6 +38,8 @@ Primary problems:
 6. Use diagnostics/Try interpretation when descriptor metadata is wrong or incomplete.
 7. Compare before/after images through linked views, split, diff, or blink.
 8. Export only when evidence must be shared or retained.
+
+When an unregistered camera or board object is structurally image-like but ambiguous, **Connect Your Buffer** is the supported recovery workflow: review suggested member roles, explicitly Preview, Save Mapping for reuse, or optionally copy a vendor-neutral `RawBufferView` starter template. Opening, resetting, or copying from the dialog must not scan the frame, append an image, or persist a mapping.
 
 The image list and viewer are the primary UI. Diagnostics are supporting UI and must not crowd out the image.
 
@@ -135,6 +137,7 @@ Current maturity gaps:
 - compatibility, packaging, update, repair, diagnostics, and support evidence;
 - comparison features that help before/after inspection.
 - vendor-neutral `RawBufferView`/`RawBufferSnapshot` integration for buffers supplied by the user's application.
+- user-controlled Connect Your Buffer mappings for debugger-visible pointer or managed-array objects, with explicit preview and reusable per-user or solution-local storage.
 
 ### Later, only with evidence
 
@@ -156,6 +159,33 @@ Current maturity gaps:
 - requiring users to install a second viewer extension or a rendering runtime separately.
 
 ## Roadmap
+
+### Version transition: 1.0.53 before 2.0
+
+`1.0.53` is the planned 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the already-qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation to users of public `1.0.52` without claiming a breaking platform transition.
+
+Do not relabel the exact qualified `1.0.53` VSIX as `2.0.0`; changing its version changes the package bytes and invalidates its installed qualification. Publish the unchanged `1.0.53` candidate first after source commit and explicit Marketplace approval. Then start the 2.0 development line with the vendor-neutral camera/frame-grabber buffer-shape matrix, corresponding onboarding/support contract, and a separately built and qualified `2.0.0` candidate.
+
+### 2.0 first vertical slice: Connect Your Buffer
+
+The 2.0 direction is a vendor-neutral 2D industrial buffer debugger, not a bundle of proprietary SDK adapters. Its first vertical slice reuses Smart Type Mapper instead of adding a new pane or acquisition layer.
+
+Required workflow:
+
+1. An ambiguous application object enters through Automatic Inspector, Open Variable, or a mapped collection error row.
+2. The user sees persisted or inferred roles and may edit every selection.
+3. Preview remains explicit and reads only the current stopped-process buffer.
+4. Save Mapping persists the selection; reopening restores it visibly and editably.
+5. Use Suggested Roles changes the visible draft only.
+6. Copy RawBufferView Template copies neutral starter code only for pointer-backed data and does not modify the project or mapping store.
+
+Acceptance gate:
+
+- mapping save/reload/reopen round-trips;
+- Preview, reset, copy, and dialog-open paths have no unintended scan, image-open, registration, or save side effect;
+- generated code contains selected member roles and no proprietary SDK dependency or claim;
+- the dialog follows the existing dark IDE visual system for normal, hover, focus, selected/open, disabled, error, and scroll states;
+- direct camera/board SDKs, acquisition, device control, 3D, PLC, and I/O remain outside the slice.
 
 ### Now: stabilize 1.0.53 and resolve the vendor SDK license hold
 

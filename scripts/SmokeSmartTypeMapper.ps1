@@ -58,13 +58,14 @@ if ($VerifyVssdkDiscoveryOnly) {
     return
 }
 
-$outputRoot = Join-Path $repoRoot $OutputDir
+$outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path $repoRoot $OutputDir }
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
 
 $interopCandidates = @(
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll",
@@ -112,6 +113,7 @@ public static class RawBufferDockedLayoutNative {
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
 }
@@ -187,12 +189,28 @@ $mappingBackupPath = $null
 if (Test-Path -LiteralPath $mappingPath) {
     $mappingBackupPath = $mappingPath + ".smoke-backup"
     Copy-Item -LiteralPath $mappingPath -Destination $mappingBackupPath -Force
+
+    $smokeStore = [RawBufferVisualizer.VisualStudio.ObjectSource.TypeMappingStore]::new($null, $mappingPath)
+    $smokeFile = $smokeStore.LoadUserFile()
+    for ($i = $smokeFile.Mappings.Count - 1; $i -ge 0; $i--) {
+        if ($smokeFile.Mappings[$i].TypeName -eq "Company.Vision.CompanyFrame" -and
+            $smokeFile.Mappings[$i].AssemblyName -eq "Company.Vision") {
+            $smokeFile.Mappings.RemoveAt($i)
+        }
+    }
+    $smokeStore.Save($smokeFile)
 }
+$mappingStateBeforeDialog = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
 
 $currentPid = [Diagnostics.Process]::GetCurrentProcess().Id
 $bufferAddress = [MapperSmokeSample]::Create(640, 480)
 $dialogCapturePath = Join-Path $outputRoot "after-mapping-dialog.png"
+$popupCapturePath = Join-Path $outputRoot "after-pixel-format-popup.png"
+$buttonStateCapturePath = Join-Path $outputRoot "after-button-hover-focus.png"
 $menuCapturePath = Join-Path $outputRoot "after-error-row-menu.png"
+$testScreen = [System.Windows.Forms.Screen]::AllScreens |
+    Sort-Object { $_.Bounds.Left } |
+    Select-Object -First 1
 
 try {
     $inventory = New-Object "System.Collections.Generic.List[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]"
@@ -231,12 +249,23 @@ try {
     $window.Title = "Raw Buffer Visualizer Smart Type Mapper"
     $window.Width = 1160
     $window.Height = 520
-    $window.Left = 20
-    $window.Top = 20
+    $window.Left = $testScreen.WorkingArea.Left + 20
+    $window.Top = $testScreen.WorkingArea.Top + 20
     $window.Topmost = $true
     $window.Content = $control
     $window.Show()
     Wait-Dispatcher 500
+
+    $windowRect = New-Object RawBufferDockedLayoutNative+RECT
+    $windowHandle = (New-Object System.Windows.Interop.WindowInteropHelper($window)).Handle
+    [RawBufferDockedLayoutNative]::GetWindowRect($windowHandle, [ref]$windowRect) | Out-Null
+    $intersectsTestScreen = $windowRect.Right -gt $testScreen.Bounds.Left -and
+        $windowRect.Left -lt $testScreen.Bounds.Right -and
+        $windowRect.Bottom -gt $testScreen.Bounds.Top -and
+        $windowRect.Top -lt $testScreen.Bounds.Bottom
+    if (-not $intersectsTestScreen) {
+        throw "Smart Type Mapper smoke window did not intersect the leftmost monitor."
+    }
 
     $control.OpenHandoffRequest($requestPath)
     Wait-Dispatcher 500
@@ -253,7 +282,7 @@ try {
     Wait-Dispatcher 300
     $mapMenuItem = $control.FindName("MapThisTypeMenuItem")
     if ($mapMenuItem.Visibility -ne [System.Windows.Visibility]::Visible) {
-        throw "Map This Type menu item was not visible for an error row with a member inventory."
+        throw "Connect Your Buffer menu item was not visible for an error row with a member inventory."
     }
 
     Capture-Window (New-Object System.Windows.Interop.WindowInteropHelper($window)).Handle $menuCapturePath
@@ -285,6 +314,17 @@ try {
         if ($dialog.FindName("PixelFormatBox").SelectedItem -ne "PixelType") { throw "Pixel format preselection failed." }
         if ($dialog.FindName("EnumMappingPanel").Visibility -ne [System.Windows.Visibility]::Visible) { throw "Enum mapping grid was not shown for the enum member." }
 
+        $dialog.FindName("WidthBox").SelectedItem = "SizeY"
+        $dialog.FindName("ByteOrderBox").SelectedItem = "BigEndian"
+        $dialog.FindName("UseSuggestedRolesButton").RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        Wait-Dispatcher 200
+        if ($dialog.FindName("WidthBox").SelectedItem -ne "SizeX") { throw "Use Suggested Roles did not restore the inferred width." }
+        if ($dialog.FindName("ByteOrderBox").SelectedItem -ne "LittleEndian") { throw "Use Suggested Roles did not restore default byte order." }
+        if ($null -ne $dialog.FindName("PreviewImage").Source) { throw "Use Suggested Roles unexpectedly rendered a preview." }
+        $mappingStateAfterReset = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
+        if ($mappingStateAfterReset -ne $mappingStateBeforeDialog) { throw "Use Suggested Roles unexpectedly changed the mapping file." }
+
+        $dialog.FindName("ByteOrderBox").SelectedItem = "BigEndian"
         $dialog.FindName("PreviewButton").RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
         Wait-Dispatcher 600
         if ($null -eq $dialog.FindName("PreviewImage").Source) {
@@ -299,6 +339,40 @@ try {
             if ($label -eq "Bgr") { $box.SelectedItem = "BGR24" }
         }
 
+        $copyButton = $dialog.FindName("CopyTemplateButton")
+        $copyButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        Wait-Dispatcher 200
+        $copiedTemplate = [System.Windows.Clipboard]::GetText()
+        foreach ($expectedTemplateText in @("RawBufferView", "frame.ImageAddress", "frame.SizeX", "RawPixelFormat.Mono8")) {
+            if (-not $copiedTemplate.Contains($expectedTemplateText)) {
+                throw "Copied RawBufferView template is missing '$expectedTemplateText'."
+            }
+        }
+        foreach ($forbiddenTemplateText in @("Basler", "Pylon", "Spinnaker")) {
+            if ($copiedTemplate.Contains($forbiddenTemplateText)) {
+                throw "Copied RawBufferView template contains proprietary SDK text '$forbiddenTemplateText'."
+            }
+        }
+        $mappingStateAfterCopy = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
+        if ($mappingStateAfterCopy -ne $mappingStateBeforeDialog) { throw "Copy RawBufferView Template unexpectedly changed the mapping file." }
+        if ($imageList.Items.Count -ne 1) { throw "Draft actions unexpectedly appended an image row." }
+
+        $copyButton.Focus() | Out-Null
+        $copyButtonPoint = $copyButton.PointToScreen([System.Windows.Point]::new(8, 8))
+        [RawBufferDockedLayoutNative]::SetCursorPos([int]$copyButtonPoint.X, [int]$copyButtonPoint.Y) | Out-Null
+        Wait-Dispatcher 100
+        if (-not $copyButton.IsKeyboardFocusWithin) { throw "Copy template button did not expose keyboard focus." }
+        if (-not $copyButton.IsMouseOver) { throw "Copy template button did not expose pointer hover." }
+        Capture-Window $script:dialogHwnd $buttonStateCapturePath
+        $copyButton.IsEnabled = $false
+        Wait-Dispatcher 100
+        if ([Math]::Abs($copyButton.Opacity - 0.45) -gt 0.01) { throw "Disabled button theme state did not apply." }
+        $copyButton.IsEnabled = $true
+
+        $dialog.FindName("PixelFormatBox").IsDropDownOpen = $true
+        Wait-Dispatcher 300
+        Capture-Window $script:dialogHwnd $popupCapturePath
+        $dialog.FindName("PixelFormatBox").IsDropDownOpen = $false
         Wait-Dispatcher 300
         Capture-Window $script:dialogHwnd $dialogCapturePath
         Wait-Dispatcher 300
@@ -314,11 +388,29 @@ try {
     }
 
     $savedJson = [IO.File]::ReadAllText($mappingPath)
-    foreach ($expected in @("Company.Vision.CompanyFrame", "Company.Vision", "ImageAddress", "SizeX", "LinePitch", "pixelFormatMap", "Mono12PackedLsb", "BGR24")) {
+    foreach ($expected in @("Company.Vision.CompanyFrame", "Company.Vision", "ImageAddress", "SizeX", "LinePitch", "pixelFormatMap", "Mono12PackedLsb", "BGR24", "BigEndian")) {
         if (-not $savedJson.Contains($expected)) {
             throw "Saved mapping file is missing '$expected'."
         }
     }
+
+    $reopenedDialog = [RawBufferVisualizer.VisualStudio.Vssdk.TypeMappingDialog]::new(
+        $inventory,
+        "Company.Vision.CompanyFrame",
+        "Company.Vision",
+        $currentPid,
+        $null,
+        $false)
+    $reopenedDialog.Owner = $window
+    $reopenedDialog.Show()
+    Wait-Dispatcher 350
+    if ($reopenedDialog.FindName("DataBox").SelectedItem -ne "ImageAddress") { throw "Saved data role was not restored on reopen." }
+    if ($reopenedDialog.FindName("WidthBox").SelectedItem -ne "SizeX") { throw "Saved width role was not restored on reopen." }
+    if ($reopenedDialog.FindName("StrideBox").SelectedItem -ne "LinePitch") { throw "Saved stride role was not restored on reopen." }
+    if ($reopenedDialog.FindName("ByteOrderBox").SelectedItem -ne "BigEndian") { throw "Saved byte order was not restored on reopen." }
+    $reopenedDialog.Close()
+    Wait-Dispatcher 150
+    if ([IO.File]::ReadAllText($mappingPath) -ne $savedJson) { throw "Reopening the mapping dialog unexpectedly changed the saved file." }
 
     $window.Close()
     Wait-Dispatcher 250
@@ -326,7 +418,12 @@ try {
     [pscustomobject]@{
         MenuCapture = $menuCapturePath
         DialogCapture = $dialogCapturePath
+        PopupCapture = $popupCapturePath
+        ButtonStateCapture = $buttonStateCapturePath
         MappingFile = $mappingPath
+        MonitorName = $testScreen.DeviceName
+        MonitorBounds = $testScreen.Bounds.ToString()
+        WindowBounds = "Left=$($windowRect.Left),Top=$($windowRect.Top),Right=$($windowRect.Right),Bottom=$($windowRect.Bottom)"
     } | Format-List
     Write-Host "Smart Type Mapper smoke passed. Captures: $menuCapturePath, $dialogCapturePath"
 }

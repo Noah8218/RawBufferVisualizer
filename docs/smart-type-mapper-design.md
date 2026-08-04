@@ -1,7 +1,7 @@
-# Smart Type Mapper Design
+# Connect Your Buffer (Smart Type Mapper) Design
 
-Status: Phases 1–5 are implemented in the working tree; the installed-VSIX automatic fallback is Complete. Real pointer-backed **Open Variable** installed verification remains a separate boundary.
-Last updated: 2026-07-27.
+Status: Phases 1–5 and the Connect Your Buffer current-source and installed-VSIX workflows are Complete in Compact and Wide layouts. Real pointer-backed **Open Variable** remains a separate verification boundary.
+Last updated: 2026-08-04.
 
 ## Goal
 
@@ -40,11 +40,11 @@ Therefore this feature does **not** promise "an icon appears for any type". The 
 
 1. Break in the debugger; `List<CompanyFrame>` has the visualizer icon; user clicks it.
 2. Entries fail shape detection (`ImageAddress`, `SizeX`, ... are not in the built-in name candidates) and appear as red error rows: "Unsupported type Company.Vision.CompanyFrame".
-3. The error row offers **Map This Type**. The object source has already attached a **member inventory** (member name, CLR kind, sample value) to the error payload — reading fields is side-effect free.
+3. The error row offers **Connect Your Buffer**. The object source has already attached a **member inventory** (member name, CLR kind, sample value) to the error payload — reading fields is side-effect free.
 4. The mapping dialog lists detected members with heuristic pre-selection (IntPtr → Data, names containing Width/SizeX → Width, Pitch/Stride → Stride, enum → Pixel Format). The user adjusts dropdowns.
 5. Enum mapping: each detected enum value is mapped to a `RawPixelFormat` (`Mono12 → Mono12PackedLsb`).
 6. **Preview** renders a thumbnail immediately: the member values (pointer + dimensions) are already known, and the existing process-memory source can read the live debuggee buffer — no debugger round-trip needed.
-7. **Save for This Type** writes the mapping file.
+7. **Save Mapping** writes the mapping file. **Use Suggested Roles** resets only the visible draft, and **Copy RawBufferView Template** copies optional neutral starter code for pointer-backed data without saving or scanning.
 
 ### Scenario 2 — afterwards (automatic)
 
@@ -110,13 +110,13 @@ Never invoked: arbitrary methods (`GetBuffer()`, `ConvertImage()`). Method-call 
 
 1. `TypeMappingStore`: loads and caches mapping files (both locations, file-timestamp invalidation). File I/O in the debuggee is acceptable and matches existing snapshot behavior.
 2. Generalize `ImagePtrVisualizerTransfer`: the existing name-candidate `FindMember`/`GetMemberValue`/`ConvertValue<T>` helpers already work by member name; a mapping simply supplies the names. Built-in heuristic detection stays as the fallback.
-3. On shape-detection failure for a collection entry, attach a **member inventory** (name, kind, sample value preview, enum values when applicable) to the error metadata so the docked window can offer Map This Type without a second debugger round-trip.
+3. On shape-detection failure for a collection entry, attach a **member inventory** (name, kind, sample value preview, enum values when applicable) to the error metadata so the docked window can offer Connect Your Buffer without a second debugger round-trip.
 4. Mapped extraction failures (member missing, wrong type, null pointer) become error rows with the reason, never silent drops (product rule: fail visibly).
 
 ### Docked window (`RawBufferVisualizer.VisualStudio.Vssdk`)
 
-1. Error rows with a member inventory get a **Map This Type** action.
-2. Mapping dialog: role dropdowns over the inventory, enum mapping grid, Preview (process-memory or chunked bytes already available), Save/Cancel. Follows the compact IDE UX rule; hosted as a dialog from the error row, not a new persistent pane.
+1. Error rows with a member inventory get a **Connect Your Buffer** action.
+2. Mapping dialog: role dropdowns over the inventory, enum mapping grid, explicit Preview, Save Mapping, Use Suggested Roles, optional RawBufferView template copy, and Cancel. It follows the compact IDE UX rule and remains a dialog from the error row, not a new persistent pane.
 3. Save → write mapping file → offer "retry this entry" (re-invokes the collection provider path via a new handoff request).
 
 ### Phase 5 — Open Variable (individual variables)
@@ -133,7 +133,7 @@ Never invoked: arbitrary methods (`GetBuffer()`, `ConvertImage()`). Method-call 
 | 1 | Mapping schema v1, `TypeMappingStore`, both storage locations | small |
 | 2 | ObjectSource mapped extraction + failure member inventory | medium |
 | 3 | Mapping dialog + preview + save/retry | medium |
-| 4 | Error-row Map This Type action + collection retry flow | small |
+| 4 | Error-row Connect Your Buffer action + collection retry flow | small |
 | 5 | Open Variable via EnvDTE (individual variables) | medium-large |
 
 Phases 1-4 deliver the majority of the value through the collection path. Phase 5 completes the individual-variable UX.
@@ -149,11 +149,13 @@ Buffer Doctor connection: the mapping dialog's Preview reuses the Diagnose Buffe
 5. Failure inventory: unmapped type produces an error payload containing the member inventory.
 6. Missing/renamed member after a mapping → visible error row, no crash.
 7. UI smoke: mapping dialog opens from an error row in the docked harness; preview renders from a synthetic live source.
+8. Template generation: mapped and derived stride/length forms are deterministic, UIntPtr is converted explicitly, and no proprietary SDK name is built in.
+9. State/side-effect smoke: saved selections and byte order restore; reset does not save; copy does not save or open an image; explicit Save remains the persistence boundary.
 
 ## Documentation Impact On Release
 
-- README supported-inputs table: new row "User-mapped types (Smart Type Mapper)" with the icon constraint stated plainly.
-- Marketplace copy: "Map unsupported image classes once — no code changes, no extension rebuild" plus the collection/individual entry explanation.
+- README describes Connect Your Buffer as the no-code mapping route, its storage scopes, optional template prerequisite, and lack of camera SDK/FFmpeg runtime dependency.
+- Marketplace copy may say "Map unsupported image classes once" only with the icon and entry-route constraints stated plainly.
 - Handoff: resolve the long-standing ImagePtr wording gap by documenting mapper-based support as the generic answer; the exact `Cressem.ImageModel.ImagePtr` registration remains a compatibility exception.
 
 ## Verification Record
@@ -186,3 +188,25 @@ Evidence:
 - `artifacts/ui/installed-vsix-new-features/smart-type-mapper-automatic-after-reopen.png`
 
 Boundary / next dependency: This proves the Automatic Vision Inspector-to-mapper recovery path for the supplied simulated `UnmappedCompanyFrame`. It does not prove every real SDK object, method-only buffer API, native lifetime rule, or vendor pixel-format enum.
+
+## Connect Your Buffer Current-Source Verification — 2026-08-04
+
+```text
+Status: Complete
+Scope: Vendor-neutral Connect Your Buffer dialog, explicit preview, suggestion reset, mapping save/reopen, optional pointer-backed RawBufferView template copy, and dark IDE control states.
+Acceptance criteria: Selected roles and BigEndian save/reopen -> pass; dialog open/reset/copy leave the mapping file and image list unchanged -> pass; preview remains explicit -> pass; generated mapped/derived stride and length code plus UIntPtr conversion and no built-in proprietary SDK text -> pass; normal/focus/hover/open-popup/disabled/scroll/status UI states -> pass.
+Verification: dotnet build .\RawBufferVisualizer.sln --configuration Release -> pass with 18 pre-existing ImageTypeRecognizer VSTHRD010 warnings; dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --no-build -> pass; .\scripts\SmokeSmartTypeMapper.ps1 -Configuration Release -NoBuild -> pass.
+Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-2.0\before and D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-2.0\final. The desktop smoke used leftmost monitor \\.\DISPLAY2, bounds X=-1920,Y=365,Width=1920,Height=1080; host window bounds Left=-1900,Top=385,Right=-740,Bottom=905.
+Boundary / next dependency: These are current-source WPF view captures and harness behavior, not installed-VSIX evidence. Managed-array mappings use Save Mapping but intentionally do not generate RawBufferView pointer code. The optional template requires an application reference to RawBufferVisualizer.Sdk; Save Mapping remains the dependency-free route.
+```
+
+## Connect Your Buffer Installed-VSIX Verification - 2026-08-04
+
+```text
+Status: Complete
+Scope: Install the current 1.0.53.0 development VSIX into VS2022 and VS2026, save an inferred mapping, start a fresh IDE/debuggee session, restore every role, copy neutral RawBufferView starter code, exercise suggestion reset and Cancel, and reopen the saved mapping through the normal Compact Inspector path.
+Acceptance criteria: VSIX payload equals both installed extensions -> pass for five package-owned files; initial mapping/preview/save/reopen -> pass on VS2022 17.14.37516.0 and VS2026 18.8.12023.21; fresh-process persisted auto-open -> pass at 640 x 484, stride 960, Mono12PackedLsb, live source, zero errors; nine restored choices -> pass; 630-character RawBufferView template with no Basler/Pylon/Spinnaker/Vimba/IDS peak text -> pass; Copy/Use Suggested Roles/Cancel leave the mapping file unchanged -> pass; Compact Inspector > Interpret shows a visible Edit Mapping action and reopens the saved choices without forcing Wide layout -> pass on both IDEs.
+Verification: Release build -> pass with 18 pre-existing ImageTypeRecognizer VSTHRD010 warnings and zero errors; self-tests -> pass; current-source Smart Type Mapper UI smoke -> pass; installed SmartTypeMapper and SmartTypeMapperPersisted -> pass on both IDEs; final package comparison -> pass; pre-test user mapping state -> restored after every run.
+Evidence: package C:\Git\RawBufferVisualizer\.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Release\net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix, size 1,914,617 bytes, SHA-256 ADDC416CDA4F5DB68410BFA352628217D2B1D737BF3449B20D48A47DA751B6C1; before capture D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-installed\VS2022\persisted\SmartTypeMapperPersisted-failure.png; current-source evidence D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-compact\current-source; final installed evidence D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-compact\installed-final. Desktop runs used leftmost monitor \\.\DISPLAY2 at -1920,365,1920,1080.
+Boundary / next dependency: This proves the synthetic pointer-backed UnmappedCompanyFrame path and the packaged dark-theme Compact/Wide controls, not proprietary SDK objects or physical camera/board hardware. Real pointer-backed Open Variable remains separately bounded.
+```
