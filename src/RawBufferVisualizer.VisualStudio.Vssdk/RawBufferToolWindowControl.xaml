@@ -408,7 +408,7 @@
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
                                 <MenuItem Header="Save raw snapshot" Click="SaveSnapshot_Click"/>
                                 <MenuItem x:Name="OpenVariableMenuItem" Header="Open Variable..." AutomationProperties.AutomationId="OpenVariableMenuItem" Click="OpenVariable_Click"/>
-                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Map This Type" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
+                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Connect Your Buffer" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
                             </ContextMenu>
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
@@ -732,6 +732,36 @@
                     <TabItem Header="Interpret">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="4">
+                                <Border x:Name="CompactAutomaticInspectionPanel"
+                                        Visibility="{Binding ElementName=AutomaticInspectionPanel, Path=Visibility}"
+                                        Margin="0,0,0,10"
+                                        Padding="9"
+                                        Background="#252526"
+                                        BorderBrush="{StaticResource StatusAccentBrush}"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="Automatic Vision Inspector" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Margin="0,5,0,0"
+                                                   Foreground="#9CDCFE"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding ElementName=AutomaticInspectionConfidenceText, Path=Text}"/>
+                                        <TextBlock Margin="0,5,0,0"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding ElementName=AutomaticInspectionMembersText, Path=Text}"/>
+                                        <Button x:Name="CompactEditAutomaticMappingButton"
+                                                Content="Edit Mapping"
+                                                Margin="0,7,0,0"
+                                                HorizontalAlignment="Left"
+                                                Visibility="{Binding ElementName=EditAutomaticMappingButton, Path=Visibility}"
+                                                ToolTip="Review inferred members and save corrections for this runtime type"
+                                                AutomationProperties.AutomationId="CompactEditAutomaticVisionMappingButton"
+                                                Click="EditAutomaticMapping_Click"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="64"/>
