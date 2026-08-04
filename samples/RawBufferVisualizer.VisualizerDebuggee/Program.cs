@@ -211,24 +211,24 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 PrintCase(ref caseNumber, "rawViewBgra32 as RawBufferView / IntPtr BGRA32");
                 if (shouldBreak) Debugger.Break();
 
-                var baslerPylonLikeFrame = new IndustrialCameraFrame(
-                    PinView(pinnedViews, "basler-pylon-like", CreateMono8Buffer(Width, Height, Width), CreateDescriptor(Width, Height, Width, RawPixelFormat.Mono8, 8), 1));
-                PrintCase(ref caseNumber, "baslerPylonLikeFrame.View as RawBufferView / Basler pylon-like object");
+                var contiguousMonoFrame = new IndustrialCameraFrame(
+                    PinView(pinnedViews, "contiguous-mono", CreateMono8Buffer(Width, Height, Width), CreateDescriptor(Width, Height, Width, RawPixelFormat.Mono8, 8), 1));
+                PrintCase(ref caseNumber, "contiguousMonoFrame.View as RawBufferView / contiguous Mono8 object");
                 if (shouldBreak) Debugger.Break();
 
-                var hikrobotMvsLikeFrame = new IndustrialCameraFrame(
-                    PinView(pinnedViews, "hikrobot-mvs-like", CreateBgr24Buffer(Width, Height, Width * 3), CreateDescriptor(Width, Height, Width * 3, RawPixelFormat.BGR24, 8), 3));
-                PrintCase(ref caseNumber, "hikrobotMvsLikeFrame.View as RawBufferView / HIKROBOT MVS-like object");
+                var bgrPointerFrame = new IndustrialCameraFrame(
+                    PinView(pinnedViews, "bgr-pointer", CreateBgr24Buffer(Width, Height, Width * 3), CreateDescriptor(Width, Height, Width * 3, RawPixelFormat.BGR24, 8), 3));
+                PrintCase(ref caseNumber, "bgrPointerFrame.View as RawBufferView / BGR24 pointer object");
                 if (shouldBreak) Debugger.Break();
 
-                var spinnakerLikeFrame = new IndustrialCameraFrame(
-                    PinView(pinnedViews, "spinnaker-like", CreateBayer8Buffer(Width, Height, Width, RawPixelFormat.BayerRGGB8), CreateDescriptor(Width, Height, Width, RawPixelFormat.BayerRGGB8, 8), 1));
-                PrintCase(ref caseNumber, "spinnakerLikeFrame.View as RawBufferView / Spinnaker-like object");
+                var bayerPointerFrame = new IndustrialCameraFrame(
+                    PinView(pinnedViews, "bayer-pointer", CreateBayer8Buffer(Width, Height, Width, RawPixelFormat.BayerRGGB8), CreateDescriptor(Width, Height, Width, RawPixelFormat.BayerRGGB8, 8), 1));
+                PrintCase(ref caseNumber, "bayerPointerFrame.View as RawBufferView / BayerRGGB8 pointer object");
                 if (shouldBreak) Debugger.Break();
 
-                var frameGrabberLikeBuffer = new IndustrialCameraFrame(
-                    PinView(pinnedViews, "framegrabber-like", CreateMono16Buffer(Width, Height, Width * 2), CreateDescriptor(Width, Height, Width * 2, RawPixelFormat.Mono16, 16), 1));
-                PrintCase(ref caseNumber, "frameGrabberLikeBuffer.View as RawBufferView / eGrabber-Sapera-MIL-like object");
+                var mono16BoardBuffer = new IndustrialCameraFrame(
+                    PinView(pinnedViews, "mono16-board-buffer", CreateMono16Buffer(Width, Height, Width * 2), CreateDescriptor(Width, Height, Width * 2, RawPixelFormat.Mono16, 16), 1));
+                PrintCase(ref caseNumber, "mono16BoardBuffer.View as RawBufferView / Mono16 board buffer");
                 if (shouldBreak) Debugger.Break();
 
                 bitmapMono8 = CreateMono8Bitmap(Width, Height);
@@ -390,10 +390,10 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(imagePtrBgr24);
                 GC.KeepAlive(rawViewMono16);
                 GC.KeepAlive(rawViewBgra32);
-                GC.KeepAlive(baslerPylonLikeFrame);
-                GC.KeepAlive(hikrobotMvsLikeFrame);
-                GC.KeepAlive(spinnakerLikeFrame);
-                GC.KeepAlive(frameGrabberLikeBuffer);
+                GC.KeepAlive(contiguousMonoFrame);
+                GC.KeepAlive(bgrPointerFrame);
+                GC.KeepAlive(bayerPointerFrame);
+                GC.KeepAlive(mono16BoardBuffer);
                 GC.KeepAlive(imageList);
                 GC.KeepAlive(imageDictionary);
                 GC.KeepAlive(imageArray);
@@ -650,10 +650,10 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     graphics.Clear(Color.FromArgb(17, 97, 201));
                 }
 
-                var baslerResult = new SimulatedBaslerGrabResult(mono8Owner);
-                var flirImage = new SimulatedFlirImagePtr(mono8Owner);
-                var vimbaFrame = new SimulatedVimbaFrame(mono8Owner);
-                var idsPeakImage = new SimulatedIdsPeakIcvImage(mono8Owner);
+                var paddingAwareFrame = new SimulatedPaddingAwareFrame(mono8Owner);
+                var strideAwareFrame = new SimulatedStrideAwareFrame(mono8Owner);
+                var offsetAwareFrame = new SimulatedOffsetAwareFrame(mono8Owner);
+                var sizedBufferFrame = new SimulatedSizedBufferFrame(mono8Owner);
 
                 Debugger.Break();
 
@@ -662,10 +662,10 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(openCvMat);
                 GC.KeepAlive(emguMat);
                 GC.KeepAlive(bitmap);
-                GC.KeepAlive(baslerResult);
-                GC.KeepAlive(flirImage);
-                GC.KeepAlive(vimbaFrame);
-                GC.KeepAlive(idsPeakImage);
+                GC.KeepAlive(paddingAwareFrame);
+                GC.KeepAlive(strideAwareFrame);
+                GC.KeepAlive(offsetAwareFrame);
+                GC.KeepAlive(sizedBufferFrame);
                 GC.KeepAlive(mono8Owner);
                 GC.KeepAlive(bgr24Owner);
 
@@ -1478,18 +1478,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         }
     }
 
-    // Simulation of Basler pylon IGrabResult
-    internal enum SimulatedBaslerPixelType
-    {
-        Mono8,
-        Mono10,
-        Mono12,
-        Mono16,
-        Bgr8,
-        Bgra8
-    }
-
-    internal sealed class SimulatedBaslerGrabResult
+    internal sealed class SimulatedPaddingAwareFrame
     {
         private readonly PinnedRawBufferView _owner;
 
@@ -1498,9 +1487,9 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         public int Height { get; private set; }
         public int PaddingX { get; private set; }
         public long PayloadSize { get; private set; }
-        public SimulatedBaslerPixelType PixelTypeValue { get; private set; }
+        public RawPixelFormat PixelTypeValue { get; private set; }
 
-        public SimulatedBaslerGrabResult(PinnedRawBufferView owner)
+        public SimulatedPaddingAwareFrame(PinnedRawBufferView owner)
         {
             _owner = owner;
             PixelDataPointer = owner.View.Buffer;
@@ -1508,38 +1497,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             Height = owner.View.Height;
             PaddingX = owner.View.Stride - owner.View.ToDescriptor().GetMinimumStride();
             PayloadSize = owner.View.BufferLength;
-            PixelTypeValue = MapBaslerPixelType(owner.View.PixelFormat);
-        }
-
-        private static SimulatedBaslerPixelType MapBaslerPixelType(RawPixelFormat format)
-        {
-            switch (format)
-            {
-                case RawPixelFormat.Mono16:
-                    return SimulatedBaslerPixelType.Mono16;
-                case RawPixelFormat.BGR24:
-                    return SimulatedBaslerPixelType.Bgr8;
-                case RawPixelFormat.BGRA32:
-                    return SimulatedBaslerPixelType.Bgra8;
-                case RawPixelFormat.Mono8:
-                default:
-                    return SimulatedBaslerPixelType.Mono8;
-            }
+            PixelTypeValue = owner.View.PixelFormat;
         }
     }
 
-    // Simulation of FLIR Spinnaker ImagePtr
-    internal enum SimulatedFlirPixelFormat
-    {
-        Mono8,
-        Mono10p,
-        Mono12p,
-        Mono16,
-        Bgr8,
-        Bgra8
-    }
-
-    internal sealed class SimulatedFlirImagePtr
+    internal sealed class SimulatedStrideAwareFrame
     {
         private readonly PinnedRawBufferView _owner;
 
@@ -1547,47 +1509,20 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         public uint Width { get; private set; }
         public uint Height { get; private set; }
         public uint Stride { get; private set; }
-        public SimulatedFlirPixelFormat PixelFormat { get; private set; }
+        public RawPixelFormat PixelFormat { get; private set; }
 
-        public SimulatedFlirImagePtr(PinnedRawBufferView owner)
+        public SimulatedStrideAwareFrame(PinnedRawBufferView owner)
         {
             _owner = owner;
             DataPtr = owner.View.Buffer;
             Width = (uint)owner.View.Width;
             Height = (uint)owner.View.Height;
             Stride = (uint)owner.View.Stride;
-            PixelFormat = MapFlirPixelFormat(owner.View.PixelFormat);
-        }
-
-        private static SimulatedFlirPixelFormat MapFlirPixelFormat(RawPixelFormat format)
-        {
-            switch (format)
-            {
-                case RawPixelFormat.Mono16:
-                    return SimulatedFlirPixelFormat.Mono16;
-                case RawPixelFormat.BGR24:
-                    return SimulatedFlirPixelFormat.Bgr8;
-                case RawPixelFormat.BGRA32:
-                    return SimulatedFlirPixelFormat.Bgra8;
-                case RawPixelFormat.Mono8:
-                default:
-                    return SimulatedFlirPixelFormat.Mono8;
-            }
+            PixelFormat = owner.View.PixelFormat;
         }
     }
 
-    // Contract fixture modeled after Allied Vision Vimba X IFrame
-    internal enum SimulatedVimbaPixelFormat
-    {
-        Mono8,
-        Mono10,
-        Mono12,
-        Mono16,
-        Bgr8,
-        Bgra8
-    }
-
-    internal sealed class SimulatedVimbaFrame
+    internal sealed class SimulatedOffsetAwareFrame
     {
         private readonly PinnedRawBufferView _owner;
 
@@ -1596,9 +1531,9 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         public IntPtr ImageData { get; private set; }
         public uint Width { get; private set; }
         public uint Height { get; private set; }
-        public SimulatedVimbaPixelFormat PixelFormat { get; private set; }
+        public RawPixelFormat PixelFormat { get; private set; }
 
-        public SimulatedVimbaFrame(PinnedRawBufferView owner)
+        public SimulatedOffsetAwareFrame(PinnedRawBufferView owner)
         {
             _owner = owner;
             Buffer = owner.View.Buffer;
@@ -1606,71 +1541,28 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             ImageData = owner.View.Buffer;
             Width = (uint)owner.View.Width;
             Height = (uint)owner.View.Height;
-            PixelFormat = MapVimbaPixelFormat(owner.View.PixelFormat);
-        }
-
-        private static SimulatedVimbaPixelFormat MapVimbaPixelFormat(RawPixelFormat format)
-        {
-            switch (format)
-            {
-                case RawPixelFormat.Mono16:
-                    return SimulatedVimbaPixelFormat.Mono16;
-                case RawPixelFormat.BGR24:
-                    return SimulatedVimbaPixelFormat.Bgr8;
-                case RawPixelFormat.BGRA32:
-                    return SimulatedVimbaPixelFormat.Bgra8;
-                case RawPixelFormat.Mono8:
-                default:
-                    return SimulatedVimbaPixelFormat.Mono8;
-            }
+            PixelFormat = owner.View.PixelFormat;
         }
     }
 
-    // Contract fixture modeled after IDS peak ICV Types.Image
-    internal enum SimulatedIdsPeakPixelFormat
-    {
-        Mono8,
-        Mono10p,
-        Mono12p,
-        Mono16,
-        Bgr8,
-        Bgra8
-    }
-
-    internal sealed class SimulatedIdsPeakIcvImage
+    internal sealed class SimulatedSizedBufferFrame
     {
         private readonly PinnedRawBufferView _owner;
 
         public IntPtr Data { get; private set; }
         public uint Width { get; private set; }
         public uint Height { get; private set; }
-        public SimulatedIdsPeakPixelFormat PixelFormat { get; private set; }
+        public RawPixelFormat PixelFormat { get; private set; }
         public long SizeInBytes { get; private set; }
 
-        public SimulatedIdsPeakIcvImage(PinnedRawBufferView owner)
+        public SimulatedSizedBufferFrame(PinnedRawBufferView owner)
         {
             _owner = owner;
             Data = owner.View.Buffer;
             Width = (uint)owner.View.Width;
             Height = (uint)owner.View.Height;
-            PixelFormat = MapIdsPeakPixelFormat(owner.View.PixelFormat);
+            PixelFormat = owner.View.PixelFormat;
             SizeInBytes = owner.View.BufferLength;
-        }
-
-        private static SimulatedIdsPeakPixelFormat MapIdsPeakPixelFormat(RawPixelFormat format)
-        {
-            switch (format)
-            {
-                case RawPixelFormat.Mono16:
-                    return SimulatedIdsPeakPixelFormat.Mono16;
-                case RawPixelFormat.BGR24:
-                    return SimulatedIdsPeakPixelFormat.Bgr8;
-                case RawPixelFormat.BGRA32:
-                    return SimulatedIdsPeakPixelFormat.Bgra8;
-                case RawPixelFormat.Mono8:
-                default:
-                    return SimulatedIdsPeakPixelFormat.Mono8;
-            }
         }
     }
 

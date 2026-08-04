@@ -10,16 +10,16 @@ namespace RawBufferVisualizer.Tests
     {
         public static void RunAll()
         {
-            SpinnakerManagedImageContractAutoOpens();
-            BaslerGrabResultRequiresContiguousPayload();
-            VimbaFramePrefersImageDataAndRejectsChunkOffset();
-            IdsPeakImageRequiresContiguousSize();
+            ExplicitStridePointerShapeAutoOpens();
+            PaddingAndPayloadShapeRequiresContiguousLayout();
+            ImageDataOffsetShapeRequiresExplicitLayout();
+            SizedBufferShapeRequiresContiguousSize();
             GenICamPfncAliasesResolveConservatively();
             MethodOnlyBufferContractsStayExplicit();
             MappedPointerTransfersRejectUnsafeLayouts();
         }
 
-        private static void SpinnakerManagedImageContractAutoOpens()
+        private static void ExplicitStridePointerShapeAutoOpens()
         {
             var inference = VisionMemberInference.Infer(
                 new List<VisualizerMemberInventoryItem>
@@ -30,64 +30,64 @@ namespace RawBufferVisualizer.Tests
                     Item("Stride", "UInt64", "640"),
                     Item("PixelFormat", "PixelFormatEnums", "PixelFormat_Mono8")
                 },
-                "SpinnakerNET.IManagedImage");
+                "Example.ExplicitStrideFrame");
 
-            Assert(inference.CanAutoOpen, "Spinnaker IManagedImage should auto-open when DataPtr and Stride are explicit.");
-            Assert(inference.Members.Data == "DataPtr", "Spinnaker inference selected the wrong data pointer.");
-            Assert(inference.Members.Stride == "Stride", "Spinnaker inference did not retain the explicit stride.");
-            Assert(inference.PixelFormat == RawPixelFormat.Mono8, "Spinnaker PixelFormat_Mono8 did not resolve.");
+            Assert(inference.CanAutoOpen, "A pointer shape should auto-open when DataPtr and Stride are explicit.");
+            Assert(inference.Members.Data == "DataPtr", "Inference selected the wrong data pointer.");
+            Assert(inference.Members.Stride == "Stride", "Inference did not retain the explicit stride.");
+            Assert(inference.PixelFormat == RawPixelFormat.Mono8, "PixelFormat_Mono8 did not resolve.");
         }
 
-        private static void BaslerGrabResultRequiresContiguousPayload()
+        private static void PaddingAndPayloadShapeRequiresContiguousLayout()
         {
-            var contiguous = CreateBaslerInventory(0, 640L * 480L);
-            var safe = VisionMemberInference.Infer(contiguous, "Basler.Pylon.IGrabResult");
-            Assert(safe.CanAutoOpen, "A zero-padding Basler grab result with an exact payload should auto-open.");
-            Assert(safe.Members.Data == "PixelDataPointer", "Basler inference must prefer PixelDataPointer.");
-            Assert(safe.Members.BufferLength == "PayloadSize", "Basler inference did not retain PayloadSize.");
+            var contiguous = CreatePaddingAwareInventory(0, 640L * 480L);
+            var safe = VisionMemberInference.Infer(contiguous, "Example.PaddingAwareFrame");
+            Assert(safe.CanAutoOpen, "A zero-padding frame with an exact payload should auto-open.");
+            Assert(safe.Members.Data == "PixelDataPointer", "Inference must prefer PixelDataPointer.");
+            Assert(safe.Members.BufferLength == "PayloadSize", "Inference did not retain PayloadSize.");
 
             var padded = VisionMemberInference.Infer(
-                CreateBaslerInventory(16, (640L + 16L) * 480L),
-                "Basler.Pylon.IGrabResult");
-            Assert(padded.RequiresExplicitLayout, "Nonzero Basler PaddingX must require an explicit layout.");
-            Assert(!padded.CanAutoOpen, "A padded Basler grab result must not auto-open without a stride.");
+                CreatePaddingAwareInventory(16, (640L + 16L) * 480L),
+                "Example.PaddingAwareFrame");
+            Assert(padded.RequiresExplicitLayout, "Nonzero PaddingX must require an explicit layout.");
+            Assert(!padded.CanAutoOpen, "A padded frame must not auto-open without a stride.");
 
             var extraPayload = VisionMemberInference.Infer(
-                CreateBaslerInventory(0, (640L * 480L) + 128L),
-                "Basler.Pylon.IGrabResult");
-            Assert(extraPayload.RequiresExplicitLayout, "A Basler payload larger than the contiguous image must remain explicit.");
-            Assert(!extraPayload.CanAutoOpen, "An extra Basler payload must not be interpreted as contiguous pixels.");
+                CreatePaddingAwareInventory(0, (640L * 480L) + 128L),
+                "Example.PaddingAwareFrame");
+            Assert(extraPayload.RequiresExplicitLayout, "A payload larger than the contiguous image must remain explicit.");
+            Assert(!extraPayload.CanAutoOpen, "An extra payload must not be interpreted as contiguous pixels.");
         }
 
-        private static void VimbaFramePrefersImageDataAndRejectsChunkOffset()
+        private static void ImageDataOffsetShapeRequiresExplicitLayout()
         {
             var safe = VisionMemberInference.Infer(
-                CreateVimbaInventory("0x2000", "0x2000", 640L * 480L),
-                "VmbNET.IFrame");
-            Assert(safe.Members.Data == "ImageData", "Vimba inference must prefer ImageData over the whole Buffer.");
-            Assert(safe.CanAutoOpen, "A Vimba frame with equal base/image pointers and exact size should auto-open.");
+                CreateImageDataInventory("0x2000", "0x2000", 640L * 480L),
+                "Example.ImageDataFrame");
+            Assert(safe.Members.Data == "ImageData", "Inference must prefer ImageData over the whole Buffer.");
+            Assert(safe.CanAutoOpen, "A frame with equal base/image pointers and exact size should auto-open.");
 
             var chunked = VisionMemberInference.Infer(
-                CreateVimbaInventory("0x2000", "0x2100", (640L * 480L) + 256L),
-                "VmbNET.IFrame");
-            Assert(chunked.Members.Data == "ImageData", "Chunked Vimba inference must still select ImageData.");
-            Assert(chunked.RequiresExplicitLayout, "A Vimba ImageData offset from Buffer must require an adapter.");
-            Assert(!chunked.CanAutoOpen, "A chunk-prefixed Vimba frame must never auto-open as a flat image.");
+                CreateImageDataInventory("0x2000", "0x2100", (640L * 480L) + 256L),
+                "Example.ImageDataFrame");
+            Assert(chunked.Members.Data == "ImageData", "Chunked inference must still select ImageData.");
+            Assert(chunked.RequiresExplicitLayout, "An ImageData offset from Buffer must require an explicit layout.");
+            Assert(!chunked.CanAutoOpen, "A chunk-prefixed frame must never auto-open as a flat image.");
         }
 
-        private static void IdsPeakImageRequiresContiguousSize()
+        private static void SizedBufferShapeRequiresContiguousSize()
         {
             var safe = VisionMemberInference.Infer(
-                CreateIdsPeakInventory(640L * 480L),
-                "IDSImaging.Peak.ICV.Types.Image");
-            Assert(safe.CanAutoOpen, "An IDS peak ICV image with exact SizeInBytes should auto-open.");
-            Assert(safe.Members.BufferLength == "SizeInBytes", "IDS peak inference did not retain SizeInBytes.");
+                CreateSizedBufferInventory(640L * 480L),
+                "Example.SizedBufferImage");
+            Assert(safe.CanAutoOpen, "An image with exact SizeInBytes should auto-open.");
+            Assert(safe.Members.BufferLength == "SizeInBytes", "Inference did not retain SizeInBytes.");
 
             var padded = VisionMemberInference.Infer(
-                CreateIdsPeakInventory((640L * 480L) + 480L),
-                "IDSImaging.Peak.ICV.Types.Image");
-            Assert(padded.RequiresExplicitLayout, "A padded IDS peak ICV image must require explicit layout.");
-            Assert(!padded.CanAutoOpen, "A padded IDS peak ICV image must not default to minimum stride.");
+                CreateSizedBufferInventory((640L * 480L) + 480L),
+                "Example.SizedBufferImage");
+            Assert(padded.RequiresExplicitLayout, "A padded image must require explicit layout.");
+            Assert(!padded.CanAutoOpen, "A padded image must not default to minimum stride.");
         }
 
         private static void GenICamPfncAliasesResolveConservatively()
@@ -113,7 +113,7 @@ namespace RawBufferVisualizer.Tests
         {
             var inference = VisionMemberInference.Infer(
                 new List<VisualizerMemberInventoryItem>(),
-                "Euresys.EGrabber.ScopedBuffer");
+                "Example.MethodOnlyScopedBuffer");
             Assert(!inference.CanAutoOpen, "A method-only frame-grabber buffer must not auto-open.");
             Assert(inference.MissingRoles.Contains("data"), "A method-only buffer must report missing property/field data.");
         }
@@ -174,7 +174,7 @@ namespace RawBufferVisualizer.Tests
                 "does not match the contiguous image size");
         }
 
-        private static List<VisualizerMemberInventoryItem> CreateBaslerInventory(long paddingX, long payloadSize)
+        private static List<VisualizerMemberInventoryItem> CreatePaddingAwareInventory(long paddingX, long payloadSize)
         {
             return new List<VisualizerMemberInventoryItem>
             {
@@ -187,7 +187,7 @@ namespace RawBufferVisualizer.Tests
             };
         }
 
-        private static List<VisualizerMemberInventoryItem> CreateVimbaInventory(
+        private static List<VisualizerMemberInventoryItem> CreateImageDataInventory(
             string bufferAddress,
             string imageDataAddress,
             long bufferSize)
@@ -203,7 +203,7 @@ namespace RawBufferVisualizer.Tests
             };
         }
 
-        private static List<VisualizerMemberInventoryItem> CreateIdsPeakInventory(long sizeInBytes)
+        private static List<VisualizerMemberInventoryItem> CreateSizedBufferInventory(long sizeInBytes)
         {
             return new List<VisualizerMemberInventoryItem>
             {

@@ -10,7 +10,7 @@
 
 Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio 2022 or Visual Studio 2026 window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
 
-Current development is 2D camera-SDK first: Basler pylon .NET `IGrabResult` is the first direct vendor target, while `RawBufferView` remains the common adapter for other SDKs. Camera acquisition/control and all 3D point-cloud or depth-container visualization remain out of scope. See the [SDK adapter roadmap](docs/sdk-adapter-roadmap.md) and [Basler 2D contract](docs/basler-pylon-2d-adapter.md).
+Vendor-neutral `RawBufferView` remains the supported path for camera-SDK buffers. Direct vendor-named adapters are release-blocked until the applicable SDK license and compatibility wording are cleared in writing for this individual open-source project. Camera acquisition/control and all 3D point-cloud or depth-container visualization remain out of scope. See the [vendor SDK license policy](docs/vendor-sdk-license-policy.md) and [SDK adapter roadmap](docs/sdk-adapter-roadmap.md).
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
@@ -22,7 +22,7 @@ Visual Studio Marketplace still serves exact public `1.0.52.0`. The Gallery API 
 
 The `1.0.53.0` candidate adds:
 
-- a dependency-free direct debugger target for supported 2D Basler pylon .NET `IGrabResult` values; the development candidate passed 11-format camera-emulator coverage and a direct Mono12 debugger open on exact pylon Software Suite `8.1.0.16743` and `26.07.2.18500` test points;
+- removal of the uncleared proprietary vendor-adapter experiment while retaining vendor-neutral raw-buffer inspection;
 - an **Environment** panel that reports only required host/extension/temp-storage state;
 - a privacy-bounded diagnostic report that excludes credentials, environment-variable values, and image payloads;
 - bounded cold-page sampling for faster first preview of dense 100k/200k pointer-backed sources;
@@ -458,7 +458,7 @@ Recorded evidence is split between the current public `1.0.52` package, its prev
 
 | Check | Result |
 | --- | --- |
-| Basler pylon `1.0.53` development qualification | Exact pylon Software Suite `8.1.0.16743` and `26.07.2.18500` each passed 11 supported 2D camera-emulator formats and a registered direct `Basler.Pylon.GrabResult` Mono12 128 x 96 debugger open in Visual Studio Community 2026 `18.8.12023.21`. The same 26.07 assembly had already passed the direct path in VS2022. These are tested compatibility points, not a claim for every intervening pylon release or physical camera. Physical hardware, `Mono10p`/`Mono12p` emulator availability, and generic Automatic Inspector support remain outside this result. See [Basler pylon .NET 2D Adapter](docs/basler-pylon-2d-adapter.md). |
+| Proprietary vendor adapter in `1.0.53` | The engineering experiment was removed from active source because its technical evidence did **not** authorize distribution or a support claim. Any future direct integration must first pass the [vendor SDK license policy](docs/vendor-sdk-license-policy.md). |
 | Current public `1.0.52` package | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. The Gallery API, downloadable VSIX, and rendered 1.0.52 Overview were rechecked on 2026-08-03 KST. The public asset exactly matches the qualified candidate. |
 | Current `1.0.52` installed runtime | The same package passed ReleaseAnnouncement, AutomaticCollections, and MultiLibraryHybrid on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`: 9 hybrid documents, 0 errors, one Open/Scan command each, and 0 protocol errors. The durable result is recorded in [release-qualification-1.0.52.md](docs/release-qualification-1.0.52.md); the original pre-reinstall D-drive runtime folders were not recovered. |
 | Preserved failed `1.0.51` package | 2,011,587 bytes; SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`. VS2022 passed, but stable VS2026 `18.8.2` could not activate the registered provider because the older Extensibility framework requested the unavailable host-contract assembly version `17.0.0.0`. |
@@ -581,3 +581,5 @@ Copyright (c) 2026 Noah Choi.
 This project is licensed under the MIT License. You may use, modify, and redistribute the source code, but the copyright and license notice must remain included. See [LICENSE](LICENSE).
 
 External libraries keep their own licenses. Review [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before publishing a VSIX, release package, or redistributed binary.
+
+Direct proprietary camera-SDK adapters also require the separate [vendor SDK license gate](docs/vendor-sdk-license-policy.md). Technical compatibility alone is not permission to download, test, distribute, or advertise vendor support.

@@ -8,14 +8,14 @@ This is the canonical continuation document for the next conversation. Read it a
 | --- | --- |
 | Last verified | 2026-08-04 KST |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
-| Branch / remote | `main` / `https://github.com/Noah8218/RawBufferVisualizer.git` |
-| Implementation baseline | Pushed `1.0.53` release preparation is `bb23756`; current uncommitted follow-up removes non-runtime Environment utilities and gives Environment and What's New consistent same-button close behavior. Exact qualified/public `1.0.52` source remains `854cb67` |
+| Branch / remote | `agent/basler-environment-1.0.53` / `origin/agent/basler-environment-1.0.53`; repository `https://github.com/Noah8218/RawBufferVisualizer.git` |
+| Implementation baseline | Pre-remediation `c35074b` contains the Environment/panel work and the rejected Basler experiment. The succeeding remediation removes that direct provider/ObjectSource/registration/test path and applies the vendor SDK license gate. Exact qualified/public `1.0.52` source remains `854cb67` |
 | Source and VSIX version | Current source/development package `1.0.53` / `1.0.53.0`; public Marketplace remains exact `1.0.52.0`; preserved `EB94CCE...20534` is now historical because it predates the essential-only Environment feedback; preserved `1.0.51.0` is a failed unpublished candidate |
 | Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. Essential-only Environment and panel-toggle current-source UI passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)` |
 | Public Marketplace version | `1.0.52.0`; Gallery updated `2026-08-02T09:05:21.537Z`; public VSIX 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview `1.0.52`; current local `1.0.53` source has essential-only Environment and consistent panel toggles plus bounded cold-page preview sampling. Marketplace `1.0.53` publication has not occurred, and preserved pre-feedback/intermediate candidates must not be uploaded. |
-| Commit scope | The essential-only Environment and panel-toggle consistency source/tests/release communication plus updated 2026-08-03 audit documents belong to the next intentional commit. The explicitly excluded pre-existing untracked paths below do not. |
+| Product stage | Public Marketplace Preview `1.0.52`; current `1.0.53` working tree has essential-only Environment, consistent panel toggles, bounded cold-page sampling, and no active proprietary vendor adapter. A new immutable candidate has not been created or qualified. |
+| Commit scope | Current tracked edits remove the Basler direct code/registration/tests, neutralize vendor-named fixtures, remove the SDK audit/setup path, and align policy/release documentation. The explicitly excluded pre-existing untracked paths below do not belong to this work. |
 
 Public links:
 
@@ -27,15 +27,15 @@ The public Marketplace package is `1.0.52.0`. The Gallery API was rechecked on 2
 
 ## Current Change Set And Ownership
 
-The `1.0.53` release preparation is committed at `bb23756`. Continue from `origin/main`; do not replace it with an older tree.
+The pre-remediation technical `1.0.53` change set is pushed at `c35074b` on `origin/agent/basler-environment-1.0.53`. Do not publish that commit because it still contains the removed vendor experiment.
 
-Current public `1.0.52` ownership remains unchanged. Commit `bb23756` contains the broader `1.0.53` work below, while the current uncommitted follow-up narrows the Environment product surface, aligns its panel-toggle interaction, and completes the first Basler pylon 2D SDK vertical slice:
+Current public `1.0.52` ownership remains unchanged and it does not contain the direct Basler adapter. The remediation following `c35074b` removes the direct experiment and classifies all proprietary camera and board adapters as blocked by default:
 
 - `VisualizerEnvironmentCheck` now reports only Visual Studio host, loaded extension registration, and temporary storage; the Environment ToggleButton opens and closes the panel, and development/media utilities remain documentation-only;
 - What's New is now a ToggleButton: repeated selection closes the banner without changing the release-seen preference, while Dismiss closes it, clears the checked state, and persists the preference; the narrow-layout Inspector control was already a toggle;
 - large pointer-preview page budgeting and phase/cache-state performance evidence without relaxing the five-second threshold;
 - current-workspace Automatic Inspector diagnostic seam and newest-restored VSSDK discovery for Smart Type Mapper;
-- dependency-free Basler `IGrabResult` ObjectSource/provider, exact runtime-type registration, deterministic and official-emulator coverage, and long-TEMP handoff hardening;
+- removed Basler provider/ObjectSource/exact registration/dedicated tests and the multi-vendor SDK assembly-audit script; retained only neutral padding/stride/offset/size safety tests and historical evidence;
 - version `1.0.53`, release announcement, changelog, README, Marketplace Overview/notes, embedded notes, utility recovery documentation, and safety-contract tests;
 - package guards that invalidate version-bump outputs and reject stale generated/packaged VSIX manifests.
 
@@ -262,9 +262,9 @@ The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery,
 2. Local installed screenshots provide visual aspect evidence only. The full 540/900/1160 Fit/Manual assertions are current-source view evidence, not an installed-VSIX behavioral matrix.
 3. Local tag `v1.0.45` exists on `a23d8ad` but is not pushed; there are no GitHub Releases. Release bookkeeping should follow the actual next publication decision instead of presenting the historical draft as current.
 4. Marketplace CD exists, but PAT/publisher/environment approval and an actual automated publish run are not proven. Manual upload remains the known working release path.
-5. A new immutable release candidate has not been created from the complete Environment/panel and Basler follow-up source. The installed Basler candidate is qualification evidence, not a publishable release artifact.
-6. Basler is the only implemented direct vendor SDK adapter. `RawBufferView` and safe structural discovery remain the generic answers for other vendors; the exact ImagePtr registration remains a compatibility exception.
-7. Spinnaker and Vimba X assemblies/live objects, emulators, cameras, and representative lifetime cases are missing. Basler physical-camera drivers, transport behavior, requeue/disposal transitions, and packed `Mono10p`/`Mono12p` emulator coverage are also unverified.
+5. A new immutable `1.0.53` release candidate has not been created from the vendor-safe working tree. The historical Basler candidate is not publishable.
+6. No active direct proprietary camera or frame-grabber/board adapter remains. `RawBufferView` and safe structural discovery are the vendor-neutral paths.
+7. Current Vimba X and IDS peak terms exclude consumers; current Spinnaker terms require owned qualifying hardware/images; current Basler terms introduce purpose, marketing, derivative-distribution, indemnity, record, and audit conditions. Other proprietary camera/board SDKs are blocked by default. Do not download, test, implement, publish, or advertise a direct path without the clearance defined in [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md).
 8. Stable Visual Studio 2026 `18.x` is a supported compatibility target under Microsoft's VSIX API-version model. Exact `1.0.52` runtime qualification passed on Community `18.8.2`; VS2022 qualification passed on Community `17.14.33`. Preview/Insiders and explicit standalone .NET 9/10 matrices are not current support claims.
 9. Large 100k/200k evidence is file-backed raw-image evidence, not proof that a debuggee can safely allocate a fully decoded 100k/200k `Mat`.
 10. Smart Type Mapper **Open Variable** handles the no-debug-session case, but its individual pointer-backed live-open path does not have the same installed-VSIX automation depth as the automatic fallback path.
@@ -288,7 +288,7 @@ The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery,
 - Automatic Vision Inspector scans the selected stack frame's Locals and Arguments only. It does not scan other frames/threads, fields outside the bounded root/one-level inventory, or arbitrary collection contents. Optional collection expansion is limited to exact OpenCvSharp/Emgu Mat lists and one-dimensional arrays under the documented 8/16/8 caps.
 - Managed-array extraction prefers VSSDK child enumeration. Its EnvDTE fallback is capped at 256 elements, so a debugger engine that does not expose array children may require the existing collection path or a pointer-backed view.
 - Automatic confidence is structural evidence, not semantic proof. A plausible but wrong shape can still require **Edit Mapping**, and format ambiguities remain user decisions.
-- The new automatic path is proven with simulated company frames and IDS peak assembly metadata only, not live industrial-camera SDK objects. Padded rows, extra payload, and `Buffer`/`ImageData` offsets now fail closed.
+- The automatic path uses vendor-neutral structural fixtures, not live proprietary SDK objects. Padded rows, extra payload, and `Buffer`/`ImageData` offsets fail closed.
 - OpenCvSharp/Emgu exact automatic capture requires an initialized value and a breakpoint after assignment. Bitmap remains a registered-glyph path because automatic `LockBits` evaluation is not part of the safe contract.
 - Shared terminal cleanup polls for at most two minutes and removes terminal artifacts only. It intentionally leaves Ready/Processing untouched; late terminal markers and Processing items stranded by process crash are not immediately reclaimed.
 - Owned file-backed documents now hold active snapshot-directory leases, but a process crash can leave unlocked lease markers and payload directories until the later stale sweep.
@@ -334,13 +334,15 @@ The 2026-08-03 restored-PC audit is complete. The harness seam, VSSDK discovery,
 - Delayed cleanup removes only ACK/NACK/conflict terminal artifacts and never deletes Ready/Processing on timeout.
 - `Menus.ctmenu, 2` and exactly one instance of each Raw Buffer Visualizer View command remain in the generated package.
 - Fit preserves aspect ratio with the whole image visible; wheel/pan/1:1 switch to Manual and preserve the user's zoom/center.
-- Basler direct support remains exact `Basler.Pylon.IGrabResult` only, has no packaged pylon dependency, invokes only documented `ComputeStride(IImage)`, and never clones or disposes the application-owned result.
+- No proprietary vendor-named adapter or compatibility statement enters a release until [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md) passes. Technical tests and absence of bundled SDK DLLs are not legal clearance.
 
-## Basler pylon 2D Runtime-Qualified Checkpoint (2026-08-04)
+## Historical Removed Basler Experiment (2026-08-04)
 
-The approved product direction is now 2D camera-SDK first; 3D point clouds, depth/coordinate containers, camera acquisition/control, and PLC/I/O remain out of scope. The first direct SDK target is exact `Basler.Pylon.IGrabResult, Basler.Pylon`.
+**Removed from active source:** The following is technical history only. It does not authorize distribution, Marketplace publication, or a Basler/pylon support claim. See [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md).
 
-Implemented:
+The experiment targeted exact `Basler.Pylon.IGrabResult, Basler.Pylon`. The active product direction is vendor-neutral 2D buffer inspection; 3D point clouds, depth/coordinate containers, camera acquisition/control, and PLC/I/O remain out of scope.
+
+Historically implemented and now removed:
 
 - dependency-free Extensibility provider and debuggee-side ObjectSource;
 - exact `Image`/`TopDown`/live-pointer gates and official nullable `ComputeStride(IImage)` reflection;
@@ -364,37 +366,25 @@ Evidence:
 - long `D:` TEMP path: actual handoff log passed `Published -> Queue -> Open start -> Open end` after short request IDs and final-name watcher filtering;
 - physical evidence root: `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\installed-pylon-26.07.2`.
 
-Boundary: the direct registered debugger visualizer is qualified; generic Automatic Inspector remains slow and mapping-required for this Basler frame. `Mono10p`/`Mono12p` were unavailable from the emulator profile, and no physical camera, transport driver, requeue/disposal across resume, or 3D claim has passed.
+Boundary: the removed direct debugger visualizer passed a technical experiment only. It is not active or license-cleared. `Mono10p`/`Mono12p` were unavailable from the emulator profile, and no physical camera, transport driver, requeue/disposal across resume, or 3D claim passed.
 
 ## Next Priorities
 
-1. Commit and push the Environment/panel-toggle and Basler 2D changes when the owner requests `PUSH` | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+1. Create and qualify a new immutable `1.0.53` candidate from the remediated commit | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Scope only the intended tracked source/test/document changes. Keep `.tmp/` and the three root helper scripts excluded.
+2. Publish the newly qualified candidate to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-2. Choose the release version and create a new immutable candidate from the committed and runtime-qualified source | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+   Prerequisite: the license-safe candidate from priority 1 and explicit owner approval for the external Marketplace write.
 
-   Prerequisite: owner decision to retain unpublished `1.0.53` or bump again. Do not overwrite or publish historical `EB94CCE...20534` or intermediate `297A011...CF9`; the installed Basler VSIX `608A932...EFAD` is development qualification evidence, not the canonical release candidate.
-
-3. Publish the newly qualified candidate to Marketplace | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
-
-   Prerequisite: explicit owner approval for the external Marketplace write and a newly qualified immutable candidate from priority 2. Run the documented dry run immediately before upload and perform public asset, version, Overview, and release-note read-back afterward.
-
-4. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+3. Validate public `1.0.50 -> 1.0.52` profile migration on a separate PC | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
    Prerequisite: a separate serviced VS2022 `17.14+` or stable VS2026 PC that currently runs the exact public `1.0.50.0` package. Install the unchanged candidate SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F` as an update without uninstall, repair, `/ResetSkipPkgs`, or manual registration changes; restart and repeat ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, menu-count, and protocol checks. Do not spend model tokens on repeated local reinstall testing when this prerequisite is unavailable.
 
-5. Decide the Basler Automatic Inspector policy before changing it | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
-
-   Current evidence exposes a concrete gap: the registered direct provider opens immediately, while generic automatic scanning spends about 100 seconds and leaves the same value mapping-required. Decide whether registered Basler values should be skipped quickly or integrated through a bounded automatic path; preserve explicit debugger actions and do not invoke arbitrary SDK methods.
-
-6. Begin the Vimba X 2D adapter only after its official runtime prerequisite exists | Recommended model: `gpt-5.6-sol` | Reasoning effort: `high`
-
-   Prerequisite: an official Vimba X runtime/camera simulator. The Basler gate is complete, but do not spend implementation tokens or make vendor claims until the Vimba runtime/lifetime object can be exercised legally.
-
-7. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+4. Decide whether to keep an Inspector toggle visible at every width | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
    Current evidence proves the button/panel switch is responsive behavior, not intermittent registration. Any change requires a written UI description, a text mockup, and explicit owner approval before implementation.
+
+Blocked future work: any direct proprietary camera/frame-grabber/board adapter requires applicable written vendor rights, required legal review, and explicit owner implementation approval first. Do not spend model tokens on implementation until those prerequisites exist.
 
 Owner decision recorded 2026-07-26: the ImagePtr provider/public-contract mismatch (former priority 1) is intentionally left unchanged. The exact `Cressem.ImageModel.ImagePtr` registration is company-specific support and stays as is; the broader public wording question is deferred.
 
@@ -497,7 +487,7 @@ VS2022 installed it under `17.0_f2675563\Extensions\vxty5daa.2d4`; VS2026 instal
 
 The Kimi/embedded Git Bash environment on this machine starts without standard Windows variables (`ProgramFiles`, `ProgramFiles(x86)`, `ProgramData`, `ComSpec`, `SystemRoot`, ...). Symptoms: NuGet restore fails with `Value cannot be null. (Parameter 'path1')`, `ProcessStartInfo.EnvironmentVariables` returns null in smoke scripts, and `VisualStudioPublicAssemblies` auto-detection fails. Plain `dotnet build/restore/test` works when the variables are prefixed via `env "VAR=..."`; PowerShell smoke scripts should be launched through `.tmp\Invoke-WithFullEnvironment.ps1`, which rebuilds a complete process environment from the registry before invoking the target script.
 
-## Current Task Closure
+## Historical Basler Technical Task Closure
 
 Status: Complete
 Scope: First direct Basler pylon .NET 2D adapter through source/package implementation; exact pylon `8.1.0.16743` and `26.07.2.18500` installed assembly, 11-format emulator, and actual registered debugger visualizer qualification; long `D:` TEMP handoff repair; and reusable documentation.
@@ -505,3 +495,21 @@ Acceptance criteria: deterministic Basler and aggregate tests -> pass; Release s
 Verification: self-tests under intentionally long `D:` TEMP, full Release solution build, SDK contract script, Environment contract script, release communication script, pylon runtime harness, generated extension registration inspection, actual VS2022 baseline interaction plus VS2026 pylon 8.1/restored-26.07 interactions, package-log inspection, and fresh version-swap screenshots on active leftmost `\\.\DISPLAY2` bounds `-1920,365,1920,1080`.
 Evidence: [basler-pylon-2d-adapter.md](basler-pylon-2d-adapter.md), [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md), installed candidate VSIX SHA-256 `608A9327...EFAD`, and `D:\OpenVisionLab-TestData\RawBufferVisualizer\basler-pylon-2d\BASLER_PYLON_8.1_AND_26.07_QUALIFICATION_2026-08-04.md`.
 Boundary / next dependency: This completion covers the registered Basler emulator path on two exact pylon suites only. Untested pylon releases, physical cameras/drivers, packed `Mono10p`/`Mono12p` emulator coverage, generic Automatic Inspector integration, and other vendor SDKs remain separate. Marketplace still serves immutable public `1.0.52`; commit/push and any Marketplace write require explicit owner instruction.
+
+## Current Vendor SDK Source Remediation Closure
+
+Status: Complete
+Scope: Remove the uncleared Basler direct provider/ObjectSource/registration/tests and proprietary multi-SDK audit path; keep vendor-neutral buffer inspection and safety tests; apply the same default license gate to camera and frame-grabber/board SDKs.
+Acceptance criteria: direct Basler source and dedicated test path absent -> pass; proprietary SDK audit script absent -> pass; active source/test/sample/script vendor coupling -> 0 matches; vendor-neutral padding/stride/offset/length/PFNC safety coverage retained -> self-tests pass; generated VSIX proprietary registration/entry -> 0 matches; release and maintainer documentation aligned -> pass.
+Verification: `dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows` -> pass; `dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore` -> 0 errors and 18 pre-existing `VSTHRD010` warnings; built VSIX inspection -> 94 entries and no proprietary vendor registration; `Test-ReleaseCommunication.ps1` -> pass; changed Markdown relative-link validation -> pass for 16 files; smoke-script PowerShell parse -> pass; `git diff --check` -> pass.
+Evidence: current working-tree diff; [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md); [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md); built VSIX at `.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Release\net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`; test TEMP/TMP root `D:\OpenVisionLab-TestData\RawBufferVisualizer\vendor-sdk-removal`.
+Boundary / next dependency: This proves source/build/package removal, not an installed-VSIX runtime matrix. The remediation supersedes pre-remediation commit `c35074b` on the development branch; public Marketplace remains immutable `1.0.52`.
+
+## Future Direct Proprietary SDK Gate
+
+Status: Blocked
+Scope: Any new direct Basler pylon, Allied Vision Vimba X, IDS peak, Teledyne FLIR Spinnaker, or other proprietary camera/frame-grabber/transport-board/imaging-board adapter.
+Acceptance criteria: current official terms for the exact proposal -> required; applicable written vendor authorization -> missing; qualified legal review of material conditions -> missing; explicit owner implementation approval -> missing.
+Verification: official terms and decision checklist are recorded in [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md).
+Evidence: [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md) and [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md).
+Boundary / next dependency: Do not download, test, implement, publish, or advertise a direct integration until those prerequisites exist. Vendor-neutral `RawBufferView`/`RawBufferSnapshot` use remains supported.

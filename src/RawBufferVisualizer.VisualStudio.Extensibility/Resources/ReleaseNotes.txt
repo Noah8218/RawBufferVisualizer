@@ -1,7 +1,6 @@
 Raw Buffer Visualizer 1.0.53
 
 NEW
-- Supported 2D Basler pylon .NET IGrabResult values have a registered debugger visualizer without adding pylon to the VSIX. The development candidate passed pylon 26.07.2 camera emulation and an installed-VSIX Mono12 debugger open.
 - Environment Check reports only the current Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
 - Refresh and diagnostic-report copy do not scan a frame, open an image, install software, or change registration.
 
@@ -13,6 +12,9 @@ IMPROVED
 - Select Environment again to close the panel. Contributor and demo-media tools remain in development documentation instead of appearing as runtime requirements.
 - Select What's New again to close the release highlights. Dismiss still saves the version as seen.
 - The environment report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
+
+LICENSE GATE
+- Proprietary vendor-named camera SDK adapters are excluded from the approved release claim until written vendor permission and required legal review are recorded.
 
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
 

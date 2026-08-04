@@ -121,7 +121,7 @@ Current maturity gaps:
 - the public ImagePtr-style claim is broader than the current exact `Cressem.ImageModel.ImagePtr` provider registration;
 - public-update smoke evidence and Marketplace copy must be kept synchronized per release;
 - GitHub tags/releases are not yet used;
-- Basler is emulator-qualified, but physical hardware and every additional vendor still need their own runtime/lifetime evidence before becoming compatibility claims;
+- direct vendor adapters are release-blocked until the vendor SDK license, developer eligibility, hardware restrictions, distribution conditions, and compatibility wording are cleared in writing;
 - real long-running team usage is still the best source for remaining leaks, package-load edge cases, and unsupported type reports.
 
 ## Scope
@@ -134,10 +134,11 @@ Current maturity gaps:
 - large-image responsiveness and bounded memory/storage;
 - compatibility, packaging, update, repair, diagnostics, and support evidence;
 - comparison features that help before/after inspection.
-- focused 2D adapters for camera SDK image-result objects when the exact type, memory layout, and lifetime can be tested without adding a vendor runtime dependency to the VSIX.
+- vendor-neutral `RawBufferView`/`RawBufferSnapshot` integration for buffers supplied by the user's application.
 
 ### Later, only with evidence
 
+- focused 2D vendor adapters only after the [vendor SDK license policy](vendor-sdk-license-policy.md) passes and the exact type, memory layout, and lifetime are tested without adding a vendor runtime dependency to the VSIX;
 - additional industrial formats such as signed, planar, YUV, or packed Bayer variants;
 - broader Visual Studio/runtime support matrices;
 - richer comparison operators when a real workflow exposes a gap;
@@ -156,16 +157,16 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Now: stabilize 1.0.53 after completing the first 2D SDK vertical slice
+### Now: stabilize 1.0.53 and resolve the vendor SDK license hold
 
 1. Keep public Marketplace `1.0.52.0` immutable while `1.0.53.0` remains a local development candidate.
-2. Complete: Basler pylon .NET `IGrabResult` is the first direct 2D SDK target and no Basler assembly is packaged in the VSIX.
-3. Complete: deterministic tests prove descriptor mapping, padded stride, payload bounds, unsupported-format rejection, and non-ownership of the grab result.
-4. Complete: exact installed pylon `8.1.0.16743` and `26.07.2.18500` test points each passed 11-format camera emulation and an actual installed-VSIX Mono12 debugger open for the direct registered path. This is not a blanket claim for every intervening pylon version.
-5. Before starting another adapter, preserve the Basler evidence boundary: physical hardware, packed `Mono10p`/`Mono12p`, and generic Automatic Inspector integration are not part of the completed emulator claim.
+2. Keep the removed Basler experiment's emulator results classified as historical engineering evidence only; no active provider, registration, or transfer path remains.
+3. Apply the same license gate to camera, frame-grabber, transport-board, and imaging-board SDKs before any direct adapter is implemented, distributed, or advertised.
+4. Do not download or test Vimba X or IDS peak as an individual consumer under the currently reviewed terms, and do not use Spinnaker without owned qualifying hardware or written authorization.
+5. Keep `RawBufferView` as the vendor-neutral supported path while the direct-adapter gate is blocked.
 6. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
 
-Public Marketplace `1.0.52.0` remains the published baseline. Source `1.0.53.0` includes the Basler direct path, but the official emulator proof remains development qualification until a new immutable candidate is created and published. Physical-camera proof is a separate scope.
+Public Marketplace `1.0.52.0` remains the published baseline and never contained the direct Basler adapter. Source `1.0.53.0` removes the engineering experiment and retains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
 
 Exit criteria:
 
@@ -173,7 +174,7 @@ Exit criteria:
 - exactly one View open command and one current-frame scan command;
 - debugger handoff success requires an explicit ACK and rejection surfaces its reason;
 - primary individual/collection providers appear and open;
-- the Basler `IGrabResult`/concrete `GrabResult` registered provider opens a real emulator value without adding pylon to the VSIX;
+- release-facing code and copy contain no uncleared proprietary vendor adapter or support claim;
 - initialized OpenCvSharp/Emgu Mats open automatically without creating duplicate rows, while Bitmap stays glyph-owned;
 - Fit and Manual mode behavior remains stable across resize;
 - pointer support claims match exact provider registrations and samples;
@@ -184,8 +185,8 @@ Exit criteria:
 ### Next: supportability and compatibility growth
 
 1. Convert real user failures into reproducible samples in `VisualizerDebuggee` or focused smoke scripts.
-2. Convert only real vendor SDK/runtime evidence into new compatibility claims; the qualified `1.0.51` OpenCvSharp/Emgu automatic capture and Bitmap registered capture do not certify unrelated vendor SDK objects.
-3. Add only requested formats/types with an exact source type, assembly version, descriptor mapping, and lifetime rule.
+2. Convert vendor SDK/runtime evidence into a compatibility claim only after both the technical gate and [vendor SDK license gate](vendor-sdk-license-policy.md) pass.
+3. Add only requested formats/types with written authorization, an exact source type, assembly version, descriptor mapping, and lifetime rule.
 4. Extend long-session and multi-instance regression coverage when a real failure reveals a missing assertion.
 5. Evaluate Visual Studio 18 and newer .NET debuggee matrices after stable tooling is available.
 
@@ -197,17 +198,11 @@ Exit criteria for a new adapter/type:
 - individual and relevant collection paths work;
 - unsupported shapes fail visibly;
 - no core dependency on a vendor package is introduced without approval.
+- written vendor authorization and required legal review are recorded for the exact developer, purpose, SDK version, distribution model, and compatibility wording.
 
-### Next: 2D vendor SDK adapters
+### Later: direct proprietary SDK integrations
 
-The current evidence-driven order is:
-
-1. Basler pylon .NET, because official camera emulation can exercise `IGrabResult` without physical hardware.
-2. Allied Vision Vimba X, because the official camera simulator can exercise `IFrame` and its image-data offset/lifetime contract.
-3. IDS peak, building on the already audited managed assembly metadata and adding an official runtime or real camera.
-4. Teledyne FLIR Spinnaker, after an official runtime and representative managed-image lifetime scenario are available.
-
-HIKROBOT MVS, Euresys eGrabber, Teledyne DALSA Sapera LT, and Zebra Aurora remain evidence-gated candidates. A user-owned device or SDK that is available for repeatable testing can override this order. `RawBufferView` remains the public escape hatch for all other SDKs.
+There is no active vendor order or implementation target. All direct camera and frame-grabber/board work is blocked by [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md). A vendor becomes a candidate only after applicable written rights, required legal review, and explicit owner approval exist; only then is technical evidence planning justified. Hardware or an available installer never overrides license eligibility. `RawBufferView` remains the public vendor-neutral path.
 
 ## Prioritization Rule
 
@@ -227,6 +222,7 @@ Do not trade correctness or release stability for a broader feature list.
 
 An update is ready only when all changed surfaces have evidence:
 
+- proprietary vendor code and compatibility wording have passed the license gate or are absent from the candidate;
 - source and package build;
 - focused tests for the change;
 - relevant docked/installed VSIX smoke;

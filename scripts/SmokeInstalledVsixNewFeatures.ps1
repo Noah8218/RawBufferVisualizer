@@ -1438,19 +1438,19 @@ function Invoke-MultiLibraryHybridScenario(
         "OpenCvSharp.Mat",
         "Emgu.CV.Mat",
         "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedVimbaFrame",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage"
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedPaddingAwareFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedStrideAwareFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedOffsetAwareFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedSizedBufferFrame"
     )
     $automaticTypeCounts = [ordered]@{
         "OpenCvSharp.Mat" = 1
         "Emgu.CV.Mat" = 1
         "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView" = 2
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult" = 1
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr" = 1
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedVimbaFrame" = 1
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedPaddingAwareFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedStrideAwareFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedOffsetAwareFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedSizedBufferFrame" = 1
     }
 
     Show-LocalsWindow $Process.Id
