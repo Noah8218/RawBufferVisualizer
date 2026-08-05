@@ -1,6 +1,6 @@
 # Raw Buffer Visualizer 1.0.53 Release Qualification
 
-> Current-state record: 2026-08-05 KST. This document qualifies the exact local `1.0.53.0` vendor-safe candidate below. Matching source and evidence were committed and pushed at `7ab84b7`; this does not authorize a Marketplace upload. Public Marketplace remains exact `1.0.52.0`.
+> Current-state record: 2026-08-05 KST. This document qualified the exact vendor-safe `1.0.53.0` candidate below before publication. Marketplace now serves the same 1,914,615-byte asset with SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`; Gallery metadata, manifest, download, and Overview readback evidence is under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\marketplace-readback-20260805-110018`.
 
 ## Scope
 
@@ -29,7 +29,7 @@ Manifest target: [17.14,18.0) for Community/Professional/Enterprise x64
 Source: commit 7ab84b7
 ```
 
-The candidate was frozen on 2026-08-04. Installed-runtime test-harness and documentation corrections made after the freeze are not packaged product files. Rebuilding or modifying the VSIX invalidates this exact record. Commit `7ab84b7` contains the matching packaged product source plus those non-package qualification corrections and is pushed to `origin/agent/basler-environment-1.0.53`. Publication still requires explicit owner approval.
+The candidate was frozen on 2026-08-04. Installed-runtime test-harness and documentation corrections made after the freeze are not packaged product files. Rebuilding or modifying the VSIX invalidates this exact record. Commit `7ab84b7` contains the matching packaged product source plus those non-package qualification corrections and is pushed to `origin/agent/basler-environment-1.0.53`. Owner-approved Marketplace publication and exact-asset readback completed on 2026-08-05 KST.
 
 ## Acceptance evidence
 
@@ -108,4 +108,13 @@ Scope: Exact local vendor-safe `1.0.53.0` candidate packaging, VS2022/VS2026 ins
 Acceptance criteria: All local criteria in this document passed for SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`
 Verification: Release build/self-tests and package guards before freeze; installed scenarios above; ten installed-file comparisons; registration audit; release/environment contracts; Marketplace Dry Run; parser and diff checks
 Evidence: Exact candidate and D-drive paths above
-Boundary / next dependency: Matching source/evidence commit `7ab84b7` was pushed. Marketplace publication was not performed and requires explicit owner approval plus use of this unchanged VSIX. Public Marketplace remains `1.0.52.0`.
+Boundary / next dependency: Matching source/evidence commit `7ab84b7` was pushed, and Marketplace publication/readback now proves that the public asset is this exact VSIX. This does not prove a physical camera/board path, authorize a proprietary SDK adapter, or qualify a future 2.0 package.
+
+## Marketplace publication readback closure
+
+Status: Complete
+Scope: Existing Marketplace item `openvisionlab.RawBufferVisualizer` updated to exact public `1.0.53.0` with the approved English Overview
+Acceptance criteria: Gallery version `1.0.53.0` -> pass; public VSIX size and SHA-256 equal the qualified candidate -> pass; downloaded manifest `1.0.53.0` -> pass; rendered Overview equals the local English source after the Gallery's normal H1-marker removal -> pass
+Verification: Gallery query; public VSIX download and SHA-256; downloaded manifest inspection; Overview asset comparison; fresh cache-busted public-page check
+Evidence: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\marketplace-readback-20260805-110018`
+Boundary / next dependency: This proves publication identity and copy propagation. It does not qualify a new package, a physical camera/board, or a proprietary SDK integration.

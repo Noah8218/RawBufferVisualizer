@@ -409,7 +409,7 @@ Exact local `1.0.53.0` vendor-safe release candidate, qualified 2026-08-05:
 - Release solution build, aggregate self-tests, communication/environment checks, package guards, layout, memory soak, registration audit, installed-file equality, and Marketplace dry run passed;
 - the same exact candidate passed ReleaseAnnouncement, EnvironmentCheck, AutomaticCollections, MultiLibraryHybrid, SmartTypeMapper, SmartTypeMapperPersisted, exact menu counts, installed registration, and protocol diagnostics on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21`;
 - BufferDoctor, AutomaticVisionInspector, and OpenVariable also passed the exact candidate on VS2022;
-- public Marketplace remains the immutable exact `1.0.52.0` package; matching source/evidence were pushed at `7ab84b7`, while Marketplace upload was not performed;
+- public Marketplace serves the immutable exact `1.0.53.0` package; Gallery metadata, public download, manifest, and Overview readback match the qualified candidate, with evidence under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\marketplace-readback-20260805-110018`;
 - the exact artifact, criteria, commands, and D-drive evidence are recorded in [release-qualification-1.0.53.md](release-qualification-1.0.53.md).
 
 The sections below preserve historical validation baselines for regression context. They are not the current release status.

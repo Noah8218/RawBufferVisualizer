@@ -16,11 +16,11 @@ Vendor-neutral `RawBufferView` remains the supported path for camera-SDK buffers
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## 1.0.53 development candidate
+## Current release: 1.0.53
 
-Visual Studio Marketplace still serves exact public `1.0.52.0`. The Gallery API and downloadable public asset were rechecked on 2026-08-03 KST: the public VSIX is 1,902,513 bytes with SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. Source version `1.0.53.0` is a new local development candidate and has not been uploaded to Marketplace.
+Visual Studio Marketplace serves exact public `1.0.53.0`. Gallery metadata, the public download, manifest, and Overview were read back on 2026-08-05 KST: the public VSIX is 1,914,615 bytes with SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`, exactly matching the qualified candidate.
 
-The `1.0.53.0` candidate adds:
+The `1.0.53.0` release adds:
 
 - removal of the uncleared proprietary vendor-adapter experiment while retaining vendor-neutral raw-buffer inspection;
 - **Connect Your Buffer**, the vendor-neutral mapping workflow for existing camera and frame-grabber objects;
@@ -29,9 +29,9 @@ The `1.0.53.0` candidate adds:
 - bounded cold-page sampling for faster first preview of dense 100k/200k pointer-backed sources;
 - repaired Automatic Vision Inspector and Smart Type Mapper layout checks that follow the current workspace and restored VSSDK package.
 
-The candidate keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, the existing Marketplace extension ID, and the `1.0.52` Visual Studio 2026/automatic Mat collection/snapshot lease baseline. Public `1.0.52` remains the immutable release asset; do not rebuild or upload another binary under that version.
+The release keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, the existing Marketplace extension ID, and the `1.0.52` Visual Studio 2026/automatic Mat collection/snapshot lease baseline. Public `1.0.53` is now the immutable release asset; do not rebuild or upload another binary under that version.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.53`, it shows a non-modal summary of the candidate. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `1.0.53`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
 ### Environment Check
 
@@ -469,13 +469,14 @@ If disk usage looks high after a crashed debug session, close Visual Studio and 
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Recorded evidence is split between the current public `1.0.52` package, its previous public `1.0.50` baseline, the preserved failed `1.0.51` candidate, and historical stress/compatibility runs:
+Recorded evidence is split between the current public `1.0.53` package, previous public baselines, the preserved failed `1.0.51` candidate, and historical stress/compatibility runs:
 
 | Check | Result |
 | --- | --- |
-| Proprietary vendor adapter in `1.0.53` | The engineering experiment was removed from active source because its technical evidence did **not** authorize distribution or a support claim. Any future direct integration must first pass the [vendor SDK license policy](docs/vendor-sdk-license-policy.md). |
-| Current public `1.0.52` package | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. The Gallery API, downloadable VSIX, and rendered 1.0.52 Overview were rechecked on 2026-08-03 KST. The public asset exactly matches the qualified candidate. |
-| Current `1.0.52` installed runtime | The same package passed ReleaseAnnouncement, AutomaticCollections, and MultiLibraryHybrid on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`: 9 hybrid documents, 0 errors, one Open/Scan command each, and 0 protocol errors. The durable result is recorded in [release-qualification-1.0.52.md](docs/release-qualification-1.0.52.md); the original pre-reinstall D-drive runtime folders were not recovered. |
+| Current public `1.0.53` package | 1,914,615 bytes; SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Gallery metadata, the downloadable VSIX, manifest `1.0.53.0`, and rendered Overview were read back on 2026-08-05 KST and match the qualified candidate. |
+| Current `1.0.53` installed runtime | The same package passed ReleaseAnnouncement, Environment Check, AutomaticCollections, MultiLibraryHybrid, Smart Type Mapper, persisted mapping, exact menu counts, registration, and protocol diagnostics on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21`. The durable result is recorded in [release-qualification-1.0.53.md](docs/release-qualification-1.0.53.md). |
+| Proprietary vendor adapter boundary | The historical engineering experiment was removed before public `1.0.53` because its technical evidence did **not** authorize distribution or a support claim. Any future direct integration must first pass the [vendor SDK license policy](docs/vendor-sdk-license-policy.md). |
+| Previous public `1.0.52` package | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. Its installed-runtime evidence remains in [release-qualification-1.0.52.md](docs/release-qualification-1.0.52.md). |
 | Preserved failed `1.0.51` package | 2,011,587 bytes; SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`. VS2022 passed, but stable VS2026 `18.8.2` could not activate the registered provider because the older Extensibility framework requested the unavailable host-contract assembly version `17.0.0.0`. |
 | Previous public Marketplace `1.0.50` baseline | Exact downloaded package: 2,001,513 bytes; SHA-256 `2014AA8D679AF3D01F0B16CC304E77064ABCF0B0725BDC6BD543B7C08CDA397E`. It predates automatic Mat collection expansion and the in-product release-highlights banner. |
 | Current-source Fit/Manual matrix | 540/900/1160 px passed with aspect errors 0, Fit margin 1.05, and Manual zoom/center delta 0. This is current-source view evidence, not an installed-VSIX Fit behavioral run. |
@@ -484,7 +485,7 @@ Recorded evidence is split between the current public `1.0.52` package, its prev
 | Standalone viewer interactions | Passed open, pixel/GV read, Fit, 1:1, slider and wheel zoom, PNG/snapshot export, tabs, and linked views. |
 | VS2022 docked `5000 x 5000 Mono8` | Passed with `115.3 ms` open path, `1.24 ms` max wheel command, `0.77 ms` max drag command, and `33.94 ms` max frame. |
 | Installed VSIX, real `8192 x 8192` Mats (historical) | Passed in VS2022 17.14 with OpenCvSharp and Emgu CV, correct GV values, at most `1 MiB` per new preview file, and controlled `Unavailable` state after debuggee exit. This is not exact `1.0.51` evidence. |
-| Installed VSIX, hybrid current-frame session | Exact `1.0.52` passed in VS2022 17.14 and VS2026 18.8 with OpenCvSharp, Emgu CV, Bitmap, and five pointer-backed camera-shape fixtures; 9 images, 0 errors, 8/8 automatic opens, and no duplicate registered-type rows. |
+| Installed VSIX, hybrid current-frame session | Exact `1.0.53` passed in VS2022 17.14 and VS2026 18.8 with OpenCvSharp, Emgu CV, Bitmap, and five pointer-backed camera-shape fixtures; 9 images, 0 errors, 8/8 automatic opens, and no duplicate registered-type rows. |
 | Dense file-backed `100000 x 100000 Mono8` | Passed with a non-sparse `10,000,000,000` byte payload, `1.73 s` first visible time, and `88.0 MB` working set. |
 | Dense file-backed `200000 x 200000 Mono8` | Passed with a non-sparse `40,000,000,000` byte payload, `1.94 s` first visible time, and `87.5 MB` working set. |
 | Docked accumulation and cleanup soak | Passed 240 repeated `2048 x 2048 Mono8` opens using both selected-item Delete and Clear, with no positive managed/private/working-set growth, no GDI/USER growth, and no owned temporary directories left behind. |

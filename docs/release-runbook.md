@@ -57,7 +57,7 @@ Run the coherence guard:
 powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 1.0.53
 ```
 
-The guard fails when any version, heading, path, manifest metadata, or GitHub Release notes flow is stale. `Publish-VisualStudioMarketplace.ps1` requires an explicit `-VsixPath`, rejects a VSIX whose manifest version differs from the current extension project version, and defaults only the Overview to `docs\marketplace-overview-<VSIX version>.md`; it no longer uploads the root README as the Overview. Never depend on a repository publish folder containing the current qualified candidate.
+The guard fails when any version, Overview product heading/current-version section, path, manifest metadata, or GitHub Release notes flow is stale. `Publish-VisualStudioMarketplace.ps1` requires an explicit `-VsixPath`, rejects a VSIX whose manifest version differs from the current extension project version, and defaults only the Overview to `docs\marketplace-overview-<VSIX version>.md`; it no longer uploads the root README as the Overview. Never depend on a repository publish folder containing the current qualified candidate.
 
 The Tool Window announcement is intentionally non-modal. It appears only after the user opens Raw Buffer Visualizer, never opens the Tool Window itself, never starts inspection, and stores **Dismiss** per user in `%APPDATA%\RawBufferVisualizer\release-announcement-settings.json`. **What's New** opens or closes the current summary without changing the saved Dismiss preference.
 

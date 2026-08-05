@@ -160,15 +160,15 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Version transition: 1.0.53 before 2.0
+### Version transition: public 1.0.53 to separate 2.0
 
-`1.0.53` is the planned 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the already-qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation to users of public `1.0.52` without claiming a breaking platform transition.
+`1.0.53` is the published 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation without claiming a breaking platform transition.
 
-Do not relabel the exact qualified `1.0.53` VSIX as `2.0.0`; changing its version changes the package bytes and invalidates its installed qualification. Matching source/evidence commit `7ab84b7` is pushed; publish the unchanged `1.0.53` candidate only after explicit Marketplace approval. Then start the 2.0 development line with the vendor-neutral camera/frame-grabber buffer-shape matrix, corresponding onboarding/support contract, and a separately built and qualified `2.0.0` candidate.
+Do not relabel or rebuild the exact public `1.0.53` VSIX as `2.0.0`; changing its version changes the package bytes and invalidates its installed qualification. Matching product source/evidence commit `7ab84b7` is pushed, and Marketplace readback matches the qualified asset. Start the 2.0 development line with the vendor-neutral camera/frame-grabber buffer-shape matrix, corresponding onboarding/support contract, and a separately built and qualified `2.0.0` candidate only when that contract is ready.
 
-### 2.0 first vertical slice: Connect Your Buffer
+### 2.0 foundation already delivered: Connect Your Buffer
 
-The 2.0 direction is a vendor-neutral 2D industrial buffer debugger, not a bundle of proprietary SDK adapters. Its first vertical slice reuses Smart Type Mapper instead of adding a new pane or acquisition layer.
+The 2.0 direction is a vendor-neutral 2D industrial buffer debugger, not a bundle of proprietary SDK adapters. The first vertical slice was delivered in public `1.0.53` by reusing Smart Type Mapper instead of adding a new pane or acquisition layer. Do not reimplement it for the version transition.
 
 Required workflow:
 
@@ -187,16 +187,16 @@ Acceptance gate:
 - the dialog follows the existing dark IDE visual system for normal, hover, focus, selected/open, disabled, error, and scroll states;
 - direct camera/board SDKs, acquisition, device control, 3D, PLC, and I/O remain outside the slice.
 
-### Now: stabilize 1.0.53 and resolve the vendor SDK license hold
+### Now: lock the 2.0 vendor-neutral buffer contract
 
-1. Keep public Marketplace `1.0.52.0` immutable while `1.0.53.0` remains a local development candidate.
-2. Keep the removed Basler experiment's emulator results classified as historical engineering evidence only; no active provider, registration, or transfer path remains.
-3. Apply the same license gate to camera, frame-grabber, transport-board, and imaging-board SDKs before any direct adapter is implemented, distributed, or advertised.
-4. Do not download or test Vimba X or IDS peak as an individual consumer under the currently reviewed terms, and do not use Spinnaker without owned qualifying hardware or written authorization.
-5. Keep `RawBufferView` as the vendor-neutral supported path while the direct-adapter gate is blocked.
-6. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
+1. Keep public Marketplace `1.0.53.0` immutable and branch 2.0 work separately.
+2. Define a testable matrix for managed arrays and pointers, dimensions, stride or length, buffer offset, pixel format, valid bits, byte order, and lifetime.
+3. Add public neutral fixtures for padding, extra payload, member offsets, method-only or scoped shapes, and neutral PFNC-style aliases; define exact fail-closed outcomes for unsupported or ambiguous cases.
+4. Exercise the matrix through existing Connect Your Buffer and `RawBufferView`/`RawBufferSnapshot` contracts before adding UI, abstraction, or vendor-specific code.
+5. Extend Connect Your Buffer only when a proven matrix case cannot be expressed with its current editable, persisted, explicit-preview workflow.
+6. Keep the removed Basler experiment classified as historical engineering evidence only, and apply the license gate to every camera, frame-grabber, transport-board, and imaging-board SDK.
 
-Public Marketplace `1.0.52.0` remains the published baseline and never contained the direct Basler adapter. Source `1.0.53.0` removes the engineering experiment and retains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
+Public Marketplace `1.0.53.0` is the immutable published baseline and contains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
 
 Exit criteria:
 
@@ -210,7 +210,9 @@ Exit criteria:
 - pointer support claims match exact provider registrations and samples;
 - docked real-mouse zoom/pan remains responsive;
 - error/report/recovery, Save, Delete, Clear, and cleanup work;
-- public version, Overview, README, release notes, and artifact version agree.
+- every supported and rejected matrix row has a reproducible neutral fixture and expected outcome;
+- save/reload/reopen preserves visible editable roles without executing Preview or opening an image;
+- public version, Overview, README, release notes, and artifact version agree before any future release.
 
 ### Next: supportability and compatibility growth
 

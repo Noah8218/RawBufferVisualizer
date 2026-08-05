@@ -35,7 +35,7 @@ If any condition is unknown, the result is **Blocked**, not "probably permitted"
 | Teledyne FLIR Spinnaker | The EULA grants use only with supported FLIR cameras owned by the licensee and images derived from those cameras. | **Blocked without owned qualifying hardware or written authorization.** Do not use a no-camera SDK installation as release evidence. |
 | Other proprietary camera, frame-grabber, transport-board, and imaging-board SDKs | Not yet reviewed for the exact developer, purpose, hardware, redistribution, and trademark conditions. | **Blocked by default.** Review the current official license before any download or implementation. If the vendor does not offer applicable rights, Raw Buffer Visualizer does not provide that direct integration. |
 
-The public Marketplace `1.0.52` package predates the direct Basler adapter and is not changed by this hold. The current working tree removes the Basler direct adapter; pushed branch commit `c35074b` still contains the historical engineering experiment until an explicitly authorized commit/push updates it. Neither state is a released or legally cleared support claim.
+The public Marketplace `1.0.53` package contains no direct proprietary adapter or vendor support claim. Commit `c35074b` preserves the historical pre-remediation engineering experiment, while `af48a4f` removed it and `7ab84b7` contains the qualified vendor-safe product source. Historical technical evidence is not legal clearance.
 
 ## Written Authorization Checklist
 
