@@ -105,7 +105,7 @@ Lead with the debugger workflow, not the large-image benchmark. Publish only in 
 
 Current Overview copy:
 
-[Raw Buffer Visualizer 1.0.53 Marketplace Overview](marketplace-overview-1.0.53.md)
+[Raw Buffer Visualizer Marketplace Overview for 1.0.53](marketplace-overview-1.0.53.md)
 
 The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.53`.
 

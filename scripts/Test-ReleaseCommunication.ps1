@@ -102,7 +102,8 @@ Assert-Contains $toolWindowCodePath 'WhatsNewButton\.IsChecked\s*=\s*shouldShow'
 Assert-Contains $toolWindowCodePath 'private void WhatsNew_Click[\s\S]*?WhatsNewButton\.IsChecked != true[\s\S]*?ReleaseAnnouncementBanner\.Visibility = Visibility\.Collapsed[\s\S]*?Release highlights closed' "What's New repeated-click close behavior"
 Assert-Contains $toolWindowCodePath 'private void MarkCurrentReleaseSeen[\s\S]*?ReleaseAnnouncementBanner\.Visibility = Visibility\.Collapsed;[\s\S]*?WhatsNewButton\.IsChecked = false;' "What's New dismissed-state synchronization"
 Assert-Contains $changeLogPath "(?m)^## \[$escapedPackageVersion\]" 'CHANGELOG entry'
-Assert-Contains $overviewPath "(?m)^# Raw Buffer Visualizer $escapedPackageVersion Marketplace Overview$" 'Marketplace overview heading'
+Assert-Contains $overviewPath '(?m)^# Raw Buffer Visualizer$' 'Marketplace overview product heading'
+Assert-Contains $overviewPath "(?m)^## What's New In $escapedPackageVersion$" 'Marketplace overview current-version section'
 Assert-Contains $marketplaceNotesPath "(?m)^# Raw Buffer Visualizer $escapedPackageVersion$" 'Marketplace release-notes heading'
 Assert-Contains $embeddedNotesPath "(?m)^Raw Buffer Visualizer $escapedPackageVersion$" 'Embedded VSIX release-notes heading'
 Assert-Contains $readmePath "CHANGELOG\.md" 'README changelog link'
