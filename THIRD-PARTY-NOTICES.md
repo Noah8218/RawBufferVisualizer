@@ -32,3 +32,8 @@ Review this file before publishing a Marketplace package or GitHub release. If d
 dotnet list .\RawBufferVisualizer.sln package --include-transitive
 ```
 
+## Proprietary Camera SDK Hold
+
+No proprietary camera SDK is redistributed in the public `1.0.52` VSIX. A no-binary design does not by itself grant permission to download, test, integrate, or advertise compatibility with a proprietary SDK.
+
+Basler pylon, Allied Vision Vimba X, IDS peak, Teledyne FLIR Spinnaker, and other proprietary camera/frame-grabber/board direct adapters are blocked by project policy until their exact developer eligibility, purpose, hardware, distribution, and compatibility-wording conditions are cleared in writing. See [docs/vendor-sdk-license-policy.md](docs/vendor-sdk-license-policy.md). The former Basler `1.0.53` experiment was removed from active source; its historical evidence must not be presented as current support.

@@ -79,6 +79,46 @@ RawBufferVisualizer.VisualStudio.dll: 68,096 bytes; SHA-256 C6700E9BD6302A99A787
 RawBufferVisualizer.VisualStudio.Vssdk.dll: 194,560 bytes; SHA-256 66637E25B7D46147E6ABBB4D262D9C7EA6B1AFF87A55EF33C1AAAEB9A7878FE5
 ```
 
+## Essential-Only Environment Follow-Up
+
+Owner feedback after the candidate review narrowed the in-product panel to the three checks that an extension user actually needs: the Visual Studio host, the loaded Raw Buffer Visualizer registration, and writable temporary storage. The .NET SDK, VSSDK workload, and FFmpeg remain documented development or demo utilities in [development-prerequisites.md](development-prerequisites.md), but no longer appear as product setup requirements. The Environment toolbar control is now a toggle; selecting it again closes the panel, so the redundant in-panel Close button and all installer/download actions were removed.
+
+The preserved `EB94CCE...20534` candidate above predates this feedback. It remains historical evidence and must not be uploaded as the current Environment behavior. The corrected current-source package used only for this follow-up installation and UI verification is:
+
+```text
+Source baseline: bb23756 plus the uncommitted essential-only Environment follow-up
+Version: 1.0.53.0
+Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\current-source-vsix\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+Size: 1,907,942 bytes
+SHA-256: 297A01104993CB7C524EE418759FDF0EAB41D07A0766A018B1A475F793219CF9
+VS2022 installed folder: C:\Users\USER\AppData\Local\Microsoft\VisualStudio\17.0_f2675563\Extensions\i00kqfbx.m2v
+VS2026 installed folder: C:\Users\USER\AppData\Local\Microsoft\VisualStudio\18.0_19923728\Extensions\d4t0qvg1.cnd
+RawBufferVisualizer.VisualStudio.dll: 63,488 bytes; SHA-256 D0BF16316FF16112AA7199681EB94D75F873B226E2837AEDF5A79B12B9E1B33E
+RawBufferVisualizer.VisualStudio.Vssdk.dll: 190,464 bytes; SHA-256 BDA11BFE35A958358C03781994D4093443C049CF05361E54AC1788496D61F784
+```
+
+Both installed manifests report `1.0.53.0`, and both installed product assemblies hash-match the corrected VSIX payload. VS2022 Wide and VS2026 Compact were exercised on active leftmost monitor `\\.\DISPLAY1`, bounds `0,0,1920,1080`: opening showed exactly the three required Ready rows plus Refresh and Copy; no optional-tool text or installer action was present; selecting Environment again removed the panel and exposed `Environment check closed` through the ToolWindow status. Both IDEs closed normally without a save prompt.
+
+## Panel Toggle Consistency Follow-Up
+
+The next owner-approved follow-up made **What's New** follow the same panel contract as **Environment**. Before the edit, a fresh VS2026 capture proved that selecting What's New a second time left the release banner open. Current source uses the existing release handler with a ToggleButton: the first selection opens the banner, a repeated selection closes it without changing the saved release-seen preference, and **Dismiss** closes the banner, clears the toggle state, and persists the release-seen preference. The narrow-layout **Inspector** control was already a toggle and required no change; ordinary action controls such as Open, Clear, Save, Fit, and Scan Now remain one-shot commands rather than panels.
+
+The newest current-source package used only for this follow-up installation and UI verification is:
+
+```text
+Source baseline: bb23756 plus the uncommitted essential-only Environment and panel-toggle consistency follow-ups
+Version: 1.0.53.0
+Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\current-source-vsix\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+Size: 1,908,045 bytes
+SHA-256: 5EC07758A9592F9F47C7479B005E205AA255A60D6F1400586A37F5B3B8024C23
+VS2022 installed folder: C:\Users\USER\AppData\Local\Microsoft\VisualStudio\17.0_f2675563\Extensions\vxty5daa.2d4
+VS2026 installed folder: C:\Users\USER\AppData\Local\Microsoft\VisualStudio\18.0_19923728\Extensions\nmzdwcrf.z0i
+RawBufferVisualizer.VisualStudio.dll: 63,488 bytes; SHA-256 8AB612A6D69B0561D5D5411B1792823E8E66E1C20C33A0777C8287903A6FD636
+RawBufferVisualizer.VisualStudio.Vssdk.dll: 190,976 bytes; SHA-256 95B424C494CA28E71B52BF1FB4C69933DCF3EDDED7C667DD3F29A629C0E0FB65
+```
+
+Both installed manifests report `1.0.53.0`, and both installed product assemblies match the VSIX payload by length and SHA-256. VS2022 Wide and VS2026 Compact were exercised on the active leftmost monitor `\\.\DISPLAY1`, bounds `0,0,1920,1080`: What's New opened on the first selection, closed on the second selection, reopened, and then closed with its checked state cleared by Dismiss. The fixed dark ToolWindow theme showed the existing normal, hover/focus, checked, and unchecked states without a platform-default visual leak. Both IDEs closed normally without a save prompt.
+
 ## Functional Matrix
 
 | Area | Result | Evidence or boundary |
@@ -97,7 +137,9 @@ RawBufferVisualizer.VisualStudio.Vssdk.dll: 194,560 bytes; SHA-256 66637E25B7D46
 | First-access dense 100k/200k sampled preview after correction | Pass | Page-budgeted pointer previews produced 122x122/62x62 output. In the final regression run, first source access in the benchmark process was `992 ms`/`692 ms`; sample stage `950 ms`/`632 ms`. The script records that Windows file cache was not flushed or claimed as controlled. |
 | Automatic Vision Inspector harness seam | Pass | `ActiveDocumentForDiagnostics` provides a narrow current-workspace seam; `-VerifyDiagnosticSeamOnly` passed against the current Release assembly. Full visual layout execution remains part of the installed/current-source UI checkpoint. |
 | Smart Type Mapper VSSDK discovery | Pass | `-VerifyVssdkDiscoveryOnly` selected restored `Microsoft.VSSDK.BuildTools\17.14.2094\tools\vssdk`; historical `17.9.3168` is no longer required. |
-| Environment Check service/UI contracts | Pass | Required/optional order, build-suffixed supported VS versions, temp write/delete round trip, privacy declarations, official URLs, confirmation defaults, collapsed-by-default UI, compact-safe action row, and no open/refresh scan/open/install side effects passed aggregate and contract tests. Final installed UI in both IDEs showed the expected host, `1.0.53.0`, temp, .NET, workload, and FFmpeg states; Refresh, Copy, and Close completed. Copied reports contained no credential/environment-variable values or image payload. |
+| Historical Environment Check candidate | Pass, superseded | The preserved `EB94CCE...20534` package passed its then-approved required/optional panel, report, external-link confirmation, compact Close, and installed-runtime checks. Owner feedback later superseded only that panel scope; the package remains historical and is not the current publication candidate. |
+| Essential-only Environment follow-up | Pass | Aggregate and static contracts prove exactly three runtime rows, no optional-tool/install surfaces, a ToggleButton open/close contract, temp write/delete, privacy-bounded report, build-suffixed host parsing, and no scan/open/install side effects. Installed current-source UI passed in VS2022 Wide and VS2026 Compact; repeated Environment selection closed the panel and reported `Environment check closed`. |
+| Panel toggle consistency follow-up | Pass | Release communication contracts prove What's New initialization, repeated-selection close, and Dismiss state synchronization. The prior installed VS2026 behavior was captured before editing; the matching current-source package then passed first-open, repeated-button close, reopen, and Dismiss in VS2022 Wide and VS2026 Compact. Inspector was already a narrow-layout toggle. |
 | Actual VS2022 workflow | Pass | Exact public `1.0.52` showed the ToolWindow, debugger break/Continue, automatic status, and registered visualizer availability. Exact final `1.0.53` then showed the corrected host suffix, `348.16`-pixel compact and `990 x 695` wide panels, visible compact Close, report copy, debugger break/Continue, automatic inspection, and the installed `1.0.53.0` registration state. |
 | Actual VS2026 command/ToolWindow/debug workflow | Pass | Exact public `1.0.52` showed the ToolWindow, debugger break/Continue, and the local-window `Alt+Down` visualizer-list registration cue. Exact final `1.0.53` then showed the same compact/wide panel and action behavior, host `18.8.12023.21 built by: stable`, debugger break/Continue, the local `args` visualizer cue, automatic inspection, and installed `1.0.53.0` registration state. |
 | Public Marketplace read-back | Pass | Gallery reports `1.0.52.0`; public VSIX is 1,902,513 bytes and SHA-256 `3DD78167...EB9E1F`; rendered Overview is the 1.0.52 document |
@@ -125,6 +167,19 @@ D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\envir
 D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\final\vs2026-compact-final.jpg
 D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\final\vs2026-wide-final.jpg
 D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\final\vs2026-debug-break-final.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\before-user-current.png
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\after-vs2022-wide-open.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\after-vs2022-wide-closed.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\after-vs2026-compact-open.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\essential-only-toggle\after-vs2026-compact-closed.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\before-vs2026-whats-new-open.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\before-vs2026-second-click-still-open.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\after-vs2022-wide-open.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\after-vs2022-wide-closed.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\after-vs2022-wide-dismissed.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\after-vs2026-compact-open.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\after-vs2026-compact-closed.jpg
+D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency\after-vs2026-compact-dismissed.jpg
 D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\preview-first-handoff\preview-first-handoff.json
 ```
 
@@ -139,8 +194,12 @@ The owner approved the reviewed correction set and Environment Check mockup.
 3. Complete: sampled-preview output records map, view, pointer acquisition, sample, cleanup, first/repeat access, drive, and source metadata. The sample stage was the dominant cold path, so large pointer-backed previews now use a bounded page estimate without changing the five-second threshold.
 4. Complete: Environment Check, build-suffixed host-version handling, compact-safe action row, privacy report, confirmation-only external actions, release communication, and unit/static contract tests are implemented in `1.0.53`.
 5. Complete installed runtime: exact public `1.0.52` passed in VS2022 and VS2026. The final-hash `1.0.53` candidate then passed installed compact/wide Environment Check and debug-registration checks in both IDEs. Both IDEs were stopped and closed normally; no process was force-terminated and no unsaved state was discarded.
+6. Complete follow-up: owner feedback removed non-runtime utilities and external actions from the product panel, converted Environment to a same-control open/close toggle, updated release/development communication, and passed current-source installed UI checks in VS2022 Wide and VS2026 Compact. The preserved candidate in item 5 was not overwritten.
+7. Complete panel consistency follow-up: What's New now opens and closes from the same toggle, while Dismiss additionally saves the release-seen preference and clears the checked state. Static contracts, the Release build, aggregate tests, matching installed payloads, and actual VS2022 Wide/VS2026 Compact interactions passed.
 
-## In-Product Environment Check - Review And Mockup
+## Historical In-Product Environment Check Mockup
+
+The mockup below records the initially approved candidate and is retained as change history. The later essential-only follow-up above supersedes its optional-tool rows, installer actions, and separate Close button.
 
 Review: normal users have no extra runtime utility to install. A silent "install everything" feature would therefore add risk and present contributor/media tools as product dependencies. If approved, the useful feature is a read-only **Environment** panel that diagnoses the current Visual Studio/extension state and opens only official installers or download pages for genuinely missing items.
 
@@ -173,13 +232,13 @@ Behavior contract:
 - The diagnostic report excludes secrets and image payloads and warns that local paths should be reviewed before sharing.
 - The panel uses the product's existing fixed dark ToolWindow visual system. The product does not currently claim an adaptive light ToolWindow theme. Compact `348.16`-pixel and floating wide `990 x 695` states were verified in both supported IDE generations; existing deterministic layout tests cover the intermediate widths.
 
-The owner approved this mockup. Source `1.0.53` implements it with the same required-first/optional-second order and confirmation-only external actions. The current public `1.0.52` package does not contain the feature.
+The owner initially approved this mockup. The preserved `EB94CCE...20534` candidate implements it, while current source implements the later essential-only toggle behavior. The current public `1.0.52` package contains neither version of the feature.
 
 ## Durable Closure
 
 Status: Complete
-Scope: Post-Windows-reinstall recovery, approved harness/performance corrections, `1.0.53` Environment Check implementation, deterministic source/package tests, exact artifact installation, and current VS2022/VS2026 Compact/Wide/debug evidence
-Acceptance criteria: Restore/build/core/preview/soak checks passed; harness seam/discovery and first-access preview criteria passed; Environment Check source/static tests passed; exact-public VS2022/VS2026 recheck passed; exact final-hash `1.0.53` installed Environment and debug-registration checks passed in both IDEs
-Verification: Release build; aggregate self-tests; release communication; Environment Check contract test; diagnostic seam/VSSDK discovery checks; two-run sampled-preview benchmark; package identity/hash comparison; compatibility/layout/Buffer Doctor/memory-soak; actual installed VS2022/VS2026 Compact/Wide, Refresh/Copy/Close, debugger break, automatic inspection, and visualizer-cue interaction
-Evidence: candidate SHA-256 `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53`; final UI evidence under `D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\environment-check\final`
-Boundary / next dependency: This completes the restored-PC audit and local `1.0.53` qualification. It does not publish `1.0.53` to Marketplace and does not satisfy the separate-PC exact-public `1.0.50 -> 1.0.52` profile-migration debt.
+Scope: Post-Windows-reinstall recovery, approved harness/performance corrections, essential-only `1.0.53` Environment toggle, consistent What's New toggle/Dismiss behavior, deterministic source/package tests, current-source installation, and VS2022 Wide/VS2026 Compact evidence
+Acceptance criteria: Original restore/build/core/preview/soak and exact-package gates passed; essential-only Environment and What's New source/static contracts pass; corrected current-source VSIX installed with matching payload in both IDEs; each installed UI closes Environment and What's New on repeated selection, while Dismiss closes What's New and clears its checked state
+Verification: Release solution build; aggregate self-tests; release communication; Environment Check contract test; package and installed-assembly hash comparison; actual installed VS2022 Wide and VS2026 Compact open/repeated-close/reopen/Dismiss interactions on the active leftmost monitor
+Evidence: historical candidate SHA-256 `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`; intermediate essential-only development VSIX SHA-256 `297A01104993CB7C524EE418759FDF0EAB41D07A0766A018B1A475F793219CF9`; newest panel-consistency development VSIX SHA-256 `5EC07758A9592F9F47C7479B005E205AA255A60D6F1400586A37F5B3B8024C23`; UI evidence under `D:\OpenVisionLab-TestData\RawBufferVisualizer\post-reinstall-2026-08-03\ui\panel-toggle-consistency`
+Boundary / next dependency: This completes the requested product/UI follow-up but does not replace the canonical `1.0.53` release candidate or publish Marketplace content. Before any upload, choose whether to retain `1.0.53` or bump again, then produce and qualify a new immutable candidate from the committed follow-up source. The separate-PC exact-public `1.0.50 -> 1.0.52` profile-migration debt also remains external.

@@ -17,7 +17,7 @@ Use this checklist after a Windows reinstall, on a new contributor PC, or before
 | `VsixPublisher.exe` | No | No | No | Required; normally restored by `Microsoft.VSSDK.BuildTools` | No |
 | FFmpeg | No | No | No | No | Optional, required only by `tools\Create-DemoMedia.ps1` |
 | OpenCvSharp, Emgu CV, SharpGL, VSSDK NuGet packages | No separate product install | Restored automatically by NuGet | Restored automatically for samples/tests | Restored automatically | Restored automatically when needed |
-| Vendor camera SDKs/drivers | Only when the user's own application requires them | Optional qualification inputs | Optional qualification inputs | No | No |
+| Proprietary camera/frame-grabber/board SDKs and drivers | Only when the user's own application requires them | Not a project prerequisite; license-gated before any project qualification | Not installed by project validation | No | No |
 
 ## End-User Requirement
 
@@ -100,6 +100,12 @@ powershell -ExecutionPolicy Bypass -File .\tools\Create-DemoMedia.ps1 -InputPath
 
 Installation is intentionally manual. Follow [demo-recording-guide.md](demo-recording-guide.md), visually review the source capture, and do not treat generated media as functional-test evidence.
 
+## Proprietary Vendor SDK Boundary
+
+Proprietary camera, frame-grabber, transport-board, and imaging-board SDKs are not Raw Buffer Visualizer contributor or end-user prerequisites. Do not download, install, audit, or add one for this project until [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md) passes for the exact developer, purpose, version, hardware state, distribution model, and compatibility wording.
+
+An SDK already installed for the user's own application does not automatically authorize this project to integrate, distribute, or advertise support for it. Historical vendor experiments are recorded separately and are not setup instructions.
+
 ## Test Storage
 
 On the project Windows workstation, store generated test data and evidence under:
@@ -112,7 +118,7 @@ Route test-process `TEMP` and `TMP` there when practical. A machine without `D:`
 
 ## In-Product Environment Check
 
-Source version `1.0.53` implements the approved **Environment** panel. Public Marketplace `1.0.52` does not contain it; do not confuse the local development candidate with the immutable public package.
+Public Marketplace `1.0.53` and the locally qualified `2.0.0` candidate implement the approved **Environment** panel. The panel must report the version loaded by the current Visual Studio session; it is not evidence that Marketplace has already published the local candidate.
 
 The panel reports required runtime state first:
 
@@ -120,21 +126,14 @@ The panel reports required runtime state first:
 2. Raw Buffer Visualizer version loaded in the current Visual Studio session.
 3. A create/write/delete probe below the extension's temporary-storage root.
 
-It then reports optional contributor/media utilities:
-
-- .NET 8 SDK: detected below `%ProgramFiles%\dotnet\sdk\8.*`.
-- Visual Studio extension-development workload: detected through the current installation's `VSSDK` directory.
-- FFmpeg: detected as `ffmpeg.exe` on `PATH`; it remains demo-media-only.
-
 Actions follow these rules:
 
-- **Refresh**, **Copy diagnostic report**, and **Close** do not scan a debugger frame, open an image, change the active document, install software, or modify VSPackage registration.
-- **Open VS Installer**, **Official download**, and **Installation guide** require a visible Yes/No confirmation.
-- The extension opens Visual Studio Installer or the official .NET, Microsoft Learn, or FFmpeg page. It does not download installers, select workloads, or run package-manager commands.
+- **Refresh**, **Copy diagnostic report**, and the **Environment** open/close toggle do not scan a debugger frame, open an image, change the active document, install software, or modify VSPackage registration.
+- Selecting **Environment** again closes the panel; there is no redundant in-panel Close action.
 - The report excludes credentials, environment-variable values, and image payloads. It explicitly warns that local paths are present and must be reviewed before sharing.
 - Vendor SDKs/drivers and Marketplace publisher credentials remain outside the feature.
 
-A normal extension user still has no extra utility to install beyond a supported Visual Studio and the VSIX.
+A normal extension user still has no extra utility to install beyond a supported Visual Studio and the VSIX. Contributor and demo-media utilities remain documented in the role matrix and setup sections above; they are not product runtime checks.
 
 Source/markup safety contracts can be rechecked without launching an IDE:
 
@@ -152,4 +151,4 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\Test-EnvironmentCh
 | NuGet package path in a smoke script is missing | Fix the script to discover the restored version; do not install the stale hard-coded version |
 | `VsixPublisher.exe` is missing | Restore the solution or install the VSSDK workload only for release tooling |
 | FFmpeg is missing | Ignore unless producing demo media; install manually from the documented source when needed |
-| Vendor SDK test is blocked | Obtain the legal SDK/hardware/emulator prerequisite; fixture evidence is not certification |
+| Vendor SDK test is blocked | Stop. Obtain the written permission and legal review required by [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md) before any download or qualification work. |

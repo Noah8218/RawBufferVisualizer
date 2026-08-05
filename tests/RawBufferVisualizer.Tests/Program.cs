@@ -92,6 +92,7 @@ namespace RawBufferVisualizer.Tests
                 BufferDoctorAcceptsTrailingRowFit();
                 TypeMappingFileRoundTrips();
                 TypeMappingResolutionPrefersSolutionLocal();
+                RawBufferViewTemplateUsesSelectedMapping();
                 TypeMappingExtractsMappedCompanyFrame();
                 TypeMappingAppliesEnumPixelFormatMap();
                 TypeMappingFailureIncludesMemberInventory();
@@ -1777,6 +1778,9 @@ namespace RawBufferVisualizer.Tests
                 var liveRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(liveRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
+                Assert(
+                    Path.GetFileName(requestPath).Length <= 48,
+                    "Handoff request names must stay short enough for long Visual Studio TEMP paths.");
                 Assert(Path.GetDirectoryName(requestPath) == firstInbox, "Handoff request was not routed to the first Visual Studio inbox.");
                 Assert(Path.GetDirectoryName(typedRequestPath) == secondInbox, "Handoff request was not routed to the second Visual Studio inbox.");
                 Assert(!string.Equals(firstInbox, secondInbox, StringComparison.OrdinalIgnoreCase), "Visual Studio inboxes must be isolated.");
@@ -2751,6 +2755,53 @@ namespace RawBufferVisualizer.Tests
                     Directory.Delete(directory, true);
                 }
             }
+        }
+
+        private static void RawBufferViewTemplateUsesSelectedMapping()
+        {
+            var mapped = new TypeMapping
+            {
+                TypeName = "Company.Vision.CompanyFrame",
+                AssemblyName = "Company.Vision",
+                Members = new TypeMappingMembers
+                {
+                    Data = "ImageAddress",
+                    Width = "SizeX",
+                    Height = "SizeY",
+                    Stride = "LinePitch",
+                    BufferLength = "BufferSize",
+                    ValidBits = "ValidBits"
+                },
+                ByteOrder = RawByteOrder.BigEndian.ToString()
+            };
+
+            var template = RawBufferViewTemplateGenerator.Create(mapped, RawPixelFormat.BGR24, 8);
+            Assert(template.Contains("var rawBufferStride = frame.LinePitch;", StringComparison.Ordinal), "Template should use the mapped stride member.");
+            Assert(template.Contains("Buffer = frame.ImageAddress,", StringComparison.Ordinal), "Template should use the mapped pointer member.");
+            Assert(template.Contains("BufferLength = frame.BufferSize,", StringComparison.Ordinal), "Template should use the mapped buffer-length member.");
+            Assert(template.Contains("Width = frame.SizeX,", StringComparison.Ordinal), "Template should use the mapped width member.");
+            Assert(template.Contains("Height = frame.SizeY,", StringComparison.Ordinal), "Template should use the mapped height member.");
+            Assert(template.Contains("PixelFormat = RawPixelFormat.BGR24,", StringComparison.Ordinal), "Template should use the selected raw pixel format.");
+            Assert(template.Contains("Channels = 3,", StringComparison.Ordinal), "Template should derive the channel count.");
+            Assert(template.Contains("BitDepth = frame.ValidBits,", StringComparison.Ordinal), "Template should use the mapped valid-bits member.");
+            Assert(template.Contains("ByteOrder = RawByteOrder.BigEndian,", StringComparison.Ordinal), "Template should preserve byte order.");
+            Assert(template.Contains("Name = nameof(frame)", StringComparison.Ordinal), "Template should name the source variable.");
+            Assert(!template.Contains("Basler", StringComparison.OrdinalIgnoreCase)
+                && !template.Contains("Pylon", StringComparison.OrdinalIgnoreCase)
+                && !template.Contains("Spinnaker", StringComparison.OrdinalIgnoreCase),
+                "Template should not hard-code a proprietary SDK.");
+
+            var inferred = new TypeMapping
+            {
+                Members = new TypeMappingMembers { Data = "Pointer", Width = "Width", Height = "Height" }
+            };
+            var inferredTemplate = RawBufferViewTemplateGenerator.Create(inferred, RawPixelFormat.Mono12PackedLsb, 12, true);
+            Assert(inferredTemplate.Contains("var rawBufferStride = checked((frame.Width * 12 + 7) / 8);", StringComparison.Ordinal),
+                "Template should derive a packed Mono12 stride when no member is mapped.");
+            Assert(inferredTemplate.Contains("BufferLength = checked((long)rawBufferStride * frame.Height),", StringComparison.Ordinal),
+                "Template should derive buffer length when no member is mapped.");
+            Assert(inferredTemplate.Contains("Buffer = new IntPtr(unchecked((long)frame.Pointer.ToUInt64())),", StringComparison.Ordinal),
+                "Template should convert UIntPtr safely.");
         }
 
         private static void TypeMappingExtractsMappedCompanyFrame()

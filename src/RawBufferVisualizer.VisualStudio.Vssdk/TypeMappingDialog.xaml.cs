@@ -27,7 +27,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private readonly int _debuggeeProcessId;
         private readonly List<string> _enumValueNames = new List<string>();
         private readonly List<ComboBox> _enumValueBoxes = new List<ComboBox>();
+        private readonly TypeMappingMembers? _initialMembers;
         private readonly TypeMappingMembers? _suggestedMembers;
+        private readonly string _initialByteOrder;
         private readonly Dictionary<string, string> _existingPixelFormatMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         public TypeMappingDialog(
@@ -45,7 +47,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _debuggeeProcessId = debuggeeProcessId;
             var existingMapping = TypeMappingStore.Default.FindMapping(_typeName, _assemblyName)
                 ?? TypeMappingStore.Default.FindMappingByTypeNameOnly(_typeName);
-            _suggestedMembers = suggestedMembers ?? existingMapping?.Members;
+            _suggestedMembers = suggestedMembers;
+            _initialMembers = suggestedMembers ?? existingMapping?.Members;
+            _initialByteOrder = existingMapping?.ByteOrder ?? RawByteOrder.LittleEndian.ToString();
             if (existingMapping?.PixelFormatMap != null)
             {
                 foreach (var pair in existingMapping.PixelFormatMap)
@@ -56,22 +60,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             TypeNameText.Text = string.Format(
                 CultureInfo.InvariantCulture,
-                "Map members of {0} ({1})",
+                "Connect buffer members of {0} ({1})",
                 string.IsNullOrWhiteSpace(_typeName) ? "unknown type" : _typeName,
                 string.IsNullOrWhiteSpace(_assemblyName) ? "unknown assembly" : _assemblyName);
             PopulateRoles();
             ByteOrderBox.ItemsSource = Enum.GetNames(typeof(RawByteOrder));
-            ByteOrderBox.SelectedItem = RawByteOrder.LittleEndian.ToString();
+            ByteOrderBox.SelectedItem = Enum.TryParse(_initialByteOrder, true, out RawByteOrder initialByteOrder)
+                ? initialByteOrder.ToString()
+                : RawByteOrder.LittleEndian.ToString();
             if (pixelFormatOnly)
             {
                 Title = "Confirm Pixel Format";
                 AllRolesGrid.Visibility = Visibility.Collapsed;
+                CopyTemplateButton.Visibility = Visibility.Collapsed;
+                UseSuggestedRolesButton.Visibility = Visibility.Collapsed;
                 MappingGuidanceText.Text = "Only the current pixel-format value needs confirmation. "
                     + "Data, dimensions, and stride were inferred and are already selected for the saved mapping.";
             }
             else
             {
-                MappingGuidanceText.Text = "Review the inferred member roles, then save this mapping for future breaks.";
+                MappingGuidanceText.Text = "Review the inferred roles. Preview reads the current buffer; Save Mapping reuses these choices on future breaks.";
             }
         }
 
@@ -91,14 +99,25 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             FillBox(BufferLengthBox, names, true);
             FillBox(ValidBitsBox, names, true);
 
-            Preselect(DataBox, FirstAvailable(_suggestedMembers?.Data, PreselectDataMember()));
-            Preselect(WidthBox, FirstAvailable(_suggestedMembers?.Width, PreselectByName(WidthNameCandidates, "width", "sizex")));
-            Preselect(HeightBox, FirstAvailable(_suggestedMembers?.Height, PreselectByName(HeightNameCandidates, "height", "sizey")));
-            Preselect(StrideBox, FirstAvailable(_suggestedMembers?.Stride, PreselectByName(StrideNameCandidates, "stride", "pitch", "step")));
-            Preselect(PixelFormatBox, FirstAvailable(_suggestedMembers?.PixelFormat, PreselectPixelFormatMember()));
-            Preselect(ValidBitsBox, FirstAvailable(_suggestedMembers?.ValidBits, PreselectByName(ValidBitsNameCandidates, "validbits", "bitdepth", "depth")));
-            Preselect(BufferLengthBox, FirstAvailable(_suggestedMembers?.BufferLength, PreselectByName(BufferLengthNameCandidates, "bufferlength", "bytelength", "length")));
+            ApplyRoleSelections(_initialMembers);
+        }
+
+        private void ApplyRoleSelections(TypeMappingMembers? preferredMembers)
+        {
+            SelectRole(DataBox, FirstAvailable(preferredMembers?.Data, PreselectDataMember()));
+            SelectRole(WidthBox, FirstAvailable(preferredMembers?.Width, PreselectByName(WidthNameCandidates, "width", "sizex")));
+            SelectRole(HeightBox, FirstAvailable(preferredMembers?.Height, PreselectByName(HeightNameCandidates, "height", "sizey")));
+            SelectRole(StrideBox, FirstAvailable(preferredMembers?.Stride, PreselectByName(StrideNameCandidates, "stride", "pitch", "step")));
+            SelectRole(PixelFormatBox, FirstAvailable(preferredMembers?.PixelFormat, PreselectPixelFormatMember()));
+            SelectRole(ValidBitsBox, FirstAvailable(preferredMembers?.ValidBits, PreselectByName(ValidBitsNameCandidates, "validbits", "bitdepth", "depth")));
+            SelectRole(BufferLengthBox, FirstAvailable(preferredMembers?.BufferLength, PreselectByName(BufferLengthNameCandidates, "bufferlength", "bytelength", "length")));
             RebuildEnumMappingRows();
+        }
+
+        private void SelectRole(ComboBox box, string? memberName)
+        {
+            box.SelectedIndex = 0;
+            Preselect(box, memberName);
         }
 
         private string? FirstAvailable(string? preferred, string? fallback)
@@ -367,42 +386,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void Save_Click(object sender, RoutedEventArgs e)
         {
             StatusText.Text = string.Empty;
-            var dataName = DataBox.SelectedItem as string;
-            var widthName = WidthBox.SelectedItem as string;
-            var heightName = HeightBox.SelectedItem as string;
-            if (string.IsNullOrEmpty(dataName) || string.IsNullOrEmpty(widthName) || string.IsNullOrEmpty(heightName))
+            if (!TryCreateMapping(out var mapping, out var error))
             {
-                StatusText.Text = "Data, Width, and Height members are required.";
+                StatusText.Text = error;
                 return;
-            }
-
-            var mapping = new TypeMapping
-            {
-                TypeName = _typeName,
-                AssemblyName = _assemblyName,
-                Members = new TypeMappingMembers
-                {
-                    Data = dataName,
-                    Width = widthName,
-                    Height = heightName,
-                    Stride = OptionalMemberName(StrideBox),
-                    BufferLength = OptionalMemberName(BufferLengthBox),
-                    PixelFormat = OptionalMemberName(PixelFormatBox),
-                    ValidBits = OptionalMemberName(ValidBitsBox)
-                },
-                ByteOrder = Convert.ToString(ByteOrderBox.SelectedItem, CultureInfo.InvariantCulture) ?? RawByteOrder.LittleEndian.ToString()
-            };
-
-            var pixelFormatMember = FindInventoryItem(PixelFormatBox.SelectedItem as string);
-            if (pixelFormatMember != null && pixelFormatMember.EnumValues != null && pixelFormatMember.EnumValues.Count > 0)
-            {
-                var map = new Dictionary<string, string>(_existingPixelFormatMap, StringComparer.OrdinalIgnoreCase);
-                for (var i = 0; i < _enumValueNames.Count; i++)
-                {
-                    map[_enumValueNames[i]] = Convert.ToString(_enumValueBoxes[i].SelectedItem, CultureInfo.InvariantCulture) ?? RawPixelFormat.Mono8.ToString();
-                }
-
-                mapping.PixelFormatMap = map;
             }
 
             try
@@ -425,7 +412,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     var overwrite = MessageBox.Show(
                         this,
                         "A mapping for " + _typeName + " already exists. Overwrite it?",
-                        "Map This Type",
+                        "Connect Your Buffer",
                         MessageBoxButton.YesNo,
                         MessageBoxImage.Question);
                     if (overwrite != MessageBoxResult.Yes)
@@ -451,6 +438,105 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             StatusText.Text = "Mapping saved to " + TypeMappingStore.GetDefaultUserMappingPath()
                 + ". Automatic Vision Inspector will apply it on the next scan.";
             DialogResult = true;
+        }
+
+        private void CopyTemplate_Click(object sender, RoutedEventArgs e)
+        {
+            StatusText.Text = string.Empty;
+            if (!TryCreateMapping(out var mapping, out var error))
+            {
+                StatusText.Text = error;
+                return;
+            }
+
+            var dataMember = FindInventoryItem(mapping.Members.Data);
+            if (dataMember == null || !IsPointerTypeName(dataMember.TypeName))
+            {
+                StatusText.Text = "RawBufferView templates require an IntPtr or UIntPtr data member. Save Mapping supports managed arrays without project code.";
+                return;
+            }
+
+            var pixelFormat = RawPixelFormat.Mono8;
+            var pixelFormatMember = FindInventoryItem(mapping.Members.PixelFormat);
+            if (pixelFormatMember != null && !ResolvePixelFormat(pixelFormatMember, out pixelFormat))
+            {
+                StatusText.Text = "Select a Raw Buffer Visualizer format for the current pixel-format value before copying the template.";
+                return;
+            }
+
+            var validBitsMember = FindInventoryItem(mapping.Members.ValidBits ?? mapping.Members.BitDepth);
+            var bitDepth = validBitsMember != null && TryParsePositiveInt(validBitsMember.SampleValue, out var selectedValidBits)
+                ? selectedValidBits
+                : GetDefaultValidBits(pixelFormat);
+
+            try
+            {
+                Clipboard.SetText(RawBufferViewTemplateGenerator.Create(
+                    mapping,
+                    pixelFormat,
+                    bitDepth,
+                    dataMember.TypeName == "UIntPtr"));
+                StatusText.Text = "Template copied; mapping unchanged. Verify buffer lifetime and runtime pixel format.";
+            }
+            catch (Exception ex)
+            {
+                StatusText.Text = "Template copy failed: " + ex.Message;
+            }
+        }
+
+        private void UseSuggestedRoles_Click(object sender, RoutedEventArgs e)
+        {
+            _existingPixelFormatMap.Clear();
+            ApplyRoleSelections(_suggestedMembers);
+            ByteOrderBox.SelectedItem = RawByteOrder.LittleEndian.ToString();
+            PreviewImage.Source = null;
+            PreviewStatusText.Text = string.Empty;
+            StatusText.Text = "Suggested roles restored. Select Save Mapping to persist them.";
+        }
+
+        private bool TryCreateMapping(out TypeMapping mapping, out string error)
+        {
+            mapping = new TypeMapping();
+            var dataName = DataBox.SelectedItem as string;
+            var widthName = WidthBox.SelectedItem as string;
+            var heightName = HeightBox.SelectedItem as string;
+            if (string.IsNullOrEmpty(dataName) || string.IsNullOrEmpty(widthName) || string.IsNullOrEmpty(heightName))
+            {
+                error = "Data, Width, and Height members are required.";
+                return false;
+            }
+
+            mapping = new TypeMapping
+            {
+                TypeName = _typeName,
+                AssemblyName = _assemblyName,
+                Members = new TypeMappingMembers
+                {
+                    Data = dataName,
+                    Width = widthName,
+                    Height = heightName,
+                    Stride = OptionalMemberName(StrideBox),
+                    BufferLength = OptionalMemberName(BufferLengthBox),
+                    PixelFormat = OptionalMemberName(PixelFormatBox),
+                    ValidBits = OptionalMemberName(ValidBitsBox)
+                },
+                ByteOrder = Convert.ToString(ByteOrderBox.SelectedItem, CultureInfo.InvariantCulture) ?? RawByteOrder.LittleEndian.ToString()
+            };
+
+            var pixelFormatMember = FindInventoryItem(mapping.Members.PixelFormat);
+            if (pixelFormatMember != null && pixelFormatMember.EnumValues != null && pixelFormatMember.EnumValues.Count > 0)
+            {
+                var map = new Dictionary<string, string>(_existingPixelFormatMap, StringComparer.OrdinalIgnoreCase);
+                for (var i = 0; i < _enumValueNames.Count; i++)
+                {
+                    map[_enumValueNames[i]] = Convert.ToString(_enumValueBoxes[i].SelectedItem, CultureInfo.InvariantCulture) ?? RawPixelFormat.Mono8.ToString();
+                }
+
+                mapping.PixelFormatMap = map;
+            }
+
+            error = string.Empty;
+            return true;
         }
 
         private void Cancel_Click(object sender, RoutedEventArgs e)

@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This document describes the public `1.0.50.0` Marketplace baseline, the preserved failed `1.0.51.0` candidate, and the local `1.0.52.0` successor. A full VS2026 reinstall removed the orphaned per-machine `1.0.6.0`, after which exact `1.0.51` runtime testing exposed an Extensibility host-contract activation failure. Version `1.0.52` adopts the stable `17.14` Extensibility SDK line and the matching VS2022 support floor, and adds explicit document/lease and handoff coordination ownership. See `release-qualification-1.0.51.md` and `release-qualification-1.0.52.md`. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the architecture shared by public `1.0.53.0` and the locally qualified, unpublished `2.0.0.0` candidate while preserving earlier release baselines for regression history. Version `1.0.52` adopted the stable `17.14` Extensibility SDK line and explicit document/lease and handoff ownership; public `1.0.53` added the vendor-neutral Connect Your Buffer foundation; local `2.0.0` locks the vendor-neutral 2D carrier/layout contract and shared fail-closed transfer validation. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
@@ -12,7 +12,7 @@ This document describes the public `1.0.50.0` Marketplace baseline, the preserve
 | Standalone WPF viewer | `net472` and `net8.0-windows` |
 | Build machine | Visual Studio 2022 with .NET desktop development and .NET 8 SDK or newer |
 
-The technical/API floor for `1.0.52` is Visual Studio 2022 `17.14`, matching the stable Extensibility SDK/runtime used to fix activation on VS2026. Visual Studio 2026 supports API version 17.x, evaluates the lower bound of the VSIX installation range, and ignores its product-version upper bound, so `[17.14,18.0)` remains valid on stable VS2026 `18.x`. Exact installed runtime qualification is tracked separately. Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not current `1.0.52` support claims.
+The technical/API floor for `1.0.53` and `2.0.0` is Visual Studio 2022 `17.14`, matching the stable Extensibility SDK/runtime used to fix activation on VS2026. Visual Studio 2026 supports API version 17.x, evaluates the lower bound of the VSIX installation range, and ignores its product-version upper bound, so `[17.14,18.0)` remains valid on stable VS2026 `18.x`. Exact `2.0.0` installed runtime qualification passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`; see [release-qualification-2.0.0.md](release-qualification-2.0.0.md). Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not current support claims.
 
 ## System Shape
 
@@ -122,6 +122,10 @@ Important registration limit: Visual Studio debugger visualizers are attached to
 The public generic pointer contract is `RawBufferView`. Do not describe arbitrary ImagePtr-style variables as individually supported until provider metadata, sample code, tests, and package validation prove that exact claim.
 
 For a richer industrial descriptor, expose `RawBufferView` with buffer address/length, width, height, stride, format, channels, bit depth, valid bits/byte order as applicable. A pointer without dimensions, stride, format, and lifetime is not safely visualizable.
+
+### Vendor-neutral 2D buffer matrix
+
+[Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) is the 2.0 source of truth for pointer/managed carriers, dimensions, stride/length, image offsets, formats, valid bits, byte order, and lifetime. `VisualizerChunkedTransfer.CreateMetadataCore` applies the existing `RawBufferDiagnostics.AnalyzeLength` gate so registered and mapped metadata share the same fail-closed boundary. Its repository fixtures use only project-owned neutral shapes. The exact frozen `2.0.0.0` candidate passed dual-IDE installed qualification, but this work does not authorize a vendor SDK adapter or change the public `1.0.53` Marketplace asset.
 
 ## Automatic Inspection Flow
 
@@ -402,15 +406,15 @@ Full publication steps and the environment-gated CD flow are in [release-runbook
 
 ## Current Validation Baseline
 
-Exact local `1.0.52.0` release candidate, last updated 2026-08-02:
+Exact local `1.0.53.0` vendor-safe release candidate, qualified 2026-08-05:
 
-- artifact size 1,902,513 bytes, SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`;
-- source baseline is commit `43e347c` plus the current intentional `1.0.52` implementation, version, documentation, and test-infrastructure working tree;
-- Release solution build, aggregate self-tests, communication checks, package guards, and Marketplace dry run passed;
-- the same exact candidate passed ReleaseAnnouncement, AutomaticCollections, MultiLibraryHybrid, exact menu counts, installed registration, and protocol diagnostics on VS2022 Community `17.14.33` and VS2026 Community `18.8.2`;
-- workspace lifecycle, snapshot lease/replacement/disposal, and claimed handoff ACK/NACK/exception tests pass;
-- separate-PC public `1.0.50.0 -> 1.0.52.0` update evidence is the remaining external release gate;
-- the exact artifact, criteria, commands, and D-drive evidence are recorded in [release-qualification-1.0.52.md](release-qualification-1.0.52.md).
+- artifact size 1,914,615 bytes, SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`;
+- matching product source, qualification harness, and evidence are in pushed commit `7ab84b7`;
+- Release solution build, aggregate self-tests, communication/environment checks, package guards, layout, memory soak, registration audit, installed-file equality, and Marketplace dry run passed;
+- the same exact candidate passed ReleaseAnnouncement, EnvironmentCheck, AutomaticCollections, MultiLibraryHybrid, SmartTypeMapper, SmartTypeMapperPersisted, exact menu counts, installed registration, and protocol diagnostics on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21`;
+- BufferDoctor, AutomaticVisionInspector, and OpenVariable also passed the exact candidate on VS2022;
+- public Marketplace serves the immutable exact `1.0.53.0` package; Gallery metadata, public download, manifest, and Overview readback match the qualified candidate, with evidence under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.53\marketplace-readback-20260805-110018`;
+- the exact artifact, criteria, commands, and D-drive evidence are recorded in [release-qualification-1.0.53.md](release-qualification-1.0.53.md).
 
 The sections below preserve historical validation baselines for regression context. They are not the current release status.
 

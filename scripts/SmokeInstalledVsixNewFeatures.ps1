@@ -1,13 +1,13 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ReleaseAnnouncement")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ReleaseAnnouncement", "EnvironmentCheck")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [string]$VisualStudioInstanceId = "",
     [string]$OutputRoot = "",
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$ExpectedReleaseVersion = "1.0.52",
+    [string]$ExpectedReleaseVersion = "2.0.0",
     [switch]$NoBuild,
     [switch]$NoInstall,
     [switch]$KeepVisualStudio,
@@ -369,7 +369,9 @@ function Find-LocalsTreeItem(
     [System.Windows.Automation.AutomationElement]$Root,
     [string]$Name) {
     $item = Find-TreeItem $Root $Name
-    if ($item -and -not [bool]$item.Current.IsOffscreen) {
+    if ($item -and
+        -not [bool]$item.Current.IsOffscreen -and
+        $item.Current.BoundingRectangle.Height -ge 8) {
         return $item
     }
 
@@ -402,7 +404,9 @@ function Find-LocalsTreeItem(
 
                 Start-Sleep -Milliseconds 150
                 $item = Find-TreeItem $Root $Name
-                if ($item -and -not [bool]$item.Current.IsOffscreen) {
+                if ($item -and
+                    -not [bool]$item.Current.IsOffscreen -and
+                    $item.Current.BoundingRectangle.Height -ge 8) {
                     return $item
                 }
             }
@@ -438,6 +442,29 @@ function Select-AutomationItem([System.Windows.Automation.AutomationElement]$Ele
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
 }
 
+function Click-AutomationElement([System.Windows.Automation.AutomationElement]$Element) {
+    $rect = $Element.Current.BoundingRectangle
+    if ($rect.Width -lt 1 -or $rect.Height -lt 1 -or [bool]$Element.Current.IsOffscreen) {
+        throw "Automation element '$($Element.Current.AutomationId)' is not clickable."
+    }
+
+    [RawBufferInstalledVsixNative]::SetCursorPos(
+        [int]($rect.Left + $rect.Width / 2),
+        [int]($rect.Top + $rect.Height / 2)) | Out-Null
+    [RawBufferInstalledVsixNative]::mouse_event(
+        [RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN,
+        0,
+        0,
+        0,
+        [UIntPtr]::Zero)
+    [RawBufferInstalledVsixNative]::mouse_event(
+        [RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP,
+        0,
+        0,
+        0,
+        [UIntPtr]::Zero)
+}
+
 function Select-ComboBoxItem(
     [System.Windows.Automation.AutomationElement]$ComboBox,
     [string]$ItemName) {
@@ -461,27 +488,29 @@ function Select-ComboBoxItem(
     ([System.Windows.Automation.ExpandCollapsePattern]$expandPattern).Collapse()
 }
 
+function Get-SelectedComboBoxItemName(
+    [System.Windows.Automation.AutomationElement]$ComboBox) {
+    $selectionPattern = $null
+    if ($ComboBox.TryGetCurrentPattern([System.Windows.Automation.SelectionPattern]::Pattern, [ref]$selectionPattern)) {
+        $selection = ([System.Windows.Automation.SelectionPattern]$selectionPattern).Current.GetSelection()
+        if ($selection.Count -eq 1) {
+            return [string]$selection[0].Current.Name
+        }
+    }
+
+    [string]$ComboBox.Current.Name
+}
+
 function Click-VisualizerGlyph(
     [System.Windows.Automation.AutomationElement]$Root,
     [System.Windows.Automation.AutomationElement]$TreeItem) {
-    $itemName = [string]$TreeItem.Current.Name
-    Select-AutomationItem $TreeItem
-    Start-Sleep -Milliseconds 250
-
-    # VS 2026 can virtualize and reposition a Locals row after SelectionItem.Select().
-    # Reacquire the live row before using its bounds so the glyph click cannot land on
-    # a child or neighboring variable.
-    $refreshedTreeItem = Find-LocalsTreeItem $Root $itemName
-    if ($refreshedTreeItem) {
-        $TreeItem = $refreshedTreeItem
-    }
-
+    $localizedView = [string]([char]0xBCF4) + [string]([char]0xAE30)
     $rect = $TreeItem.Current.BoundingRectangle
     if ($rect.Width -lt 80 -or $rect.Height -lt 8 -or [bool]$TreeItem.Current.IsOffscreen) {
-        throw "Variable row has invalid bounds after selection: $($rect.Width) x $($rect.Height)"
+        throw "Variable row has invalid bounds: $($rect.Width) x $($rect.Height)"
     }
 
-    $glyphOffset = if ($rect.Width -lt 900) { 180 } elseif ($rect.Width -lt 1300) { 230 } else { 280 }
+    $glyphOffset = if ($rect.Width -lt 900) { 150 } elseif ($rect.Width -lt 1300) { 230 } else { 280 }
     $hoverX = [int][Math]::Max($rect.Left + 20, $rect.Right - $glyphOffset)
     $hoverY = [int]($rect.Top + $rect.Height / 2)
     [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $hoverY) | Out-Null
@@ -495,7 +524,7 @@ function Click-VisualizerGlyph(
     for ($index = 0; $index -lt $descendants.Count; $index++) {
         $element = $descendants.Item($index)
         $elementLog += "type=$($element.Current.ControlType.ProgrammaticName) name=$($element.Current.Name) id=$($element.Current.AutomationId) rect=$($element.Current.BoundingRectangle)"
-        if (-not $viewElement -and @("View", "보기") -contains [string]$element.Current.Name) {
+        if (-not $viewElement -and @("View", $localizedView) -contains [string]$element.Current.Name) {
             $viewElement = $element
         }
     }
@@ -506,7 +535,7 @@ function Click-VisualizerGlyph(
             [System.Windows.Automation.Condition]::TrueCondition)
         for ($index = 0; $index -lt $desktopElements.Count; $index++) {
             $element = $desktopElements.Item($index)
-            if (@("View", "보기") -notcontains [string]$element.Current.Name) {
+            if (@("View", $localizedView) -notcontains [string]$element.Current.Name) {
                 continue
             }
 
@@ -799,6 +828,20 @@ function Invoke-BufferDoctorScenario(
         @(Get-ImageListItems $toolRoot).Count -gt 0
     } 30 | Out-Null
 
+    $inspectorToggle = Find-ElementByAutomationId $toolRoot "InspectorToggleButton"
+    if ($inspectorToggle -and -not [bool]$inspectorToggle.Current.IsOffscreen) {
+        $togglePattern = $null
+        if (-not $inspectorToggle.TryGetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern,
+            [ref]$togglePattern)) {
+            throw "Compact Inspector button does not support TogglePattern."
+        }
+        if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
+            [System.Windows.Automation.ToggleState]::On) {
+            ([System.Windows.Automation.TogglePattern]$togglePattern).Toggle()
+        }
+    }
+
     # Prefer the compact inspector Interpret tab when the tool window is narrow.
     $interpretTab = Wait-Until "Interpret tab" {
         Get-ElementsByControlType $toolRoot ([System.Windows.Automation.ControlType]::TabItem) |
@@ -969,7 +1012,7 @@ function Invoke-SmartTypeMapperScenario(
 
     $saveButton = Find-ElementByAutomationId $dialog "SaveMappingButton"
     if (-not $saveButton) {
-        throw "Save for This Type button was not found in the mapping dialog."
+        throw "Save Mapping button was not found in the mapping dialog."
     }
 
     $invokePattern = $null
@@ -1012,6 +1055,8 @@ function Invoke-SmartTypeMapperScenario(
             throw "Saved mapping file is missing '$expected'."
         }
     }
+    $savedMappingEvidencePath = Join-Path $outputRoot "smart-type-mapper-saved-mapping.json"
+    [IO.File]::WriteAllText($savedMappingEvidencePath, $savedMapping, (New-Object Text.UTF8Encoding($false)))
 
     $afterMapPath = Join-Path $outputRoot "smart-type-mapper-automatic-after-reopen.png"
     Capture-Window $MainHandle $afterMapPath
@@ -1032,6 +1077,224 @@ function Invoke-SmartTypeMapperScenario(
         reopenedStride = [int]$mappedDocument.stride
         reopenedSourceMode = [string]$mappedDocument.sourceMode
         finalErrorCount = [int]$afterState.errorCount
+        savedMappingEvidencePath = $savedMappingEvidencePath
+    }
+}
+
+function Invoke-SmartTypeMapperPersistedScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $sourceType = "RawBufferVisualizer.VisualizerDebuggee.UnmappedCompanyFrame"
+    if (-not (Test-Path -LiteralPath $userMappingPath)) {
+        throw "A persisted Smart Type Mapper mapping is required: $userMappingPath"
+    }
+
+    $mappingBefore = Get-Content -LiteralPath $userMappingPath -Encoding UTF8 -Raw
+    foreach ($expected in @("UnmappedCompanyFrame", "ImageAddress", "SizeX", "LinePitch", "PixelType", "Mono12PackedLsb")) {
+        if (-not $mappingBefore.Contains($expected)) {
+            throw "Persisted mapping is missing '$expected'."
+        }
+    }
+
+    Show-RawBufferToolWindow $Process.Id
+    $toolRoot = Wait-Until "Raw Buffer Visualizer tool window after persisted mapping break" {
+        Find-RawBufferToolWindowElement $MainHandle
+    } 30
+    Focus-Window $MainHandle
+
+    $mappedState = Wait-Until "persisted mapping automatic reopen" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Encoding UTF8 -Raw | ConvertFrom-Json
+            $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+            if ($matches.Count -eq 1 -and
+                -not [bool]$matches[0].isError -and
+                [string]$matches[0].pixelFormat -eq "Mono12PackedLsb" -and
+                [int]$matches[0].width -eq 640 -and
+                [int]$matches[0].height -eq 484 -and
+                [int]$matches[0].stride -eq 960 -and
+                [string]$matches[0].sourceMode -eq "live") {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 45
+
+    Invoke-Dte $Process.Id {
+        param($dte)
+        $window = $dte.Windows.Item("Raw Buffer Visualizer")
+        if ($window.IsFloating) {
+            $window.IsFloating = $false
+        }
+        $window.Activate()
+    } | Out-Null
+    Start-Sleep -Milliseconds 500
+
+    $inspectorToggle = Wait-Until "Compact Inspector toggle" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+        if ($button -and -not [bool]$button.Current.IsOffscreen) { $button } else { $null }
+    } 30
+    $togglePattern = $null
+    if (-not $inspectorToggle.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$togglePattern)) {
+        throw "Compact Inspector button does not support TogglePattern."
+    }
+    if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
+        [System.Windows.Automation.ToggleState]::On) {
+        ([System.Windows.Automation.TogglePattern]$togglePattern).Toggle()
+    }
+
+    $interpretTab = Wait-Until "Compact Interpret tab" {
+        Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
+            Where-Object {
+                [string]$_.Current.Name -eq "Interpret" -and
+                -not [bool]$_.Current.IsOffscreen
+            } |
+            Select-Object -First 1
+    } 30
+    Select-AutomationItem $interpretTab
+
+    $editMappingButton = Wait-Until "Compact Edit Mapping button for persisted automatic image" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "CompactEditAutomaticVisionMappingButton"
+        if ($button -and -not [bool]$button.Current.IsOffscreen) { $button } else { $null }
+    } 30
+    $compactEntryPath = Join-Path $outputRoot "connect-your-buffer-compact-edit-entry.png"
+    Capture-Window $MainHandle $compactEntryPath
+    $invokePattern = $null
+    if (-not $editMappingButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Edit Mapping button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $dialog = Wait-Until "Connect Your Buffer dialog" {
+        $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+        Get-ElementsByControlType $desktop ([System.Windows.Automation.ControlType]::Window) |
+            Where-Object { [string]$_.Current.Name -eq "Connect Your Buffer" } |
+            Select-Object -First 1
+    } 30
+
+    $expectedRoles = [ordered]@{
+        MappingDataBox = "ImageAddress"
+        MappingWidthBox = "SizeX"
+        MappingHeightBox = "SizeY"
+        MappingStrideBox = "LinePitch"
+        MappingPixelFormatBox = "PixelType"
+        MappingBufferLengthBox = "(none)"
+        MappingValidBitsBox = "(none)"
+        MappingByteOrderBox = "LittleEndian"
+        PixelFormatMapping_Mono12 = "Mono12PackedLsb"
+    }
+    $restoredRoles = [ordered]@{}
+    foreach ($pair in $expectedRoles.GetEnumerator()) {
+        $comboBox = Find-ElementByAutomationId $dialog $pair.Key
+        if (-not $comboBox) {
+            throw "Persisted mapping combo box was not found: $($pair.Key)"
+        }
+
+        $selectedName = Get-SelectedComboBoxItemName $comboBox
+        $restoredRoles[$pair.Key] = $selectedName
+        if ($selectedName -ne $pair.Value) {
+            throw "Persisted mapping role '$($pair.Key)' restored '$selectedName' instead of '$($pair.Value)'."
+        }
+    }
+
+    $copyButton = Find-ElementByAutomationId $dialog "CopyRawBufferViewTemplateButton"
+    if (-not $copyButton) {
+        throw "Copy RawBufferView Template button was not found."
+    }
+    $invokePattern = $null
+    if (-not $copyButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Copy RawBufferView Template button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+
+    $copiedTemplate = Wait-Until "RawBufferView template clipboard text" {
+        try {
+            $text = [Windows.Forms.Clipboard]::GetText()
+            if ($text.Contains("RawBufferView") -and
+                $text.Contains("frame.ImageAddress") -and
+                $text.Contains("frame.SizeX") -and
+                $text.Contains("frame.SizeY") -and
+                $text.Contains("frame.LinePitch") -and
+                $text.Contains("RawPixelFormat.Mono12PackedLsb")) {
+                return $text
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 15
+    foreach ($forbidden in @("Basler", "Pylon", "Spinnaker", "Vimba", "IDS peak")) {
+        if ($copiedTemplate.Contains($forbidden)) {
+            throw "Copied template contains proprietary SDK text '$forbidden'."
+        }
+    }
+    if ((Get-Content -LiteralPath $userMappingPath -Encoding UTF8 -Raw) -ne $mappingBefore) {
+        throw "Copy RawBufferView Template unexpectedly changed the persisted mapping."
+    }
+
+    $copyDialogPath = Join-Path $outputRoot "connect-your-buffer-persisted-copy.png"
+    Capture-Window $dialog.Current.NativeWindowHandle $copyDialogPath
+
+    $suggestedRolesButton = Find-ElementByAutomationId $dialog "UseSuggestedMappingRolesButton"
+    if (-not $suggestedRolesButton) {
+        throw "Use Suggested Roles button was not found."
+    }
+    $invokePattern = $null
+    if (-not $suggestedRolesButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Use Suggested Roles button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    Start-Sleep -Milliseconds 250
+    if ((Get-Content -LiteralPath $userMappingPath -Encoding UTF8 -Raw) -ne $mappingBefore) {
+        throw "Use Suggested Roles unexpectedly changed the persisted mapping."
+    }
+
+    $previewStatusElement = Find-ElementByAutomationId $dialog "MappingPreviewStatusText"
+    if ($previewStatusElement -and -not [string]::IsNullOrEmpty([string]$previewStatusElement.Current.Name)) {
+        throw "Use Suggested Roles unexpectedly rendered a preview."
+    }
+    $resetDialogPath = Join-Path $outputRoot "connect-your-buffer-suggested-roles.png"
+    Capture-Window $dialog.Current.NativeWindowHandle $resetDialogPath
+
+    $cancelButton = Find-ElementByAutomationId $dialog "CancelMappingButton"
+    $invokePattern = $null
+    if (-not $cancelButton -or -not $cancelButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Cancel button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    Start-Sleep -Milliseconds 250
+
+    $stateAfterDraftActions = Get-Content -LiteralPath $sessionPath -Encoding UTF8 -Raw | ConvertFrom-Json
+    $mappedAfterDraftActions = @($stateAfterDraftActions.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+    if ($mappedAfterDraftActions.Count -ne 1 -or [bool]$mappedAfterDraftActions[0].isError) {
+        throw "Connect Your Buffer draft actions changed the mapped image list."
+    }
+
+    $afterCancelPath = Join-Path $outputRoot "connect-your-buffer-after-cancel.png"
+    Capture-Window $MainHandle $afterCancelPath
+
+    [ordered]@{
+        scenario = "SmartTypeMapperPersisted"
+        sourceType = $sourceType
+        restoredRoles = $restoredRoles
+        templateLength = $copiedTemplate.Length
+        mappingFileUnchanged = $true
+        reopenedWidth = [int]$mappedAfterDraftActions[0].width
+        reopenedHeight = [int]$mappedAfterDraftActions[0].height
+        reopenedStride = [int]$mappedAfterDraftActions[0].stride
+        reopenedPixelFormat = [string]$mappedAfterDraftActions[0].pixelFormat
+        finalErrorCount = [int]$stateAfterDraftActions.errorCount
+        compactEntryScreenshotPath = $compactEntryPath
+        copyDialogScreenshotPath = $copyDialogPath
+        suggestedRolesScreenshotPath = $resetDialogPath
+        afterCancelScreenshotPath = $afterCancelPath
     }
 }
 
@@ -1366,14 +1629,39 @@ function Invoke-ReleaseAnnouncementScenario(
     } 30 | Out-Null
 
     $openButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
-    $openPattern = $null
+    $togglePattern = $null
     if (-not $openButton -or -not $openButton.TryGetCurrentPattern(
-        [System.Windows.Automation.InvokePattern]::Pattern,
-        [ref]$openPattern)) {
-        throw "The What's New button does not support InvokePattern."
+        [System.Windows.Automation.TogglePattern]::Pattern,
+        [ref]$togglePattern)) {
+        throw "The What's New button does not support TogglePattern."
     }
-    ([System.Windows.Automation.InvokePattern]$openPattern).Invoke()
+    $togglePattern = [System.Windows.Automation.TogglePattern]$togglePattern
+    if ($togglePattern.Current.ToggleState -ne [System.Windows.Automation.ToggleState]::Off) {
+        throw "The dismissed What's New toggle is not off."
+    }
+    Click-AutomationElement $openButton
     Wait-Until "reopened release announcement" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
+    } 30 | Out-Null
+    $openButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
+    Click-AutomationElement $openButton
+    Wait-Until "closed release announcement from What's New" {
+        $currentButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
+        $currentPattern = $null
+        if (-not $currentButton -or -not $currentButton.TryGetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern,
+            [ref]$currentPattern)) {
+            return $null
+        }
+        if (-not (Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle") -and
+            ([System.Windows.Automation.TogglePattern]$currentPattern).Current.ToggleState -eq [System.Windows.Automation.ToggleState]::Off) {
+            return $true
+        }
+        $null
+    } 30 | Out-Null
+    $openButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementOpenButton"
+    Click-AutomationElement $openButton
+    Wait-Until "reopened release announcement after toggle close" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle"
     } 30 | Out-Null
 
@@ -1388,6 +1676,7 @@ function Invoke-ReleaseAnnouncementScenario(
         title = [string]$title.Current.Name
         dismissalPersisted = $true
         reopenedFromWhatsNew = $true
+        closedFromWhatsNew = $true
         imageRowsBefore = $rowsBefore
         imageRowsAfter = $rowsAfter
         inspectionSideEffectFree = ($rowsBefore -eq $rowsAfter)
@@ -1414,19 +1703,19 @@ function Invoke-MultiLibraryHybridScenario(
         "OpenCvSharp.Mat",
         "Emgu.CV.Mat",
         "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedVimbaFrame",
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage"
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedPaddingAwareFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedStrideAwareFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedOffsetAwareFrame",
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedSizedBufferFrame"
     )
     $automaticTypeCounts = [ordered]@{
         "OpenCvSharp.Mat" = 1
         "Emgu.CV.Mat" = 1
         "RawBufferVisualizer.VisualizerDebuggee.PinnedRawBufferView" = 2
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedBaslerGrabResult" = 1
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedFlirImagePtr" = 1
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedVimbaFrame" = 1
-        "RawBufferVisualizer.VisualizerDebuggee.SimulatedIdsPeakIcvImage" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedPaddingAwareFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedStrideAwareFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedOffsetAwareFrame" = 1
+        "RawBufferVisualizer.VisualizerDebuggee.SimulatedSizedBufferFrame" = 1
     }
 
     Show-LocalsWindow $Process.Id
@@ -1609,7 +1898,7 @@ function Invoke-MultiLibraryHybridScenario(
 function Invoke-OpenVariableScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
-    $treeItem = Wait-Until "companyFrameList in Locals" { Find-TreeItem (Get-AutomationRoot $MainHandle) "companyFrameList" } 60
+    $treeItem = Wait-Until "companyFrameList in Locals" { Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) "companyFrameList" } 60
     Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
     Start-Sleep -Milliseconds 500
     Dismiss-DebuggerEvaluationWarning | Out-Null
@@ -1617,8 +1906,22 @@ function Invoke-OpenVariableScenario(
     # Wait for the docked window to load the error row.
     Wait-Until "unsupported type error row" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
-        $items = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
-        ($items | Where-Object { [string]$_.Current.Name -like "*CompanyFrame*" } | Select-Object -First 1) -ne $null
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $match = $state.documents | Where-Object {
+                -not [bool]$_.isAutomaticInspection -and
+                [bool]$_.isError -and
+                [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.CompanyFrame" -and
+                [string]$_.errorMessage -like "Unsupported collection image type*"
+            } | Select-Object -First 1
+            if ($match) { return $match }
+        }
+        catch {
+        }
+        $null
     } 30 | Out-Null
 
     # Open the context menu on the image list and select Open Variable.
@@ -1697,6 +2000,75 @@ function Invoke-OpenVariableScenario(
     }
 }
 
+function Invoke-EnvironmentCheckScenario([IntPtr]$MainHandle) {
+    $expectedExtensionVersion = "$ExpectedReleaseVersion.0"
+    $toggle = Wait-Until "Environment toggle" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "EnvironmentCheckToggleButton"
+    } 30
+    $togglePattern = $null
+    if (-not $toggle.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$togglePattern)) {
+        throw "Environment button does not support TogglePattern."
+    }
+    if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
+        [System.Windows.Automation.ToggleState]::On) {
+        Click-AutomationElement $toggle
+    }
+
+    $statuses = [ordered]@{}
+    foreach ($id in @("EnvironmentVisualStudioStatus", "EnvironmentExtensionStatus", "EnvironmentTempStorageStatus")) {
+        $element = Wait-Until "environment status $id" {
+            $candidate = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) $id
+            if ($candidate -and [string]$candidate.Current.Name -match "^\[Ready\]") { $candidate } else { $null }
+        } 30
+        $statuses[$id] = [string]$element.Current.Name
+    }
+    if ($statuses.EnvironmentExtensionStatus -notmatch [regex]::Escape($expectedExtensionVersion)) {
+        throw "Environment extension status does not report $expectedExtensionVersion`: $($statuses.EnvironmentExtensionStatus)"
+    }
+
+    $openPath = Join-Path $outputRoot "environment-check-open.png"
+    Capture-Window $MainHandle $openPath
+
+    $copyButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "EnvironmentCheckCopyReportButton"
+    $invokePattern = $null
+    if (-not $copyButton -or -not $copyButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Copy environment diagnostic report button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    $report = Wait-Until "environment diagnostic clipboard report" {
+        try {
+            $text = [Windows.Forms.Clipboard]::GetText()
+            if ($text.Contains("Raw Buffer Visualizer Environment Report") -and
+                $text.Contains($expectedExtensionVersion)) { $text } else { $null }
+        }
+        catch {
+            $null
+        }
+    } 15
+    foreach ($forbidden in @("FFmpeg", ".NET 8 SDK", "Visual Studio extension workload")) {
+        if ($report.Contains($forbidden)) {
+            throw "Environment report contains removed optional utility '$forbidden'."
+        }
+    }
+
+    $toggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "EnvironmentCheckToggleButton"
+    Click-AutomationElement $toggle
+    Wait-Until "Environment panel closed" {
+        $panel = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "EnvironmentCheckPanel"
+        if (-not $panel -or [bool]$panel.Current.IsOffscreen) { $true } else { $false }
+    } 15 | Out-Null
+    $closedPath = Join-Path $outputRoot "environment-check-closed.png"
+    Capture-Window $MainHandle $closedPath
+
+    [ordered]@{
+        scenario = "EnvironmentCheck"
+        statuses = $statuses
+        reportLength = $report.Length
+        openScreenshotPath = $openPath
+        closedScreenshotPath = $closedPath
+    }
+}
+
 Assert-InteractiveDesktop
 $executionState = [RawBufferInstalledVsixNative]::ES_CONTINUOUS -bor
     [RawBufferInstalledVsixNative]::ES_SYSTEM_REQUIRED -bor
@@ -1768,11 +2140,13 @@ $releaseAnnouncementPreferenceExisted = $false
 $scenarioArgument = switch ($Scenario) {
     "BufferDoctor" { "--buffer-doctor-debug" }
     "SmartTypeMapper" { "--smart-type-mapper-fallback-debug" }
+    "SmartTypeMapperPersisted" { "--smart-type-mapper-fallback-debug" }
     "OpenVariable" { "--smart-type-mapper-debug" }
     "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
     "AutomaticCollections" { "--automatic-collections-debug" }
     "MultiLibraryHybrid" { "--multi-library-debug" }
     "ReleaseAnnouncement" { "--buffer-doctor-debug" }
+    "EnvironmentCheck" { "--buffer-doctor-debug" }
     default { "--buffer-doctor-debug" }
 }
 
@@ -1858,7 +2232,7 @@ try {
         if ($Scenario -eq "BufferDoctor") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
-        elseif ($Scenario -eq "SmartTypeMapper") {
+        elseif ($Scenario -eq "SmartTypeMapper" -or $Scenario -eq "SmartTypeMapperPersisted") {
             (Find-TreeItem $root "unmappedCompanyFrame") -ne $null
         }
         elseif ($Scenario -eq "MultiLibraryHybrid") {
@@ -1867,7 +2241,7 @@ try {
         elseif ($Scenario -eq "AutomaticCollections") {
             (Find-TreeItem $root "partialOpenCvMatList") -ne $null
         }
-        elseif ($Scenario -eq "ReleaseAnnouncement") {
+        elseif ($Scenario -eq "ReleaseAnnouncement" -or $Scenario -eq "EnvironmentCheck") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
         else {
@@ -1878,11 +2252,13 @@ try {
     $scenarioResult = switch ($Scenario) {
         "BufferDoctor" { Invoke-BufferDoctorScenario $visualStudio $mainHandle }
         "SmartTypeMapper" { Invoke-SmartTypeMapperScenario $visualStudio $mainHandle }
+        "SmartTypeMapperPersisted" { Invoke-SmartTypeMapperPersistedScenario $visualStudio $mainHandle }
         "OpenVariable" { Invoke-OpenVariableScenario $visualStudio $mainHandle }
         "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
         "AutomaticCollections" { Invoke-AutomaticCollectionsScenario $visualStudio $mainHandle }
         "MultiLibraryHybrid" { Invoke-MultiLibraryHybridScenario $visualStudio $mainHandle }
         "ReleaseAnnouncement" { Invoke-ReleaseAnnouncementScenario $visualStudio $mainHandle }
+        "EnvironmentCheck" { Invoke-EnvironmentCheckScenario $mainHandle }
     }
 
     Stop-Debugging $visualStudio.Id

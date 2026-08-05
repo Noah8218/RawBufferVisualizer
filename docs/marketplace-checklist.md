@@ -47,7 +47,7 @@ Every Overview must distinguish the technical support range from exact runtime e
 
 The `1.0.53` manifest range `[17.14,18.0)` is valid for VS2026 because VS2026 supports API version 17.x and ignores the upper bound. The `17.14` lower bound is intentional and matches the Extensibility runtime dependency; any later manifest edit produces a new exact package and requires full requalification.
 
-For every update, the binary version, `CHANGELOG.md`, dedicated Marketplace Overview, Marketplace/GitHub release notes, embedded VSIX `ReleaseNotes.txt`, and in-product `ReleaseAnnouncement.cs` version must agree. The communication test above enforces that contract. Confirm the first Tool Window open shows the current non-modal highlights, **Dismiss** survives a Visual Studio restart, and **What's New** can reopen them without triggering a scan.
+For every update, the binary version, `CHANGELOG.md`, dedicated Marketplace Overview, Marketplace/GitHub release notes, embedded VSIX `ReleaseNotes.txt`, and in-product `ReleaseAnnouncement.cs` version must agree. The communication test above enforces that contract. Confirm the first Tool Window open shows the current non-modal highlights, **Dismiss** survives a Visual Studio restart, and **What's New** can open and close them without triggering a scan.
 
 ## GitHub Discovery
 
@@ -105,7 +105,7 @@ Lead with the debugger workflow, not the large-image benchmark. Publish only in 
 
 Current Overview copy:
 
-[Raw Buffer Visualizer 1.0.53 Marketplace Overview](marketplace-overview-1.0.53.md)
+[Raw Buffer Visualizer Marketplace Overview for 1.0.53](marketplace-overview-1.0.53.md)
 
 The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `1.0.53`.
 

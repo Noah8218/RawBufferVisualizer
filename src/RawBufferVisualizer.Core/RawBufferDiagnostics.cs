@@ -71,17 +71,17 @@ namespace RawBufferVisualizer.Core
 
             if (descriptor.PixelFormat == RawPixelFormat.Mono16 && (descriptor.ValidBits < 1 || descriptor.ValidBits > 16))
             {
-                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Warning, "Mono16 valid bits should be between 1 and 16."));
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Mono16 valid bits must be between 1 and 16."));
             }
 
             if (descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb && descriptor.ValidBits != 10)
             {
-                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Info, "Mono10PackedLsb uses 10 valid bits per pixel."));
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Mono10PackedLsb requires 10 valid bits per pixel."));
             }
 
             if (descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb && descriptor.ValidBits != 12)
             {
-                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Info, "Mono12PackedLsb uses 12 valid bits per pixel."));
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Mono12PackedLsb requires 12 valid bits per pixel."));
             }
 
             var requiredBytes = descriptor.GetRequiredByteCount();

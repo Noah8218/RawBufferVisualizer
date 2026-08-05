@@ -1,6 +1,6 @@
 # SDK Adapter Roadmap
 
-The first-class extension target for arbitrary acquisition SDKs is `RawBufferView`.
+The first-class extension target for arbitrary acquisition SDKs is `RawBufferView`. There is no active vendor-named direct adapter. The removed Basler experiment is retained only as [historical evidence](basler-pylon-2d-adapter.md).
 
 ```csharp
 var view = new RawBufferView
@@ -32,18 +32,14 @@ Inspect `view` from Watch, Locals, Autos, or DataTip after the VSIX is installed
 
 ## Vendor Adapter Position
 
-Direct vendor adapters are possible, but should be added only when a public-property shape cannot safely express stride, image offset, or lifetime. The detailed evidence matrix is in `docs/industrial-camera-compatibility-validation.md`.
+The current roadmap has no proprietary vendor-specific implementation target. Camera and frame-grabber/board SDKs follow the same gate: if applicable rights are not provided, Raw Buffer Visualizer does not provide the direct integration. See [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md) and [industrial-camera-compatibility-validation.md](industrial-camera-compatibility-validation.md).
 
-| Vendor / SDK | Current automatic-contract position | Adapter direction |
+| Integration route | Current position | Direction |
 | --- | --- | --- |
-| Basler pylon .NET | `PixelDataPointer` is safe only with zero `PaddingX` and exact contiguous `PayloadSize`; `ComputeStride()` is a method and is not invoked | A small user-side wrapper can call `ComputeStride()` and expose `RawBufferView`; snapshot if grab-result ownership cannot span the paused read |
-| Teledyne FLIR Spinnaker | `DataPtr` + explicit `Stride` is structurally supported; runtime/lifetime unverified | Keep the managed image alive through the read or snapshot before release |
-| Allied Vision Vimba X | `ImageData` is preferred over `Buffer`; differing addresses are rejected as a chunk/image offset | Adapter must compute the image-data length after the offset and retain/requeue `IFrame` correctly |
-| IDS peak ICV | `Data`, width, height, pixel format, exact `SizeInBytes` contract tested; assembly metadata verified for ICV 1.4.0 | Expose explicit stride when runtime buffers are padded; retain the disposable image |
-| HIKROBOT MVS SDK | Exact current managed frame contract not verified | Map the documented frame output object only after a legal SDK/runtime sample is available |
-| Euresys eGrabber | Scoped buffer metadata is method-based and intentionally outside Automatic Vision Inspector | Adapter should call `GetInfo<T>()` while the scoped buffer is valid and expose/snapshot a `RawBufferView` |
-| Teledyne DALSA Sapera LT | Exact current C# contract not verified | Audit `SapBuffer` address/format/stride/lifetime from the installed SDK before implementation |
-| Zebra Aurora Imaging Library | Exact current buffer contract not verified | Audit bands, depth, packed/planar layout, host address, and lifetime before implementation |
+| Application-owned `RawBufferView` / `RawBufferSnapshot` | Supported | Preferred route for camera and board buffers that the user's application lawfully acquires and keeps alive. |
+| Vendor-neutral structural inference | Supported with fail-closed layout checks | Keep public-member inspection bounded; do not load an SDK or invoke arbitrary vendor methods. |
+| Proprietary camera SDK direct adapter | Blocked by default | Start only after the license gate, any required written authorization/legal review, and explicit owner approval. |
+| Proprietary frame-grabber/transport-board/imaging-board direct adapter | Blocked by default | Same gate as camera SDKs; no exception merely because the buffer originates on a board. |
 
 ## Pixel Format Mapping Rules
 
@@ -65,6 +61,8 @@ Vendor-specific adapters should fail clearly when an SDK reports unsupported pla
 
 ## Adapter Acceptance Checklist
 
+- The project owner has explicitly approved reintroducing a direct vendor integration after the legal gate passed.
+- The exact developer, purpose, SDK version, hardware state, distribution model, and compatibility wording pass [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md).
 - The adapter has no hard dependency in the core viewer unless the SDK is already installed by the target app.
 - The Visual Studio provider is registered only for exact SDK target types, not for every `object`.
 - The adapter captures width, height, stride, pixel format, valid bits, byte order, and buffer length.
@@ -72,6 +70,8 @@ Vendor-specific adapters should fail clearly when an SDK reports unsupported pla
 - The adapter documents source buffer lifetime. If the SDK owns the memory only until the next grab callback, the adapter must snapshot immediately or keep the SDK buffer pinned/owned until transfer completes.
 - Tests cover descriptor mapping and at least one chunked pointer read path.
 - Installed-VSIX evidence uses a real SDK object or an official vendor emulator, not only a class with similar member names.
+- 3D, multi-component, compressed, and otherwise unsupported payloads are rejected explicitly instead of being flattened into a guessed 2D image.
+- Technical validation never overrides a failed or unknown license gate.
 
 ## References Checked
 

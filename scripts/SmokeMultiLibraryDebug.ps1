@@ -499,13 +499,14 @@ function Invoke-MultiLibraryScenario(
     [IntPtr]$MainHandle) {
 
     $expectedVariables = @(
+        @{ Name = "mono8Owner"; Data = "mono8Owner.View.Buffer"; Width = "mono8Owner.View.Width"; Height = "mono8Owner.View.Height"; Stride = "mono8Owner.View.Stride"; PixelFormat = "mono8Owner.View.PixelFormat" },
+        @{ Name = "bgr24Owner"; Data = "bgr24Owner.View.Buffer"; Width = "bgr24Owner.View.Width"; Height = "bgr24Owner.View.Height"; Stride = "bgr24Owner.View.Stride"; PixelFormat = "bgr24Owner.View.PixelFormat" },
         @{ Name = "openCvMat"; Data = "openCvMat.Data"; Width = "openCvMat.Cols"; Height = "openCvMat.Rows"; Stride = "openCvMat.Step"; PixelFormat = "openCvMat.Type" },
         @{ Name = "emguMat"; Data = "emguMat.DataPointer"; Width = "emguMat.Cols"; Height = "emguMat.Rows"; Stride = "emguMat.Step"; PixelFormat = "emguMat.Depth" },
-        @{ Name = "baslerResult"; Data = "baslerResult.PixelDataPointer"; Width = "baslerResult.Width"; Height = "baslerResult.Height"; Stride = $null; PixelFormat = "baslerResult.PixelTypeValue" },
-        @{ Name = "flirImage"; Data = "flirImage.DataPtr"; Width = "flirImage.Width"; Height = "flirImage.Height"; Stride = "flirImage.Stride"; PixelFormat = "flirImage.PixelFormat" },
-        @{ Name = "vimbaFrame"; Data = "vimbaFrame.ImageData"; Width = "vimbaFrame.Width"; Height = "vimbaFrame.Height"; Stride = $null; PixelFormat = "vimbaFrame.PixelFormat" },
-        @{ Name = "idsPeakImage"; Data = "idsPeakImage.Data"; Width = "idsPeakImage.Width"; Height = "idsPeakImage.Height"; Stride = $null; PixelFormat = "idsPeakImage.PixelFormat" },
-        @{ Name = "badStrideSnapshot"; Data = $null; Width = $null; Height = $null; Stride = $null; PixelFormat = $null }
+        @{ Name = "paddingAwareFrame"; Data = "paddingAwareFrame.PixelDataPointer"; Width = "paddingAwareFrame.Width"; Height = "paddingAwareFrame.Height"; Stride = $null; PixelFormat = "paddingAwareFrame.PixelTypeValue" },
+        @{ Name = "strideAwareFrame"; Data = "strideAwareFrame.DataPtr"; Width = "strideAwareFrame.Width"; Height = "strideAwareFrame.Height"; Stride = "strideAwareFrame.Stride"; PixelFormat = "strideAwareFrame.PixelFormat" },
+        @{ Name = "offsetAwareFrame"; Data = "offsetAwareFrame.ImageData"; Width = "offsetAwareFrame.Width"; Height = "offsetAwareFrame.Height"; Stride = $null; PixelFormat = "offsetAwareFrame.PixelFormat" },
+        @{ Name = "sizedBufferFrame"; Data = "sizedBufferFrame.Data"; Width = "sizedBufferFrame.Width"; Height = "sizedBufferFrame.Height"; Stride = $null; PixelFormat = "sizedBufferFrame.PixelFormat" }
     )
 
     # Locals is virtualized and a full Visual Studio UI Automation tree search
@@ -521,18 +522,18 @@ function Invoke-MultiLibraryScenario(
             }
 
             $foundOpenCv = $false
-            $foundBasler = $false
+            $foundNeutralFrame = $false
             for ($index = 1; $index -le $frame.Locals.Count; $index++) {
                 $name = [string]$frame.Locals.Item($index).Name
                 if ($name -eq "openCvMat") {
                     $foundOpenCv = $true
                 }
-                elseif ($name -eq "baslerResult") {
-                    $foundBasler = $true
+                elseif ($name -eq "paddingAwareFrame") {
+                    $foundNeutralFrame = $true
                 }
             }
 
-            $foundOpenCv -and $foundBasler
+            $foundOpenCv -and $foundNeutralFrame
         }
     } 90 | Out-Null
 

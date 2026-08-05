@@ -4,32 +4,58 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No user-visible changes are queued after `1.0.53`.
+No user-visible changes are queued after `2.0.0`.
 
-## [1.0.53] - 2026-08-03
+## [2.0.0] - 2026-08-05
 
-Release status: local development candidate. Marketplace publication and propagation are not complete.
+Release status: separate vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged until this exact candidate passes installed qualification and the owner separately approves publication.
 
 ### Added
 
-- Added an **Environment** panel that checks the supported Visual Studio host, loaded extension version, and temporary-storage writability before showing optional contributor/media utilities.
+- Added a documented compatibility matrix for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointer buffers, and mapped `byte[]`, `ushort[]`, and `float[]` carriers.
+- Added neutral repository fixtures that verify descriptor fields, transferred bytes, byte order, valid bits, process ownership, and fail-closed outcomes without a proprietary SDK.
+
+### Improved
+
+- Registered and mapped metadata now use the same dimension, stride, and buffer-length validation boundary before transfer.
+- Valid `Mono16` values from 1 through 16 remain accepted; fixtures explicitly preserve 10, 12, 14, and 16.
+
+### Fixed
+
+- Invalid `Mono16` valid-bit counts now fail instead of remaining advisory warnings.
+- `Mono10PackedLsb` and `Mono12PackedLsb` now reject valid-bit values that contradict their fixed 10-bit and 12-bit layouts.
+
+### Scope
+
+- Version 2.0 remains a Visual Studio debugger for already-acquired 2D buffers. It does not add camera acquisition/control, PLC/I/O, 3D visualization, or a proprietary camera/frame-grabber SDK dependency.
+
+## [1.0.53] - 2026-08-03
+
+Release status: local development candidate. The uncleared proprietary vendor adapter has been removed; a new immutable package has not yet been created or qualified for Marketplace publication.
+
+### Added
+
+- Added an **Environment** panel that checks only the supported Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
 - Added explicit **Refresh** and **Copy diagnostic report** actions. The report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
 
 ### Improved
 
 - Large pointer-backed sampled previews now use a bounded estimate of cold storage page reads. On the restored workstation, the final regression run's first benchmark-process access completed in `0.992 s` for the dense 100k fixture and `0.692 s` for the dense 200k fixture without changing the existing five-second gate.
-- Optional .NET 8, Visual Studio extension-workload, and FFmpeg actions require confirmation and open only Visual Studio Installer or official guidance; the extension never downloads or installs them silently.
+- Contributor and demo-media utilities remain documented in the development prerequisites instead of being presented as product runtime requirements.
+- Selecting **Environment** again closes the panel; the redundant in-panel **Close** action was removed.
+- Selecting **What's New** again closes the release highlights. **Dismiss** still records the version as seen, while a simple toggle close does not change that saved preference.
 
 ### Fixed
 
 - Updated the Automatic Vision Inspector layout check to use a narrow current-workspace diagnostic seam instead of reflecting a removed `_activeDocument` field.
 - Updated the Smart Type Mapper layout check to discover the newest restored `Microsoft.VSSDK.BuildTools` package instead of requiring historical package `17.9.3168`.
 - Environment Check now accepts the build-suffixed file-version text reported by installed Visual Studio hosts, so supported `17.14+` and `18.x` sessions are not mislabeled as unknown.
-- The Environment Check **Close** action now shares the wrapping action row with **Refresh** and **Copy diagnostic report**, keeping it visible in compact docked layouts.
+- Environment Check now labels unavailable required state as **Attention** rather than suggesting an unrelated install action.
 
 ### Safety contract
 
-- Opening, refreshing, copying, or closing Environment Check does not scan the current frame, open an image, change the active document, install software, or modify VSPackage registration.
+- Removed the uncleared proprietary vendor adapter, its exact-type registration, SDK audit script, and vendor-named test fixtures. Vendor-neutral buffer inspection remains available.
+- Opening, refreshing, copying, or toggling Environment Check does not scan the current frame, open an image, change the active document, install software, or modify VSPackage registration.
 - The existing explicit debugger visualizer, **Scan Now**, Fit/Manual, snapshot ownership, and preview-to-full handoff contracts remain unchanged.
 
 ## [1.0.52] - 2026-08-02
@@ -120,7 +146,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...v2.0.0
 [1.0.53]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.53
 [1.0.52]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.52
 [1.0.51]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.51

@@ -108,9 +108,13 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(descriptor));
             }
 
-            if (bufferLength < descriptor.GetRequiredByteCount())
+            var diagnostics = RawBufferDiagnostics.AnalyzeLength(bufferLength, descriptor);
+            for (var i = 0; i < diagnostics.Count; i++)
             {
-                throw new ArgumentException("Buffer is smaller than descriptor requires.", nameof(bufferLength));
+                if (diagnostics[i].Severity == RawDiagnosticSeverity.Error)
+                {
+                    throw new ArgumentException(diagnostics[i].Message, nameof(descriptor));
+                }
             }
 
             return new VisualizerSnapshotMetadata

@@ -6,7 +6,7 @@ Raw Buffer Visualizer is a Visual Studio debugger tool for C# machine-vision dev
 
 The product promise is:
 
-> Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, pointer-backed images, raw buffers, and supported image collections directly inside one docked Visual Studio window.
+> Inspect Bitmap, OpenCvSharp Mat, Emgu CV Mat, pointer-backed images, raw buffers, supported image collections, and user-mapped application buffer objects directly inside one docked Visual Studio window.
 
 Registered debugger visualizers remain available. Automatic Vision Inspector also opens initialized exact OpenCvSharp and Emgu CV Mats through a validated live-memory path, while safe unregistered company-frame shapes use structural discovery and Smart Type Mapper only when inference is ambiguous. Bitmap remains on its registered visualizer path. The workflow should remove debug-only code such as temporary image saves, `ImShow`, conversion helpers, and ad hoc pointer dumps.
 
@@ -38,6 +38,8 @@ Primary problems:
 6. Use diagnostics/Try interpretation when descriptor metadata is wrong or incomplete.
 7. Compare before/after images through linked views, split, diff, or blink.
 8. Export only when evidence must be shared or retained.
+
+When an unregistered camera or board object is structurally image-like but ambiguous, **Connect Your Buffer** is the supported recovery workflow: review suggested member roles, explicitly Preview, Save Mapping for reuse, or optionally copy a vendor-neutral `RawBufferView` starter template. Opening, resetting, or copying from the dialog must not scan the frame, append an image, or persist a mapping.
 
 The image list and viewer are the primary UI. Diagnostics are supporting UI and must not crowd out the image.
 
@@ -120,9 +122,8 @@ Current maturity gaps:
 
 - the public ImagePtr-style claim is broader than the current exact `Cressem.ImageModel.ImagePtr` provider registration;
 - public-update smoke evidence and Marketplace copy must be kept synchronized per release;
-- VSSDK threading warnings remain;
 - GitHub tags/releases are not yet used;
-- direct vendor SDK adapters and Visual Studio 18/.NET 9/10 matrices are not current commitments;
+- direct vendor adapters are release-blocked until the vendor SDK license, developer eligibility, hardware restrictions, distribution conditions, and compatibility wording are cleared in writing;
 - real long-running team usage is still the best source for remaining leaks, package-load edge cases, and unsupported type reports.
 
 ## Scope
@@ -135,10 +136,12 @@ Current maturity gaps:
 - large-image responsiveness and bounded memory/storage;
 - compatibility, packaging, update, repair, diagnostics, and support evidence;
 - comparison features that help before/after inspection.
+- vendor-neutral `RawBufferView`/`RawBufferSnapshot` integration for buffers supplied by the user's application.
+- user-controlled Connect Your Buffer mappings for debugger-visible pointer or managed-array objects, with explicit preview and reusable per-user or solution-local storage.
 
 ### Later, only with evidence
 
-- direct adapters for a specific vendor SDK;
+- focused 2D vendor adapters only after the [vendor SDK license policy](vendor-sdk-license-policy.md) passes and the exact type, memory layout, and lifetime are tested without adding a vendor runtime dependency to the VSIX;
 - additional industrial formats such as signed, planar, YUV, or packed Bayer variants;
 - broader Visual Studio/runtime support matrices;
 - richer comparison operators when a real workflow exposes a gap;
@@ -146,6 +149,7 @@ Current maturity gaps:
 
 ### Out of scope
 
+- 3D point clouds, depth/coordinate containers, and 3D camera visualization;
 - Vision Replay Debugger;
 - camera discovery, grabbing, trigger, exposure, lighting, PLC, and I/O control;
 - production acquisition pipelines;
@@ -156,14 +160,53 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Now: publish and externally verify the 1.0.51 update
+### Version transition: public 1.0.53 to separate 2.0
 
-1. Publish the exact qualified `1.0.51` SHA without rebuilding it.
-2. Update another PC from public `1.0.50` to Marketplace `1.0.51` without uninstall, repair, or `/ResetSkipPkgs`.
-3. Repeat menu, ToolWindow, Automatic Inspector, automatic Mat collections, registered Bitmap, explicit handoff completion, and Fit checks on that external profile.
-4. Continue watching team usage for repeated-open memory, temp storage, package-load, menu duplication, automatic-scan false positives, and live-source-unavailable issues.
+`1.0.53` is the published 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation without claiming a breaking platform transition.
 
-Public Marketplace `1.0.50.0` is the early 2,001,513-byte baseline. The exact local `1.0.51.0` package passed an in-place update from that downloaded baseline plus installed runtime checks on Windows 10 Pro / VS2022. Marketplace publication, post-propagation verification on another PC, and live vendor hardware remain separate qualification scopes.
+The exact public `1.0.53` VSIX was not relabeled or overwritten. After explicit owner approval, a separately versioned `2.0.0.0` candidate was built, frozen, and qualified on both supported IDE generations. Matching public 1.0.53 source/evidence commit `7ab84b7` and Marketplace readback remain the immutable 1.x baseline. See [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) and [Release Qualification 2.0.0](release-qualification-2.0.0.md).
+
+### 2.0 foundation already delivered: Connect Your Buffer
+
+The 2.0 direction is a vendor-neutral 2D industrial buffer debugger, not a bundle of proprietary SDK adapters. The first vertical slice was delivered in public `1.0.53` by reusing Smart Type Mapper instead of adding a new pane or acquisition layer. Do not reimplement it for the version transition.
+
+Required workflow:
+
+1. An ambiguous application object enters through Automatic Inspector, Open Variable, or a mapped collection error row.
+2. The user sees persisted or inferred roles and may edit every selection.
+3. Preview remains explicit and reads only the current stopped-process buffer.
+4. Save Mapping persists the selection; reopening restores it visibly and editably.
+5. Use Suggested Roles changes the visible draft only.
+6. Copy RawBufferView Template copies neutral starter code only for pointer-backed data and does not modify the project or mapping store.
+
+Acceptance gate:
+
+- mapping save/reload/reopen round-trips;
+- Preview, reset, copy, and dialog-open paths have no unintended scan, image-open, registration, or save side effect;
+- generated code contains selected member roles and no proprietary SDK dependency or claim;
+- the dialog follows the existing dark IDE visual system for normal, hover, focus, selected/open, disabled, error, and scroll states;
+- direct camera/board SDKs, acquisition, device control, 3D, PLC, and I/O remain outside the slice.
+
+### Completed: lock the 2.0 vendor-neutral buffer contract
+
+The [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) now records supported and fail-closed decisions across managed arrays and pointers, dimensions, stride/length, image offset, pixel format, valid bits, byte order, and lifetime. Repository-owned fixtures exercise Connect Your Buffer plus existing `RawBufferView`/`RawBufferSnapshot` contracts without a vendor SDK, new UI, or new abstraction.
+
+### Completed: close the proven shared-validation gaps
+
+1. Public Marketplace `1.0.53.0`, its package, and its installed evidence remain immutable.
+2. The common transfer metadata boundary applies complete descriptor/length diagnostics to registered `RawBufferView`, mapped carriers, snapshots, and registered library adapters.
+3. Incompatible `ValidBits` values fail consistently; valid `Mono16` values such as 10, 12, 14, and 16 and the fixed packed layouts remain accepted.
+4. Focused neutral tests cover both entry paths without changing Preview, mapping persistence, or no-side-effect behavior.
+5. No pane, SDK adapter, offset abstraction, camera acquisition/control, PLC/I/O, or 3D path was added.
+
+### Completed release checkpoint: separate 2.0 candidate
+
+1. Explicit owner approval was obtained before the version/package checkpoint.
+2. A separately identifiable `2.0.0` candidate was frozen without overwriting preserved 1.x artifacts.
+3. Package equality, registration, installed VS2022/VS2026, persisted automatic settings, registered `RawBufferView`, and neutral mapped-carrier workflows passed against the same bytes.
+4. Package hash, manifest, Overview, release notes, and installed evidence now identify the same local 2.0 artifact. Publication and public readback remain a separate explicit owner action.
+
+Public Marketplace `1.0.53.0` is the immutable published baseline and contains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
 
 Exit criteria:
 
@@ -171,18 +214,25 @@ Exit criteria:
 - exactly one View open command and one current-frame scan command;
 - debugger handoff success requires an explicit ACK and rejection surfaces its reason;
 - primary individual/collection providers appear and open;
+- release-facing code and copy contain no uncleared proprietary vendor adapter or support claim;
 - initialized OpenCvSharp/Emgu Mats open automatically without creating duplicate rows, while Bitmap stays glyph-owned;
 - Fit and Manual mode behavior remains stable across resize;
 - pointer support claims match exact provider registrations and samples;
 - docked real-mouse zoom/pan remains responsive;
 - error/report/recovery, Save, Delete, Clear, and cleanup work;
-- public version, Overview, README, release notes, and artifact version agree.
+- every supported and rejected matrix row has a reproducible neutral fixture and expected outcome;
+- save/reload/reopen preserves visible editable roles without executing Preview or opening an image;
+- public version, Overview, README, release notes, and artifact version agree before any future release.
+
+### Current 2.0 release checkpoint
+
+The vendor-neutral carrier/layout matrix, shared registered/mapped transfer validation, neutral executable fixtures, and separately versioned `2.0.0.0` VSIX are complete. The exact frozen candidate passed installed package equality and the core registered/mapped runtime workflow on VS2022 `17.14.37516.0` and stable VS2026 `18.8.12023.21`. Marketplace still serves `1.0.53.0`; publication/readback is a separate owner action, not implementation work. See [release-qualification-2.0.0.md](release-qualification-2.0.0.md).
 
 ### Next: supportability and compatibility growth
 
 1. Convert real user failures into reproducible samples in `VisualizerDebuggee` or focused smoke scripts.
-2. Convert only real vendor SDK/runtime evidence into new compatibility claims; the qualified `1.0.51` OpenCvSharp/Emgu automatic capture and Bitmap registered capture do not certify unrelated vendor SDK objects.
-3. Add only requested formats/types with an exact source type, assembly version, descriptor mapping, and lifetime rule.
+2. Convert vendor SDK/runtime evidence into a compatibility claim only after both the technical gate and [vendor SDK license gate](vendor-sdk-license-policy.md) pass.
+3. Add only requested formats/types with written authorization, an exact source type, assembly version, descriptor mapping, and lifetime rule.
 4. Extend long-session and multi-instance regression coverage when a real failure reveals a missing assertion.
 5. Evaluate Visual Studio 18 and newer .NET debuggee matrices after stable tooling is available.
 
@@ -194,19 +244,11 @@ Exit criteria for a new adapter/type:
 - individual and relevant collection paths work;
 - unsupported shapes fail visibly;
 - no core dependency on a vendor package is introduced without approval.
+- written vendor authorization and required legal review are recorded for the exact developer, purpose, SDK version, distribution model, and compatibility wording.
 
-### Later: vendor-specific adapters
+### Later: direct proprietary SDK integrations
 
-Candidate order remains driven by actual users and available SDK samples, not a speculative checklist:
-
-- Euresys eGrabber;
-- Teledyne DALSA Sapera LT;
-- Basler pylon .NET;
-- HIKROBOT MVS;
-- Teledyne FLIR Spinnaker;
-- Zebra Aurora/MIL.
-
-The default solution remains a small user-side adapter that exposes `RawBufferView`. A first-party direct adapter is justified only when that path is insufficient and the SDK can be tested legally and repeatably.
+There is no active vendor order or implementation target. All direct camera and frame-grabber/board work is blocked by [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md). A vendor becomes a candidate only after applicable written rights, required legal review, and explicit owner approval exist; only then is technical evidence planning justified. Hardware or an available installer never overrides license eligibility. `RawBufferView` remains the public vendor-neutral path.
 
 ## Prioritization Rule
 
@@ -226,6 +268,7 @@ Do not trade correctness or release stability for a broader feature list.
 
 An update is ready only when all changed surfaces have evidence:
 
+- proprietary vendor code and compatibility wording have passed the license gate or are absent from the candidate;
 - source and package build;
 - focused tests for the change;
 - relevant docked/installed VSIX smoke;
