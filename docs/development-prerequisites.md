@@ -118,7 +118,7 @@ Route test-process `TEMP` and `TMP` there when practical. A machine without `D:`
 
 ## In-Product Environment Check
 
-Source version `1.0.53` implements the approved **Environment** panel. Public Marketplace `1.0.52` does not contain it; do not confuse the local development candidate with the immutable public package.
+Public Marketplace `1.0.53` and the locally qualified `2.0.0` candidate implement the approved **Environment** panel. The panel must report the version loaded by the current Visual Studio session; it is not evidence that Marketplace has already published the local candidate.
 
 The panel reports required runtime state first:
 

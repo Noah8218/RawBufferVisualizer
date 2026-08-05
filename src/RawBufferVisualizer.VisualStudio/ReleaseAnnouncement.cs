@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "1.0.53";
+        public const string CurrentVersion = "2.0.0";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1053";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#200";
 
         public const string HighlightEnvironmentCheck =
-            "Environment Check shows only the runtime state the extension needs";
+            "One 2D buffer contract covers registered and mapped sources";
 
         public const string HighlightColdPreview =
-            "Large sampled previews use a bounded cold-page budget";
+            "Invalid dimensions, stride, length, and valid bits fail before transfer";
 
         public const string HighlightPanelToggles =
-            "Select Environment or What's New again to close its panel";
+            "Valid Mono16 and packed layouts preserve explicit buffer metadata";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

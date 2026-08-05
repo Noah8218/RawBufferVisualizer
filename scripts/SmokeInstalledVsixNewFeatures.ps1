@@ -7,7 +7,7 @@ param(
     [string]$VisualStudioInstanceId = "",
     [string]$OutputRoot = "",
     [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$ExpectedReleaseVersion = "1.0.52",
+    [string]$ExpectedReleaseVersion = "2.0.0",
     [switch]$NoBuild,
     [switch]$NoInstall,
     [switch]$KeepVisualStudio,
@@ -2001,6 +2001,7 @@ function Invoke-OpenVariableScenario(
 }
 
 function Invoke-EnvironmentCheckScenario([IntPtr]$MainHandle) {
+    $expectedExtensionVersion = "$ExpectedReleaseVersion.0"
     $toggle = Wait-Until "Environment toggle" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "EnvironmentCheckToggleButton"
     } 30
@@ -2021,8 +2022,8 @@ function Invoke-EnvironmentCheckScenario([IntPtr]$MainHandle) {
         } 30
         $statuses[$id] = [string]$element.Current.Name
     }
-    if ($statuses.EnvironmentExtensionStatus -notmatch "1\.0\.53\.0") {
-        throw "Environment extension status does not report 1.0.53.0: $($statuses.EnvironmentExtensionStatus)"
+    if ($statuses.EnvironmentExtensionStatus -notmatch [regex]::Escape($expectedExtensionVersion)) {
+        throw "Environment extension status does not report $expectedExtensionVersion`: $($statuses.EnvironmentExtensionStatus)"
     }
 
     $openPath = Join-Path $outputRoot "environment-check-open.png"
@@ -2038,7 +2039,7 @@ function Invoke-EnvironmentCheckScenario([IntPtr]$MainHandle) {
         try {
             $text = [Windows.Forms.Clipboard]::GetText()
             if ($text.Contains("Raw Buffer Visualizer Environment Report") -and
-                $text.Contains("1.0.53.0")) { $text } else { $null }
+                $text.Contains($expectedExtensionVersion)) { $text } else { $null }
         }
         catch {
             $null

@@ -18,7 +18,7 @@ using Task = System.Threading.Tasks.Task;
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "1.0.53")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.0")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(

@@ -164,7 +164,7 @@ Current maturity gaps:
 
 `1.0.53` is the published 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation without claiming a breaking platform transition.
 
-Do not relabel or rebuild the exact public `1.0.53` VSIX as `2.0.0`; changing its version changes the package bytes and invalidates its installed qualification. Matching product source/evidence commit `7ab84b7` is pushed, and Marketplace readback matches the qualified asset. Start the 2.0 development line with the vendor-neutral camera/frame-grabber buffer-shape matrix, corresponding onboarding/support contract, and a separately built and qualified `2.0.0` candidate only when that contract is ready.
+The exact public `1.0.53` VSIX was not relabeled or overwritten. After explicit owner approval, a separately versioned `2.0.0.0` candidate was built, frozen, and qualified on both supported IDE generations. Matching public 1.0.53 source/evidence commit `7ab84b7` and Marketplace readback remain the immutable 1.x baseline. See [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) and [Release Qualification 2.0.0](release-qualification-2.0.0.md).
 
 ### 2.0 foundation already delivered: Connect Your Buffer
 
@@ -187,14 +187,24 @@ Acceptance gate:
 - the dialog follows the existing dark IDE visual system for normal, hover, focus, selected/open, disabled, error, and scroll states;
 - direct camera/board SDKs, acquisition, device control, 3D, PLC, and I/O remain outside the slice.
 
-### Now: lock the 2.0 vendor-neutral buffer contract
+### Completed: lock the 2.0 vendor-neutral buffer contract
 
-1. Keep public Marketplace `1.0.53.0` immutable and branch 2.0 work separately.
-2. Define a testable matrix for managed arrays and pointers, dimensions, stride or length, buffer offset, pixel format, valid bits, byte order, and lifetime.
-3. Add public neutral fixtures for padding, extra payload, member offsets, method-only or scoped shapes, and neutral PFNC-style aliases; define exact fail-closed outcomes for unsupported or ambiguous cases.
-4. Exercise the matrix through existing Connect Your Buffer and `RawBufferView`/`RawBufferSnapshot` contracts before adding UI, abstraction, or vendor-specific code.
-5. Extend Connect Your Buffer only when a proven matrix case cannot be expressed with its current editable, persisted, explicit-preview workflow.
-6. Keep the removed Basler experiment classified as historical engineering evidence only, and apply the license gate to every camera, frame-grabber, transport-board, and imaging-board SDK.
+The [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) now records supported and fail-closed decisions across managed arrays and pointers, dimensions, stride/length, image offset, pixel format, valid bits, byte order, and lifetime. Repository-owned fixtures exercise Connect Your Buffer plus existing `RawBufferView`/`RawBufferSnapshot` contracts without a vendor SDK, new UI, or new abstraction.
+
+### Completed: close the proven shared-validation gaps
+
+1. Public Marketplace `1.0.53.0`, its package, and its installed evidence remain immutable.
+2. The common transfer metadata boundary applies complete descriptor/length diagnostics to registered `RawBufferView`, mapped carriers, snapshots, and registered library adapters.
+3. Incompatible `ValidBits` values fail consistently; valid `Mono16` values such as 10, 12, 14, and 16 and the fixed packed layouts remain accepted.
+4. Focused neutral tests cover both entry paths without changing Preview, mapping persistence, or no-side-effect behavior.
+5. No pane, SDK adapter, offset abstraction, camera acquisition/control, PLC/I/O, or 3D path was added.
+
+### Completed release checkpoint: separate 2.0 candidate
+
+1. Explicit owner approval was obtained before the version/package checkpoint.
+2. A separately identifiable `2.0.0` candidate was frozen without overwriting preserved 1.x artifacts.
+3. Package equality, registration, installed VS2022/VS2026, persisted automatic settings, registered `RawBufferView`, and neutral mapped-carrier workflows passed against the same bytes.
+4. Package hash, manifest, Overview, release notes, and installed evidence now identify the same local 2.0 artifact. Publication and public readback remain a separate explicit owner action.
 
 Public Marketplace `1.0.53.0` is the immutable published baseline and contains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
 
@@ -213,6 +223,10 @@ Exit criteria:
 - every supported and rejected matrix row has a reproducible neutral fixture and expected outcome;
 - save/reload/reopen preserves visible editable roles without executing Preview or opening an image;
 - public version, Overview, README, release notes, and artifact version agree before any future release.
+
+### Current 2.0 release checkpoint
+
+The vendor-neutral carrier/layout matrix, shared registered/mapped transfer validation, neutral executable fixtures, and separately versioned `2.0.0.0` VSIX are complete. The exact frozen candidate passed installed package equality and the core registered/mapped runtime workflow on VS2022 `17.14.37516.0` and stable VS2026 `18.8.12023.21`. Marketplace still serves `1.0.53.0`; publication/readback is a separate owner action, not implementation work. See [release-qualification-2.0.0.md](release-qualification-2.0.0.md).
 
 ### Next: supportability and compatibility growth
 

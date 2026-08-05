@@ -1,22 +1,22 @@
-Raw Buffer Visualizer 1.0.53
+Raw Buffer Visualizer 2.0.0
 
 NEW
-- Environment Check reports only the current Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
-- Refresh and diagnostic-report copy do not scan a frame, open an image, install software, or change registration.
+- One vendor-neutral 2D contract covers RawBufferView, snapshots, mapped pointers, and mapped byte[], ushort[], and float[] buffers.
+- Neutral fixtures verify descriptor metadata, transferred bytes, byte order, valid bits, and pointer ownership without a proprietary SDK.
 
 FIXED
-- Large pointer-backed previews use a bounded cold-page-read budget, keeping first access to dense 100k/200k fixtures below the existing five-second gate on the restored workstation.
-- Automatic Vision Inspector and Smart Type Mapper layout checks now follow the current workspace seam and newest restored VSSDK package instead of stale implementation/package paths.
+- Invalid dimensions, stride, buffer length, and incompatible valid bits now fail before metadata transfer.
+- Mono10PackedLsb and Mono12PackedLsb reject values that contradict their fixed 10-bit and 12-bit layouts.
 
 IMPROVED
-- Select Environment again to close the panel. Contributor and demo-media tools remain in development documentation instead of appearing as runtime requirements.
-- Select What's New again to close the release highlights. Dismiss still saves the version as seen.
-- The environment report excludes credentials, environment-variable values, and image payloads, and warns that local paths must be reviewed before sharing.
+- Registered and mapped sources now share the same metadata-validation boundary.
+- Valid Mono16 values from 1 through 16 remain accepted; executable fixtures preserve 10, 12, 14, and 16.
+- Existing explicit Preview, mapping persistence, panel toggles, and no-side-effect behavior remain unchanged.
 
-LICENSE GATE
-- Proprietary vendor-named camera SDK adapters are excluded from the approved release claim until written vendor permission and required legal review are recorded.
+SCOPE
+- Camera acquisition/control, lighting, PLC/I/O, 3D visualization, and proprietary SDK adapters remain outside this release.
 
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
 
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#1053
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#200

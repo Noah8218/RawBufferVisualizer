@@ -1,10 +1,12 @@
 # Industrial Camera And Board Buffer Compatibility
 
-Last updated: 2026-08-04 KST
+Last updated: 2026-08-05 KST
 
 ## Current Decision
 
 Raw Buffer Visualizer does not claim direct compatibility with a proprietary camera, frame-grabber, transport-board, or imaging-board SDK. The active product contract is vendor-neutral: a user's application may expose an already acquired 2D buffer as `RawBufferView` or `RawBufferSnapshot`, or Automatic Vision Inspector may recognize a safe public member shape without loading or invoking a vendor SDK.
+
+The exact supported and fail-closed carrier/layout decisions are locked in [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md).
 
 The same rule applies to camera-side and board-side SDKs. If a vendor does not provide applicable individual-developer, testing, integration, distribution, and compatibility-wording rights, this project does not provide that vendor-named direct integration. See [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md).
 
@@ -26,16 +28,18 @@ GigE Vision, USB3 Vision, Camera Link, and CoaXPress are transports. A transport
 
 `tests/RawBufferVisualizer.Tests/IndustrialCameraContractTests.cs` verifies:
 
-1. an explicit `DataPtr` and stride shape can open;
-2. nonzero row padding without explicit stride is rejected;
-3. extra payload without explicit stride is rejected;
-4. `ImageData` is preferred over a base `Buffer` and an address offset is rejected;
-5. exact `SizeInBytes` is accepted while unexplained extra size is rejected;
-6. safe PFNC aliases resolve while ambiguous, planar, YUV, compressed, and 3D layouts stay explicit;
-7. method-only scoped buffers do not auto-open;
-8. saved pointer mappings fail closed on padding, offsets, and extra payload.
+1. contiguous and explicitly padded/strided pointer mappings preserve descriptors, bytes, and live-process ownership;
+2. mapped `byte[]`, `ushort[]`, and `float[]` carriers preserve descriptors, bytes, valid bits, and byte order;
+3. registered `RawBufferView` and mapped carriers reject nonpositive dimensions, undersized stride, short length, and incompatible `Mono16`/packed valid bits at the shared metadata boundary;
+4. null pointer, unsupported array carrier, and invalid byte order fail visibly;
+5. nonzero row padding or extra payload without explicit stride is rejected;
+6. `ImageData` is preferred over a base `Buffer` and an address offset is rejected;
+7. exact `SizeInBytes` is accepted while unexplained extra size is rejected;
+8. safe PFNC aliases resolve while ambiguous, planar, YUV, compressed, and 3D layouts stay explicit;
+9. method-only scoped buffers do not auto-open;
+10. saved pointer mappings fail closed on padding, offsets, and extra payload.
 
-The installed-VSIX hybrid smoke uses neutral padding-aware, stride-aware, offset-aware, and sized-buffer fixtures. These fixtures validate inference behavior only; they do not simulate or certify a named vendor runtime.
+The installed-VSIX hybrid smoke uses neutral padding-aware, stride-aware, offset-aware, and sized-buffer fixtures. These fixtures validate inference behavior only; they do not simulate or certify a named vendor runtime. The repository self-tests additionally validate actual mapped transfer metadata and bytes.
 
 ## Historical Vendor Evidence
 
@@ -74,6 +78,6 @@ Acceptance criteria: current official terms reviewed for the exact proposal -> r
 
 Verification: [vendor-sdk-license-policy.md](vendor-sdk-license-policy.md) and the official terms above.
 
-Evidence: No active vendor-specific provider, ObjectSource, SDK audit script, or vendor-named runtime fixture remains in the intended `1.0.53` source.
+Evidence: No active vendor-specific provider, ObjectSource, SDK audit script, or vendor-named runtime fixture remains in the locally qualified `2.0.0` source or frozen VSIX.
 
 Boundary / next dependency: This blocked state does not affect vendor-neutral `RawBufferView`/`RawBufferSnapshot` use. A vendor reply and legal review are prerequisites before spending implementation effort on a direct adapter.
