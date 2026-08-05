@@ -128,9 +128,8 @@ Malformed or unsupported preference JSON is non-fatal: the control falls back to
 | `scripts/SmokeInstalledVsixNewFeatures.ps1` | Installed-VSIX automation and session-state assertions. |
 | `scripts/SmokeAutomaticVisionInspectorLayout.ps1` | Narrow/medium/wide layout assertions. |
 | `tests/RawBufferVisualizer.Tests/Program.cs` | Core inference and nested-mapping tests. |
-| `tests/RawBufferVisualizer.Tests/IndustrialCameraContractTests.cs` | Basler, Spinnaker, Vimba X, IDS peak, PFNC, method-only, padding, payload, and offset safety contracts. |
+| `tests/RawBufferVisualizer.Tests/IndustrialCameraContractTests.cs` | Vendor-neutral PFNC, method-only, stride, padding, payload, size, and offset safety contracts. |
 | `tests/RawBufferVisualizer.Tests/AutomaticImageCollectionPolicyTests.cs` | Exact collection type acceptance/rejection, expression, and scheduling-cap regressions. |
-| `scripts/Test-IndustrialCameraSdkContracts.ps1` | Optional reflection audit for installed/provided vendor SDK assemblies. |
 | `docs/industrial-camera-compatibility-validation.md` | Official-source matrix, evidence levels, remaining release gates, and durable result. |
 
 ## Verification Record

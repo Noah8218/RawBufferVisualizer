@@ -98,6 +98,10 @@
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandPressedBrush}"/>
                                 <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#1C97EA"/>
                             </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
+                            </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.45"/>
                             </Trigger>
@@ -216,18 +220,18 @@
                     <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
                     <CheckBox x:Name="SelectionOverlayBox" Content="Selection" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="8,0,0,0" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"/>
                     <ToggleButton x:Name="InspectorToggleButton" Content="Inspector" Visibility="Collapsed" Checked="InspectorToggleButton_Changed" Unchecked="InspectorToggleButton_Changed"/>
-                    <Button x:Name="WhatsNewButton"
-                            Content="What's New"
-                            ToolTip="Show the current Raw Buffer Visualizer release highlights"
-                            AutomationProperties.Name="Show release highlights"
-                            AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
-                            Click="WhatsNew_Click"/>
-                    <Button x:Name="EnvironmentCheckButton"
-                            Content="Environment"
-                            ToolTip="Check runtime compatibility and optional contributor utilities"
-                            AutomationProperties.Name="Open environment check"
-                            AutomationProperties.AutomationId="EnvironmentCheckOpenButton"
-                            Click="EnvironmentCheck_Click"/>
+                    <ToggleButton x:Name="WhatsNewButton"
+                                  Content="What's New"
+                                  ToolTip="Show or hide the current Raw Buffer Visualizer release highlights"
+                                  AutomationProperties.Name="Toggle release highlights"
+                                  AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
+                                  Click="WhatsNew_Click"/>
+                    <ToggleButton x:Name="EnvironmentCheckButton"
+                                  Content="Environment"
+                                  ToolTip="Show or hide runtime compatibility status"
+                                  AutomationProperties.Name="Toggle environment check"
+                                  AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
+                                  Click="EnvironmentCheck_Click"/>
                     <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                 </WrapPanel>
             </DockPanel>
@@ -295,7 +299,7 @@
                         <TextBlock Text="Environment Check"
                                    FontSize="14"
                                    FontWeight="SemiBold"/>
-                        <TextBlock Text="Runtime requirements are listed before optional contributor and media tools."
+                        <TextBlock Text="Checks the Visual Studio host, extension registration, and temporary storage."
                                    Margin="0,2,0,0"
                                    Foreground="{StaticResource MutedTextBrush}"
                                    TextWrapping="Wrap"
@@ -316,63 +320,6 @@
                                    TextWrapping="Wrap"/>
                     </StackPanel>
 
-                    <TextBlock Text="Optional contributor/media tools"
-                               Margin="0,10,0,4"
-                               FontWeight="SemiBold"/>
-
-                    <Border Background="{StaticResource InputBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1"
-                            Padding="6"
-                            Margin="0,0,0,4">
-                        <DockPanel LastChildFill="True">
-                            <Button DockPanel.Dock="Right"
-                                    Content="Official download"
-                                    Margin="8,0,0,0"
-                                    AutomationProperties.Name="Open the official .NET 8 download page"
-                                    AutomationProperties.AutomationId="EnvironmentDotNetDownloadButton"
-                                    Click="OpenDotNetDownload_Click"/>
-                            <TextBlock x:Name="EnvironmentDotNetText"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"/>
-                        </DockPanel>
-                    </Border>
-
-                    <Border Background="{StaticResource InputBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1"
-                            Padding="6"
-                            Margin="0,0,0,4">
-                        <DockPanel LastChildFill="True">
-                            <Button DockPanel.Dock="Right"
-                                    Content="Open VS Installer"
-                                    Margin="8,0,0,0"
-                                    AutomationProperties.Name="Open Visual Studio Installer"
-                                    AutomationProperties.AutomationId="EnvironmentVisualStudioInstallerButton"
-                                    Click="OpenVisualStudioInstaller_Click"/>
-                            <TextBlock x:Name="EnvironmentVisualStudioWorkloadText"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"/>
-                        </DockPanel>
-                    </Border>
-
-                    <Border Background="{StaticResource InputBrush}"
-                            BorderBrush="{StaticResource BorderBrush}"
-                            BorderThickness="1"
-                            Padding="6">
-                        <DockPanel LastChildFill="True">
-                            <Button DockPanel.Dock="Right"
-                                    Content="Installation guide"
-                                    Margin="8,0,0,0"
-                                    AutomationProperties.Name="Open the official FFmpeg installation guide"
-                                    AutomationProperties.AutomationId="EnvironmentFfmpegGuideButton"
-                                    Click="OpenFfmpegGuide_Click"/>
-                            <TextBlock x:Name="EnvironmentFfmpegText"
-                                       VerticalAlignment="Center"
-                                       TextWrapping="Wrap"/>
-                        </DockPanel>
-                    </Border>
-
                     <WrapPanel Margin="0,8,0,0">
                         <Button Content="Refresh"
                                 AutomationProperties.Name="Refresh environment check"
@@ -382,10 +329,6 @@
                                 AutomationProperties.Name="Copy environment diagnostic report"
                                 AutomationProperties.AutomationId="EnvironmentCheckCopyReportButton"
                                 Click="CopyEnvironmentReport_Click"/>
-                        <Button Content="Close"
-                                AutomationProperties.Name="Close environment check"
-                                AutomationProperties.AutomationId="EnvironmentCheckCloseButton"
-                                Click="CloseEnvironmentCheck_Click"/>
                     </WrapPanel>
                 </StackPanel>
             </Border>
@@ -465,7 +408,7 @@
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
                                 <MenuItem Header="Save raw snapshot" Click="SaveSnapshot_Click"/>
                                 <MenuItem x:Name="OpenVariableMenuItem" Header="Open Variable..." AutomationProperties.AutomationId="OpenVariableMenuItem" Click="OpenVariable_Click"/>
-                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Map This Type" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
+                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Connect Your Buffer" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
                             </ContextMenu>
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
@@ -789,6 +732,36 @@
                     <TabItem Header="Interpret">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="4">
+                                <Border x:Name="CompactAutomaticInspectionPanel"
+                                        Visibility="{Binding ElementName=AutomaticInspectionPanel, Path=Visibility}"
+                                        Margin="0,0,0,10"
+                                        Padding="9"
+                                        Background="#252526"
+                                        BorderBrush="{StaticResource StatusAccentBrush}"
+                                        BorderThickness="1">
+                                    <StackPanel>
+                                        <TextBlock Text="Automatic Vision Inspector" FontSize="14" FontWeight="SemiBold"/>
+                                        <TextBlock Margin="0,5,0,0"
+                                                   Foreground="#9CDCFE"
+                                                   FontWeight="SemiBold"
+                                                   Text="{Binding ElementName=AutomaticInspectionConfidenceText, Path=Text}"/>
+                                        <TextBlock Margin="0,5,0,0"
+                                                   Foreground="{StaticResource MutedTextBrush}"
+                                                   FontFamily="Consolas"
+                                                   FontSize="11"
+                                                   TextWrapping="Wrap"
+                                                   Text="{Binding ElementName=AutomaticInspectionMembersText, Path=Text}"/>
+                                        <Button x:Name="CompactEditAutomaticMappingButton"
+                                                Content="Edit Mapping"
+                                                Margin="0,7,0,0"
+                                                HorizontalAlignment="Left"
+                                                Visibility="{Binding ElementName=EditAutomaticMappingButton, Path=Visibility}"
+                                                ToolTip="Review inferred members and save corrections for this runtime type"
+                                                AutomationProperties.AutomationId="CompactEditAutomaticVisionMappingButton"
+                                                Click="EditAutomaticMapping_Click"/>
+                                    </StackPanel>
+                                </Border>
+
                                 <Grid>
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="64"/>

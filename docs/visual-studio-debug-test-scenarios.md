@@ -41,10 +41,10 @@ Visual Studio stops before executing the highlighted breakpoint statement. Do no
 | 15 | `rawViewBgr24` | Opens through unmanaged pointer metadata as `BGR24`. |
 | 16 | `rawViewMono16` | Opens through unmanaged pointer metadata as `Mono16`. |
 | 17 | `rawViewBgra32` | Opens through unmanaged pointer metadata as `BGRA32`. |
-| 18 | `baslerPylonLikeFrame.View` | Opens through the SDK-style object wrapper as `Mono8`. |
-| 19 | `hikrobotMvsLikeFrame.View` | Opens through the SDK-style object wrapper as `BGR24`. |
-| 20 | `spinnakerLikeFrame.View` | Opens through the SDK-style object wrapper as `BayerRGGB8`. |
-| 21 | `frameGrabberLikeBuffer.View` | Opens through the SDK-style object wrapper as `Mono16`. |
+| 18 | `contiguousMonoFrame.View` | Opens through the vendor-neutral object wrapper as `Mono8`. |
+| 19 | `bgrPointerFrame.View` | Opens through the vendor-neutral object wrapper as `BGR24`. |
+| 20 | `bayerPointerFrame.View` | Opens through the vendor-neutral object wrapper as `BayerRGGB8`. |
+| 21 | `mono16BoardBuffer.View` | Opens through the vendor-neutral object wrapper as `Mono16`. |
 | 22 | `bitmapMono8` | Opens as `System.Drawing.Bitmap` mapped to `Mono8`. |
 | 23 | `bitmapBgr24` | Opens as `System.Drawing.Bitmap` mapped to `BGR24`. |
 | 24 | `bitmapBgra32` | Opens as `System.Drawing.Bitmap` mapped to `BGRA32`. |

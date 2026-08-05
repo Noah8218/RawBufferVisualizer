@@ -10,7 +10,7 @@ namespace RawBufferVisualizer.Tests
         public static void RunAll()
         {
             SupportedVisualStudioVersionsAreExplicit();
-            RequiredAndOptionalChecksRemainSeparated();
+            RequiredChecksContainOnlyRuntimeNeeds();
             DiagnosticReportDeclaresPrivacyBoundary();
             CaptureVerifiesAndCleansTemporaryStorage();
         }
@@ -40,25 +40,16 @@ namespace RawBufferVisualizer.Tests
                 "Unknown Visual Studio versions must not be reported as supported.");
         }
 
-        private static void RequiredAndOptionalChecksRemainSeparated()
+        private static void RequiredChecksContainOnlyRuntimeNeeds()
         {
             var snapshot = CreateReadySnapshot();
-            snapshot.VisualStudioExtensionWorkloadInstalled = false;
-            snapshot.FfmpegAvailable = false;
 
             var result = VisualizerEnvironmentCheck.Create(snapshot);
 
             Assert(result.Required.Count == 3, "Environment check required-item count changed.");
-            Assert(result.Optional.Count == 3, "Environment check optional-item count changed.");
             Assert(result.Required[0].Name == "Visual Studio host", "Visual Studio must be the first required check.");
             Assert(result.Required[1].Name == "Raw Buffer Visualizer", "Extension registration must be the second required check.");
             Assert(result.Required[2].Name == "Temporary storage", "Temporary storage must be the third required check.");
-            Assert(result.Optional[0].Action == VisualizerEnvironmentAction.OpenDotNetDownload, ".NET action changed.");
-            Assert(result.Optional[1].Action == VisualizerEnvironmentAction.OpenVisualStudioInstaller, "Visual Studio Installer action changed.");
-            Assert(result.Optional[2].Action == VisualizerEnvironmentAction.OpenFfmpegGuide, "FFmpeg action changed.");
-            Assert(
-                result.Optional[1].State == VisualizerEnvironmentCheckState.Attention,
-                "Missing optional workload should be visible without failing required runtime checks.");
         }
 
         private static void DiagnosticReportDeclaresPrivacyBoundary()
@@ -67,7 +58,9 @@ namespace RawBufferVisualizer.Tests
             var report = result.CreateDiagnosticReport();
 
             Assert(report.Contains("Required runtime:"), "Environment report required heading is missing.");
-            Assert(report.Contains("Optional contributor/media tools:"), "Environment report optional heading is missing.");
+            Assert(!report.Contains(".NET 8 SDK"), "Environment report must not present contributor SDKs as runtime needs.");
+            Assert(!report.Contains("FFmpeg"), "Environment report must not contain demo-media utilities.");
+            Assert(!report.Contains("extension workload"), "Environment report must not contain contributor workloads.");
             Assert(report.Contains("Local paths included: Yes - review this report before sharing."), "Environment report local-path warning is missing.");
             Assert(report.Contains("Credentials or environment-variable values included: No"), "Environment report credential declaration is missing.");
             Assert(report.Contains("Image payload included: No"), "Environment report image privacy declaration is missing.");
@@ -84,7 +77,6 @@ namespace RawBufferVisualizer.Tests
                 var result = VisualizerEnvironmentCheck.Capture(
                     "1.0.53.0",
                     "18.8.12023.21",
-                    string.Empty,
                     directory);
 
                 Assert(
@@ -112,13 +104,7 @@ namespace RawBufferVisualizer.Tests
                 Is64BitProcess = true,
                 ExtensionVersion = "1.0.53.0",
                 TempStorageWritable = true,
-                TempStoragePath = @"D:\OpenVisionLab-TestData\RawBufferVisualizer\temp",
-                DotNet8SdkInstalled = true,
-                DotNet8SdkPath = @"C:\Program Files\dotnet\sdk\8.0.423",
-                VisualStudioExtensionWorkloadInstalled = true,
-                VisualStudioInstallerPath = @"C:\Program Files (x86)\Microsoft Visual Studio\Installer\setup.exe",
-                FfmpegAvailable = true,
-                FfmpegPath = @"C:\Tools\ffmpeg.exe"
+                TempStoragePath = @"D:\OpenVisionLab-TestData\RawBufferVisualizer\temp"
             };
         }
 

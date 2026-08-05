@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Text;
 
 namespace RawBufferVisualizer.VisualStudio
@@ -13,20 +12,11 @@ namespace RawBufferVisualizer.VisualStudio
         Attention
     }
 
-    public enum VisualizerEnvironmentAction
-    {
-        None,
-        OpenDotNetDownload,
-        OpenVisualStudioInstaller,
-        OpenFfmpegGuide
-    }
-
     public sealed class VisualizerEnvironmentCheckItem
     {
         public string Name { get; set; } = string.Empty;
         public string Detail { get; set; } = string.Empty;
         public VisualizerEnvironmentCheckState State { get; set; }
-        public VisualizerEnvironmentAction Action { get; set; }
     }
 
     public sealed class VisualizerEnvironmentSnapshot
@@ -38,29 +28,20 @@ namespace RawBufferVisualizer.VisualStudio
         public bool TempStorageWritable { get; set; }
         public string TempStoragePath { get; set; } = string.Empty;
         public string TempStorageError { get; set; } = string.Empty;
-        public bool DotNet8SdkInstalled { get; set; }
-        public string DotNet8SdkPath { get; set; } = string.Empty;
-        public bool VisualStudioExtensionWorkloadInstalled { get; set; }
-        public string VisualStudioInstallerPath { get; set; } = string.Empty;
-        public bool FfmpegAvailable { get; set; }
-        public string FfmpegPath { get; set; } = string.Empty;
     }
 
     public sealed class VisualizerEnvironmentCheckResult
     {
         public VisualizerEnvironmentCheckResult(
             VisualizerEnvironmentSnapshot snapshot,
-            IList<VisualizerEnvironmentCheckItem> required,
-            IList<VisualizerEnvironmentCheckItem> optional)
+            IList<VisualizerEnvironmentCheckItem> required)
         {
             Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
             Required = required ?? throw new ArgumentNullException(nameof(required));
-            Optional = optional ?? throw new ArgumentNullException(nameof(optional));
         }
 
         public VisualizerEnvironmentSnapshot Snapshot { get; }
         public IList<VisualizerEnvironmentCheckItem> Required { get; }
-        public IList<VisualizerEnvironmentCheckItem> Optional { get; }
 
         public string CreateDiagnosticReport()
         {
@@ -72,7 +53,6 @@ namespace RawBufferVisualizer.VisualStudio
                 "yyyy-MM-ddTHH:mm:ss.fffZ",
                 CultureInfo.InvariantCulture));
             AppendItems(builder, "Required runtime", Required);
-            AppendItems(builder, "Optional contributor/media tools", Optional);
             builder.AppendLine();
             builder.AppendLine("Local paths included: Yes - review this report before sharing.");
             builder.AppendLine("Credentials or environment-variable values included: No");
@@ -105,16 +85,9 @@ namespace RawBufferVisualizer.VisualStudio
 
     public static class VisualizerEnvironmentCheck
     {
-        public const string DotNet8DownloadUrl =
-            "https://dotnet.microsoft.com/en-us/download/dotnet/8.0";
-        public const string VisualStudioModifyUrl =
-            "https://learn.microsoft.com/en-us/visualstudio/install/modify-visual-studio?view=visualstudio";
-        public const string FfmpegDownloadUrl = "https://ffmpeg.org/download.html";
-
         public static VisualizerEnvironmentCheckResult Capture(
             string extensionVersion,
             string visualStudioVersion,
-            string visualStudioInstallationPath,
             string tempStoragePath)
         {
             var snapshot = new VisualizerEnvironmentSnapshot
@@ -127,9 +100,6 @@ namespace RawBufferVisualizer.VisualStudio
             };
 
             CaptureTempStorage(snapshot);
-            CaptureDotNet8Sdk(snapshot);
-            CaptureVisualStudioWorkload(snapshot, visualStudioInstallationPath);
-            CaptureFfmpeg(snapshot);
             return Create(snapshot);
         }
 
@@ -181,44 +151,7 @@ namespace RawBufferVisualizer.VisualStudio
                 }
             };
 
-            var optional = new List<VisualizerEnvironmentCheckItem>
-            {
-                new VisualizerEnvironmentCheckItem
-                {
-                    Name = ".NET 8 SDK",
-                    Detail = snapshot.DotNet8SdkInstalled
-                        ? snapshot.DotNet8SdkPath + " - available"
-                        : "Not detected; required only for contributors and source-based validation",
-                    State = snapshot.DotNet8SdkInstalled
-                        ? VisualizerEnvironmentCheckState.Ready
-                        : VisualizerEnvironmentCheckState.Attention,
-                    Action = VisualizerEnvironmentAction.OpenDotNetDownload
-                },
-                new VisualizerEnvironmentCheckItem
-                {
-                    Name = "Visual Studio extension workload",
-                    Detail = snapshot.VisualStudioExtensionWorkloadInstalled
-                        ? "VSSDK workload files detected"
-                        : "Not detected; optional for the verified command-line build",
-                    State = snapshot.VisualStudioExtensionWorkloadInstalled
-                        ? VisualizerEnvironmentCheckState.Ready
-                        : VisualizerEnvironmentCheckState.Attention,
-                    Action = VisualizerEnvironmentAction.OpenVisualStudioInstaller
-                },
-                new VisualizerEnvironmentCheckItem
-                {
-                    Name = "FFmpeg (demo media only)",
-                    Detail = snapshot.FfmpegAvailable
-                        ? snapshot.FfmpegPath + " - available"
-                        : "Not detected; not required by the extension runtime",
-                    State = snapshot.FfmpegAvailable
-                        ? VisualizerEnvironmentCheckState.Ready
-                        : VisualizerEnvironmentCheckState.Attention,
-                    Action = VisualizerEnvironmentAction.OpenFfmpegGuide
-                }
-            };
-
-            return new VisualizerEnvironmentCheckResult(snapshot, required, optional);
+            return new VisualizerEnvironmentCheckResult(snapshot, required);
         }
 
         public static bool IsSupportedVisualStudioVersion(string versionText)
@@ -259,86 +192,6 @@ namespace RawBufferVisualizer.VisualStudio
                 snapshot.TempStorageError = ex.GetType().Name;
                 TryDeleteFile(probePath);
             }
-        }
-
-        private static void CaptureDotNet8Sdk(VisualizerEnvironmentSnapshot snapshot)
-        {
-            try
-            {
-                var dotnetRoot = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
-                    "dotnet");
-                var sdkRoot = Path.Combine(dotnetRoot, "sdk");
-                var sdkDirectory = Directory.Exists(sdkRoot)
-                    ? Directory.GetDirectories(sdkRoot, "8.*", SearchOption.TopDirectoryOnly)
-                        .OrderByDescending(path => path, StringComparer.OrdinalIgnoreCase)
-                        .FirstOrDefault()
-                    : null;
-                snapshot.DotNet8SdkInstalled = !string.IsNullOrWhiteSpace(sdkDirectory)
-                    && File.Exists(Path.Combine(dotnetRoot, "dotnet.exe"));
-                snapshot.DotNet8SdkPath = sdkDirectory ?? string.Empty;
-            }
-            catch
-            {
-                snapshot.DotNet8SdkInstalled = false;
-                snapshot.DotNet8SdkPath = string.Empty;
-            }
-        }
-
-        private static void CaptureVisualStudioWorkload(
-            VisualizerEnvironmentSnapshot snapshot,
-            string visualStudioInstallationPath)
-        {
-            try
-            {
-                snapshot.VisualStudioExtensionWorkloadInstalled =
-                    !string.IsNullOrWhiteSpace(visualStudioInstallationPath)
-                    && Directory.Exists(Path.Combine(visualStudioInstallationPath, "VSSDK"));
-                var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-                var installerPath = Path.Combine(
-                    programFilesX86,
-                    "Microsoft Visual Studio",
-                    "Installer",
-                    "setup.exe");
-                snapshot.VisualStudioInstallerPath = File.Exists(installerPath)
-                    ? installerPath
-                    : string.Empty;
-            }
-            catch
-            {
-                snapshot.VisualStudioExtensionWorkloadInstalled = false;
-                snapshot.VisualStudioInstallerPath = string.Empty;
-            }
-        }
-
-        private static void CaptureFfmpeg(VisualizerEnvironmentSnapshot snapshot)
-        {
-            try
-            {
-                var pathValue = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
-                foreach (var pathEntry in pathValue.Split(Path.PathSeparator))
-                {
-                    var directory = pathEntry.Trim().Trim('"');
-                    if (string.IsNullOrWhiteSpace(directory))
-                    {
-                        continue;
-                    }
-
-                    var candidate = Path.Combine(directory, "ffmpeg.exe");
-                    if (File.Exists(candidate))
-                    {
-                        snapshot.FfmpegAvailable = true;
-                        snapshot.FfmpegPath = candidate;
-                        return;
-                    }
-                }
-            }
-            catch
-            {
-            }
-
-            snapshot.FfmpegAvailable = false;
-            snapshot.FfmpegPath = string.Empty;
         }
 
         private static string NormalizeError(string error)
