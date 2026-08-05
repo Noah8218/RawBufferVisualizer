@@ -4,7 +4,30 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No user-visible changes are queued after `1.0.53`.
+No user-visible changes are queued after `2.0.0`.
+
+## [2.0.0] - 2026-08-05
+
+Release status: separate vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged until this exact candidate passes installed qualification and the owner separately approves publication.
+
+### Added
+
+- Added a documented compatibility matrix for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointer buffers, and mapped `byte[]`, `ushort[]`, and `float[]` carriers.
+- Added neutral repository fixtures that verify descriptor fields, transferred bytes, byte order, valid bits, process ownership, and fail-closed outcomes without a proprietary SDK.
+
+### Improved
+
+- Registered and mapped metadata now use the same dimension, stride, and buffer-length validation boundary before transfer.
+- Valid `Mono16` values from 1 through 16 remain accepted; fixtures explicitly preserve 10, 12, 14, and 16.
+
+### Fixed
+
+- Invalid `Mono16` valid-bit counts now fail instead of remaining advisory warnings.
+- `Mono10PackedLsb` and `Mono12PackedLsb` now reject valid-bit values that contradict their fixed 10-bit and 12-bit layouts.
+
+### Scope
+
+- Version 2.0 remains a Visual Studio debugger for already-acquired 2D buffers. It does not add camera acquisition/control, PLC/I/O, 3D visualization, or a proprietary camera/frame-grabber SDK dependency.
 
 ## [1.0.53] - 2026-08-03
 
@@ -123,7 +146,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...v2.0.0
 [1.0.53]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.53
 [1.0.52]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.52
 [1.0.51]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.51
