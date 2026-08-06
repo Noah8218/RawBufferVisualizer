@@ -4,18 +4,17 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.0` changes are queued; the unreleased `2.0.0` candidate contents are listed below.
+No post-`2.0.0` changes are queued.
 
 ## [2.0.0] - 2026-08-06
 
-Release status: qualified vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged. The consolidated candidate passed installed VS2022/VS2026 Continue invalidation, local validation, source push, CI, clean install, and exact public `1.0.53 -> 2.0.0` in-place update; publication remains a separate owner-controlled action.
+Raw Buffer Visualizer `2.0.0` adds safer 2D buffer inspection, Connect Doctor, and debugger-lifetime protection for Visual Studio 2022 and Visual Studio 2026.
 
 ### Added
 
 - Added **Diagnose interpretation** inside Connect Your Buffer. It ranks bounded Buffer Doctor candidates without opening another ToolWindow or starting a new debugger transfer.
 - Candidate selection updates only the visible mapping draft and preview; only **Save Mapping** persists. Repeated selection closes the result panel, and **Use Suggested Roles** resets the draft.
 - Added a documented compatibility matrix for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointer buffers, and mapped `byte[]`, `ushort[]`, and `float[]` carriers.
-- Added neutral repository fixtures that verify descriptor fields, transferred bytes, byte order, valid bits, process ownership, and fail-closed outcomes without a proprietary SDK.
 
 ### Improved
 
@@ -32,13 +31,9 @@ Release status: qualified vendor-neutral 2D compatibility candidate. Public Mark
 - Continue/process exit now disposes live process-memory sources, marks their rows `Unavailable`, and prevents progressive or pixel reads from touching invalid memory; copied managed buffers remain available.
 - Delayed handoffs captured before Continue are rejected in Run Mode and cannot revive in a later Break session.
 
-### Scope
-
-- Version 2.0 remains a Visual Studio debugger for already-acquired 2D buffers. It does not add camera acquisition/control, PLC/I/O, 3D visualization, or a proprietary camera/frame-grabber SDK dependency.
-
 ## [1.0.53] - 2026-08-03
 
-Release status: local development candidate. The uncleared proprietary vendor adapter has been removed; a new immutable package has not yet been created or qualified for Marketplace publication.
+Release status: published Marketplace release.
 
 ### Added
 

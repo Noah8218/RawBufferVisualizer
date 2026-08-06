@@ -61,7 +61,6 @@ Preview와 scan은 사용자가 명시적으로 실행할 때만 동작합니다
 - 등록 및 mapping metadata가 dimension, stride, length, format/order enum과 valid-bits를 같은 checked fail-closed 규칙으로 검증합니다.
 - `Mono16`의 1~16 valid bits를 유지하며 실행 가능한 fixture가 10, 12, 14, 16을 검증합니다.
 - `Mono10PackedLsb`와 `Mono12PackedLsb`는 고정 layout과 맞지 않는 valid-bits를 거부합니다.
-- 중립 fixture가 독점 SDK 없이 descriptor, 전송 바이트, byte order와 포인터 소유권을 검증합니다.
 - Continue 또는 debuggee 종료 뒤에는 live process-backed row를 `Unavailable`로 전환하고 이후 source read를 차단합니다. Visual Studio가 이미 복사해 소유하는 managed buffer는 계속 사용할 수 있습니다.
 - Continue 전에 예약된 지연 handoff는 Run Mode나 다음 Break에서 다시 열리지 않습니다.
 
@@ -81,8 +80,6 @@ Community, Professional, Enterprise를 지원합니다. Visual Studio 2019, Visu
 - Continue 또는 process 종료 뒤 live row에는 마지막으로 렌더링된 픽셀만 참고용으로 남을 수 있으며 debuggee source를 다시 읽지 않습니다. 새 live source가 필요하면 유효한 중단점에서 다시 열거나 scan하십시오.
 - 자동 검색은 선택한 stack frame의 Locals와 Arguments만 제한된 범위에서 검사합니다.
 - 모호하거나 compressed, planar, YUV, 미지원 packed, offset 또는 method-only layout은 추측하지 않고 명확히 실패합니다.
-- 카메라 획득/제어, 조명, PLC/I/O, 3D point cloud와 depth/coordinate container는 이 확장의 범위가 아닙니다.
-- 범용 buffer 검사는 특정 카메라, frame grabber, driver, SDK 또는 하드웨어 인증을 의미하지 않습니다.
 
 ## 라이선스와 지원
 
