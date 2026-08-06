@@ -17,8 +17,11 @@
             <Style TargetType="{x:Type TextBlock}" BasedOn="{StaticResource RbvTextBlockStyle}"/>
             <Style TargetType="{x:Type Label}" BasedOn="{StaticResource RbvLabelStyle}"/>
             <Style TargetType="{x:Type Button}" BasedOn="{StaticResource RbvButtonStyle}"/>
+            <Style TargetType="{x:Type ToggleButton}" BasedOn="{StaticResource RbvToggleButtonStyle}"/>
             <Style TargetType="{x:Type ComboBox}" BasedOn="{StaticResource RbvComboBoxStyle}"/>
             <Style TargetType="{x:Type ComboBoxItem}" BasedOn="{StaticResource RbvComboBoxItemStyle}"/>
+            <Style TargetType="{x:Type ListBox}" BasedOn="{StaticResource RbvListBoxStyle}"/>
+            <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource RbvListBoxItemStyle}"/>
             <Style TargetType="{x:Type ScrollBar}" BasedOn="{StaticResource RbvScrollBarStyle}"/>
             <Style TargetType="{x:Type ToolTip}" BasedOn="{StaticResource RbvToolTipStyle}"/>
         </ResourceDictionary>
@@ -78,9 +81,78 @@
 
             <WrapPanel Margin="0,12,0,0">
                 <Button x:Name="PreviewButton" Content="Preview" AutomationProperties.AutomationId="PreviewMappingButton" Click="Preview_Click"/>
+                <ToggleButton x:Name="DiagnoseInterpretationButton"
+                              Content="Diagnose interpretation"
+                              AutomationProperties.Name="Show or hide ranked buffer interpretations"
+                              AutomationProperties.AutomationId="DiagnoseMappingInterpretationButton"
+                              ToolTip="Suggest ranked interpretations from the current paused buffer"
+                              Checked="DiagnoseInterpretation_Changed"
+                              Unchecked="DiagnoseInterpretation_Changed"/>
                 <Button x:Name="CopyTemplateButton" Content="Copy RawBufferView Template" AutomationProperties.AutomationId="CopyRawBufferViewTemplateButton" Click="CopyTemplate_Click"/>
                 <Button x:Name="UseSuggestedRolesButton" Content="Use Suggested Roles" AutomationProperties.AutomationId="UseSuggestedMappingRolesButton" Click="UseSuggestedRoles_Click"/>
             </WrapPanel>
+
+            <Border x:Name="DiagnosisResultPanel"
+                    Visibility="Collapsed"
+                    Margin="0,4,0,0"
+                    Padding="8"
+                    Background="{StaticResource RbvInputBrush}"
+                    BorderBrush="{StaticResource RbvBorderBrush}"
+                    BorderThickness="1">
+                <StackPanel>
+                    <TextBlock Text="Suggested interpretations" FontSize="14" FontWeight="SemiBold"/>
+                    <TextBlock x:Name="DiagnosisStatusText"
+                               Margin="0,5,0,6"
+                               Foreground="{StaticResource RbvMutedTextBrush}"
+                               TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="MappingDiagnosisStatusText"/>
+                    <ListBox x:Name="DiagnosisCandidateList"
+                              MaxHeight="140"
+                              AutomationProperties.Name="Ranked buffer interpretations"
+                              AutomationProperties.AutomationId="MappingDiagnosisCandidateList"
+                              SelectionChanged="DiagnosisCandidateList_SelectionChanged">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource RbvListBoxItemStyle}">
+                                <Setter Property="AutomationProperties.Name" Value="{Binding AccessibleName}"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ToolTip="{Binding ReasonsText}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="42"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Background="{StaticResource RbvAccentBrush}"
+                                            Padding="6,2"
+                                            Margin="0,0,8,0"
+                                            CornerRadius="2"
+                                            VerticalAlignment="Top">
+                                        <TextBlock Text="{Binding ScoreText}" FontWeight="SemiBold" TextAlignment="Center"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding Summary}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource RbvMutedTextBrush}"
+                                                   TextWrapping="Wrap"/>
+                                        <TextBlock Text="{Binding AmbiguityNote}"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource RbvAttentionTextBrush}"
+                                                   TextWrapping="Wrap"
+                                                   Visibility="{Binding AmbiguityVisibility}"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+                    <TextBlock x:Name="DiagnosisApplyStatusText"
+                               Margin="0,6,0,0"
+                               Foreground="{StaticResource RbvAttentionTextBrush}"
+                               TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="MappingDiagnosisApplyStatusText"/>
+                </StackPanel>
+            </Border>
 
             <Border Margin="0,4,0,0" Padding="6" Background="#111111" BorderBrush="{StaticResource RbvBorderBrush}" BorderThickness="1">
                 <DockPanel LastChildFill="True">

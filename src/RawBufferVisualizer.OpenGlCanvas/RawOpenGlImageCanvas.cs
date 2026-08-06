@@ -476,6 +476,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
             RequestRender();
         }
 
+        public void InvalidateSource()
+        {
+            SetSourceUnavailableState();
+        }
+
         public void SetRenderLevels(double blackLevel, double whiteLevel)
         {
             if (_descriptor == null || _imageSource == null)
@@ -1893,17 +1898,29 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void MarkSourceUnavailable(RawImageSourceUnavailableException exception)
         {
-            if (_sourceUnavailable)
+            if (!SetSourceUnavailableState())
             {
                 return;
             }
 
-            _sourceUnavailable = true;
-            ResetProgressiveRenderState();
-            HidePixelOverlay();
             Debug.WriteLine("Raw Buffer Visualizer live source unavailable: " + exception);
             SourceUnavailable?.Invoke(this, new RawOpenGlSourceUnavailableEventArgs(exception));
+        }
+
+        private bool SetSourceUnavailableState()
+        {
+            if (_sourceUnavailable)
+            {
+                return false;
+            }
+
+            _sourceUnavailable = true;
+            _imageGeneration++;
+            _renderOptionsGeneration++;
+            ResetProgressiveRenderState();
+            HidePixelOverlay();
             RequestRender();
+            return true;
         }
 
         private void RenderQueuedFrame()

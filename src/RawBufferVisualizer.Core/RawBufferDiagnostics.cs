@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 
@@ -42,16 +43,35 @@ namespace RawBufferVisualizer.Core
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Height must be greater than zero."));
             }
 
-            var minimumStride = descriptor.GetMinimumStride();
+            var pixelFormatDefined = Enum.IsDefined(typeof(RawPixelFormat), descriptor.PixelFormat);
+            if (!pixelFormatDefined)
+            {
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Pixel format is not defined."));
+            }
+
+            if (!Enum.IsDefined(typeof(RawByteOrder), descriptor.ByteOrder))
+            {
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Byte order is not defined."));
+            }
+
+            int minimumStride;
+            var hasMinimumStride = descriptor.TryGetMinimumStride(out minimumStride);
+            if (descriptor.Width > 0 && pixelFormatDefined && !hasMinimumStride)
+            {
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Error,
+                    "Minimum stride exceeds the supported 32-bit stride range."));
+            }
+
             if (descriptor.Stride <= 0)
             {
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Stride must be greater than zero."));
             }
-            else if (minimumStride > 0 && descriptor.Stride < minimumStride)
+            else if (hasMinimumStride && descriptor.Stride < minimumStride)
             {
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Stride is smaller than the pixel format requires."));
             }
-            else if (minimumStride > 0 && descriptor.Stride > minimumStride)
+            else if (hasMinimumStride && descriptor.Stride > minimumStride)
             {
                 diagnostics.Add(new RawDiagnostic(
                     RawDiagnosticSeverity.Info,
@@ -62,7 +82,7 @@ namespace RawBufferVisualizer.Core
                         minimumStride,
                         descriptor.Stride - minimumStride)));
             }
-            else if (minimumStride > 0 && descriptor.Stride == minimumStride)
+            else if (hasMinimumStride && descriptor.Stride == minimumStride)
             {
                 diagnostics.Add(new RawDiagnostic(
                     RawDiagnosticSeverity.Info,
@@ -84,8 +104,16 @@ namespace RawBufferVisualizer.Core
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Mono12PackedLsb requires 12 valid bits per pixel."));
             }
 
-            var requiredBytes = descriptor.GetRequiredByteCount();
-            if (requiredBytes > 0)
+            long requiredBytes;
+            var hasRequiredBytes = descriptor.TryGetRequiredByteCount(out requiredBytes);
+            if (hasMinimumStride && descriptor.Height > 0 && descriptor.Stride > 0 && !hasRequiredBytes)
+            {
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Error,
+                    "Required byte count exceeds the supported 64-bit range."));
+            }
+
+            if (hasRequiredBytes)
             {
                 diagnostics.Add(new RawDiagnostic(
                     RawDiagnosticSeverity.Info,
@@ -96,7 +124,7 @@ namespace RawBufferVisualizer.Core
                         bufferLength)));
             }
 
-            if (requiredBytes > bufferLength)
+            if (hasRequiredBytes && requiredBytes > bufferLength)
             {
                 diagnostics.Add(new RawDiagnostic(
                     RawDiagnosticSeverity.Error,
@@ -105,7 +133,7 @@ namespace RawBufferVisualizer.Core
                         "Buffer is smaller than descriptor requires by {0:N0} bytes.",
                         requiredBytes - bufferLength)));
             }
-            else if (requiredBytes > 0 && bufferLength > requiredBytes)
+            else if (hasRequiredBytes && bufferLength > requiredBytes)
             {
                 diagnostics.Add(new RawDiagnostic(
                     RawDiagnosticSeverity.Info,
@@ -115,15 +143,18 @@ namespace RawBufferVisualizer.Core
                         bufferLength - requiredBytes)));
             }
 
-            diagnostics.Add(new RawDiagnostic(
-                RawDiagnosticSeverity.Info,
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Interpretation: {0}, {1} valid bits, {2}, {3} channel(s).",
-                    descriptor.PixelFormat,
-                    descriptor.ValidBits,
-                    descriptor.ByteOrder,
-                    GetChannelCount(descriptor.PixelFormat))));
+            if (pixelFormatDefined && Enum.IsDefined(typeof(RawByteOrder), descriptor.ByteOrder))
+            {
+                diagnostics.Add(new RawDiagnostic(
+                    RawDiagnosticSeverity.Info,
+                    string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Interpretation: {0}, {1} valid bits, {2}, {3} channel(s).",
+                        descriptor.PixelFormat,
+                        descriptor.ValidBits,
+                        descriptor.ByteOrder,
+                        GetChannelCount(descriptor.PixelFormat))));
+            }
 
             return diagnostics;
         }

@@ -51,6 +51,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             get { return _control.IsAutoInspectEnabled; }
         }
 
+        public int InvalidateLiveSources()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            return _control.InvalidateLiveSources();
+        }
+
         protected override void Dispose(bool disposing)
         {
             if (disposing)

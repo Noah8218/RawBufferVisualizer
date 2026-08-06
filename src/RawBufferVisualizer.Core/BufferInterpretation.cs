@@ -108,6 +108,7 @@ namespace RawBufferVisualizer.Core
     {
         public const int MaxCandidates = 8;
         public const int BayerGroupMinimumScore = 50;
+        private const int MaxHintGeometryCandidates = 3;
 
         public static BufferDiagnosisResult Diagnose(RawImageSource source, CancellationToken cancellationToken)
         {
@@ -130,10 +131,61 @@ namespace RawBufferVisualizer.Core
             candidates.Sort((left, right) => CompareCandidates(left, right, hint));
             if (candidates.Count > MaxCandidates)
             {
-                candidates = candidates.GetRange(0, MaxCandidates);
+                candidates = SelectVisibleCandidates(candidates, hint);
             }
 
             return new BufferDiagnosisResult(candidates, source.Analyze());
+        }
+
+        private static List<BufferInterpretationCandidate> SelectVisibleCandidates(
+            List<BufferInterpretationCandidate> ranked,
+            RawImageDescriptor hint)
+        {
+            var selected = ranked.GetRange(0, MaxCandidates);
+            if (hint == null)
+            {
+                return selected;
+            }
+
+            var geometryCandidates = new List<BufferInterpretationCandidate>();
+            var formats = new HashSet<RawPixelFormat>();
+            for (var i = 0; i < ranked.Count && geometryCandidates.Count < MaxHintGeometryCandidates; i++)
+            {
+                var candidate = ranked[i];
+                var descriptor = candidate.Descriptor;
+                if (descriptor.Width != hint.Width
+                    || descriptor.Height != hint.Height
+                    || descriptor.Stride != hint.Stride
+                    || !formats.Add(descriptor.PixelFormat))
+                {
+                    continue;
+                }
+
+                geometryCandidates.Add(candidate);
+            }
+
+            for (var i = 0; i < geometryCandidates.Count; i++)
+            {
+                var required = geometryCandidates[i];
+                if (selected.Contains(required))
+                {
+                    continue;
+                }
+
+                for (var replace = selected.Count - 1; replace > 0; replace--)
+                {
+                    if (geometryCandidates.Contains(selected[replace]))
+                    {
+                        continue;
+                    }
+
+                    selected[replace] = required;
+                    break;
+                }
+            }
+
+            selected.Sort((left, right) => CompareCandidates(left, right, hint));
+            return selected;
         }
 
         private static int CompareCandidates(BufferInterpretationCandidate left, BufferInterpretationCandidate right, RawImageDescriptor hint)

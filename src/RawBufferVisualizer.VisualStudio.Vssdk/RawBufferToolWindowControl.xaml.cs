@@ -404,6 +404,44 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateStatus();
         }
 
+        public int InvalidateLiveSources()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            const string unavailableMessage = "Live debugger image memory is no longer readable.";
+            var invalidatedCount = 0;
+            var activeInvalidated = false;
+            for (var index = 0; index < _documents.Count; index++)
+            {
+                var document = _documents[index];
+                if (!document.Source.IsLiveProcessBacked
+                    || !document.MarkSourceUnavailable(unavailableMessage))
+                {
+                    continue;
+                }
+
+                invalidatedCount++;
+                activeInvalidated |= ReferenceEquals(document, _activeDocument);
+            }
+
+            if (invalidatedCount == 0)
+            {
+                return 0;
+            }
+
+            ImageList.Items.Refresh();
+            if (activeInvalidated && _activeDocument != null)
+            {
+                OpenGlImageView.InvalidateSource();
+                ShowSourceUnavailableState(unavailableMessage);
+            }
+            else
+            {
+                UpdateStatus();
+            }
+
+            return invalidatedCount;
+        }
+
         private static string BuildAutomaticCollectionStatus(
             AutomaticVisionScanResult scan)
         {
@@ -3168,14 +3206,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 delegate
                 {
                     var diagnosed = BufferDoctor.Diagnose(source, cancellation.Token);
-                    var rows = new List<DiagnosisCandidateItem>(diagnosed.Candidates.Count);
+                    var rows = new List<BufferDiagnosisCandidateItem>(diagnosed.Candidates.Count);
                     for (var i = 0; i < diagnosed.Candidates.Count; i++)
                     {
                         cancellation.Token.ThrowIfCancellationRequested();
-                        rows.Add(new DiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i])));
+                        rows.Add(new BufferDiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i])));
                     }
 
-                    return new KeyValuePair<BufferDiagnosisResult, List<DiagnosisCandidateItem>>(diagnosed, rows);
+                    return new KeyValuePair<BufferDiagnosisResult, List<BufferDiagnosisCandidateItem>>(diagnosed, rows);
                 },
                 cancellation.Token).ContinueWith(
                 task => CompleteDiagnosis(task, document, cancellation),
@@ -3186,7 +3224,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         }
 
         private void CompleteDiagnosis(
-            Task<KeyValuePair<BufferDiagnosisResult, List<DiagnosisCandidateItem>>> task,
+            Task<KeyValuePair<BufferDiagnosisResult, List<BufferDiagnosisCandidateItem>>> task,
             ImageDocument document,
             CancellationTokenSource cancellation)
         {
@@ -3233,7 +3271,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void DiagnosisCandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var listBox = sender as ListBox;
-            var item = listBox == null ? null : listBox.SelectedItem as DiagnosisCandidateItem;
+            var item = listBox == null ? null : listBox.SelectedItem as BufferDiagnosisCandidateItem;
             if (item == null || _activeDocument == null || _activeDocument.IsError)
             {
                 return;
@@ -3461,10 +3499,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             ImageList.Items.Refresh();
+            ShowSourceUnavailableState(e.Exception.Message);
+        }
+
+        private void ShowSourceUnavailableState(string message)
+        {
             DiagnosticsList.Items.Insert(
                 0,
                 "Warning: live debugger memory is unavailable. The last rendered image remains visible; pause at a valid breakpoint and open the visualizer again. "
-                + e.Exception.Message);
+                + message);
             _lastHoverX = -1;
             _lastHoverY = -1;
             _pinnedInspectorX = -1;
@@ -5009,50 +5052,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 document.DisplayPath);
         }
 
-        private sealed class DiagnosisCandidateItem
-        {
-            public BufferInterpretationCandidate Candidate { get; private set; }
-            public BitmapSource? Thumbnail { get; private set; }
-            public string Title { get; private set; }
-            public string Summary { get; private set; }
-            public string ScoreText { get; private set; }
-            public string AmbiguityNote { get; private set; }
-            public string ReasonsText { get; private set; }
-
-            public Visibility AmbiguityVisibility
-            {
-                get { return string.IsNullOrEmpty(AmbiguityNote) ? Visibility.Collapsed : Visibility.Visible; }
-            }
-
-            public DiagnosisCandidateItem(BufferInterpretationCandidate candidate, BitmapSource? thumbnail)
-            {
-                Candidate = candidate;
-                Thumbnail = thumbnail;
-                var descriptor = candidate.Descriptor;
-                var padding = descriptor.Stride - descriptor.GetMinimumStride();
-                Title = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}  {1} x {2}",
-                    descriptor.PixelFormat,
-                    descriptor.Width,
-                    descriptor.Height);
-                Summary = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "stride {0}{1}, {2} bits, {3}",
-                    descriptor.Stride,
-                    padding > 0 ? " (+" + padding + " pad/row)" : string.Empty,
-                    descriptor.ValidBits,
-                    descriptor.ByteOrder == RawByteOrder.LittleEndian ? "LE" : "BE");
-                ScoreText = candidate.Score.ToString(CultureInfo.InvariantCulture);
-                AmbiguityNote = candidate.IsAmbiguousWithGroup
-                    ? "Tied group: cannot be distinguished from buffer content."
-                    : string.Empty;
-                ReasonsText = candidate.Reasons.Count == 0
-                    ? "No scoring reasons."
-                    : string.Join("\n", candidate.Reasons);
-            }
-        }
-
         private sealed class ImageDocument : IDisposable
         {
             public string DisplayPath { get; private set; }
@@ -5363,6 +5362,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 if (IsSourceUnavailable)
                 {
                     return false;
+                }
+
+                if (Source.IsLiveProcessBacked)
+                {
+                    Source.Dispose();
                 }
 
                 SourceUnavailableMessage = string.IsNullOrWhiteSpace(message)

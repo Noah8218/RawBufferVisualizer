@@ -306,7 +306,30 @@ function Capture-Window([IntPtr]$Handle, [string]$Path) {
         throw "Invalid window bounds: $width x $height"
     }
 
-    Capture-ScreenRegion -X $rect.Left -Y $rect.Top -Width $width -Height $height -Path $Path
+    [RawBufferInstalledVsixNative]::SetWindowPos(
+        $Handle,
+        [RawBufferInstalledVsixNative]::HWND_TOPMOST,
+        $rect.Left,
+        $rect.Top,
+        $width,
+        $height,
+        0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::BringWindowToTop($Handle) | Out-Null
+    [RawBufferInstalledVsixNative]::SetForegroundWindow($Handle) | Out-Null
+    Start-Sleep -Milliseconds 250
+    try {
+        Capture-ScreenRegion -X $rect.Left -Y $rect.Top -Width $width -Height $height -Path $Path
+    }
+    finally {
+        [RawBufferInstalledVsixNative]::SetWindowPos(
+            $Handle,
+            [RawBufferInstalledVsixNative]::HWND_NOTOPMOST,
+            $rect.Left,
+            $rect.Top,
+            $width,
+            $height,
+            0x0040) | Out-Null
+    }
 }
 
 function Capture-ScreenRegion([int]$X, [int]$Y, [int]$Width, [int]$Height, [string]$Path) {
@@ -802,6 +825,13 @@ function Stop-Debugging([int]$ProcessId) {
     }
 }
 
+function Continue-Debugging([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $dte.Debugger.Go($false)
+    }
+}
+
 function Close-DebugSolutionWithoutSaving([int]$ProcessId) {
     Invoke-Dte $ProcessId {
         param($dte)
@@ -986,7 +1016,82 @@ function Invoke-SmartTypeMapperScenario(
     if (-not $mono12MappingBox) {
         throw "Mono12 pixel-format mapping combo box was not found."
     }
-    Select-ComboBoxItem $mono12MappingBox "Mono12PackedLsb"
+
+    $diagnoseToggle = Find-ElementByAutomationId $dialog "DiagnoseMappingInterpretationButton"
+    if (-not $diagnoseToggle) {
+        throw "Diagnose interpretation toggle was not found in the mapping dialog."
+    }
+    $diagnoseTogglePattern = $null
+    if (-not $diagnoseToggle.TryGetCurrentPattern(
+        [System.Windows.Automation.TogglePattern]::Pattern,
+        [ref]$diagnoseTogglePattern)) {
+        throw "Diagnose interpretation does not support TogglePattern."
+    }
+    $diagnoseTogglePattern = [System.Windows.Automation.TogglePattern]$diagnoseTogglePattern
+    $diagnoseTogglePattern.Toggle()
+
+    $diagnosisList = Wait-Until "Connect Doctor ranked interpretation list" {
+        $list = Find-ElementByAutomationId $dialog "MappingDiagnosisCandidateList"
+        if (-not $list -or [bool]$list.Current.IsOffscreen) {
+            return $null
+        }
+
+        $items = @(Get-ElementsByControlType $list ([System.Windows.Automation.ControlType]::ListItem))
+        if ($items.Count -gt 0) {
+            return $list
+        }
+
+        $null
+    } 45
+    $diagnosisItems = @(Get-ElementsByControlType $diagnosisList ([System.Windows.Automation.ControlType]::ListItem))
+    $mono12Candidate = $diagnosisItems |
+        Where-Object {
+            [string]$_.Current.Name -like "*Mono12PackedLsb*640*484*" -and
+            [string]$_.Current.Name -like "*stride 960*"
+        } |
+        Select-Object -First 1
+    if (-not $mono12Candidate) {
+        $availableCandidates = ($diagnosisItems | ForEach-Object { [string]$_.Current.Name }) -join " | "
+        throw "Connect Doctor did not expose the expected Mono12PackedLsb 640 x 484 stride 960 candidate. Candidates: $availableCandidates"
+    }
+
+    Select-AutomationItem $mono12Candidate
+    $diagnosisApplyStatus = Wait-Until "Connect Doctor draft-only status" {
+        $status = Find-ElementByAutomationId $dialog "MappingDiagnosisApplyStatusText"
+        if ($status -and [string]$status.Current.Name -like "*nothing has been saved*") {
+            return [string]$status.Current.Name
+        }
+
+        $null
+    } 30
+    $selectedFormat = Wait-Until "Connect Doctor Mono12 draft selection" {
+        $selected = Get-SelectedComboBoxItemName $mono12MappingBox
+        if ($selected -eq "Mono12PackedLsb") {
+            return $selected
+        }
+
+        $null
+    } 15
+    $diagnosisPreviewStatus = Wait-Until "Connect Doctor selected-candidate preview" {
+        $status = Find-ElementByAutomationId $dialog "MappingPreviewStatusText"
+        if ($status -and [string]$status.Current.Name -like "Preview rendered from the selected candidate*") {
+            return [string]$status.Current.Name
+        }
+
+        $null
+    } 30
+
+    $connectDoctorPath = Join-Path $outputRoot "smart-type-mapper-connect-doctor.png"
+    Capture-Window $dialog.Current.NativeWindowHandle $connectDoctorPath
+    $diagnoseTogglePattern.Toggle()
+    Wait-Until "Connect Doctor second-click close" {
+        if ($diagnoseTogglePattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::Off -and
+            [bool]$diagnosisList.Current.IsOffscreen) {
+            return $true
+        }
+
+        $null
+    } 15 | Out-Null
 
     $previewButton = Find-ElementByAutomationId $dialog "PreviewMappingButton"
     if (-not $previewButton) {
@@ -1065,11 +1170,16 @@ function Invoke-SmartTypeMapperScenario(
     [ordered]@{
         scenario = "SmartTypeMapper"
         beforeMapScreenshotPath = $beforeMapPath
+        connectDoctorScreenshotPath = $connectDoctorPath
         dialogScreenshotPath = $dialogPath
         afterMapScreenshotPath = $afterMapPath
         sourceType = $sourceType
         candidateSummary = [string]$candidateDocument.summary
-        selectedPixelFormat = "Mono12PackedLsb"
+        diagnosisCandidate = [string]$mono12Candidate.Current.Name
+        diagnosisApplyStatus = $diagnosisApplyStatus
+        diagnosisPreviewStatus = $diagnosisPreviewStatus
+        diagnosisClosedOnSecondClick = $true
+        selectedPixelFormat = $selectedFormat
         previewStatus = $previewStatus
         mappedRowName = [string]$mappedDocument.title
         reopenedWidth = [int]$mappedDocument.width
@@ -1465,6 +1575,79 @@ function Invoke-AutomaticVisionInspectorScenario(
         duplicateFree = $true
         initialAutoInspectEnabled = $initialAutoInspectEnabled
         finalAutoInspectEnabled = $finalAutoInspectEnabled
+    }
+}
+
+function Complete-AutomaticVisionInspectorRunModeScenario(
+    [System.Collections.Specialized.OrderedDictionary]$ScenarioResult,
+    [IntPtr]$MainHandle) {
+    $expectedUnavailableTitles = @(
+        "parameterFrame",
+        "mono8Owner",
+        "bgr24Owner",
+        "companyFrame",
+        "nestedCompanyFrame"
+    )
+
+    $runModeState = Wait-Until "Automatic Vision Inspector run-mode invalidation" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $unavailable = @($state.documents | Where-Object { [bool]$_.isSourceUnavailable })
+            if ($unavailable.Count -ne $expectedUnavailableTitles.Count) {
+                return $null
+            }
+
+            foreach ($title in $expectedUnavailableTitles) {
+                if (@($unavailable | Where-Object { [string]$_.title -eq "[Auto] $title" }).Count -ne 1) {
+                    return $null
+                }
+            }
+
+            $copiedArray = @($state.documents | Where-Object {
+                [string]$_.title -like "*companyArrayFrame" -and
+                -not [bool]$_.isSourceUnavailable -and
+                [string]$_.sourceMode -eq "mem" -and
+                [int]$_.width -eq 64 -and
+                [int]$_.height -eq 48
+            })
+            if ($copiedArray.Count -ne 1) {
+                return $null
+            }
+
+            $state
+        }
+        catch {
+            $null
+        }
+    } 60
+
+    $selectedState = Wait-Until "active live-source-unavailable state" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([bool]$state.activeSourceUnavailable -and
+                [string]$state.status -like "*Live source unavailable*") {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 15
+
+    $capturePath = Join-Path $outputRoot "automatic-vision-inspector-after-debug-stop.png"
+    Capture-Window $MainHandle $capturePath
+    $ScenarioResult["afterDebugStop"] = [ordered]@{
+        invalidatedLiveSourceCount = $expectedUnavailableTitles.Count
+        invalidatedTitles = $expectedUnavailableTitles
+        copiedArrayRetained = $true
+        activeSourceUnavailable = [bool]$selectedState.activeSourceUnavailable
+        status = [string]$selectedState.status
+        screenshotPath = $capturePath
     }
 }
 
@@ -2244,6 +2427,9 @@ try {
         elseif ($Scenario -eq "ReleaseAnnouncement" -or $Scenario -eq "EnvironmentCheck") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
+        elseif ($Scenario -eq "AutomaticVisionInspector") {
+            (Find-TreeItem $root "parameterFrame") -ne $null
+        }
         else {
             (Find-TreeItem $root "companyFrameList") -ne $null
         }
@@ -2261,9 +2447,18 @@ try {
         "EnvironmentCheck" { Invoke-EnvironmentCheckScenario $mainHandle }
     }
 
-    Stop-Debugging $visualStudio.Id
-    $debuggingStopped = $true
+    if ($Scenario -eq "AutomaticVisionInspector") {
+        Continue-Debugging $visualStudio.Id
+    }
+    else {
+        Stop-Debugging $visualStudio.Id
+        $debuggingStopped = $true
+    }
     Start-Sleep -Milliseconds 250
+    if ($Scenario -eq "AutomaticVisionInspector") {
+        Complete-AutomaticVisionInspectorRunModeScenario $scenarioResult $mainHandle
+        $debuggingStopped = $true
+    }
 
     $newPackageLogLines = if (Test-Path -LiteralPath $packageLogPath) {
         @(Get-Content -LiteralPath $packageLogPath | Select-Object -Skip $packageLogStartLineCount)
@@ -2282,6 +2477,10 @@ try {
         $packageProtocolErrors |
             Set-Content -LiteralPath (Join-Path $outputRoot "$Scenario-package-protocol-errors.log") -Encoding UTF8
         throw "Raw Buffer Visualizer package log contains $($packageProtocolErrors.Count) protocol or settings error(s) from this smoke session."
+    }
+    if ($Scenario -eq "AutomaticVisionInspector" -and
+        @($newPackageLogLines | Where-Object { $_ -like "*Run mode entered; invalidated 5 live source(s)*" }).Count -ne 1) {
+        throw "The package log did not record exactly one five-source run-mode invalidation."
     }
 
     $result = [ordered]@{

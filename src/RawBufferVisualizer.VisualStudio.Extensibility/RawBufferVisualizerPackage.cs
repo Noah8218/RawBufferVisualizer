@@ -46,6 +46,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private readonly object _requestGate = new object();
         private readonly HashSet<string> _queuedRequests = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly DebuggerHandoffSessionGate _handoffSessionGate = new DebuggerHandoffSessionGate();
         private readonly string _inboxDirectory = VisualizerHandoffInbox.GetInboxDirectory(Process.GetCurrentProcess().Id);
         private FileSystemWatcher? _watcher;
         private Timer? _inboxPollTimer;
@@ -58,15 +59,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             WriteAutomationLog("InitializeAsync start");
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-
-            try
-            {
-                StartInboxWatcher();
-            }
-            catch (Exception ex)
-            {
-                WriteAutomationLog("StartInboxWatcher error " + ex);
-            }
 
             try
             {
@@ -86,11 +78,31 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     _debuggerEvents.OnEnterBreakMode += OnEnterBreakMode;
                     _debuggerEvents.OnEnterRunMode += OnEnterRunMode;
                     WriteAutomationLog("DebuggerEvents subscribed");
+                    try
+                    {
+                        if (dte.Debugger.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode)
+                        {
+                            _handoffSessionGate.EnterBreakMode();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        WriteAutomationLog("Initial debugger mode read error " + ex);
+                    }
                 }
             }
             catch (Exception ex)
             {
                 WriteAutomationLog("DebuggerEvents subscribe error " + ex);
+            }
+
+            try
+            {
+                StartInboxWatcher();
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("StartInboxWatcher error " + ex);
             }
 
             try
@@ -215,6 +227,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ThreadHelper.ThrowIfNotOnUIThread();
             try
             {
+                _handoffSessionGate.EnterBreakMode();
                 WriteAutomationLog("Break mode entered");
                 var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
                 if (window == null)
@@ -240,7 +253,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void OnEnterRunMode(EnvDTE.dbgEventReason reason)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _handoffSessionGate.EnterRunMode();
             VisualStudioDebugFrameContext.SetCurrentThread(null);
+            try
+            {
+                var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
+                var invalidatedCount = window == null ? 0 : window.InvalidateLiveSources();
+                WriteAutomationLog(
+                    "Run mode entered; invalidated "
+                    + invalidatedCount.ToString(CultureInfo.InvariantCulture)
+                    + " live source(s)");
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("Run mode live-source invalidation error " + ex);
+            }
         }
 
         public int Event(
@@ -361,6 +389,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             WriteAutomationLog("Queue " + requestPath + " as " + processingPath);
+            var handoffSession = _handoffSessionGate.Capture();
             _ = JoinableTaskFactory.RunAsync(async delegate
             {
                 try
@@ -369,6 +398,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     await OpenHandoffAsync(
                         fullRequestPath,
                         processingPath,
+                        handoffSession,
                         DisposalToken);
                     WriteAutomationLog("Open end " + requestPath);
                 }
@@ -493,10 +523,31 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private async Task OpenHandoffAsync(
             string requestPath,
             string processingPath,
+            long handoffSession,
             CancellationToken cancellationToken)
         {
+            if (!_handoffSessionGate.IsCurrent(handoffSession))
+            {
+                WriteAutomationLog("Reject stale debugger handoff " + requestPath);
+                TryRejectHandoffOrLog(
+                    requestPath,
+                    processingPath,
+                    "The debugger continued before this handoff could be opened. Pause again and reopen the visualizer.");
+                return;
+            }
+
             var window = await ShowRawBufferToolWindowAsync(cancellationToken);
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
+            if (!_handoffSessionGate.IsCurrent(handoffSession))
+            {
+                WriteAutomationLog("Reject handoff invalidated while opening " + requestPath);
+                TryRejectHandoffOrLog(
+                    requestPath,
+                    processingPath,
+                    "The debugger continued before this handoff could be opened. Pause again and reopen the visualizer.");
+                return;
+            }
+
             if (window.OpenClaimedHandoffRequest(requestPath, processingPath))
             {
                 ScheduleDebuggerVisualizerHostCleanup();

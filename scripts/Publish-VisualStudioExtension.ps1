@@ -333,7 +333,7 @@ Get-ChildItem -LiteralPath $buildOutput -Force |
 
 $readmePath = Join-Path $publishDir 'README.txt'
 Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
-    'Raw Buffer Visualizer Visual Studio extension prototype',
+    'Raw Buffer Visualizer for Visual Studio',
     '',
     'Install this single VSIX:',
     'RawBufferVisualizer.VisualStudio.Extensibility.vsix',
@@ -343,9 +343,8 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     '- In-process Visual Studio ToolWindow used as the docked image viewer',
     '- Marketplace-installed debugger providers that forward inspected values to the same docked image list',
     '',
-    'Manual validation prerequisites:',
+    'Supported environment:',
     '- Visual Studio 2022 17.14 or newer, or Visual Studio 2026 18.x',
-    '- Visual Studio extension development workload',
     '',
     'Close Visual Studio before installing, then restart Visual Studio before debugger testing.'
 )

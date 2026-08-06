@@ -205,6 +205,7 @@ $mappingStateBeforeDialog = if (Test-Path -LiteralPath $mappingPath) { [IO.File]
 $currentPid = [Diagnostics.Process]::GetCurrentProcess().Id
 $bufferAddress = [MapperSmokeSample]::Create(640, 480)
 $dialogCapturePath = Join-Path $outputRoot "after-mapping-dialog.png"
+$diagnosisCapturePath = Join-Path $outputRoot "after-connect-doctor-selection.png"
 $popupCapturePath = Join-Path $outputRoot "after-pixel-format-popup.png"
 $buttonStateCapturePath = Join-Path $outputRoot "after-button-hover-focus.png"
 $menuCapturePath = Join-Path $outputRoot "after-error-row-menu.png"
@@ -324,6 +325,98 @@ try {
         $mappingStateAfterReset = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
         if ($mappingStateAfterReset -ne $mappingStateBeforeDialog) { throw "Use Suggested Roles unexpectedly changed the mapping file." }
 
+        $diagnoseToggle = $dialog.FindName("DiagnoseInterpretationButton")
+        $diagnoseToggle.IsChecked = $true
+        Wait-Dispatcher 1800
+        $diagnosisPanel = $dialog.FindName("DiagnosisResultPanel")
+        $diagnosisList = $dialog.FindName("DiagnosisCandidateList")
+        if ($diagnosisPanel.Visibility -ne [System.Windows.Visibility]::Visible) {
+            throw "Connect Doctor result panel did not open."
+        }
+        if ($diagnosisList.Items.Count -eq 0) {
+            throw "Connect Doctor returned no ranked candidates."
+        }
+
+        $matchingCandidate = $null
+        foreach ($candidateItem in $diagnosisList.Items) {
+            $candidate = $candidateItem.Candidate.Descriptor
+            if ($candidate.Width -eq 640 -and $candidate.Height -eq 480 -and
+                $candidate.Stride -eq 640 -and $candidate.PixelFormat.ToString() -eq "Mono8") {
+                $matchingCandidate = $candidateItem
+                break
+            }
+        }
+        if ($null -eq $matchingCandidate) {
+            throw "Connect Doctor did not retain the current valid Mono8 interpretation."
+        }
+        $diagnosisList.UpdateLayout()
+        $matchingContainer = $diagnosisList.ItemContainerGenerator.ContainerFromItem($matchingCandidate)
+        $matchingAccessibleName = [System.Windows.Automation.AutomationProperties]::GetName($matchingContainer)
+        if ($matchingAccessibleName -notlike "*Mono8*640*480*stride 640*") {
+            throw "Connect Doctor candidate did not expose a useful accessible name. Actual: '$matchingAccessibleName'"
+        }
+
+        $unrepresentableCandidate = $null
+        foreach ($candidateItem in $diagnosisList.Items) {
+            $candidate = $candidateItem.Candidate.Descriptor
+            if ($candidate.Width -ne 640 -or $candidate.Height -ne 480 -or $candidate.Stride -ne 640) {
+                $unrepresentableCandidate = $candidateItem
+                break
+            }
+        }
+        if ($null -eq $unrepresentableCandidate) {
+            throw "Connect Doctor did not expose an interpretation that the current numeric members cannot represent."
+        }
+
+        $diagnosisList.SelectedItem = $unrepresentableCandidate
+        Wait-Dispatcher 300
+        if (-not $dialog.FindName("DiagnosisApplyStatusText").Text.Contains("cannot persist")) {
+            throw "Connect Doctor did not explain why the selected candidate cannot be persisted."
+        }
+        $dialog.FindName("SaveButton").RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        Wait-Dispatcher 200
+        if (-not $dialog.FindName("StatusText").Text.StartsWith("Mapping was not saved.")) {
+            throw "Save Mapping did not block a diagnosis that the visible member roles cannot reproduce."
+        }
+        $mappingStateAfterBlockedSave = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
+        if ($mappingStateAfterBlockedSave -ne $mappingStateBeforeDialog) {
+            throw "Blocked Connect Doctor save unexpectedly changed the mapping file."
+        }
+
+        $diagnosisList.SelectedItem = $matchingCandidate
+        Wait-Dispatcher 500
+        if ($null -eq $dialog.FindName("PreviewImage").Source) {
+            throw "Selecting a Connect Doctor candidate did not render a preview."
+        }
+        if ($dialog.FindName("WidthBox").SelectedItem -ne "SizeX" -or
+            $dialog.FindName("HeightBox").SelectedItem -ne "SizeY" -or
+            $dialog.FindName("StrideBox").SelectedItem -ne "LinePitch" -or
+            $dialog.FindName("ByteOrderBox").SelectedItem -ne "LittleEndian") {
+            throw "Selecting a Connect Doctor candidate did not update the visible mapping draft."
+        }
+        if (-not $dialog.FindName("DiagnosisApplyStatusText").Text.Contains("nothing has been saved")) {
+            throw "Connect Doctor did not expose the draft-only persistence boundary."
+        }
+        $mappingStateAfterDiagnosis = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
+        if ($mappingStateAfterDiagnosis -ne $mappingStateBeforeDialog) { throw "Connect Doctor selection unexpectedly changed the mapping file." }
+        if ($imageList.Items.Count -ne 1) { throw "Connect Doctor selection unexpectedly appended an image row." }
+        Capture-Window $script:dialogHwnd $diagnosisCapturePath
+
+        $diagnoseToggle.IsChecked = $false
+        Wait-Dispatcher 200
+        if ($diagnosisPanel.Visibility -ne [System.Windows.Visibility]::Collapsed) {
+            throw "Selecting Diagnose interpretation a second time did not close the result panel."
+        }
+        $mappingStateAfterDiagnosisClose = if (Test-Path -LiteralPath $mappingPath) { [IO.File]::ReadAllText($mappingPath) } else { $null }
+        if ($mappingStateAfterDiagnosis -ne $mappingStateAfterDiagnosisClose) {
+            throw "Closing Connect Doctor unexpectedly changed the mapping file."
+        }
+
+        $dialog.FindName("UseSuggestedRolesButton").RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+        Wait-Dispatcher 200
+        if ($null -ne $diagnosisList.SelectedItem) { throw "Use Suggested Roles did not clear the selected diagnosis candidate." }
+        if ($null -ne $dialog.FindName("PreviewImage").Source) { throw "Use Suggested Roles did not clear the candidate preview." }
+
         $dialog.FindName("ByteOrderBox").SelectedItem = "BigEndian"
         $dialog.FindName("PreviewButton").RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
         Wait-Dispatcher 600
@@ -412,12 +505,35 @@ try {
     Wait-Dispatcher 150
     if ([IO.File]::ReadAllText($mappingPath) -ne $savedJson) { throw "Reopening the mapping dialog unexpectedly changed the saved file." }
 
+    $unavailableDialog = [RawBufferVisualizer.VisualStudio.Vssdk.TypeMappingDialog]::new(
+        $inventory,
+        "Company.Vision.CompanyFrame",
+        "Company.Vision",
+        0,
+        $null,
+        $false)
+    $unavailableDialog.Owner = $window
+    $unavailableDialog.Show()
+    Wait-Dispatcher 150
+    $unavailableDialog.FindName("DiagnoseInterpretationButton").IsChecked = $true
+    Wait-Dispatcher 150
+    if (-not $unavailableDialog.FindName("DiagnosisStatusText").Text.StartsWith("Diagnosis unavailable:")) {
+        throw "Connect Doctor did not present a controlled unavailable state without a paused process source."
+    }
+    if ($unavailableDialog.FindName("DiagnosisCandidateList").Items.Count -ne 0) {
+        throw "Unavailable Connect Doctor state unexpectedly exposed candidates."
+    }
+    $unavailableDialog.Close()
+    Wait-Dispatcher 150
+    if ([IO.File]::ReadAllText($mappingPath) -ne $savedJson) { throw "Unavailable diagnosis unexpectedly changed the saved file." }
+
     $window.Close()
     Wait-Dispatcher 250
 
     [pscustomobject]@{
         MenuCapture = $menuCapturePath
         DialogCapture = $dialogCapturePath
+        DiagnosisCapture = $diagnosisCapturePath
         PopupCapture = $popupCapturePath
         ButtonStateCapture = $buttonStateCapturePath
         MappingFile = $mappingPath

@@ -42,6 +42,7 @@ namespace RawBufferVisualizer.Tests
                 TileRenderMatchesFullRender();
                 FileBackedSourceRendersLikeMemory();
                 ProcessMemorySourceRendersLikeMemory();
+                DisposedProcessMemorySourceRejectsFurtherReads();
                 ProcessMemorySourceReportsUnavailableAfterProcessExit();
                 FileBackedSampledRenderHonorsCancellation();
                 SampledMemorySourceMatchesFileBackedSourceForAllFormats();
@@ -52,11 +53,13 @@ namespace RawBufferVisualizer.Tests
                 DifferenceSourceRendersAbsDiff();
                 SplitSourceRendersLeftAndRight();
                 InvalidStrideIsReported();
+                InvalidEnumAndOverflowDescriptorsAreRejected();
                 DiagnosticsReportPaddingAndExpectedBytes();
                 PixelInspectorReportsRawBytes();
                 SnapshotRoundTrips();
                 SnapshotReferenceLoadsMetadata();
                 SnapshotReferenceLoadsUtf8BomPrettyMetadata();
+                SnapshotReferenceRejectsNumericEnumValues();
                 VisualizerTransferRoundTrips();
                 VisualizerChunkedTransferCreatesChunks();
                 VisualizerSampledPreviewSamplesByteAndPointerSources();
@@ -87,6 +90,7 @@ namespace RawBufferVisualizer.Tests
                 BufferDoctorPrefersCorrectEndianness();
                 BufferDoctorPrefersMatchingValidBits();
                 BufferDoctorFindsPackedMono12Candidate();
+                BufferDoctorDiagnoseFindsPackedMono12FromWrongHint();
                 BufferDoctorSamplingStaysWithinCaps();
                 BufferDoctorMarksRgbBgrAsAmbiguousTieGroup();
                 BufferDoctorAcceptsTrailingRowFit();
@@ -485,6 +489,38 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void DisposedProcessMemorySourceRejectsFurtherReads()
+        {
+            var buffer = new byte[] { 37 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            var descriptor = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
+            var source = RawImageSource.FromProcessMemory(
+                Process.GetCurrentProcess().Id,
+                handle.AddrOfPinnedObject().ToInt64(),
+                buffer.LongLength,
+                descriptor);
+            try
+            {
+                source.Dispose();
+                RawImageSourceUnavailableException? failure = null;
+                try
+                {
+                    source.RenderTile(0, 0, 1, 1, null);
+                }
+                catch (RawImageSourceUnavailableException ex)
+                {
+                    failure = ex;
+                }
+
+                Assert(failure != null, "Disposed process memory source allowed another debuggee read.");
+            }
+            finally
+            {
+                source.Dispose();
+                handle.Free();
+            }
+        }
+
         private static void SampledMemorySourceMatchesFileBackedSourceForAllFormats()
         {
             var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
@@ -709,6 +745,56 @@ namespace RawBufferVisualizer.Tests
             Assert(rendered.Bgra32[12] == 255, "Mono10 packed white failed.");
         }
 
+        private static void InvalidEnumAndOverflowDescriptorsAreRejected()
+        {
+            var invalidPixelFormat = CreateDescriptor(1, 1, 1, (RawPixelFormat)999, 8);
+            Assert(
+                RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(1, invalidPixelFormat)),
+                "Undefined pixel format was accepted by Core diagnostics.");
+            ArgumentException? sourceFailure = null;
+            try
+            {
+                RawImageSource.FromMemory(new byte[] { 1 }, invalidPixelFormat);
+            }
+            catch (ArgumentException ex)
+            {
+                sourceFailure = ex;
+            }
+
+            Assert(sourceFailure != null, "Core image-source boundary accepted an undefined pixel format.");
+
+            var invalidByteOrder = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
+            invalidByteOrder.ByteOrder = (RawByteOrder)999;
+            Assert(
+                RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(1, invalidByteOrder)),
+                "Undefined byte order was accepted by Core diagnostics.");
+
+            var unpackedOverflow = CreateDescriptor(
+                int.MaxValue,
+                1,
+                int.MaxValue,
+                RawPixelFormat.BGRA32,
+                8);
+            Assert(
+                RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(long.MaxValue, unpackedOverflow)),
+                "Unpacked minimum-stride overflow was accepted by Core diagnostics.");
+
+            var packedOverflow = CreateDescriptor(
+                int.MaxValue,
+                1,
+                int.MaxValue,
+                RawPixelFormat.Mono12PackedLsb,
+                12);
+            Assert(
+                RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(long.MaxValue, packedOverflow)),
+                "Packed minimum-stride overflow was accepted by Core diagnostics.");
+
+            var validLarge = CreateDescriptor(200000, 200000, 200000, RawPixelFormat.Mono8, 8);
+            Assert(
+                !RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(40000000000L, validLarge)),
+                "Valid 200K descriptor was rejected by overflow safeguards.");
+        }
+
         private static void Mono12PackedLsbInspects()
         {
             var descriptor = new RawImageDescriptor
@@ -854,6 +940,40 @@ namespace RawBufferVisualizer.Tests
                 var reference = RawBufferSnapshot.LoadReference(metadataPath);
                 Assert(reference.RawByteLength == 4, "UTF-8 BOM snapshot reference raw length failed.");
                 Assert(reference.Descriptor.Width == 2 && reference.Descriptor.PixelFormat == RawPixelFormat.Mono8, "UTF-8 BOM snapshot reference descriptor failed.");
+            }
+            finally
+            {
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
+        private static void SnapshotReferenceRejectsNumericEnumValues()
+        {
+            var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
+            try
+            {
+                Directory.CreateDirectory(directory);
+                var metadataPath = Path.Combine(directory, "numeric-enum.rbuf.json");
+                File.WriteAllBytes(Path.Combine(directory, "numeric-enum.raw"), new byte[] { 1 });
+                File.WriteAllText(
+                    metadataPath,
+                    "{\"rawFile\":\"numeric-enum.raw\",\"width\":1,\"height\":1,\"stride\":1,"
+                    + "\"pixelFormat\":\"999\",\"validBits\":8,\"byteOrder\":\"LittleEndian\"}");
+
+                InvalidDataException? failure = null;
+                try
+                {
+                    RawBufferSnapshot.LoadReference(metadataPath);
+                }
+                catch (InvalidDataException ex)
+                {
+                    failure = ex;
+                }
+
+                Assert(failure != null, "Numeric undefined snapshot enum value was accepted.");
             }
             finally
             {
@@ -2553,6 +2673,22 @@ namespace RawBufferVisualizer.Tests
                 Assert(
                     !RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(buffer.Length, packed.Descriptor)),
                     "Packed Mono12 candidate should have clean length diagnostics.");
+            }
+        }
+
+        private static void BufferDoctorDiagnoseFindsPackedMono12FromWrongHint()
+        {
+            const int width = 640;
+            const int height = 484;
+            const int stride = 960;
+            var buffer = CreatePackedRows(width, height, 12, 4095);
+            var wrongHint = CreateDescriptor(width, height, stride, RawPixelFormat.Mono8, 8);
+            using (var source = RawImageSource.FromMemory(buffer, wrongHint))
+            {
+                var result = BufferDoctor.Diagnose(source, CancellationToken.None);
+                var packed = FindCandidate(result, width, height, stride, RawPixelFormat.Mono12PackedLsb);
+                Assert(packed != null, "Buffer Doctor diagnosis should retain the packed Mono12 interpretation when the current mapping says Mono8.");
+                Assert(result.Candidates.Count <= BufferDoctor.MaxCandidates, "Buffer Doctor exceeded its visible candidate limit.");
             }
         }
 

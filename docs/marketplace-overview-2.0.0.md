@@ -27,9 +27,9 @@ Supported pixel formats include `Mono8`, `Mono16`, `Mono10PackedLsb`, `Mono12Pac
 
 ## Connect Your Buffer
 
-When a compatible object is not registered directly, **Connect Your Buffer** lets you assign its debugger-visible members to buffer, width, height, stride or length, format, valid bits, and byte order. Preview the result explicitly, then save an editable mapping for that type. A neutral `RawBufferView` starter is available when an explicit wrapper is clearer.
+When a compatible object is not registered directly, **Connect Your Buffer** lets you assign its debugger-visible members to buffer, width, height, stride or length, format, valid bits, and byte order. Preview the result explicitly. If it still looks wrong, **Diagnose interpretation** ranks bounded alternatives in the same dialog; selecting one changes only the visible draft and preview. Only **Save Mapping** persists an editable mapping for that type. A neutral `RawBufferView` starter is available when an explicit wrapper is clearer.
 
-The same validation contract is used for registered and mapped sources. Invalid dimensions, undersized stride, short buffer length, or incompatible valid bits fail before transfer instead of being guessed.
+The same checked validation contract is used for registered and mapped sources. Invalid dimensions, undersized stride, short buffer length, undefined format/order values, overflowing descriptor arithmetic, or incompatible valid bits fail before transfer instead of being guessed.
 
 ## Diagnose And Compare
 
@@ -42,11 +42,14 @@ The same validation contract is used for registered and mapped sources. Invalid 
 
 ## What's New In 2.0.0
 
+- Added Connect Doctor to the mapping dialog for ranked format, stride, valid-bit, and byte-order alternatives with an explicit save boundary.
 - Added one documented 2D compatibility contract for registered views, mapped pointers, and mapped managed buffers.
 - Registered and mapped metadata now share fail-closed dimension, stride, length, and valid-bits validation.
+- Descriptor arithmetic and format/order enum values now fail closed before allocation, transfer, or rendering.
 - Valid `Mono16` values from 1 through 16 remain supported; 10, 12, 14, and 16 are covered by executable fixtures.
 - `Mono10PackedLsb` and `Mono12PackedLsb` reject valid-bit values that contradict their fixed layouts.
 - Neutral fixtures verify descriptor fields, transferred bytes, byte order, and pointer ownership without a proprietary SDK dependency.
+- Continue or process exit converts live process-backed rows to `Unavailable` and blocks delayed handoffs; copied managed buffers stay usable.
 
 ## Visual Studio Support
 
@@ -61,6 +64,7 @@ Community, Professional, and Enterprise are supported installation targets. Visu
 
 - Stop after assignment; a breakpoint on the assignment statement can expose the previous or null value.
 - A pointer requires valid dimensions, stride or length, pixel format, and a lifetime that remains valid while the debuggee is paused.
+- After Continue or process exit, a live row keeps only its last rendered pixels as context and cannot read the debuggee source again. Pause at a valid breakpoint and reopen or rescan to obtain a new live source.
 - Automatic discovery scans only the selected stack frame's Locals and Arguments and keeps its search bounded.
 - Ambiguous, compressed, planar, YUV, unsupported packed, offset, or method-only layouts fail visibly instead of being guessed.
 - Camera acquisition/control, lighting, PLC/I/O, 3D point clouds, and depth/coordinate containers are outside this extension.
