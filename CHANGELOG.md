@@ -4,26 +4,33 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No user-visible changes are queued after `2.0.0`.
+No post-`2.0.0` changes are queued; the unreleased `2.0.0` candidate contents are listed below.
 
-## [2.0.0] - 2026-08-05
+## [2.0.0] - 2026-08-06
 
-Release status: separate vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged until this exact candidate passes installed qualification and the owner separately approves publication.
+Release status: separate vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged. The P0 candidate passed installed VS2022/VS2026 Continue invalidation and local validation; commit/push/publication remain separate owner-controlled actions.
 
 ### Added
 
+- Added **Diagnose interpretation** inside Connect Your Buffer. It ranks bounded Buffer Doctor candidates without opening another ToolWindow or starting a new debugger transfer.
+- Candidate selection updates only the visible mapping draft and preview; only **Save Mapping** persists. Repeated selection closes the result panel, and **Use Suggested Roles** resets the draft.
 - Added a documented compatibility matrix for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointer buffers, and mapped `byte[]`, `ushort[]`, and `float[]` carriers.
 - Added neutral repository fixtures that verify descriptor fields, transferred bytes, byte order, valid bits, process ownership, and fail-closed outcomes without a proprietary SDK.
 
 ### Improved
 
-- Registered and mapped metadata now use the same dimension, stride, and buffer-length validation boundary before transfer.
+- Preserved up to three format alternatives that match the current width, height, and stride so packed Mono10/Mono12 candidates are not crowded out by higher-scoring but unrelated dimension factorizations.
+- Added explicit accessible names and themed selected/focus/hover/disabled states to ranked interpretation rows.
+- Registered and mapped metadata now use the same checked dimension, stride, buffer-length, enum, and valid-bits validation boundary before transfer.
 - Valid `Mono16` values from 1 through 16 remain accepted; fixtures explicitly preserve 10, 12, 14, and 16.
 
 ### Fixed
 
 - Invalid `Mono16` valid-bit counts now fail instead of remaining advisory warnings.
 - `Mono10PackedLsb` and `Mono12PackedLsb` now reject valid-bit values that contradict their fixed 10-bit and 12-bit layouts.
+- Undefined pixel-format/byte-order values and overflowing descriptor arithmetic now fail before allocation, transfer, or rendering.
+- Continue/process exit now disposes live process-memory sources, marks their rows `Unavailable`, and prevents progressive or pixel reads from touching invalid memory; copied managed buffers remain available.
+- Delayed handoffs captured before Continue are rejected in Run Mode and cannot revive in a later Break session.
 
 ### Scope
 

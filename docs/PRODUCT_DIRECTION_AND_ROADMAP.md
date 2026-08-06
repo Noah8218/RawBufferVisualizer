@@ -164,7 +164,7 @@ Current maturity gaps:
 
 `1.0.53` is the published 1.x stabilization bridge, not a substitute for the 2.0 product line. It delivers the qualified Environment, panel-toggle, bounded-preview, and vendor-neutral Connect Your Buffer foundation without claiming a breaking platform transition.
 
-The exact public `1.0.53` VSIX was not relabeled or overwritten. After explicit owner approval, a separately versioned `2.0.0.0` candidate was built, frozen, and qualified on both supported IDE generations. Matching public 1.0.53 source/evidence commit `7ab84b7` and Marketplace readback remain the immutable 1.x baseline. See [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) and [Release Qualification 2.0.0](release-qualification-2.0.0.md).
+The exact public `1.0.53` VSIX was not relabeled or overwritten. After explicit owner approval, a separately versioned `2.0.0.0` candidate was built and qualified on both supported IDE generations. Matching pre-P0 2.0 source/evidence is on `origin/main` at `3d88894`, and CI run `30975139392` succeeded. A later P0 safety review superseded those candidate bytes: the current local candidate adds checked descriptor validation, live-source invalidation on Continue, and delayed-handoff session gating. Public 1.0.53 source/evidence commit `7ab84b7` and Marketplace readback remain the immutable 1.x baseline. See [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) and [Release Qualification 2.0.0](release-qualification-2.0.0.md).
 
 ### 2.0 foundation already delivered: Connect Your Buffer
 
@@ -202,9 +202,10 @@ The [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compat
 ### Completed release checkpoint: separate 2.0 candidate
 
 1. Explicit owner approval was obtained before the version/package checkpoint.
-2. A separately identifiable `2.0.0` candidate was frozen without overwriting preserved 1.x artifacts.
-3. Package equality, registration, installed VS2022/VS2026, persisted automatic settings, registered `RawBufferView`, and neutral mapped-carrier workflows passed against the same bytes.
-4. Package hash, manifest, Overview, release notes, and installed evidence now identify the same local 2.0 artifact. Publication and public readback remain a separate explicit owner action.
+2. Separately identifiable `2.0.0` candidates were frozen without overwriting preserved 1.x or superseded 2.0 artifacts.
+3. The preserved P0 candidate passed package identity, installed VS2022/VS2026 Break-to-Continue invalidation, copied-array retention, shared descriptor/lifetime tests, and the ten-version OpenCvSharp/Emgu compatibility matrix.
+4. The active package hash, manifest, installed assembly hashes, Overview, and release notes identify the same 2.0 product line. Publication and public readback remain a separate explicit owner action.
+5. Pre-P0 source/evidence was integrated to `origin/main` at `3d88894`; GitHub Actions run `30975139392` passed, and the VS2026 Open Variable follow-up reached `Connect Your Buffer` without saving a user mapping. The P0 follow-up remains a local uncommitted change until the owner explicitly requests commit/push.
 
 Public Marketplace `1.0.53.0` is the immutable published baseline and contains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
 
@@ -226,7 +227,43 @@ Exit criteria:
 
 ### Current 2.0 release checkpoint
 
-The vendor-neutral carrier/layout matrix, shared registered/mapped transfer validation, neutral executable fixtures, and separately versioned `2.0.0.0` VSIX are complete. The exact frozen candidate passed installed package equality and the core registered/mapped runtime workflow on VS2022 `17.14.37516.0` and stable VS2026 `18.8.12023.21`. Marketplace still serves `1.0.53.0`; publication/readback is a separate owner action, not implementation work. See [release-qualification-2.0.0.md](release-qualification-2.0.0.md).
+The vendor-neutral carrier/layout matrix, shared registered/mapped transfer validation, neutral executable fixtures, separately versioned `2.0.0.0` VSIX, and Connect Doctor feature are implemented. The current exact candidate is 1,923,731 bytes with SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. It passed the consolidated local matrix on the same bytes: current-source build/self-tests, five Emgu and five OpenCvSharp versions, candidate/build/install equality, Break-to-Continue invalidation and copied-array retention, Connect Doctor, and installed regressions on VS2022 `17.14.37516.0` and stable VS2026 `18.8.12023.21`. Marketplace still serves `1.0.53.0`; the worktree is not committed or pushed, so CI, owner upload approval, publication, and readback remain separate actions. See [release-qualification-2.0.0.md](release-qualification-2.0.0.md).
+
+### Completed priority: Connect Doctor
+
+Connect Doctor joins the already delivered **Connect Your Buffer** mapping workflow with the existing bounded **Buffer Doctor** scorer so a developer can repair a wrong raw-buffer interpretation without leaving the mapping workflow or starting a new debugger transfer.
+
+Shortest safe workflow:
+
+1. The user previews an inferred or persisted mapping in Connect Your Buffer.
+2. If the interpretation is wrong, **Diagnose interpretation** runs Buffer Doctor against the same bounded source and current descriptor draft.
+3. Ranked candidates show stride, pixel format, valid bits, byte order, score, and ambiguity. Selecting one changes only the visible draft and preview.
+4. The mapping is persisted only when the user explicitly selects **Save Mapping**. Cancel, reset, reopen, and restored settings do not preview, scan, open an image, or save.
+
+Implementation constraints:
+
+- reuse the current mapping dialog, Buffer Doctor result model, bounded sampling caps, and semantic theme roles; do not add another tool window or diagnosis service abstraction;
+- preserve ties for RGB/BGR and Bayer phase rather than claiming semantic detection;
+- keep source lifetime explicit and never rerun a live read after Continue;
+- persist only the selected interpretation fields at the current mapping scope, keep them visible/editable on reopen, and provide an explicit reset;
+- add no vendor SDK dependency, vendor-named mapping, acquisition, device control, board control, or 3D path.
+
+Acceptance gate:
+
+- packed Mono12 and current-geometry format alternatives remain selectable in the visible ranked set -> pass;
+- ambiguous ties remain explicit and require user choice -> pass through existing Core ambiguity tests and visible row/status contracts;
+- apply/reset/cancel/save/reload/reopen round trips have no unintended save or image-list side effect -> pass;
+- a missing/unavailable paused source produces a controlled unavailable state -> pass;
+- the existing dark theme passes normal, checked, selected, hover/focus, disabled, popup, scroll, and open-result checks with fresh before/after evidence -> pass;
+- focused tests prove Core owns candidate generation/scoring while the mapping dialog owns draft/persistence decisions -> pass.
+
+Installed result: both supported IDE generations selected `Mono12PackedLsb 640 x 484 stride 960`, rendered candidate preview without saving, closed the result on the second toggle selection, saved explicitly, and automatically reopened the mapped live row with zero final errors. Evidence is under `D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-doctor-20260806`.
+
+### Next priority: consolidate and requalify the exact 2.0 package
+
+Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+Freeze one new candidate from the completed worktree, then rerun the P0 release matrix against those exact bytes: full Release build/self-tests, release communication/package guards, ten-version OpenCvSharp/Emgu compatibility, candidate/build/install equality, installed Break-to-Continue invalidation and copied-array retention on both IDEs, and the Connect Doctor scenario. Only that consolidated candidate may replace the blocked upload instructions.
 
 ### Next: supportability and compatibility growth
 

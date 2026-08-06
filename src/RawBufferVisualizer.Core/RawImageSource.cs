@@ -41,6 +41,11 @@ namespace RawBufferVisualizer.Core
                 throw new ArgumentOutOfRangeException("length");
             }
 
+            if (RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(length, descriptor)))
+            {
+                throw new ArgumentException("Raw image descriptor is invalid for the source length.", "descriptor");
+            }
+
             _descriptor = descriptor.Clone();
             Length = length;
             RawPath = rawPath;
@@ -972,6 +977,9 @@ namespace RawBufferVisualizer.Core
     {
         private readonly int _processId;
         private readonly long _bufferAddress;
+        private readonly CancellationTokenSource _lifetimeCancellation = new CancellationTokenSource();
+        private readonly CancellationToken _lifetimeToken;
+        private int _disposed;
 
         public override bool IsFileBacked
         {
@@ -997,16 +1005,40 @@ namespace RawBufferVisualizer.Core
 
             _processId = processId;
             _bufferAddress = bufferAddress;
+            _lifetimeToken = _lifetimeCancellation.Token;
         }
 
         public override RawImageSource WithDescriptor(RawImageDescriptor descriptor)
         {
+            ThrowIfUnavailable();
             return new ProcessMemoryRawImageSource(_processId, _bufferAddress, Length, descriptor);
         }
 
         protected override Stream OpenRawReadStream()
         {
-            return new ProcessMemoryReadStream(_processId, _bufferAddress, Length);
+            ThrowIfUnavailable();
+            return new ProcessMemoryReadStream(_processId, _bufferAddress, Length, _lifetimeToken);
+        }
+
+        public override void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            _lifetimeCancellation.Cancel();
+            _lifetimeCancellation.Dispose();
+        }
+
+        private void ThrowIfUnavailable()
+        {
+            if (_lifetimeToken.IsCancellationRequested)
+            {
+                throw new RawImageSourceUnavailableException(
+                    "Live debugger image memory is no longer readable. Pause the debuggee and open the visualizer again.",
+                    0);
+            }
         }
 
         private static long ValidateBufferLength(
@@ -1041,10 +1073,15 @@ namespace RawBufferVisualizer.Core
         private readonly IntPtr _processHandle;
         private readonly long _bufferAddress;
         private readonly long _length;
+        private readonly CancellationToken _lifetimeToken;
         private long _position;
         private bool _disposed;
 
-        public ProcessMemoryReadStream(int processId, long bufferAddress, long length)
+        public ProcessMemoryReadStream(
+            int processId,
+            long bufferAddress,
+            long length,
+            CancellationToken lifetimeToken)
         {
             _processHandle = OpenProcess(ProcessVmRead | ProcessQueryLimitedInformation, false, processId);
             if (_processHandle == IntPtr.Zero)
@@ -1054,6 +1091,7 @@ namespace RawBufferVisualizer.Core
 
             _bufferAddress = bufferAddress;
             _length = length;
+            _lifetimeToken = lifetimeToken;
         }
 
         public override bool CanRead { get { return !_disposed; } }
@@ -1079,6 +1117,7 @@ namespace RawBufferVisualizer.Core
         public override int Read(byte[] buffer, int offset, int count)
         {
             ThrowIfDisposed();
+            ThrowIfSourceUnavailable();
             if (buffer == null)
             {
                 throw new ArgumentNullException("buffer");
@@ -1108,6 +1147,7 @@ namespace RawBufferVisualizer.Core
                     new UIntPtr((uint)requested),
                     out bytesRead);
                 var read = checked((int)bytesRead.ToUInt64());
+                ThrowIfSourceUnavailable();
                 if (!succeeded || read <= 0)
                 {
                     throw CreateWin32Exception(
@@ -1177,6 +1217,16 @@ namespace RawBufferVisualizer.Core
             if (_disposed)
             {
                 throw new ObjectDisposedException(nameof(ProcessMemoryReadStream));
+            }
+        }
+
+        private void ThrowIfSourceUnavailable()
+        {
+            if (_lifetimeToken.IsCancellationRequested)
+            {
+                throw new RawImageSourceUnavailableException(
+                    "Live debugger image memory is no longer readable. Pause the debuggee and open the visualizer again.",
+                    0);
             }
         }
 

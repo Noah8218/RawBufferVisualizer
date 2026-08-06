@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This document describes the architecture shared by public `1.0.53.0` and the locally qualified, unpublished `2.0.0.0` candidate while preserving earlier release baselines for regression history. Version `1.0.52` adopted the stable `17.14` Extensibility SDK line and explicit document/lease and handoff ownership; public `1.0.53` added the vendor-neutral Connect Your Buffer foundation; local `2.0.0` locks the vendor-neutral 2D carrier/layout contract and shared fail-closed transfer validation. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the architecture shared by public `1.0.53.0`, the preserved unpublished `2.0.0.0` P0 safety baseline, and the current locally qualified consolidated Connect Doctor candidate while preserving earlier release baselines for regression history. Version `1.0.52` adopted the stable `17.14` Extensibility SDK line and explicit document/lease and handoff ownership; public `1.0.53` added the vendor-neutral Connect Your Buffer foundation; local `2.0.0` locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
@@ -38,6 +38,8 @@ Core RawImageSource -> viewport/tile planner -> internal canvas -> pixel/diagnos
 
 The user installs one VSIX. Internally, Modern debugger visualizer providers extract values and the VSSDK package hosts the docked ToolWindow. `RawBufferVisualizer.VisualStudio.Classic` remains a compatibility/build project but Classic visualizer assemblies are not installed as a second user visualizer package.
 
+Connect Doctor does not add another service or pane. `TypeMappingDialog` creates a bounded live `RawImageSource`, calls Core `BufferDoctor.Diagnose`, and presents shared `BufferDiagnosisCandidateItem` rows. Core owns generation, scoring, ambiguity, and current-geometry candidate retention; the dialog owns only draft role selection, candidate preview, the exact-representability Save gate, reset, and cancellation. If the wrapper exposes no explicit length, diagnosis may probe at most `stride * height` derived from the visible draft; an explicit shorter length is rejected rather than overridden. Manual Preview still reads only the selected descriptor's required span.
+
 ## Project Map
 
 | Project | Responsibility |
@@ -47,8 +49,8 @@ The user installs one VSIX. Internally, Modern debugger visualizer providers ext
 | `RawBufferVisualizer.BitmapAdapter` | Bitmap-to-snapshot conversion used by standalone/sample paths. |
 | `RawBufferVisualizer.OpenCvSharpAdapter` | OpenCvSharp adapter used by standalone/sample paths; not the debugger compatibility mechanism. |
 | `RawBufferVisualizer.VisualStudio.ObjectSource` | Debuggee-side metadata, preview, chunk, reflection, pointer, collection extraction, saved mappings, and pure image-member inference. |
-| `RawBufferVisualizer.VisualStudio.Extensibility` | Owns debugger visualizer registration, transfer/handoff orchestration, `RawBufferVisualizerPackage`, VSCT compilation, current-project `.pkgdef` generation, and the public hybrid VSIX. |
-| `RawBufferVisualizer.VisualStudio` | Shared inbox, claimed-handoff coordination, document-workspace ownership, temp/snapshot leases, process/instance routing, and support-report helpers. |
+| `RawBufferVisualizer.VisualStudio.Extensibility` | Owns debugger visualizer registration, transfer/handoff orchestration, `RawBufferVisualizerPackage`, debugger Break/Run event wiring, live-document invalidation, VSCT compilation, current-project `.pkgdef` generation, and the public hybrid VSIX. |
+| `RawBufferVisualizer.VisualStudio` | Shared inbox, claimed-handoff coordination, debugger-session generation admission, document-workspace ownership, temp/snapshot leases, process/instance routing, and support-report helpers. |
 | `RawBufferVisualizer.VisualStudio.Vssdk` | Referenced ToolWindow/UI support library: responsive IDE presentation, Break Mode automatic inspection, VSSDK managed-array extraction, and image-source/document presentation. It must not own the Marketplace package `.pkgdef`. |
 | `RawBufferVisualizer.OpenGlCanvas` | Internal accelerated tiled canvas, progressive viewport scheduling, textures, interaction, and render metrics. The implementation name is not user-facing. |
 | `RawBufferVisualizer.Wpf` | Optional standalone snapshot viewer and validation host. |
@@ -125,7 +127,7 @@ For a richer industrial descriptor, expose `RawBufferView` with buffer address/l
 
 ### Vendor-neutral 2D buffer matrix
 
-[Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) is the 2.0 source of truth for pointer/managed carriers, dimensions, stride/length, image offsets, formats, valid bits, byte order, and lifetime. `VisualizerChunkedTransfer.CreateMetadataCore` applies the existing `RawBufferDiagnostics.AnalyzeLength` gate so registered and mapped metadata share the same fail-closed boundary. Its repository fixtures use only project-owned neutral shapes. The exact frozen `2.0.0.0` candidate passed dual-IDE installed qualification, but this work does not authorize a vendor SDK adapter or change the public `1.0.53` Marketplace asset.
+[Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compatibility-matrix.md) is the 2.0 source of truth for pointer/managed carriers, dimensions, stride/length, image offsets, formats, valid bits, byte order, and lifetime. `VisualizerChunkedTransfer.CreateMetadataCore` and every `RawImageSource` construction path apply the common `RawBufferDiagnostics` boundary. Minimum-stride and required-length arithmetic is checked, undefined pixel-format/byte-order enum values are rejected, and valid metadata must fit the supported address/stream range before transfer or rendering. Repository fixtures use only project-owned neutral shapes. The current P0 `2.0.0.0` candidate passed dual-IDE installed qualification, but this work does not authorize a vendor SDK adapter or change the public `1.0.53` Marketplace asset.
 
 ## Automatic Inspection Flow
 
@@ -218,7 +220,13 @@ Direct memory reduces full-buffer transfer and temp-disk use, but it has a stric
 - the debuggee must still be alive and paused;
 - the backing Mat/pointer object must still own valid memory;
 - Continue, object disposal, buffer reuse, or process exit can invalidate reads;
-- the viewer converts this into a controlled `Unavailable` state rather than continuing to dereference the pointer.
+- `ProcessMemoryRawImageSource` owns an idempotent cancellation lifetime, and its stream checks that lifetime before and after `ReadProcessMemory`;
+- entering Run Mode clears the current debugger thread, disposes every live process-backed document source, cancels progressive rendering, increments render generations, and refreshes those rows as `Unavailable`;
+- already-rendered pixels may remain visible as context, but pixel reads, grid sampling, progressive uploads, and later source reads are disabled;
+- copied managed-array and file-backed documents remain available because Visual Studio already owns their bytes;
+- a handoff captures the current Break generation before opening the ToolWindow; Continue invalidates that generation, so delayed work cannot open during Run Mode or revive in a later Break session.
+
+`DebuggerHandoffSessionGate` owns only session admission and generation comparison. `RawBufferVisualizerPackage` owns DTE event wiring and invokes the gate plus ToolWindow invalidation. `RawBufferToolWindowControl` owns document state and presentation, and `RawOpenGlImageCanvas` owns renderer cancellation/generation state. A `partial` split is not used as an architectural substitute for these boundaries.
 
 A compressed image's file size is unrelated to decoded Mat memory. Calculate decoded bytes from rows, stride, channels, and element size. A very large Mat can exhaust or terminate the debuggee even if viewer-side transfer is bounded.
 
@@ -405,6 +413,29 @@ The current package keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}
 Full publication steps and the environment-gated CD flow are in [release-runbook.md](release-runbook.md). An upload must use a version not already published. Do not create a version bump only to edit documentation when the Marketplace portal allows copy changes independently.
 
 ## Current Validation Baseline
+
+Current unpublished `2.0.0.0` candidate, consolidated local qualification on 2026-08-06 KST:
+
+- artifact size 1,923,731 bytes, SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`;
+- path `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-connect-doctor-docs-20260806\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`;
+- current-source aggregate self-tests, zero-warning Release solution build, release/environment/package guards, and ten-version Emgu/OpenCvSharp compatibility passed;
+- seven package assemblies match the candidate and both installations by SHA-256;
+- installed VS2022 and VS2026 each invalidated exactly five live sources after Continue while retaining the copied array, exposed and selected `Mono12PackedLsb 640 x 484 stride 960` draft-only until Save, and passed Buffer Doctor, Automatic Collections, Multi-Library Hybrid, and Environment toggle regressions with zero package-protocol errors;
+- evidence root `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806`, with canonical verdict `consolidated-local-release-verdict.json`;
+- local qualification is complete. Commit/push, successful CI, owner upload approval, publication, and public readback remain separate gates.
+
+Preserved unpublished `2.0.0.0` P0 full-safety qualification baseline, qualified 2026-08-06 KST:
+
+- artifact size 1,917,791 bytes, SHA-256 `3C2DCC1E9E38990D1C17547331E15C5EE344ABEA07D3936B722747B0670AE7EE`;
+- based on `origin/main` `3d88894` plus the current uncommitted P0 worktree change set;
+- current-source Release solution build and aggregate self-tests passed; descriptor overflow, undefined enums, disposed live-source reads, and handoff-generation transitions are covered;
+- the full legacy matrix passed for five Emgu CV and five OpenCvSharp package versions;
+- seven package-owned Raw Buffer Visualizer assemblies match the candidate, current Release build, VS2022 installation, and VS2026 installation by length and SHA-256;
+- VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21` each opened six smart-type scenario images, marked five live process-backed rows `Unavailable` on Continue, retained the copied managed-array row, and logged `invalidated 5 live source(s)`;
+- full evidence and the preserved pre-P0 defect baseline are in [release-qualification-2.0.0.md](release-qualification-2.0.0.md) and `D:\OpenVisionLab-TestData\RawBufferVisualizer\p0-safety-20260805`;
+- Marketplace remains exact public `1.0.53.0`; source has advanced beyond these P0 bytes, and no commit, push, tag, upload, or public readback is implied.
+
+The prior 1,914,538-byte `2.0.0.0` candidate is preserved only as historical regression evidence because it left live rows readable/labelled after Continue. It is not a release candidate.
 
 Exact local `1.0.53.0` vendor-safe release candidate, qualified 2026-08-05:
 

@@ -80,17 +80,15 @@ powershell -STA -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts
 
 The VSIX to upload or smoke-test is:
 
-```text
-D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-frozen\RawBufferVisualizer.VisualStudio.Extensibility.vsix
-```
+Use the exact consolidated candidate recorded in [release-qualification-2.0.0.md](release-qualification-2.0.0.md). It passed the local matrix; preserved P0 and superseded candidates remain evidence only and must not be uploaded. Before upload, record the matching pushed source commit and successful CI run without rebuilding or substituting the candidate bytes.
 
 Validate the exact package and generated Marketplace manifest without publishing:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-frozen\RawBufferVisualizer.VisualStudio.Extensibility.vsix -OverviewPath C:\Git\RawBufferVisualizer\docs\marketplace-overview-2.0.0.md -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\marketplace\vs-publish.json -DryRun
+powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath <FULLY_QUALIFIED_2_0_VSIX> -OverviewPath C:\Git\RawBufferVisualizer\docs\marketplace-overview-2.0.0.md -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\marketplace\vs-publish.json -DryRun
 ```
 
-Omitting `-VsixPath` is an error. Passing the preserved repository `1.0.51`, previous public `1.0.52`, or current public `1.0.53` VSIX is also an error because its manifest version does not match the current `2.0.0` source release. For the qualified candidate identity and manual upload checklist, use [release-qualification-2.0.0.md](release-qualification-2.0.0.md) and [marketplace-manual-upload-2.0.0.md](marketplace-manual-upload-2.0.0.md).
+Omitting `-VsixPath` is an error. Passing the preserved repository `1.0.51`, previous public `1.0.52`, current public `1.0.53`, P0 baseline, or any superseded `2.0.0` VSIX is also an error. Before upload, the consolidated source must be committed/pushed, CI must pass for that commit, and the exact candidate path, length, and SHA-256 must match [release-qualification-2.0.0.md](release-qualification-2.0.0.md). Use [marketplace-manual-upload-2.0.0.md](marketplace-manual-upload-2.0.0.md) for the owner-controlled upload checklist.
 
 ## Pre-publish clean/update gate
 

@@ -19,7 +19,12 @@ if (-not $NoBuild) {
     }
 }
 
-$outputRoot = Join-Path $repoRoot $OutputDir
+$outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+}
+else {
+    Join-Path $repoRoot $OutputDir
+}
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 $sampleRoot = Join-Path $outputRoot "samples"

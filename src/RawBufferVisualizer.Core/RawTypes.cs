@@ -58,36 +58,63 @@ namespace RawBufferVisualizer.Core
 
         public int GetMinimumStride()
         {
+            int minimumStride;
+            return TryGetMinimumStride(out minimumStride) ? minimumStride : 0;
+        }
+
+        public bool TryGetMinimumStride(out int minimumStride)
+        {
+            minimumStride = 0;
+            if (Width <= 0 || !System.Enum.IsDefined(typeof(RawPixelFormat), PixelFormat))
+            {
+                return false;
+            }
+
+            long calculatedStride;
             switch (PixelFormat)
             {
                 case RawPixelFormat.Mono10PackedLsb:
-                    return GetPackedStride(10);
+                    calculatedStride = GetPackedStride(10);
+                    break;
                 case RawPixelFormat.Mono12PackedLsb:
-                    return GetPackedStride(12);
+                    calculatedStride = GetPackedStride(12);
+                    break;
+                default:
+                    calculatedStride = checked((long)Width * GetBytesPerPixel());
+                    break;
             }
 
-            return Width > 0 ? Width * GetBytesPerPixel() : 0;
+            if (calculatedStride <= 0 || calculatedStride > int.MaxValue)
+            {
+                return false;
+            }
+
+            minimumStride = checked((int)calculatedStride);
+            return true;
         }
 
-        private int GetPackedStride(int bitsPerPixel)
+        private long GetPackedStride(int bitsPerPixel)
         {
-            return Width > 0 ? (int)(((long)Width * bitsPerPixel + 7) / 8) : 0;
+            return checked(((long)Width * bitsPerPixel + 7) / 8);
         }
 
         public long GetRequiredByteCount()
         {
-            if (Height <= 0)
+            long requiredByteCount;
+            return TryGetRequiredByteCount(out requiredByteCount) ? requiredByteCount : 0;
+        }
+
+        public bool TryGetRequiredByteCount(out long requiredByteCount)
+        {
+            requiredByteCount = 0;
+            int minimumStride;
+            if (Height <= 0 || Stride <= 0 || !TryGetMinimumStride(out minimumStride))
             {
-                return 0;
+                return false;
             }
 
-            var minimumStride = GetMinimumStride();
-            if (Stride <= 0 || minimumStride <= 0)
-            {
-                return 0;
-            }
-
-            return ((long)Stride * (Height - 1)) + minimumStride;
+            requiredByteCount = checked(((long)Stride * (Height - 1)) + minimumStride);
+            return requiredByteCount > 0;
         }
 
         public RawImageDescriptor Clone()

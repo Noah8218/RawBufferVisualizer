@@ -1,7 +1,7 @@
 # Buffer Doctor Design
 
-Status: Implemented (Phase 1 in working tree). Phase 2 (top-down/Bayer phase/planar) is deferred.
-Last updated: 2026-07-26.
+Status: Implemented. Core Phase 1 and Connect Doctor reuse are complete; top-down/Bayer phase/planar work remains deferred.
+Last updated: 2026-08-06.
 
 ## Goal
 
@@ -31,7 +31,7 @@ This feature is a direct extension of the product principle "Raw-buffer diagnosi
    - e.g. "Stride 2560 = 2448 px + 112 bytes/row padding (32-byte aligned)"
 4. User selects a candidate; the main viewer applies it immediately via `WithDescriptor` (no debugger round-trip).
 5. User can still fine-tune in the existing Interpret controls afterwards.
-6. (Later, with Smart Type Mapper) the accepted interpretation can be saved as the default for the source type.
+6. In Connect Your Buffer, **Diagnose interpretation** reuses the same result model; only **Save Mapping** persists an exactly representable visible draft.
 
 ## Core Design
 
@@ -65,6 +65,8 @@ For each pixel format family (bytes-per-pixel from `RawImageDescriptor.GetBytesP
 Dedupe by (Width, Height, Stride, PixelFormat, ByteOrder). Cap pre-score pool at ~40 candidates. `RawBufferDiagnostics.AnalyzeLength` must report no Error for a candidate to enter the pool.
 
 Endianness and ValidBits variants (Mono16: LE/BE, valid bits 10/12/14/16) expand surviving Mono16 candidates.
+
+The visible result remains capped at eight. After score sorting, up to three distinct pixel-format alternatives matching the hint Width/Height/Stride are retained so plausible packed Mono10/Mono12 interpretations are not hidden by unrelated exact-length factorizations. Their original scores and order remain visible; this is candidate diversity, not an automatic-detection claim.
 
 ### Scoring (`BufferInterpretationScorer`)
 
@@ -130,7 +132,7 @@ Default implementation returns `false`; the scorer skips content scoring (struct
 - Top-down vs bottom-up row order (descriptor/render option does not exist yet).
 - Bayer phase offset candidates.
 - Planar vs interleaved.
-- "Save interpretation for this type" hand-off to Smart Type Mapper.
+- Additional renderer-backed interpretation fields must first have an explicit descriptor/storage contract before they can enter Connect Doctor persistence.
 
 ## Tests (`RawBufferVisualizer.Tests`)
 

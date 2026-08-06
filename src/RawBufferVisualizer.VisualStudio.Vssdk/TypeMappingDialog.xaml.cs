@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -31,6 +33,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private readonly TypeMappingMembers? _suggestedMembers;
         private readonly string _initialByteOrder;
         private readonly Dictionary<string, string> _existingPixelFormatMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private CancellationTokenSource? _diagnosisCancellation;
+        private BufferInterpretationCandidate? _selectedDiagnosisCandidate;
+        private bool _applyingDiagnosisCandidate;
 
         public TypeMappingDialog(
             List<VisualizerMemberInventoryItem> inventory,
@@ -41,6 +46,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             bool pixelFormatOnly = false)
         {
             InitializeComponent();
+            Closed += delegate { CancelDiagnosis(); };
             _inventory = inventory ?? new List<VisualizerMemberInventoryItem>();
             _typeName = typeName ?? string.Empty;
             _assemblyName = assemblyName ?? string.Empty;
@@ -79,7 +85,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             else
             {
-                MappingGuidanceText.Text = "Review the inferred roles. Preview reads the current buffer; Save Mapping reuses these choices on future breaks.";
+                MappingGuidanceText.Text = "Review the inferred roles. Preview reads the current buffer; only Save Mapping persists changes.";
             }
         }
 
@@ -271,6 +277,58 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            var previewRendered = TryRenderPreview(descriptor, dataMember, out var previewError);
+            PreviewStatusText.Text = previewRendered
+                ? "Preview rendered from live debuggee memory."
+                : "Preview unavailable: " + previewError;
+            if (previewRendered)
+            {
+                PreviewImage.BringIntoView();
+            }
+        }
+
+        private bool TryRenderPreview(
+            RawImageDescriptor descriptor,
+            VisualizerMemberInventoryItem? dataMember,
+            out string error)
+        {
+            PreviewImage.Source = null;
+            if (!TryCreateLiveSource(descriptor, dataMember, false, out var source, out error))
+            {
+                return false;
+            }
+
+            try
+            {
+                using (source)
+                {
+                    PreviewImage.Source = RawBufferToolWindowControl.CreateThumbnailSource(source, descriptor);
+                }
+
+                if (PreviewImage.Source == null)
+                {
+                    error = "mapping will be verified on the next scan.";
+                    return false;
+                }
+
+                error = string.Empty;
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
+            }
+        }
+
+        private bool TryCreateLiveSource(
+            RawImageDescriptor descriptor,
+            VisualizerMemberInventoryItem? dataMember,
+            bool includeFullStrideSpan,
+            out RawImageSource source,
+            out string error)
+        {
+            source = null!;
             long address;
             if (_debuggeeProcessId <= 0
                 || dataMember == null
@@ -278,34 +336,55 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || !TryParsePointer(dataMember.SampleValue, out address)
                 || address == 0)
             {
-                PreviewStatusText.Text = "Preview unavailable — mapping will be verified on the next scan.";
-                return;
+                error = "the current mapping does not expose a readable pointer-backed buffer at this breakpoint.";
+                return false;
+            }
+
+            if (!descriptor.TryGetRequiredByteCount(out var bufferLength))
+            {
+                error = "the selected descriptor exceeds the supported buffer range.";
+                return false;
+            }
+
+            var lengthMember = FindInventoryItem(BufferLengthBox.SelectedItem as string);
+            if (lengthMember != null)
+            {
+                if (!long.TryParse(lengthMember.SampleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedLength)
+                    || parsedLength < bufferLength)
+                {
+                    error = "the reported buffer length is smaller than the selected descriptor requires.";
+                    return false;
+                }
+
+                bufferLength = parsedLength;
+            }
+            else if (includeFullStrideSpan)
+            {
+                try
+                {
+                    bufferLength = Math.Max(bufferLength, checked((long)descriptor.Stride * descriptor.Height));
+                }
+                catch (OverflowException)
+                {
+                    error = "the selected stride and height exceed the supported buffer range.";
+                    return false;
+                }
             }
 
             try
             {
-                var bufferLength = descriptor.GetRequiredByteCount();
-                var lengthMember = FindInventoryItem(BufferLengthBox.SelectedItem as string);
-                long parsedLength;
-                if (lengthMember != null
-                    && long.TryParse(lengthMember.SampleValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsedLength)
-                    && parsedLength >= bufferLength)
-                {
-                    bufferLength = parsedLength;
-                }
-
-                using (var source = RawImageSource.FromProcessMemory(_debuggeeProcessId, address, bufferLength, descriptor))
-                {
-                    PreviewImage.Source = RawBufferToolWindowControl.CreateThumbnailSource(source, descriptor);
-                }
-
-                PreviewStatusText.Text = PreviewImage.Source == null
-                    ? "Preview unavailable — mapping will be verified on the next scan."
-                    : "Preview rendered from live debuggee memory.";
+                source = RawImageSource.FromProcessMemory(
+                    _debuggeeProcessId,
+                    address,
+                    bufferLength,
+                    descriptor);
+                error = string.Empty;
+                return true;
             }
             catch (Exception ex)
             {
-                PreviewStatusText.Text = "Preview unavailable: " + ex.Message;
+                error = ex.Message;
+                return false;
             }
         }
 
@@ -383,9 +462,354 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return Enum.TryParse(sample, true, out pixelFormat);
         }
 
+        private void DiagnoseInterpretation_Changed(object sender, RoutedEventArgs e)
+        {
+            if (DiagnoseInterpretationButton.IsChecked != true)
+            {
+                CancelDiagnosis();
+                DiagnosisResultPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            CancelDiagnosis();
+            DiagnosisResultPanel.Visibility = Visibility.Visible;
+            DiagnosisCandidateList.ItemsSource = null;
+            DiagnosisApplyStatusText.Text = string.Empty;
+            StatusText.Text = string.Empty;
+            DiagnosisStatusText.Text = "Diagnosing the current paused buffer...";
+
+            if (!TryBuildDescriptor(out var descriptor, out var dataMember, out var descriptorError))
+            {
+                DiagnosisStatusText.Text = "Diagnosis unavailable: " + descriptorError;
+                return;
+            }
+
+            if (!TryCreateLiveSource(descriptor, dataMember, true, out var source, out var sourceError))
+            {
+                DiagnosisStatusText.Text = "Diagnosis unavailable: " + sourceError;
+                return;
+            }
+
+            var cancellation = new CancellationTokenSource();
+            var diagnosisToken = cancellation.Token;
+            _diagnosisCancellation = cancellation;
+#pragma warning disable VSTHRD110
+            Task.Run(
+                delegate
+                {
+                    using (source)
+                    {
+                        return BufferDoctor.Diagnose(source, diagnosisToken);
+                    }
+                }, diagnosisToken).ContinueWith(
+                task => CompleteDiagnosis(task, cancellation),
+                CancellationToken.None,
+                TaskContinuationOptions.None,
+                TaskScheduler.FromCurrentSynchronizationContext());
+#pragma warning restore VSTHRD110
+        }
+
+        private void CompleteDiagnosis(
+            Task<BufferDiagnosisResult> task,
+            CancellationTokenSource cancellation)
+        {
+            if (!ReferenceEquals(_diagnosisCancellation, cancellation))
+            {
+                return;
+            }
+
+            _diagnosisCancellation = null;
+            cancellation.Dispose();
+            if (task.IsCanceled)
+            {
+                return;
+            }
+
+            if (task.IsFaulted)
+            {
+                var failure = task.Exception == null ? null : task.Exception.GetBaseException();
+                DiagnosisStatusText.Text = failure is RawImageSourceUnavailableException
+                    ? "Live source unavailable. Pause at a valid breakpoint and diagnose again."
+                    : "Diagnosis unavailable: " + (failure == null ? "unknown error." : failure.Message);
+                return;
+            }
+
+#pragma warning disable VSTHRD002
+            var result = task.Result;
+#pragma warning restore VSTHRD002
+            var rows = new List<BufferDiagnosisCandidateItem>(result.Candidates.Count);
+            for (var i = 0; i < result.Candidates.Count; i++)
+            {
+                rows.Add(new BufferDiagnosisCandidateItem(result.Candidates[i]));
+            }
+
+            DiagnosisCandidateList.ItemsSource = rows;
+            DiagnosisStatusText.Text = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} ranked interpretation(s). Select one to update only the visible draft and preview; Save Mapping is the persistence boundary.",
+                rows.Count);
+            DiagnosisResultPanel.BringIntoView();
+        }
+
+        private void DiagnosisCandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_applyingDiagnosisCandidate)
+            {
+                return;
+            }
+
+            var item = DiagnosisCandidateList.SelectedItem as BufferDiagnosisCandidateItem;
+            if (item == null)
+            {
+                return;
+            }
+
+            _selectedDiagnosisCandidate = item.Candidate;
+            StatusText.Text = string.Empty;
+            _applyingDiagnosisCandidate = true;
+            bool draftMatches;
+            string draftError;
+            try
+            {
+                draftMatches = TryApplyCandidateToDraft(item.Candidate.Descriptor, out draftError);
+            }
+            finally
+            {
+                _applyingDiagnosisCandidate = false;
+            }
+
+            var dataMember = FindInventoryItem(DataBox.SelectedItem as string);
+            var previewRendered = TryRenderPreview(item.Candidate.Descriptor, dataMember, out var previewError);
+            PreviewStatusText.Text = previewRendered
+                ? "Preview rendered from the selected candidate; mapping is unchanged until Save Mapping."
+                : "Preview unavailable: " + previewError;
+
+            var ambiguity = item.Candidate.IsAmbiguousWithGroup
+                ? " This candidate belongs to an ambiguous tie group and requires your confirmation."
+                : string.Empty;
+            DiagnosisApplyStatusText.Text = draftMatches
+                ? "Candidate applied to the visible draft and preview; nothing has been saved." + ambiguity
+                : "Candidate preview applied, but the draft cannot persist it yet: " + draftError
+                    + " Select matching role members before saving." + ambiguity;
+            DiagnosisResultPanel.BringIntoView();
+        }
+
+        private bool TryApplyCandidateToDraft(RawImageDescriptor candidate, out string error)
+        {
+            TrySelectRequiredNumericRole(WidthBox, candidate.Width, WidthNameCandidates, "width", "sizex");
+            TrySelectRequiredNumericRole(HeightBox, candidate.Height, HeightNameCandidates, "height", "sizey");
+            ApplyCandidatePixelFormat(candidate.PixelFormat);
+            TrySelectOptionalNumericRole(
+                StrideBox,
+                candidate.Stride,
+                candidate.GetMinimumStride(),
+                StrideNameCandidates,
+                "stride",
+                "pitch",
+                "step");
+            TrySelectOptionalNumericRole(
+                ValidBitsBox,
+                candidate.ValidBits,
+                GetDefaultValidBits(candidate.PixelFormat),
+                ValidBitsNameCandidates,
+                "validbits",
+                "bitdepth",
+                "depth");
+            ByteOrderBox.SelectedItem = candidate.ByteOrder.ToString();
+
+            if (!TryBuildDescriptor(out var draft, out _, out error))
+            {
+                return false;
+            }
+
+            if (DescriptorsMatch(draft, candidate))
+            {
+                error = string.Empty;
+                return true;
+            }
+
+            error = DescribeDescriptorMismatch(draft, candidate);
+            return false;
+        }
+
+        private bool TrySelectRequiredNumericRole(
+            ComboBox box,
+            int expectedValue,
+            string[] exactNames,
+            params string[] containsNames)
+        {
+            var current = FindInventoryItem(box.SelectedItem as string);
+            if (MemberHasPositiveIntValue(current, expectedValue))
+            {
+                return true;
+            }
+
+            var matchingName = FindNumericMemberName(expectedValue, exactNames, containsNames);
+            if (matchingName == null)
+            {
+                return false;
+            }
+
+            box.SelectedItem = matchingName;
+            return true;
+        }
+
+        private bool TrySelectOptionalNumericRole(
+            ComboBox box,
+            int expectedValue,
+            int defaultValue,
+            string[] exactNames,
+            params string[] containsNames)
+        {
+            if (TrySelectRequiredNumericRole(box, expectedValue, exactNames, containsNames))
+            {
+                return true;
+            }
+
+            if (expectedValue != defaultValue)
+            {
+                return false;
+            }
+
+            box.SelectedItem = NoneItem;
+            return true;
+        }
+
+        private string? FindNumericMemberName(
+            int expectedValue,
+            string[] exactNames,
+            string[] containsNames)
+        {
+            for (var c = 0; c < exactNames.Length; c++)
+            {
+                for (var i = 0; i < _inventory.Count; i++)
+                {
+                    if (string.Equals(_inventory[i].Name, exactNames[c], StringComparison.OrdinalIgnoreCase)
+                        && MemberHasPositiveIntValue(_inventory[i], expectedValue))
+                    {
+                        return _inventory[i].Name;
+                    }
+                }
+            }
+
+            for (var c = 0; c < containsNames.Length; c++)
+            {
+                for (var i = 0; i < _inventory.Count; i++)
+                {
+                    if (_inventory[i].Name.IndexOf(containsNames[c], StringComparison.OrdinalIgnoreCase) >= 0
+                        && MemberHasPositiveIntValue(_inventory[i], expectedValue))
+                    {
+                        return _inventory[i].Name;
+                    }
+                }
+            }
+
+            string? uniqueMatch = null;
+            for (var i = 0; i < _inventory.Count; i++)
+            {
+                if (!MemberHasPositiveIntValue(_inventory[i], expectedValue))
+                {
+                    continue;
+                }
+
+                if (uniqueMatch != null)
+                {
+                    return null;
+                }
+
+                uniqueMatch = _inventory[i].Name;
+            }
+
+            return uniqueMatch;
+        }
+
+        private bool ApplyCandidatePixelFormat(RawPixelFormat pixelFormat)
+        {
+            var member = FindInventoryItem(PixelFormatBox.SelectedItem as string);
+            if (member == null)
+            {
+                return pixelFormat == RawPixelFormat.Mono8;
+            }
+
+            if (member.EnumValues != null && member.EnumValues.Count > 0)
+            {
+                for (var i = 0; i < _enumValueNames.Count; i++)
+                {
+                    if (!string.Equals(_enumValueNames[i], member.SampleValue, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    _enumValueBoxes[i].SelectedItem = pixelFormat.ToString();
+                    return true;
+                }
+
+                return false;
+            }
+
+            return Enum.TryParse(member.SampleValue, true, out RawPixelFormat current)
+                && current == pixelFormat;
+        }
+
+        private static bool MemberHasPositiveIntValue(
+            VisualizerMemberInventoryItem? member,
+            int expectedValue)
+        {
+            return member != null
+                && TryParsePositiveInt(member.SampleValue, out var value)
+                && value == expectedValue;
+        }
+
+        private static bool DescriptorsMatch(RawImageDescriptor left, RawImageDescriptor right)
+        {
+            return left.Width == right.Width
+                && left.Height == right.Height
+                && left.Stride == right.Stride
+                && left.PixelFormat == right.PixelFormat
+                && left.ValidBits == right.ValidBits
+                && left.ByteOrder == right.ByteOrder;
+        }
+
+        private static string DescribeDescriptorMismatch(
+            RawImageDescriptor draft,
+            RawImageDescriptor candidate)
+        {
+            var fields = new List<string>();
+            if (draft.Width != candidate.Width) fields.Add("width " + candidate.Width);
+            if (draft.Height != candidate.Height) fields.Add("height " + candidate.Height);
+            if (draft.Stride != candidate.Stride) fields.Add("stride " + candidate.Stride);
+            if (draft.PixelFormat != candidate.PixelFormat) fields.Add("format " + candidate.PixelFormat);
+            if (draft.ValidBits != candidate.ValidBits) fields.Add("valid bits " + candidate.ValidBits);
+            if (draft.ByteOrder != candidate.ByteOrder) fields.Add("byte order " + candidate.ByteOrder);
+            return fields.Count == 0 ? "the selected values do not match the candidate." : string.Join(", ", fields);
+        }
+
+        private void CancelDiagnosis()
+        {
+            if (_diagnosisCancellation == null)
+            {
+                return;
+            }
+
+            _diagnosisCancellation.Cancel();
+            _diagnosisCancellation.Dispose();
+            _diagnosisCancellation = null;
+        }
+
         private void Save_Click(object sender, RoutedEventArgs e)
         {
             StatusText.Text = string.Empty;
+            if (_selectedDiagnosisCandidate != null
+                && (!TryBuildDescriptor(out var draft, out _, out var draftError)
+                    || !DescriptorsMatch(draft, _selectedDiagnosisCandidate.Descriptor)))
+            {
+                StatusText.Text = "Mapping was not saved. The visible draft does not reproduce the selected diagnosis. "
+                    + (string.IsNullOrWhiteSpace(draftError)
+                        ? DescribeDescriptorMismatch(draft, _selectedDiagnosisCandidate.Descriptor)
+                        : draftError);
+                return;
+            }
+
             if (!TryCreateMapping(out var mapping, out var error))
             {
                 StatusText.Text = error;
@@ -486,6 +910,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UseSuggestedRoles_Click(object sender, RoutedEventArgs e)
         {
+            _selectedDiagnosisCandidate = null;
+            DiagnosisCandidateList.SelectedItem = null;
+            DiagnosisApplyStatusText.Text = string.Empty;
             _existingPixelFormatMap.Clear();
             ApplyRoleSelections(_suggestedMembers);
             ByteOrderBox.SelectedItem = RawByteOrder.LittleEndian.ToString();
@@ -541,6 +968,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void Cancel_Click(object sender, RoutedEventArgs e)
         {
+            CancelDiagnosis();
             DialogResult = false;
         }
 

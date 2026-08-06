@@ -1,7 +1,7 @@
 # Connect Your Buffer (Smart Type Mapper) Design
 
-Status: Phases 1–5 and the Connect Your Buffer current-source and installed-VSIX workflows are Complete in Compact and Wide layouts. Real pointer-backed **Open Variable** remains a separate verification boundary.
-Last updated: 2026-08-04.
+Status: Phases 1–5, Connect Your Buffer, and Connect Doctor current-source and installed-VSIX workflows are Complete. Real pointer-backed **Open Variable** remains a separate verification boundary.
+Last updated: 2026-08-06.
 
 ## Goal
 
@@ -44,7 +44,8 @@ Therefore this feature does **not** promise "an icon appears for any type". The 
 4. The mapping dialog lists detected members with heuristic pre-selection (IntPtr → Data, names containing Width/SizeX → Width, Pitch/Stride → Stride, enum → Pixel Format). The user adjusts dropdowns.
 5. Enum mapping: each detected enum value is mapped to a `RawPixelFormat` (`Mono12 → Mono12PackedLsb`).
 6. **Preview** renders a thumbnail immediately: the member values (pointer + dimensions) are already known, and the existing process-memory source can read the live debuggee buffer — no debugger round-trip needed.
-7. **Save Mapping** writes the mapping file. **Use Suggested Roles** resets only the visible draft, and **Copy RawBufferView Template** copies optional neutral starter code for pointer-backed data without saving or scanning.
+7. If that interpretation looks wrong, **Diagnose interpretation** opens ranked Buffer Doctor candidates in the same dialog. Selecting one updates only the visible draft and candidate preview.
+8. **Save Mapping** writes the mapping file. **Use Suggested Roles** resets only the visible draft, and **Copy RawBufferView Template** copies optional neutral starter code for pointer-backed data without saving or scanning.
 
 ### Scenario 2 — afterwards (automatic)
 
@@ -116,7 +117,7 @@ Never invoked: arbitrary methods (`GetBuffer()`, `ConvertImage()`). Method-call 
 ### Docked window (`RawBufferVisualizer.VisualStudio.Vssdk`)
 
 1. Error rows with a member inventory get a **Connect Your Buffer** action.
-2. Mapping dialog: role dropdowns over the inventory, enum mapping grid, explicit Preview, Save Mapping, Use Suggested Roles, optional RawBufferView template copy, and Cancel. It follows the compact IDE UX rule and remains a dialog from the error row, not a new persistent pane.
+2. Mapping dialog: role dropdowns over the inventory, enum mapping grid, explicit Preview, ranked **Diagnose interpretation** results, Save Mapping, Use Suggested Roles, optional RawBufferView template copy, and Cancel. It follows the compact IDE UX rule and remains a dialog from the error row, not a new persistent pane.
 3. Save → write mapping file → offer "retry this entry" (re-invokes the collection provider path via a new handoff request).
 
 ### Phase 5 — Open Variable (individual variables)
@@ -138,7 +139,7 @@ Never invoked: arbitrary methods (`GetBuffer()`, `ConvertImage()`). Method-call 
 
 Phases 1-4 deliver the majority of the value through the collection path. Phase 5 completes the individual-variable UX.
 
-Buffer Doctor connection: the mapping dialog's Preview reuses the Diagnose Buffer candidate list when the preview looks broken, and an accepted interpretation is stored into `pixelFormatMap`/stride for that type.
+Buffer Doctor connection: **Diagnose interpretation** calls the existing bounded Core generator/scorer. The visible list keeps the highest-ranked candidates plus up to three distinct format alternatives that match the current width, height, and stride. Candidate selection never writes fixed numeric values that the current member roles cannot represent; preview may proceed, but Save is blocked with a reason until the visible draft reproduces the candidate exactly.
 
 ## Tests
 
@@ -151,10 +152,11 @@ Buffer Doctor connection: the mapping dialog's Preview reuses the Diagnose Buffe
 7. UI smoke: mapping dialog opens from an error row in the docked harness; preview renders from a synthetic live source.
 8. Template generation: mapped and derived stride/length forms are deterministic, UIntPtr is converted explicitly, and no proprietary SDK name is built in.
 9. State/side-effect smoke: saved selections and byte order restore; reset does not save; copy does not save or open an image; explicit Save remains the persistence boundary.
+10. Connect Doctor smoke: repeated toggle closes results; selection updates draft/preview only; inaccessible sources fail visibly; unrepresentable candidates cannot save; accessible row names contain format, dimensions, stride, valid bits, and byte order.
 
 ## Documentation Impact On Release
 
-- README describes Connect Your Buffer as the no-code mapping route, its storage scopes, optional template prerequisite, and lack of camera SDK/FFmpeg runtime dependency.
+- README describes Connect Your Buffer as the no-code mapping route, its storage scopes, optional template path, Connect Doctor draft/save boundary, and supported Visual Studio versions.
 - Marketplace copy may say "Map unsupported image classes once" only with the icon and entry-route constraints stated plainly.
 - Handoff: resolve the long-standing ImagePtr wording gap by documenting mapper-based support as the generic answer; the exact `Cressem.ImageModel.ImagePtr` registration remains a compatibility exception.
 
@@ -209,4 +211,15 @@ Acceptance criteria: VSIX payload equals both installed extensions -> pass for f
 Verification: Release build -> pass with 18 pre-existing ImageTypeRecognizer VSTHRD010 warnings and zero errors; self-tests -> pass; current-source Smart Type Mapper UI smoke -> pass; installed SmartTypeMapper and SmartTypeMapperPersisted -> pass on both IDEs; final package comparison -> pass; pre-test user mapping state -> restored after every run.
 Evidence: package C:\Git\RawBufferVisualizer\.build\bin\RawBufferVisualizer.VisualStudio.Extensibility\Release\net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix, size 1,914,617 bytes, SHA-256 ADDC416CDA4F5DB68410BFA352628217D2B1D737BF3449B20D48A47DA751B6C1; before capture D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-installed\VS2022\persisted\SmartTypeMapperPersisted-failure.png; current-source evidence D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-compact\current-source; final installed evidence D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-your-buffer-compact\installed-final. Desktop runs used leftmost monitor \\.\DISPLAY2 at -1920,365,1920,1080.
 Boundary / next dependency: This proves the synthetic pointer-backed UnmappedCompanyFrame path and the packaged dark-theme Compact/Wide controls, not proprietary SDK objects or physical camera/board hardware. Real pointer-backed Open Variable remains separately bounded.
+```
+
+## Connect Doctor Verification — 2026-08-06
+
+```text
+Status: Complete
+Scope: Reuse Buffer Doctor inside Connect Your Buffer; ranked toggle UI; candidate-to-draft/preview application; exact Save boundary; current-geometry candidate retention; accessible/theme-complete rows; source and installed dual-IDE verification.
+Acceptance criteria: repeated selection opens/closes results -> pass; candidate selection changes draft/preview without persistence -> pass; Save blocks an unrepresentable descriptor -> pass; Use Suggested Roles clears candidate state without saving -> pass; unavailable source fails visibly -> pass; packed Mono12 remains selectable -> pass; saved mapping reopens automatically -> pass on both IDEs; RGB/BGR/Bayer ambiguity contract remains explicit -> pass through existing Core tests.
+Verification: aggregate self-tests -> pass; full Release solution build -> pass; `SmokeSmartTypeMapper.ps1`, `SmokeBufferDoctorPanel.ps1`, and 540/900/1160 docked layout smoke -> pass; exact candidate installed on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`; installed SmartTypeMapper scenario -> pass with `Mono12PackedLsb 640 x 484 stride 960`, second-click close, saved reopen, one Open/Scan command each, zero final errors, and zero package protocol errors.
+Evidence: candidate `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-connect-doctor-docs-20260806\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 1,923,731 bytes, SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`; test root `D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-doctor-20260806`; installed equality `docs-candidate-installed-hashes.json`; VS2022/VS2026 result JSON and screenshots under `installed-docs-final-vs2022-rerun` and `installed-docs-final-vs2026`.
+Boundary / next dependency: This proves Connect Doctor on the neutral synthetic wrapper and is included in the same candidate's complete local release matrix. It does not certify a proprietary SDK or physical camera/board. Commit/push, successful CI, publication, and public update/readback remain separate owner actions.
 ```

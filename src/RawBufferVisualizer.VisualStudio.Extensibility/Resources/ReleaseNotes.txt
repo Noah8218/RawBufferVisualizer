@@ -1,6 +1,7 @@
 Raw Buffer Visualizer 2.0.0
 
 NEW
+- Connect Doctor ranks bounded interpretations inside Connect Your Buffer. Selecting one updates only the draft and preview; Save Mapping remains the persistence boundary.
 - One vendor-neutral 2D contract covers RawBufferView, snapshots, mapped pointers, and mapped byte[], ushort[], and float[] buffers.
 - Neutral fixtures verify descriptor metadata, transferred bytes, byte order, valid bits, and pointer ownership without a proprietary SDK.
 
@@ -9,6 +10,7 @@ FIXED
 - Mono10PackedLsb and Mono12PackedLsb reject values that contradict their fixed 10-bit and 12-bit layouts.
 
 IMPROVED
+- Current width/height/stride format alternatives remain visible instead of being crowded out by unrelated factorizations.
 - Registered and mapped sources now share the same metadata-validation boundary.
 - Valid Mono16 values from 1 through 16 remain accepted; executable fixtures preserve 10, 12, 14, and 16.
 - Existing explicit Preview, mapping persistence, panel toggles, and no-side-effect behavior remain unchanged.

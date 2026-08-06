@@ -29,9 +29,9 @@ Preview와 scan은 사용자가 명시적으로 실행할 때만 동작합니다
 
 ## Connect Your Buffer
 
-호환 객체가 직접 등록되어 있지 않으면 **Connect Your Buffer**에서 디버거에 보이는 멤버를 buffer, width, height, stride 또는 length, format, valid bits와 byte order 역할에 연결할 수 있습니다. 결과를 명시적으로 Preview한 다음 해당 형식의 편집 가능한 mapping으로 저장합니다. 명시적인 wrapper가 더 분명할 때는 중립 `RawBufferView` 시작 코드를 사용할 수 있습니다.
+호환 객체가 직접 등록되어 있지 않으면 **Connect Your Buffer**에서 디버거에 보이는 멤버를 buffer, width, height, stride 또는 length, format, valid bits와 byte order 역할에 연결할 수 있습니다. 결과를 명시적으로 Preview합니다. 해석이 여전히 잘못 보이면 같은 대화상자의 **Diagnose interpretation**에서 제한된 범위의 대안을 순위별로 확인할 수 있습니다. 후보 선택은 보이는 초안과 Preview만 바꾸며, **Save Mapping**을 선택해야만 해당 형식의 편집 가능한 mapping으로 저장됩니다. 명시적인 wrapper가 더 분명할 때는 중립 `RawBufferView` 시작 코드를 사용할 수 있습니다.
 
-등록 소스와 mapping 소스는 같은 검증 계약을 사용합니다. 잘못된 크기, 부족한 stride, 짧은 buffer length 또는 호환되지 않는 valid bits는 추측하지 않고 전송 전에 실패합니다.
+등록 소스와 mapping 소스는 같은 checked 검증 계약을 사용합니다. 잘못된 크기, 부족한 stride, 짧은 buffer length, 정의되지 않은 format/order 값, descriptor 산술 overflow 또는 호환되지 않는 valid bits는 추측하지 않고 전송 전에 실패합니다.
 
 ## 진단과 비교
 
@@ -44,11 +44,14 @@ Preview와 scan은 사용자가 명시적으로 실행할 때만 동작합니다
 
 ## 2.0.0의 새로운 내용
 
+- mapping 대화상자에 format, stride, valid bits와 byte order 후보를 순위별로 보여 주고 명시적인 저장 경계를 유지하는 Connect Doctor를 추가했습니다.
 - 등록 view, mapping 포인터와 mapping managed buffer에 적용되는 하나의 문서화된 2D 호환성 계약을 추가했습니다.
-- 등록 및 mapping metadata가 dimension, stride, length와 valid-bits를 같은 fail-closed 규칙으로 검증합니다.
+- 등록 및 mapping metadata가 dimension, stride, length, format/order enum과 valid-bits를 같은 checked fail-closed 규칙으로 검증합니다.
 - `Mono16`의 1~16 valid bits를 유지하며 실행 가능한 fixture가 10, 12, 14, 16을 검증합니다.
 - `Mono10PackedLsb`와 `Mono12PackedLsb`는 고정 layout과 맞지 않는 valid-bits를 거부합니다.
 - 중립 fixture가 독점 SDK 없이 descriptor, 전송 바이트, byte order와 포인터 소유권을 검증합니다.
+- Continue 또는 debuggee 종료 뒤에는 live process-backed row를 `Unavailable`로 전환하고 이후 source read를 차단합니다. Visual Studio가 이미 복사해 소유하는 managed buffer는 계속 사용할 수 있습니다.
+- Continue 전에 예약된 지연 handoff는 Run Mode나 다음 Break에서 다시 열리지 않습니다.
 
 ## Visual Studio 지원
 
@@ -63,6 +66,7 @@ Community, Professional, Enterprise를 지원합니다. Visual Studio 2019, Visu
 
 - 값 할당이 끝난 뒤 중단하십시오. 할당문 자체의 중단점에서는 이전 값이나 null이 보일 수 있습니다.
 - 포인터에는 유효한 크기, stride 또는 length, pixel format과 디버기가 중단된 동안 유지되는 lifetime이 필요합니다.
+- Continue 또는 process 종료 뒤 live row에는 마지막으로 렌더링된 픽셀만 참고용으로 남을 수 있으며 debuggee source를 다시 읽지 않습니다. 새 live source가 필요하면 유효한 중단점에서 다시 열거나 scan하십시오.
 - 자동 검색은 선택한 stack frame의 Locals와 Arguments만 제한된 범위에서 검사합니다.
 - 모호하거나 compressed, planar, YUV, 미지원 packed, offset 또는 method-only layout은 추측하지 않고 명확히 실패합니다.
 - 카메라 획득/제어, 조명, PLC/I/O, 3D point cloud와 depth/coordinate container는 이 확장의 범위가 아닙니다.

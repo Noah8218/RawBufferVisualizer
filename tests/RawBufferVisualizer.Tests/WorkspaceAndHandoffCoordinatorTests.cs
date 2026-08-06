@@ -9,8 +9,29 @@ namespace RawBufferVisualizer.Tests
         public static void RunAll()
         {
             WorkspaceOwnsActivationRemovalAndDispose();
+            DebuggerHandoffSessionRejectsRunModeAndPreviousBreakWork();
             SnapshotLeaseSurvivesSweepAndMovesOnPreviewReplacement();
             ClaimedHandoffPublishesAckAndNackFromOpenOutcome();
+        }
+
+        private static void DebuggerHandoffSessionRejectsRunModeAndPreviousBreakWork()
+        {
+            var gate = new DebuggerHandoffSessionGate();
+            Assert(!gate.IsCurrent(gate.Capture()), "Handoff gate accepted work before Break Mode.");
+
+            gate.EnterBreakMode();
+            var firstBreak = gate.Capture();
+            Assert(gate.IsCurrent(firstBreak), "Handoff gate rejected current Break Mode work.");
+
+            gate.EnterRunMode();
+            Assert(!gate.IsCurrent(firstBreak), "Handoff gate accepted previous-break work after Continue.");
+            var capturedWhileRunning = gate.Capture();
+            Assert(!gate.IsCurrent(capturedWhileRunning), "Handoff gate accepted work captured in Run Mode.");
+
+            gate.EnterBreakMode();
+            Assert(!gate.IsCurrent(firstBreak), "Previous-break work became current in the next Break Mode.");
+            Assert(!gate.IsCurrent(capturedWhileRunning), "Run Mode work became current in the next Break Mode.");
+            Assert(gate.IsCurrent(gate.Capture()), "Handoff gate rejected work from the new Break Mode.");
         }
 
         private static void WorkspaceOwnsActivationRemovalAndDispose()

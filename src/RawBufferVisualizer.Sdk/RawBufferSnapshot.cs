@@ -304,12 +304,14 @@ namespace RawBufferVisualizer.Sdk
         {
             RawPixelFormat pixelFormat;
             RawByteOrder byteOrder;
-            if (!Enum.TryParse(PixelFormat, true, out pixelFormat))
+            if (!Enum.TryParse(PixelFormat, true, out pixelFormat)
+                || !Enum.IsDefined(typeof(RawPixelFormat), pixelFormat))
             {
                 throw new InvalidDataException("Unknown pixel format: " + PixelFormat);
             }
 
-            if (!Enum.TryParse(ByteOrder, true, out byteOrder))
+            if (!Enum.TryParse(ByteOrder, true, out byteOrder)
+                || !Enum.IsDefined(typeof(RawByteOrder), byteOrder))
             {
                 throw new InvalidDataException("Unknown byte order: " + ByteOrder);
             }
