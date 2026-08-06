@@ -18,9 +18,9 @@ Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-back
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## Raw Buffer Visualizer 2.0.0
+## Raw Buffer Visualizer 2.0.1
 
-Version `2.0.0` adds:
+Version `2.0.1` delivers the complete 2.0 feature set:
 
 - one documented contract for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointers, and mapped `byte[]`, `ushort[]`, and `float[]` buffers;
 - shared checked fail-closed validation for dimensions, stride, buffer length, format/order enum values, arithmetic overflow, and valid bits before metadata transfer;
@@ -29,7 +29,7 @@ Version `2.0.0` adds:
 - debugger-session gating that prevents delayed pre-Continue handoffs from reopening in Run Mode or a later Break;
 - **Connect Doctor** inside Connect Your Buffer: ranked bounded interpretations update only the visible draft and preview until **Save Mapping** is selected.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.0`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.1`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
 ### Environment Check
 
@@ -593,8 +593,8 @@ The Marketplace extension is distributed through Visual Studio Marketplace. Rele
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview: [2.0.0 Overview](docs/marketplace-overview-2.0.0.md).
-Marketplace release text: [2.0.0 release notes](docs/marketplace-release-notes-2.0.0.md).
+Marketplace feature Overview: [2.0.1 Overview](docs/marketplace-overview-2.0.1.md).
+Marketplace release text: [2.0.1 release notes](docs/marketplace-release-notes-2.0.1.md).
 Complete user-visible history: [CHANGELOG](CHANGELOG.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 

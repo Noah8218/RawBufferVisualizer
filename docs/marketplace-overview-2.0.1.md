@@ -1,0 +1,87 @@
+# Raw Buffer Visualizer
+
+Inspect C# machine-vision images and raw 2D buffers directly in Visual Studio at a breakpoint. Raw Buffer Visualizer brings Bitmap, OpenCvSharp/Emgu Mat, pointers, managed buffers, and supported collections into one docked viewer without temporary image files or debug-only conversion code.
+
+![Raw Buffer Visualizer inspecting a real industrial PCB image in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-auto-inspector-pixel.png)
+
+The same real PCB scene is open through four supported live representations while pixel values, raw bytes, neighborhood statistics, dimensions, stride, and format remain visible in one docked window.
+
+## How It Works
+
+1. Install the extension and fully restart Visual Studio.
+2. Open `View > Other Windows > Raw Buffer Visualizer` once.
+3. Start debugging and stop after image variables have been assigned.
+4. Use **Auto Inspect on Break** or **Scan Now** for initialized Mats and compatible wrappers, or use the debugger visualizer icon for registered types.
+5. Select a thumbnail to inspect pixels, source bytes, dimensions, stride, format, diagnostics, and comparison views.
+
+Preview and scanning remain explicit actions. Restoring a saved mapping, toggling a panel, or changing visibility does not scan the current frame or open an image.
+
+![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
+
+## Supported Image Sources
+
+- `System.Drawing.Bitmap`
+- OpenCvSharp `Mat` and Emgu CV `Mat`
+- `RawBufferSnapshot` and pointer-backed `RawBufferView`
+- Mapped `byte[]`, `ushort[]`, and `float[]` buffers
+- Mapped pointer objects with explicit dimensions, stride or exact length, pixel format, and lifetime
+- Supported typed or mixed image lists, dictionaries, and one-dimensional arrays
+
+Supported pixel formats include `Mono8`, `Mono16`, `Mono10PackedLsb`, `Mono12PackedLsb`, `Binary`, `RGB24`, `BGR24`, `BGRA32`, `Float32`, and four 8-bit Bayer phases.
+
+## Connect Your Buffer
+
+When a compatible object is not registered directly, **Connect Your Buffer** lets you assign its debugger-visible members to buffer, width, height, stride or length, format, valid bits, and byte order. Preview the result explicitly. If it still looks wrong, **Diagnose interpretation** ranks bounded alternatives in the same dialog; selecting one changes only the visible draft and preview. Only **Save Mapping** persists an editable mapping for that type. A neutral `RawBufferView` starter is available when an explicit wrapper is clearer.
+
+The same checked validation contract is used for registered and mapped sources. Invalid dimensions, undersized stride, short buffer length, undefined format/order values, overflowing descriptor arithmetic, or incompatible valid bits fail before transfer instead of being guessed.
+
+## Diagnose And Compare
+
+- Inspect X/Y, GV/RGB values, channel swatches, raw source bytes, hover statistics, markers, line profile, histogram, and diagnostics.
+- Use aspect-correct Fit, 1:1, wheel zoom, drag pan, and the high-zoom pixel overlay.
+- Compare A/B images with linked views, split, absolute difference, and blink modes.
+- Use **Diagnose Buffer** to rank plausible layouts for sheared, scrambled, dark, or incorrectly packed images.
+- Export PNG images and raw snapshots.
+- Open very large raw payloads through the file-backed tiled viewer.
+
+Incorrect stride metadata shears the same grayscale PCB scene while Buffer Doctor keeps the ranked alternatives visible:
+
+![Buffer Doctor ranks interpretations for an industrial PCB image with incorrect stride metadata](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-before.png)
+
+Selecting the top `Mono8`, 2448 x 2048, stride `2560` interpretation restores the image without another debugger round trip:
+
+![Buffer Doctor restores the industrial PCB image after applying the correct stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-recovered.png)
+
+## What's New In 2.0.1
+
+- Raised the extension package version so Visual Studio recognizes this package as an update to the existing 2.0 Marketplace entry.
+- Kept the existing Marketplace extension identity and the complete 2.0 feature set unchanged.
+- Connect Doctor ranks format, stride, valid-bit, and byte-order alternatives with an explicit save boundary.
+- Registered views, mapped pointers, and mapped managed buffers use one checked 2D compatibility contract.
+- Invalid dimensions, stride, length, enum values, arithmetic overflow, and incompatible valid bits fail before transfer.
+- Continue or process exit converts live process-backed rows to `Unavailable` and blocks delayed handoffs; copied managed buffers stay usable.
+
+## Visual Studio Support
+
+| Product | Supported range |
+| --- | --- |
+| Visual Studio 2022 | `17.14` or newer, x64 |
+| Visual Studio 2026 | Stable `18.x`, x64 |
+
+Community, Professional, and Enterprise are supported installation targets. Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets.
+
+## Safety And Limits
+
+- Stop after assignment; a breakpoint on the assignment statement can expose the previous or null value.
+- A pointer requires valid dimensions, stride or length, pixel format, and a lifetime that remains valid while the debuggee is paused.
+- After Continue or process exit, a live row keeps only its last rendered pixels as context and cannot read the debuggee source again. Pause at a valid breakpoint and reopen or rescan to obtain a new live source.
+- Automatic discovery scans only the selected stack frame's Locals and Arguments and keeps its search bounded.
+- Ambiguous, compressed, planar, YUV, unsupported packed, offset, or method-only layouts fail visibly instead of being guessed.
+
+## License And Support
+
+Raw Buffer Visualizer is licensed under the [MIT License](https://github.com/Noah8218/RawBufferVisualizer/blob/main/LICENSE). External libraries retain their own licenses; see [Third-Party Notices](https://github.com/Noah8218/RawBufferVisualizer/blob/main/THIRD-PARTY-NOTICES.md).
+
+The PCB demonstration photograph is CC0; its source and exact-file validation are recorded in the [industrial image test documentation](https://github.com/Noah8218/RawBufferVisualizer/blob/main/docs/industrial-image-testing.md). Incidental product marks in the photograph do not imply affiliation or endorsement.
+
+Source, documentation, and issue reporting are available in the [Raw Buffer Visualizer repository](https://github.com/Noah8218/RawBufferVisualizer).
