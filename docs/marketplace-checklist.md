@@ -232,6 +232,9 @@ docs\images\viewer-vs-docked-error.png
 docs\images\raw-buffer-visualizer-demo.gif
 docs\images\automatic-vision-inspector.png
 docs\images\vision-buffer-doctor.png
+docs\images\industrial-pcb-auto-inspector-pixel.png
+docs\images\industrial-pcb-buffer-doctor-before.png
+docs\images\industrial-pcb-buffer-doctor-recovered.png
 ```
 
 The first Marketplace media item must show the reviewed Visual Studio debugger workflow GIF, not the standalone viewer.

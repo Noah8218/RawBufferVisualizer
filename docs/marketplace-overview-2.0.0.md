@@ -2,7 +2,9 @@
 
 Inspect C# machine-vision images and raw 2D buffers directly in Visual Studio at a breakpoint. Raw Buffer Visualizer brings Bitmap, OpenCvSharp/Emgu Mat, pointers, managed buffers, and supported collections into one docked viewer without temporary image files or debug-only conversion code.
 
-![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
+![Raw Buffer Visualizer inspecting a real industrial PCB image in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-auto-inspector-pixel.png)
+
+The same real PCB scene is open through four supported live representations while pixel values, raw bytes, neighborhood statistics, dimensions, stride, and format remain visible in one docked window.
 
 ## How It Works
 
@@ -13,6 +15,8 @@ Inspect C# machine-vision images and raw 2D buffers directly in Visual Studio at
 5. Select a thumbnail to inspect pixels, source bytes, dimensions, stride, format, diagnostics, and comparison views.
 
 Preview and scanning remain explicit actions. Restoring a saved mapping, toggling a panel, or changing visibility does not scan the current frame or open an image.
+
+![Raw Buffer Visualizer debugger workflow in Visual Studio](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
 
 ## Supported Image Sources
 
@@ -39,6 +43,14 @@ The same checked validation contract is used for registered and mapped sources. 
 - Use **Diagnose Buffer** to rank plausible layouts for sheared, scrambled, dark, or incorrectly packed images.
 - Export PNG images and raw snapshots.
 - Open very large raw payloads through the file-backed tiled viewer.
+
+Incorrect stride metadata shears the same grayscale PCB scene while Buffer Doctor keeps the ranked alternatives visible:
+
+![Buffer Doctor ranks interpretations for an industrial PCB image with incorrect stride metadata](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-before.png)
+
+Selecting the top `Mono8`, 2448 x 2048, stride `2560` interpretation restores the image without another debugger round trip:
+
+![Buffer Doctor restores the industrial PCB image after applying the correct stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## What's New In 2.0.0
 
@@ -73,5 +85,7 @@ Community, Professional, and Enterprise are supported installation targets. Visu
 ## License And Support
 
 Raw Buffer Visualizer is licensed under the [MIT License](https://github.com/Noah8218/RawBufferVisualizer/blob/main/LICENSE). External libraries retain their own licenses; see [Third-Party Notices](https://github.com/Noah8218/RawBufferVisualizer/blob/main/THIRD-PARTY-NOTICES.md).
+
+The PCB demonstration photograph is CC0; its source and exact-file validation are recorded in the [industrial image test documentation](https://github.com/Noah8218/RawBufferVisualizer/blob/main/docs/industrial-image-testing.md). Incidental product marks in the photograph do not imply affiliation or endorsement.
 
 Source, documentation, and issue reporting are available in the [Raw Buffer Visualizer repository](https://github.com/Noah8218/RawBufferVisualizer).

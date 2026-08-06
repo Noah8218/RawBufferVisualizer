@@ -8,7 +8,7 @@ Use this shot list to record the debugger workflow without narration. The goal i
 - Open `RawBufferVisualizer.sln` in Visual Studio 2022 with the dark theme.
 - Set `RawBufferVisualizer.VisualizerDebuggee` as the startup project.
 - Keep only the editor, Watch or DataTip, and the docked Raw Buffer Visualizer visible.
-- Use the sample variables `matBgr24`, `rawMono8Snapshot`, and `imageDictionary` from `samples/RawBufferVisualizer.VisualizerDebuggee/Program.cs`.
+- For public portfolio capture, prefer the license-cleared `industrialOpenCvMat`, `industrialMonoSnapshot`, and `industrialBadStrideSnapshot` scenario from [Industrial Image Debug Testing](industrial-image-testing.md). Keep `matBgr24`, `rawMono8Snapshot`, and `imageDictionary` for deterministic regression demonstrations.
 - Record at 1920 x 1080 or 1600 x 900. Hide account names, unrelated projects, desktop notifications, and private paths.
 - Start with an empty Raw Buffer Visualizer image list.
 

@@ -108,6 +108,22 @@ Expected:
 5. A second **Scan Now** leaves seven rows and two errors without duplication.
 6. The persisted collection option is restored enabled inside the test session, then the pre-test user settings file is restored during cleanup.
 
+## Real Industrial Image Scenario
+
+Use a user-owned or license-cleared photograph and follow [Industrial Image Debug Testing](industrial-image-testing.md). Run the debuggee with:
+
+```text
+--industrial-image-debug "D:\path\industrial-image.jpg"
+```
+
+Expected at the initialized breakpoint:
+
+1. `industrialOpenCvMat`, `industrialEmguMat`, and `industrialFrame` preserve the same recognizable color scene through three supported memory representations.
+2. `industrialBitmap`, `industrialBgrSnapshot`, and `industrialMonoSnapshot` open through their registered debugger visualizers.
+3. `industrialBadStrideSnapshot` initially shows the real scene with a stride defect; Buffer Doctor ranks `Mono8`, 2448 x 2048, stride 2560 first, and applying it restores the image.
+4. Pixel hover, Fit, 1:1, wheel zoom, and pan remain usable on the real photograph.
+5. Capture evidence records the source page, license, downloaded-file SHA-256, Visual Studio version, and exact installed VSIX.
+
 ## UI Checks
 
 - The Visual Studio docked visualizer shows the image list, source type, dimensions, pixel format, byte count, diagnostics, and generated metadata path.
