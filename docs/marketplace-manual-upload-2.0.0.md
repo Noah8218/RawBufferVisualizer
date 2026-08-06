@@ -2,9 +2,9 @@
 
 Use this checklist only after the owner decides to publish version 2.0.0 **and** one consolidated current-source candidate has passed the complete release matrix, is committed/pushed, and has successful CI. The public Marketplace item currently remains `openvisionlab.RawBufferVisualizer` version `1.0.53.0`.
 
-## Current Blocker: Pre-Publish Update Gate And Owner Approval
+## Current Blocker: Owner Approval
 
-Do not upload the preserved P0 or superseded pre-P0 candidates. The exact consolidated candidate below passed the complete local matrix, its matching source is pushed, and CI succeeded. The pre-publish clean/update gate and explicit owner approval remain required.
+Do not upload the preserved P0 or superseded pre-P0 candidates. The exact consolidated candidate below passed the complete release matrix, matching source push and CI, clean installation, and the exact public `1.0.53.0 -> 2.0.0.0` in-place update gate. Explicit owner approval remains required.
 
 Qualified exact candidate, held until the blocker above is cleared:
 
@@ -15,7 +15,7 @@ Size: 1,923,731 bytes
 SHA-256: D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C
 Source commit: 0d3ac2011c1bfd5104645e1d16cdf72f9eae9b26
 GitHub Actions: 31059894280 (success)
-Disposition: qualification, source push, and CI complete; do not upload before the pre-publish clean/update gate passes and the owner explicitly approves
+Disposition: qualification, source push, CI, and pre-publish clean/update gate complete; do not upload before the owner explicitly approves
 ```
 
 Do not use `C:\Git\RawBufferVisualizer\artifacts\publish`, a preserved older candidate, or a fresh rebuild as a substitute for the exact bytes above. Complete the clean install and exact public `1.0.53.0 -> 2.0.0.0` in-place update steps in [release-runbook.md](release-runbook.md) before opening the Marketplace portal.
@@ -25,8 +25,11 @@ Do not use `C:\Git\RawBufferVisualizer\artifacts\publish`, a preserved older can
 - English Overview to upload: `C:\Git\RawBufferVisualizer\docs\marketplace-overview-2.0.0.md`
 - Korean review copy only; do not upload: `C:\Git\RawBufferVisualizer\docs\marketplace-overview-2.0.0.ko.md`
 - Release notes: `C:\Git\RawBufferVisualizer\docs\marketplace-release-notes-2.0.0.md`
+- Overview image assets: `docs\images\industrial-pcb-auto-inspector-pixel.png`, `docs\images\industrial-pcb-buffer-doctor-before.png`, and `docs\images\industrial-pcb-buffer-doctor-recovered.png`
 
 The Overview intentionally tells ordinary users to install the extension in a supported Visual Studio.
+
+Before pasting the Overview, confirm the image commit is present on GitHub `main` and all three `raw.githubusercontent.com/.../main/docs/images/...` URLs render. A feature branch alone is not sufficient because the Marketplace copy deliberately uses stable `main` URLs.
 
 ## Manual Update Steps
 

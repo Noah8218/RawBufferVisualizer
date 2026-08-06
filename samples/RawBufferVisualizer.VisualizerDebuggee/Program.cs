@@ -49,6 +49,13 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 return RunAutomaticCollectionsDebug();
             }
 
+            if (TryGetArgument(args, "--industrial-image-debug", out var industrialImagePath))
+            {
+                return RunIndustrialImageDebug(
+                    industrialImagePath,
+                    Array.IndexOf(args, "--no-break") < 0);
+            }
+
             if (TryGetArgument(args, "--emgu-tiff-smoke", out var tiffPath))
             {
                 return RunEmguTiffSmoke(tiffPath);
@@ -498,6 +505,199 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 CreateEmguMatMono8(64, 48),
                 CreateEmguMatBgr24(64, 48)
             };
+        }
+
+        private static int RunIndustrialImageDebug(string path, bool shouldBreak)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                Console.Error.WriteLine("Industrial image was not found: " + path);
+                return 2;
+            }
+
+            var pinnedViews = new List<PinnedRawBufferView>();
+            Bitmap? industrialBitmap = null;
+            Mat? industrialOpenCvMat = null;
+            Emgu.CV.Mat? industrialEmguMat = null;
+            try
+            {
+                industrialBitmap = LoadBgr24Bitmap(path);
+                var width = industrialBitmap.Width;
+                var height = industrialBitmap.Height;
+                var bgr24 = ReadBgr24Buffer(industrialBitmap);
+                var mono8 = ConvertBgr24ToMono8(bgr24, width, height);
+                const int doctorWidth = 2448;
+                const int doctorHeight = 2048;
+                const int doctorPadding = 112;
+                var doctorMono8 = ResizeMono8Nearest(
+                    mono8,
+                    width,
+                    height,
+                    doctorWidth,
+                    doctorHeight);
+                var paddedMono8 = AddRowPadding(
+                    doctorMono8,
+                    doctorWidth,
+                    doctorHeight,
+                    doctorPadding);
+
+                var industrialBgrSnapshot = RawBufferSnapshot.FromByteArray(
+                    bgr24,
+                    CreateDescriptor(width, height, width * 3, RawPixelFormat.BGR24, 8));
+                var industrialMonoSnapshot = RawBufferSnapshot.FromByteArray(
+                    mono8,
+                    CreateDescriptor(width, height, width, RawPixelFormat.Mono8, 8));
+                var industrialBadStrideSnapshot = RawBufferSnapshot.FromByteArray(
+                    paddedMono8,
+                    CreateDescriptor(
+                        doctorWidth,
+                        doctorHeight,
+                        doctorWidth,
+                        RawPixelFormat.Mono8,
+                        8));
+                var industrialFrameOwner = PinView(
+                    pinnedViews,
+                    "industrial-bgr24",
+                    bgr24,
+                    CreateDescriptor(width, height, width * 3, RawPixelFormat.BGR24, 8),
+                    3);
+                var industrialFrame = new IndustrialCameraFrame(industrialFrameOwner);
+                industrialOpenCvMat = CreateMat(width, height, MatType.CV_8UC3, bgr24);
+                industrialEmguMat = CreateEmguMat(
+                    width,
+                    height,
+                    Emgu.CV.CvEnum.DepthType.Cv8U,
+                    3,
+                    bgr24);
+
+                Console.WriteLine(
+                    "Industrial image debugger smoke ready: " +
+                    Path.GetFileName(path) + ", " +
+                    width.ToString() + " x " + height.ToString() +
+                    ", BGR24/Mono8; Buffer Doctor Mono8 " +
+                    doctorWidth.ToString() + " x " + doctorHeight.ToString() +
+                    " with " + doctorPadding.ToString() + " bytes of row padding.");
+                if (shouldBreak)
+                {
+                    Debugger.Break();
+                }
+
+                GC.KeepAlive(industrialBgrSnapshot);
+                GC.KeepAlive(industrialMonoSnapshot);
+                GC.KeepAlive(industrialBadStrideSnapshot);
+                GC.KeepAlive(industrialFrame);
+                GC.KeepAlive(industrialOpenCvMat);
+                GC.KeepAlive(industrialEmguMat);
+                GC.KeepAlive(industrialBitmap);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("Industrial image debugger smoke failed.");
+                Console.Error.WriteLine("Type: " + ex.GetType().FullName);
+                Console.Error.WriteLine("Message: " + ex.Message);
+                return 1;
+            }
+            finally
+            {
+                industrialOpenCvMat?.Dispose();
+                industrialEmguMat?.Dispose();
+                industrialBitmap?.Dispose();
+                foreach (var pinnedView in pinnedViews)
+                {
+                    pinnedView.Dispose();
+                }
+            }
+        }
+
+        private static Bitmap LoadBgr24Bitmap(string path)
+        {
+            using (var source = new Bitmap(path))
+            {
+                const int maxDimension = 1280;
+                var scale = Math.Min(1.0, maxDimension / (double)Math.Max(source.Width, source.Height));
+                var width = Math.Max(1, (int)Math.Round(source.Width * scale));
+                var height = Math.Max(1, (int)Math.Round(source.Height * scale));
+                var bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+                using (var graphics = Graphics.FromImage(bitmap))
+                {
+                    graphics.DrawImage(source, 0, 0, width, height);
+                }
+
+                return bitmap;
+            }
+        }
+
+        private static byte[] ReadBgr24Buffer(Bitmap bitmap)
+        {
+            var stride = checked(bitmap.Width * 3);
+            var buffer = new byte[checked(stride * bitmap.Height)];
+            var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
+            var data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, PixelFormat.Format24bppRgb);
+            try
+            {
+                var sourceStride = Math.Abs(data.Stride);
+                for (var y = 0; y < bitmap.Height; y++)
+                {
+                    var source = data.Scan0 +
+                        (data.Stride >= 0 ? y * data.Stride : (bitmap.Height - 1 - y) * sourceStride);
+                    Marshal.Copy(source, buffer, y * stride, stride);
+                }
+
+                return buffer;
+            }
+            finally
+            {
+                bitmap.UnlockBits(data);
+            }
+        }
+
+        private static byte[] ConvertBgr24ToMono8(byte[] bgr24, int width, int height)
+        {
+            var mono8 = new byte[checked(width * height)];
+            for (var index = 0; index < mono8.Length; index++)
+            {
+                var offset = index * 3;
+                mono8[index] = (byte)((
+                    (bgr24[offset] * 29) +
+                    (bgr24[offset + 1] * 150) +
+                    (bgr24[offset + 2] * 77) + 128) >> 8);
+            }
+
+            return mono8;
+        }
+
+        private static byte[] AddRowPadding(byte[] source, int width, int height, int rowPadding)
+        {
+            var stride = checked(width + rowPadding);
+            var padded = new byte[checked(stride * height)];
+            for (var y = 0; y < height; y++)
+            {
+                Buffer.BlockCopy(source, y * width, padded, y * stride, width);
+            }
+
+            return padded;
+        }
+
+        private static byte[] ResizeMono8Nearest(
+            byte[] source,
+            int sourceWidth,
+            int sourceHeight,
+            int width,
+            int height)
+        {
+            var resized = new byte[checked(width * height)];
+            for (var y = 0; y < height; y++)
+            {
+                var sourceY = (int)((long)y * sourceHeight / height);
+                for (var x = 0; x < width; x++)
+                {
+                    var sourceX = (int)((long)x * sourceWidth / width);
+                    resized[(y * width) + x] = source[(sourceY * sourceWidth) + sourceX];
+                }
+            }
+
+            return resized;
         }
 
         private static int RunBufferDoctorDebug()

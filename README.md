@@ -12,13 +12,17 @@ Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-back
 
 Vendor-neutral `RawBufferView` remains the supported path for camera-SDK buffers. Direct vendor-named adapters are release-blocked until the applicable SDK license and compatibility wording are cleared in writing for this individual open-source project. Camera acquisition/control and all 3D point-cloud or depth-container visualization remain out of scope. See the [vendor SDK license policy](docs/vendor-sdk-license-policy.md) and [SDK adapter roadmap](docs/sdk-adapter-roadmap.md).
 
+![Raw Buffer Visualizer inspecting a real industrial PCB image in Visual Studio](docs/images/industrial-pcb-auto-inspector-pixel.png)
+
+[Demo image provenance and validation](docs/industrial-image-testing.md)
+
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
 ## Current development candidate: 2.0.0 (qualified, unpublished)
 
-Visual Studio Marketplace continues to serve the immutable public `1.0.53.0` package. The current `2.0.0.0` candidate adds Connect Doctor to the earlier P0 vendor-neutral 2D safety work and passes the complete consolidated local release matrix on the same exact bytes in Visual Studio 2022 and Visual Studio 2026. Matching source is pushed on `origin/main` at `0d3ac20`, and GitHub Actions run [#31059894280](https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31059894280) succeeded. The pre-publish clean/update gate, owner upload approval, publication, and public readback remain separate gates.
+Visual Studio Marketplace continues to serve the immutable public `1.0.53.0` package. The current `2.0.0.0` candidate adds Connect Doctor to the earlier P0 vendor-neutral 2D safety work and passes the complete consolidated local release matrix on the same exact bytes in Visual Studio 2022 and Visual Studio 2026. Matching source is pushed on `origin/main` at `0d3ac20`, and GitHub Actions run [#31059894280](https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31059894280) succeeded. The exact public `1.0.53.0 -> 2.0.0.0` in-place update also passed on serviced VS2022 without uninstall, repair, or skipped-package reset. Owner upload approval, publication, and public readback remain separate gates.
 
 The `2.0.0` candidate adds:
 
@@ -83,7 +87,13 @@ When an image looks sheared, too dark, scrambled, or incorrectly packed, select 
 
 Buffer Doctor is a buffer-layout assistant, not a semantic image detector. RGB/BGR and Bayer phase can remain inherently ambiguous, so the UI keeps tied candidates visible for the developer to confirm.
 
-![Vision Buffer Doctor ranks and applies plausible raw-buffer interpretations](docs/images/vision-buffer-doctor.png)
+Incorrect stride metadata shears the same industrial image:
+
+![Buffer Doctor ranks interpretations for an industrial PCB image with incorrect stride metadata](docs/images/industrial-pcb-buffer-doctor-before.png)
+
+Selecting the top `Mono8`, stride `2560` interpretation restores the image:
+
+![Buffer Doctor restores the industrial PCB image after applying the correct stride](docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## One-Minute Quick Start
 
@@ -476,7 +486,7 @@ Recorded evidence is split between the locally qualified `2.0.0` candidate, curr
 
 | Check | Result |
 | --- | --- |
-| Current qualified `2.0.0` candidate | 1,923,731 bytes; SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The complete consolidated local matrix passed on the same bytes: Release build/self-tests, five Emgu plus five OpenCvSharp versions, candidate/build/install equality, Break-to-Continue safety, Connect Doctor, and installed regressions on VS2022 and VS2026. Source commit `0d3ac20` is pushed and CI run `31059894280` succeeded; the pre-publish clean/update gate, owner upload approval, and public readback remain separate. |
+| Current qualified `2.0.0` candidate | 1,923,731 bytes; SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The complete consolidated local matrix passed on the same bytes: Release build/self-tests, five Emgu plus five OpenCvSharp versions, candidate/build/install equality, Break-to-Continue safety, Connect Doctor, and installed regressions on VS2022 and VS2026. Source commit `0d3ac20`, CI run `31059894280`, clean install, and exact public `1.0.53.0 -> 2.0.0.0` in-place update passed; owner upload approval and public readback remain separate. |
 | Preserved P0 `2.0.0` safety baseline | 1,917,791 bytes; SHA-256 `3C2DCC1E9E38990D1C17547331E15C5EE344ABEA07D3936B722747B0670AE7EE`. Aggregate tests, the ten-version legacy matrix, and installed Continue invalidation passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`; see [release-qualification-2.0.0.md](docs/release-qualification-2.0.0.md). Source has advanced, so these bytes are a baseline rather than the current upload asset. |
 | Superseded pre-P0 `2.0.0` candidate | 1,914,538 bytes; SHA-256 `2A6D94016B03430BDF2EF5ECCF6282D32896C02AEFB3A9EB8F5519AFE4B13512`. Preserved only as a defect baseline because live rows remained marked `live` after Continue/process exit; never upload it. |
 | Current public `1.0.53` package | 1,914,615 bytes; SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Gallery metadata, the downloadable VSIX, manifest `1.0.53.0`, and rendered Overview were read back on 2026-08-05 KST and match the qualified candidate. |

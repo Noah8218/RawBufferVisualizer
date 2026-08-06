@@ -265,11 +265,17 @@ Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
 The consolidated candidate passed the P0 release matrix against one exact byte set: full Release build/self-tests, release communication/package guards, ten-version OpenCvSharp/Emgu compatibility, candidate/build/install equality, installed Break-to-Continue invalidation and copied-array retention on both IDEs, and the Connect Doctor scenario. Matching source commit `0d3ac20` is pushed, and CI run `31059894280` succeeded.
 
-### Next priority: pre-publish clean and in-place update gate
+### Completed priority: pre-publish clean and in-place update gate
 
 Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-Using the exact qualified candidate, prove a clean install and an exact public `1.0.53.0 -> 2.0.0.0` in-place update on current serviced VS2022 `17.14` without uninstall, repair, or skipped-package reset. Publication remains a separate explicit owner action.
+The exact qualified candidate passed a clean install and an exact public `1.0.53.0 -> 2.0.0.0` in-place update on serviced VS2022 `17.14.37516.0` without uninstall, repair, or skipped-package reset. Core registered/mapped, Automatic Inspector, collection, mixed-library, menu-count, package-protocol, and viewer interaction checks passed. Publication remains a separate explicit owner action.
+
+### Next priority: owner-approved Marketplace publication
+
+Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+
+After explicit owner approval, upload only the exact qualified VSIX recorded in [Release Qualification 2.0.0](release-qualification-2.0.0.md). Do not rebuild or substitute another candidate. Public readback, real Marketplace update, tag, and GitHub Release remain later verification steps.
 
 ### Next: supportability and compatibility growth
 

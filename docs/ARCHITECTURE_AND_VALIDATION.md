@@ -422,7 +422,7 @@ Current unpublished `2.0.0.0` candidate, consolidated local qualification on 202
 - seven package assemblies match the candidate and both installations by SHA-256;
 - installed VS2022 and VS2026 each invalidated exactly five live sources after Continue while retaining the copied array, exposed and selected `Mono12PackedLsb 640 x 484 stride 960` draft-only until Save, and passed Buffer Doctor, Automatic Collections, Multi-Library Hybrid, and Environment toggle regressions with zero package-protocol errors;
 - evidence root `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806`, with canonical verdict `consolidated-local-release-verdict.json`;
-- qualification, source push at `0d3ac20`, and CI run `31059894280` are complete. The pre-publish clean/update gate, owner upload approval, publication, and public readback remain separate gates.
+- qualification, source push at `0d3ac20`, CI run `31059894280`, clean installation, and exact public `1.0.53.0 -> 2.0.0.0` in-place update are complete. Owner upload approval, publication, and public readback remain separate gates.
 
 Preserved unpublished `2.0.0.0` P0 full-safety qualification baseline, qualified 2026-08-06 KST:
 

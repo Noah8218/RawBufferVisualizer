@@ -14,7 +14,7 @@ This is the canonical continuation document for the next conversation. Read it a
 | Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. The complete consolidated installed matrix passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)`. |
 | Public Marketplace version | `1.0.53.0`; Gallery updated `2026-08-05T01:54:21.537Z`; public VSIX 1,914,615 bytes, SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3` |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public Marketplace Preview `1.0.53` remains the immutable published baseline. The exact `2.0.0` candidate passed the full consolidated matrix on both IDE generations, and its matching source push and CI are complete. The next priority is the pre-publish clean and in-place update gate; publication remains owner-controlled. |
+| Product stage | Public Marketplace Preview `1.0.53` remains the immutable published baseline. The exact `2.0.0` candidate passed the full consolidated matrix on both IDE generations, matching source push and CI, clean installation, and exact public `1.0.53.0 -> 2.0.0.0` in-place update. The next priority is owner-approved Marketplace publication. |
 | Commit scope | Commit `0d3ac20` contains the earlier release-state/CRLF follow-up, P0 safety work, Connect Doctor Core/UI/test/script/documentation changes, and consolidated local qualification records. Public `1.0.53` Marketplace state is unchanged. The explicitly excluded pre-existing untracked paths below do not belong to this work. |
 
 Public links:
@@ -51,7 +51,7 @@ add-scan-locals-command.ps1
 
 The current P0 `2.0.0.0` VSIX was installed into both IDEs. In the same smart-type debug scenario each host detected eight candidates, opened six, exposed one mapping candidate and one isolated failure, and rendered a `640x484 Mono8 live` image. Continue/process exit marked five process-backed rows `Unavailable`, kept the copied `companyArrayFrame` available, and logged `invalidated 5 live source(s)`. Seven package-owned assemblies match the candidate, current Release build, and both installations by SHA-256. VS2022 also passed the Environment open/second-click-close regression. The test sessions were terminated after evidence capture; only transient `/debugexe` solution metadata was discarded and no repository file was saved from Visual Studio. See [release-qualification-2.0.0.md](release-qualification-2.0.0.md).
 
-The current consolidated candidate is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-connect-doctor-docs-20260806\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 1,923,731 bytes, SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The same bytes passed the P0 Break-to-Continue matrix, five Emgu and five OpenCvSharp versions, package/build/install equality, Connect Doctor, Buffer Doctor, Automatic Collections, Multi-Library Hybrid, and Environment Check on both IDEs. Canonical evidence is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806\consolidated-local-release-verdict.json`. Matching source commit `0d3ac20` is pushed and CI run `31059894280` succeeded. Upload remains blocked by the pre-publish clean/update gate and explicit owner approval.
+The current consolidated candidate is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-connect-doctor-docs-20260806\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 1,923,731 bytes, SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The same bytes passed the P0 Break-to-Continue matrix, five Emgu and five OpenCvSharp versions, package/build/install equality, Connect Doctor, Buffer Doctor, Automatic Collections, Multi-Library Hybrid, and Environment Check on both IDEs. Canonical evidence is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806\consolidated-local-release-verdict.json`. Matching source commit `0d3ac20` is pushed, CI run `31059894280` succeeded, and the pre-publish clean/update gate passed. Upload remains blocked only by explicit owner approval.
 
 ## Windows Reinstall Checkpoint
 
@@ -376,19 +376,19 @@ Boundary: the removed direct debugger visualizer passed a technical experiment o
 
 ## Next Priorities
 
-The complete consolidated 2.0 qualification, source push, and CI are complete. External publication actions still require explicit owner instruction.
+The complete consolidated 2.0 qualification, source push, CI, and pre-publish clean/update gate are complete. External publication actions still require explicit owner instruction.
 
-1. Run the pre-publish clean and in-place update gate | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+1. Publish only the exact qualified 2.0 VSIX after owner approval | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-   On current serviced VS2022 `17.14`, prove both a clean install and an exact public `1.0.53.0 -> 2.0.0.0` in-place update without uninstall, repair, or skipped-package reset. Use the exact recorded VSIX; do not rebuild or replace it.
+   Use [marketplace-manual-upload-2.0.0.md](marketplace-manual-upload-2.0.0.md) only after the owner explicitly approves upload. Upload the exact recorded path/hash; never substitute the preserved P0, repository publish-path, or freshly rebuilt bytes.
 
-2. Publish only the exact qualified 2.0 VSIX after owner approval | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
+2. Verify public bytes, Overview, and real `1.0.53 -> 2.0.0` Marketplace update | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Use [marketplace-manual-upload-2.0.0.md](marketplace-manual-upload-2.0.0.md) only after priority 1 closes and the owner explicitly approves upload. Upload the exact recorded path/hash; never substitute the preserved P0, repository publish-path, or freshly rebuilt bytes.
+   After publication, download the public VSIX and require exact size/hash/manifest/Overview readback. Update a Marketplace-served `1.0.53` profile without uninstall, repair, or `/ResetSkipPkgs`, then repeat the core registered/mapped workflow and Continue invalidation.
 
-3. Verify the real public `1.0.53 -> 2.0.0` update and create release bookkeeping | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+3. Create final release bookkeeping | Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-   On a Marketplace-updated profile, require the core registered/mapped workflow and Continue invalidation to pass without uninstall, repair, or `/ResetSkipPkgs`. Create/push the final 2.0 tag and GitHub Release only after Marketplace readback identifies the same consolidated bytes; do not reuse the historical unpushed `v1.0.45` tag.
+   Create/push the final 2.0 tag and GitHub Release only after Marketplace readback identifies the same consolidated bytes; do not reuse the historical unpushed `v1.0.45` tag.
 
 Blocked future work: any direct proprietary camera/frame-grabber/board adapter requires applicable written vendor rights, required legal review, and explicit owner implementation approval first. Do not spend model tokens on implementation until those prerequisites exist.
 
@@ -433,12 +433,12 @@ Expected:
 - public and qualified vendor-safe `1.0.53`: 1,914,615 bytes, `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`, manifest `1.0.53.0`;
 - superseded pre-P0 `2.0.0`: 1,914,538 bytes, `2A6D94016B03430BDF2EF5ECCF6282D32896C02AEFB3A9EB8F5519AFE4B13512`, manifest `2.0.0.0`; historical baseline only, do not publish;
 - preserved full-safety P0 baseline `2.0.0`: 1,917,791 bytes, `3C2DCC1E9E38990D1C17547331E15C5EE344ABEA07D3936B722747B0670AE7EE`, manifest `2.0.0.0`;
-- current qualified `2.0.0`: 1,923,731 bytes, `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`, manifest `2.0.0.0`; complete local matrix, source push, and CI passed, held for the pre-publish update gate and owner approval;
+- current qualified `2.0.0`: 1,923,731 bytes, `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`, manifest `2.0.0.0`; complete matrix, source push, CI, clean install, and in-place update passed, held for owner approval;
 - historical pre-feedback `1.0.53`: 1,911,715 bytes, `EB94CCE2144E1325FDFDB2DF8A63C383F9B4E82DFD2F8EF504CAEECB99220534`, manifest `1.0.53.0`; do not publish it;
 - intermediate essential-only development `1.0.53`: 1,907,942 bytes, `297A01104993CB7C524EE418759FDF0EAB41D07A0766A018B1A475F793219CF9`, manifest `1.0.53.0`; superseded by the panel-consistency follow-up;
 - newest panel-consistency development `1.0.53`: 1,908,045 bytes, `5EC07758A9592F9F47C7479B005E205AA255A60D6F1400586A37F5B3B8024C23`, manifest `1.0.53.0`; installed UI evidence only, not yet canonical.
 
-Do not rebuild into or overwrite preserved artifacts. Read `docs/release-qualification-2.0.0.md` and `docs/release-qualification-1.0.53.md` first. Marketplace serves exact `1.0.53.0`; the P0 bytes are a preserved safety baseline and the newer exact candidate is qualified. Source push and CI are complete. The pre-publish update gate, Marketplace upload, Git tag, and GitHub Release still require their stated gates and explicit user instruction.
+Do not rebuild into or overwrite preserved artifacts. Read `docs/release-qualification-2.0.0.md` and `docs/release-qualification-1.0.53.md` first. Marketplace serves exact `1.0.53.0`; the P0 bytes are a preserved safety baseline and the newer exact candidate is qualified. Source push, CI, and the pre-publish update gate are complete. Marketplace upload, Git tag, and GitHub Release still require their stated gates and explicit user instruction.
 
 ## Current Release Artifacts
 
@@ -560,7 +560,7 @@ Verification: see [release-qualification-2.0.0.md](release-qualification-2.0.0.m
 
 Evidence: exact VSIX and hash above; evidence root `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806`; canonical verdict `consolidated-local-release-verdict.json`; candidate source commit `0d3ac2011c1bfd5104645e1d16cdf72f9eae9b26`; successful CI run `31059894280`.
 
-Boundary / next dependency: Public Marketplace remains `1.0.53.0`. Candidate source commit `0d3ac20` is pushed and CI succeeded. The pre-publish clean and in-place update gate, publication/readback, and a real public `1.0.53 -> 2.0.0` update were not performed. Preserved older candidates are non-publishable. Direct proprietary SDK work remains blocked below.
+Boundary / next dependency: Public Marketplace remains `1.0.53.0`. Candidate source commit `0d3ac20`, CI, clean installation, and exact local public-baseline `1.0.53.0 -> 2.0.0.0` in-place update passed. Publication/readback and a real Marketplace-served `1.0.53 -> 2.0.0` update were not performed. Preserved older candidates are non-publishable. Direct proprietary SDK work remains blocked below.
 
 ## Connect Doctor Feature Closure
 
@@ -574,7 +574,35 @@ Verification: aggregate self-tests; Release solution build; current-source Smart
 
 Evidence: exact VSIX and hash above; consolidated verdict under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806`; detailed contract in [smart-type-mapper-design.md](smart-type-mapper-design.md) and [release-qualification-2.0.0.md](release-qualification-2.0.0.md).
 
-Boundary / next dependency: Connect Doctor is included in the completed release closure. Source push and CI are complete. The exact package remains blocked from upload until the pre-publish clean/update gate passes and the owner explicitly authorizes publication.
+Boundary / next dependency: Connect Doctor is included in the completed release closure. Source push, CI, and pre-publish clean/update gate are complete. The exact package remains blocked from upload until the owner explicitly authorizes publication.
+
+## 2.0.0 Pre-Publish Clean/Update Closure
+
+Status: Complete
+
+Scope: Exact candidate clean install and exact public `1.0.53.0 -> 2.0.0.0` in-place update on serviced VS2022 Community `17.14.37516.0`, plus portfolio capture selection.
+
+Acceptance criteria: clean install -> pass; public baseline package/install equality -> 7/7; update without uninstall, repair, or `/ResetSkipPkgs` -> pass; candidate/install equality -> 7/7; Automatic Inspector -> pass; Automatic Collections -> pass; Multi-Library Hybrid -> 9 documents/0 errors after direct user-equivalent Visualizer selection; menu counts -> 1/1; package-protocol errors -> 0; Fit/1:1/wheel/pan/Manual resize -> pass; portfolio images -> six reviewed captures.
+
+Verification: `Test-VisualStudioMarketplaceUpdate.ps1`; installed `AutomaticVisionInspector`, `AutomaticCollections`, and `MultiLibraryHybrid` scenarios; `SmokeDockedLayoutWidths.ps1` at 540/900/1160; package/install SHA-256 comparison; visual review of all selected images.
+
+Evidence: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\prepublish-update-gate-20260806`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\portfolio-captures-20260806\selected`.
+
+Boundary / next dependency: This is local pre-publish evidence, not Marketplace publication or a Marketplace-served update. The exact candidate now waits for explicit owner publication approval. Two automated Bitmap Visualizer clicks timed out before one manual-assisted pass; evidence identifies this as a harness-control selection issue rather than a product handoff failure.
+
+## Industrial Photograph Debug Validation Closure
+
+Status: Complete
+
+Scope: Add an opt-in real-photograph debuggee route using one reviewed CC0 PCB image; exercise registered Bitmap/OpenCvSharp/Emgu CV paths, Automatic Inspector, pixel inspection, and Buffer Doctor stride recovery; track three reviewed screenshots and use them in the English/Korean 2.0 Marketplace Overview while retaining the existing workflow GIF.
+
+Acceptance criteria: reusable industrial-image debug route -> pass; source/license/hash recorded -> pass; Debug build and no-Break conversion smoke -> pass; aggregate self-tests -> pass; Automatic Inspector opens four supported live representations -> 4/4; registered Bitmap visualizer opens 1280 x 960 `BGR24` -> pass; incorrect 2448 x 2048 `Mono8` stride is visually broken -> pass; first Buffer Doctor row is `Mono8` stride 2560 and restores the PCB scene -> pass; three current screenshots visually reviewed and tracked -> pass; English/Korean Overview references all three screenshots and retains the workflow GIF -> pass.
+
+Verification: Debug debuggee build -> 0 warnings and 0 errors; `--industrial-image-debug <CC0 PCB> --no-break` -> exit 0; Release `RawBufferVisualizer.Tests` -> pass; actual Visual Studio 2022 Community `17.14.37516.0` interaction on leftmost `\\.\DISPLAY2` -> Automatic Inspector 4 opened/0 failed and Buffer Doctor recovery pass.
+
+Evidence: [industrial-image-testing.md](industrial-image-testing.md); tracked screenshots under `docs/images/industrial-pcb-*.png`; [marketplace-overview-2.0.0.md](marketplace-overview-2.0.0.md); [marketplace-overview-2.0.0.ko.md](marketplace-overview-2.0.0.ko.md); source SHA-256 `E833DFE885BBB08D85F091D452A0B4FB7182C7B8A08EFF103AC49522597C9D46`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\portfolio-captures-industrial-20260806`; detailed record `D:\OpenVisionLab-TestData\RawBufferVisualizer\industrial-image-tests-20260806\industrial-image-validation-20260806.md`.
+
+Boundary / next dependency: This proves real CC0 photographic content through supported in-memory representations. It does not prove a physical camera, proprietary vendor SDK, transport, acquisition timing, exposure control, or sensor-native Bayer/packed data. The original source photograph remains outside Git; only the three reviewed Visual Studio captures are tracked. Public Marketplace remains `1.0.53.0` until the owner uploads 2.0.
 
 ## Future Direct Proprietary SDK Gate
 

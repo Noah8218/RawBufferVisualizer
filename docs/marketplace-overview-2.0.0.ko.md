@@ -4,7 +4,9 @@
 
 C# 머신비전 이미지와 raw 2D 버퍼를 중단점에서 Visual Studio 안에서 바로 검사합니다. Raw Buffer Visualizer는 임시 이미지 저장이나 디버그 전용 변환 코드 없이 Bitmap, OpenCvSharp/Emgu Mat, 포인터, managed buffer와 지원 컬렉션을 하나의 docked viewer에 모아 줍니다.
 
-![Visual Studio에서 실행 중인 Raw Buffer Visualizer 디버거 작업 흐름](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
+![Visual Studio에서 실제 산업용 PCB 이미지를 검사하는 Raw Buffer Visualizer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-auto-inspector-pixel.png)
+
+동일한 실제 PCB 장면을 지원되는 네 가지 live 표현으로 열었으며, 하나의 docked window에서 픽셀 값, 원본 바이트, 주변 통계, 크기, stride와 형식을 함께 확인할 수 있습니다.
 
 ## 사용 방법
 
@@ -15,6 +17,8 @@ C# 머신비전 이미지와 raw 2D 버퍼를 중단점에서 Visual Studio 안�
 5. 썸네일을 선택해 픽셀, 원본 바이트, 크기, stride, 형식, 진단과 비교 화면을 확인합니다.
 
 Preview와 scan은 사용자가 명시적으로 실행할 때만 동작합니다. 저장된 mapping 복원, 패널 열기/닫기 또는 표시 상태 변경은 현재 frame을 scan하거나 이미지를 열지 않습니다.
+
+![Visual Studio에서 실행 중인 Raw Buffer Visualizer 디버거 작업 흐름](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
 
 ## 지원 이미지 소스
 
@@ -41,6 +45,14 @@ Preview와 scan은 사용자가 명시적으로 실행할 때만 동작합니다
 - **Diagnose Buffer**로 기울어지거나 깨지거나 어둡거나 packed 해석이 잘못된 이미지의 가능한 layout을 순위별로 확인합니다.
 - PNG 이미지와 raw snapshot을 내보냅니다.
 - 매우 큰 raw payload는 file-backed tiled viewer로 엽니다.
+
+잘못된 stride metadata는 동일한 grayscale PCB 장면을 기울어지게 표시하며, Buffer Doctor는 순위가 매겨진 대안을 계속 보여 줍니다.
+
+![잘못된 stride metadata가 적용된 산업용 PCB 이미지의 해석 후보](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-before.png)
+
+최상위 `Mono8`, 2448 x 2048, stride `2560` 해석을 선택하면 추가 디버거 왕복 없이 이미지가 복구됩니다.
+
+![올바른 stride를 적용해 복구된 산업용 PCB 이미지](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## 2.0.0의 새로운 내용
 
@@ -75,5 +87,7 @@ Community, Professional, Enterprise를 지원합니다. Visual Studio 2019, Visu
 ## 라이선스와 지원
 
 Raw Buffer Visualizer는 [MIT License](https://github.com/Noah8218/RawBufferVisualizer/blob/main/LICENSE)로 배포됩니다. 외부 라이브러리는 각 라이선스를 따르며 [Third-Party Notices](https://github.com/Noah8218/RawBufferVisualizer/blob/main/THIRD-PARTY-NOTICES.md)에서 확인할 수 있습니다.
+
+PCB 데모 사진은 CC0이며 출처와 정확한 파일 검증은 [산업용 이미지 테스트 문서](https://github.com/Noah8218/RawBufferVisualizer/blob/main/docs/industrial-image-testing.md)에 기록되어 있습니다. 사진에 우연히 포함된 제품 표시는 제휴나 보증을 의미하지 않습니다.
 
 소스, 문서와 이슈 등록은 [Raw Buffer Visualizer 저장소](https://github.com/Noah8218/RawBufferVisualizer)에서 확인할 수 있습니다.
