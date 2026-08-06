@@ -1,4 +1,8 @@
-Raw Buffer Visualizer 2.0.0
+Raw Buffer Visualizer 2.0.1
+
+FIXED
+- Raised the extension package version so Visual Studio recognizes this package as an update to the existing 2.0 Marketplace entry.
+- Kept the existing Marketplace extension identity and the complete 2.0 feature set unchanged.
 
 NEW
 - Connect Doctor ranks bounded interpretations inside Connect Your Buffer. Selecting one updates only the draft and preview; Save Mapping remains the persistence boundary.
@@ -21,4 +25,4 @@ SCOPE
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
 
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#200
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#201

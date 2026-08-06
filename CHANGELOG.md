@@ -4,7 +4,16 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.0` changes are queued.
+No post-`2.0.1` changes are queued.
+
+## [2.0.1] - 2026-08-06
+
+Raw Buffer Visualizer `2.0.1` republishes the complete 2.0 feature set at a higher extension version so Visual Studio can recognize it as a Marketplace update.
+
+### Fixed
+
+- Raised the VSIX, assembly, product-registration, and release-communication versions from `2.0.0` to `2.0.1` without changing the Marketplace extension identity.
+- Prepared a newly built `2.0.1.0` package so installations offered the earlier Marketplace entry can receive the complete 2.0 payload through the normal update path.
 
 ## [2.0.0] - 2026-08-06
 
@@ -148,7 +157,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...v2.0.0
 [1.0.53]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.53
 [1.0.52]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.52

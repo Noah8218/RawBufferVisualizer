@@ -7,9 +7,9 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.0.0";
+        public const string CurrentVersion = "2.0.1";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#200";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#201";
 
         public const string HighlightEnvironmentCheck =
             "One 2D buffer contract covers registered and mapped sources";
