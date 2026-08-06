@@ -10,8 +10,6 @@
 
 Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio 2022 or Visual Studio 2026 window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
 
-Vendor-neutral `RawBufferView` remains the supported path for camera-SDK buffers. Direct vendor-named adapters are release-blocked until the applicable SDK license and compatibility wording are cleared in writing for this individual open-source project. Camera acquisition/control and all 3D point-cloud or depth-container visualization remain out of scope. See the [vendor SDK license policy](docs/vendor-sdk-license-policy.md) and [SDK adapter roadmap](docs/sdk-adapter-roadmap.md).
-
 ![Raw Buffer Visualizer inspecting a real industrial PCB image in Visual Studio](docs/images/industrial-pcb-auto-inspector-pixel.png)
 
 [Demo image provenance and validation](docs/industrial-image-testing.md)
@@ -20,21 +18,16 @@ Vendor-neutral `RawBufferView` remains the supported path for camera-SDK buffers
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## Current development candidate: 2.0.0 (qualified, unpublished)
+## Raw Buffer Visualizer 2.0.0
 
-Visual Studio Marketplace continues to serve the immutable public `1.0.53.0` package. The current `2.0.0.0` candidate adds Connect Doctor to the earlier P0 vendor-neutral 2D safety work and passes the complete consolidated local release matrix on the same exact bytes in Visual Studio 2022 and Visual Studio 2026. Matching source is pushed on `origin/main` at `0d3ac20`, and GitHub Actions run [#31059894280](https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31059894280) succeeded. The exact public `1.0.53.0 -> 2.0.0.0` in-place update also passed on serviced VS2022 without uninstall, repair, or skipped-package reset. Owner upload approval, publication, and public readback remain separate gates.
-
-The `2.0.0` candidate adds:
+Version `2.0.0` adds:
 
 - one documented contract for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointers, and mapped `byte[]`, `ushort[]`, and `float[]` buffers;
 - shared checked fail-closed validation for dimensions, stride, buffer length, format/order enum values, arithmetic overflow, and valid bits before metadata transfer;
 - preserved valid `Mono16` values and fixed 10/12-bit packed-layout rules;
-- neutral executable fixtures that verify descriptor fields and transferred bytes without loading a proprietary SDK;
 - controlled `Unavailable` state after Continue/process exit, with live reads cancelled and copied managed buffers retained;
 - debugger-session gating that prevents delayed pre-Continue handoffs from reopening in Run Mode or a later Break;
 - **Connect Doctor** inside Connect Your Buffer: ranked bounded interpretations update only the visible draft and preview until **Save Mapping** is selected.
-
-The candidate keeps VSPackage GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, the existing Marketplace extension ID, the explicit Preview workflow, and the qualified Visual Studio 2022/2026 baseline. It does not add camera acquisition/control, PLC/I/O, 3D visualization, or proprietary SDK binaries.
 
 When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.0`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
@@ -148,8 +141,8 @@ Other debugger visualizers have different feature sets. This comparison describe
 
 | Product | Supported versions | Current qualification |
 | --- | --- | --- |
-| Visual Studio 2022 | `17.14` or newer, x64 | Exact frozen `2.0.0.0` candidate passed package equality, registration, release/environment UI, persisted settings, eight-buffer automatic inspection, and registered `RawBufferView` visualization on Community `17.14.37516.0`. |
-| Visual Studio 2026 | Stable `18.x`, x64 | The same unchanged candidate passed the equivalent checks on Community `18.8.12023.21`. |
+| Visual Studio 2022 | `17.14` or newer, x64 | Version `2.0.0.0` passed package equality, registration, release/environment UI, persisted settings, eight-buffer automatic inspection, and registered `RawBufferView` visualization on Community `17.14.37516.0`. |
+| Visual Studio 2026 | Stable `18.x`, x64 | The same `2.0.0.0` package passed the equivalent checks on Community `18.8.12023.21`. |
 
 Community, Professional, and Enterprise editions are installation targets. Visual Studio 2019, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets.
 
@@ -189,7 +182,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Public `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Public `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Public `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the vendor-neutral mapping foundation. Locally qualified `2.0.0.0` locks the shared vendor-neutral 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` adds the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -205,7 +198,7 @@ Use `Extensions > Manage Extensions > Updates` in Visual Studio. After the updat
 
 If a lower `Raw Buffer Visualizer` tab from version `1.0.34.0` or earlier is still present in a saved Visual Studio layout, close that tab once. Current Marketplace packages publish the debugger providers and automatically close their temporary handoff host, so new invocations remain in the main docked viewer.
 
-For `1.0.48` and later, a release must not be qualified by manually writing a package `CodeBase`. The exact `2.0.0` candidate passed ordinary installed-VSIX qualification without registration repair or `/ResetSkipPkgs`; this does not replace the separate post-publication update/readback check from public `1.0.53`. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
+Version `2.0.0` passed ordinary installed-VSIX qualification and an in-place update from `1.0.53` without registration repair or `/ResetSkipPkgs`. If an older developer installation left a stale registration, close all Visual Studio windows and use the repair script only as a local migration/recovery step:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
@@ -482,16 +475,15 @@ If disk usage looks high after a crashed debug session, close Visual Studio and 
 %TEMP%\RawBufferVisualizer\VisualStudio
 ```
 
-Recorded evidence is split between the locally qualified `2.0.0` candidate, current public `1.0.53`, previous public baselines, the preserved failed `1.0.51` candidate, and historical stress/compatibility runs:
+Recorded evidence covers `2.0.0`, previous releases, and historical stress/compatibility runs:
 
 | Check | Result |
 | --- | --- |
-| Current qualified `2.0.0` candidate | 1,923,731 bytes; SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The complete consolidated local matrix passed on the same bytes: Release build/self-tests, five Emgu plus five OpenCvSharp versions, candidate/build/install equality, Break-to-Continue safety, Connect Doctor, and installed regressions on VS2022 and VS2026. Source commit `0d3ac20`, CI run `31059894280`, clean install, and exact public `1.0.53.0 -> 2.0.0.0` in-place update passed; owner upload approval and public readback remain separate. |
+| Raw Buffer Visualizer `2.0.0` | 1,923,731 bytes; SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The complete matrix passed on the same bytes: Release build/self-tests, five Emgu plus five OpenCvSharp versions, build/package/install equality, Break-to-Continue safety, Connect Doctor, installed regressions on VS2022 and VS2026, clean installation, and the `1.0.53.0 -> 2.0.0.0` in-place update. |
 | Preserved P0 `2.0.0` safety baseline | 1,917,791 bytes; SHA-256 `3C2DCC1E9E38990D1C17547331E15C5EE344ABEA07D3936B722747B0670AE7EE`. Aggregate tests, the ten-version legacy matrix, and installed Continue invalidation passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`; see [release-qualification-2.0.0.md](docs/release-qualification-2.0.0.md). Source has advanced, so these bytes are a baseline rather than the current upload asset. |
-| Superseded pre-P0 `2.0.0` candidate | 1,914,538 bytes; SHA-256 `2A6D94016B03430BDF2EF5ECCF6282D32896C02AEFB3A9EB8F5519AFE4B13512`. Preserved only as a defect baseline because live rows remained marked `live` after Continue/process exit; never upload it. |
-| Current public `1.0.53` package | 1,914,615 bytes; SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Gallery metadata, the downloadable VSIX, manifest `1.0.53.0`, and rendered Overview were read back on 2026-08-05 KST and match the qualified candidate. |
-| Current `1.0.53` installed runtime | The same package passed ReleaseAnnouncement, Environment Check, AutomaticCollections, MultiLibraryHybrid, Smart Type Mapper, persisted mapping, exact menu counts, registration, and protocol diagnostics on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21`. The durable result is recorded in [release-qualification-1.0.53.md](docs/release-qualification-1.0.53.md). |
-| Proprietary vendor adapter boundary | The historical engineering experiment was removed before public `1.0.53` because its technical evidence did **not** authorize distribution or a support claim. Any future direct integration must first pass the [vendor SDK license policy](docs/vendor-sdk-license-policy.md). |
+| Superseded pre-P0 `2.0.0` baseline | 1,914,538 bytes; SHA-256 `2A6D94016B03430BDF2EF5ECCF6282D32896C02AEFB3A9EB8F5519AFE4B13512`. Preserved only as a defect baseline because live rows remained marked `live` after Continue/process exit. |
+| Previous `1.0.53` package | 1,914,615 bytes; SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Gallery metadata, the downloadable VSIX, manifest `1.0.53.0`, and rendered Overview were verified on 2026-08-05 KST. |
+| Previous `1.0.53` installed runtime | The same package passed ReleaseAnnouncement, Environment Check, AutomaticCollections, MultiLibraryHybrid, Smart Type Mapper, persisted mapping, exact menu counts, registration, and protocol diagnostics on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21`. The durable result is recorded in [release-qualification-1.0.53.md](docs/release-qualification-1.0.53.md). |
 | Previous public `1.0.52` package | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. Its installed-runtime evidence remains in [release-qualification-1.0.52.md](docs/release-qualification-1.0.52.md). |
 | Preserved failed `1.0.51` package | 2,011,587 bytes; SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`. VS2022 passed, but stable VS2026 `18.8.2` could not activate the registered provider because the older Extensibility framework requested the unavailable host-contract assembly version `17.0.0.0`. |
 | Previous public Marketplace `1.0.50` baseline | Exact downloaded package: 2,001,513 bytes; SHA-256 `2014AA8D679AF3D01F0B16CC304E77064ABCF0B0725BDC6BD543B7C08CDA397E`. It predates automatic Mat collection expansion and the in-product release-highlights banner. |
@@ -581,7 +573,7 @@ README and Marketplace screenshots must be reviewed before commit. Do not publis
 
 ## Release And Marketplace
 
-The Marketplace extension is currently distributed as a preview. Before publishing an update, validate:
+The Marketplace extension is distributed through Visual Studio Marketplace. Release validation covers:
 
 - Clean install, update, uninstall, and reinstall of the VSIX.
 - Multi-instance isolation: with two separate `devenv.exe` processes running, each debugger visualizer invocation must reach only that Visual Studio instance's docked viewer.
@@ -592,7 +584,7 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 - Buffer Doctor ranked candidates and immediate descriptor application.
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
-- Upgrade recovery: update a profile that runs exact public `1.0.53` to the exact `2.0.0` candidate, then prove the View command, Environment Check, registered buffer handoff, automatic Mat, and mapped-buffer workflows without repair or `/ResetSkipPkgs`.
+- Upgrade recovery: update a `1.0.53` profile to `2.0.0`, then prove the View command, Environment Check, registered buffer handoff, automatic Mat, and mapped-buffer workflows without repair or `/ResetSkipPkgs`.
 - VSSDK package ownership: the generated `.pkgdef` must reference `RawBufferVisualizer.VisualStudio.Extensibility.dll`; the former split-project `.pkgdef` is prohibited.
 - VSPackage/menu identity: the `2.0.0` `.pkgdef` must contain `{1977574b-f107-465f-bfd1-5fc022907039}`, exactly one `Menus.ctmenu, 2` entry, and no retired `1.0.47`/`1.0.48` GUID.
 - View menu: exactly one open command and one current-frame scan command.
@@ -601,9 +593,9 @@ The Marketplace extension is currently distributed as a preview. Before publishi
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview for this candidate: [2.0.0 Overview](docs/marketplace-overview-2.0.0.md).
-Marketplace release text for this candidate: [2.0.0 release notes](docs/marketplace-release-notes-2.0.0.md).
-Complete user-visible history: [CHANGELOG](CHANGELOG.md). A future `v2.0.0` GitHub Release must use the same curated 2.0.0 release notes and point Visual Studio users to Marketplace rather than attaching a second VSIX distribution.
+Marketplace feature Overview: [2.0.0 Overview](docs/marketplace-overview-2.0.0.md).
+Marketplace release text: [2.0.0 release notes](docs/marketplace-release-notes-2.0.0.md).
+Complete user-visible history: [CHANGELOG](CHANGELOG.md).
 For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
 
 ## License
@@ -613,5 +605,3 @@ Copyright (c) 2026 Noah Choi.
 This project is licensed under the MIT License. You may use, modify, and redistribute the source code, but the copyright and license notice must remain included. See [LICENSE](LICENSE).
 
 External libraries keep their own licenses. Review [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before publishing a VSIX, release package, or redistributed binary.
-
-Direct proprietary camera-SDK adapters also require the separate [vendor SDK license gate](docs/vendor-sdk-license-policy.md). Technical compatibility alone is not permission to download, test, distribute, or advertise vendor support.

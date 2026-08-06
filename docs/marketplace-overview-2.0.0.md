@@ -60,7 +60,6 @@ Selecting the top `Mono8`, 2448 x 2048, stride `2560` interpretation restores th
 - Descriptor arithmetic and format/order enum values now fail closed before allocation, transfer, or rendering.
 - Valid `Mono16` values from 1 through 16 remain supported; 10, 12, 14, and 16 are covered by executable fixtures.
 - `Mono10PackedLsb` and `Mono12PackedLsb` reject valid-bit values that contradict their fixed layouts.
-- Neutral fixtures verify descriptor fields, transferred bytes, byte order, and pointer ownership without a proprietary SDK dependency.
 - Continue or process exit converts live process-backed rows to `Unavailable` and blocks delayed handoffs; copied managed buffers stay usable.
 
 ## Visual Studio Support
@@ -79,8 +78,6 @@ Community, Professional, and Enterprise are supported installation targets. Visu
 - After Continue or process exit, a live row keeps only its last rendered pixels as context and cannot read the debuggee source again. Pause at a valid breakpoint and reopen or rescan to obtain a new live source.
 - Automatic discovery scans only the selected stack frame's Locals and Arguments and keeps its search bounded.
 - Ambiguous, compressed, planar, YUV, unsupported packed, offset, or method-only layouts fail visibly instead of being guessed.
-- Camera acquisition/control, lighting, PLC/I/O, 3D point clouds, and depth/coordinate containers are outside this extension.
-- Generic buffer inspection is not certification for a camera, frame grabber, driver, SDK, or hardware model.
 
 ## License And Support
 
