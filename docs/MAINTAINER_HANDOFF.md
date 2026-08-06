@@ -6,22 +6,22 @@ This is the canonical continuation document for the next conversation. Read it a
 
 | Item | Verified state |
 | --- | --- |
-| Last verified | 2026-08-06 KST, including the public 2.0 metadata/payload mismatch and exact local `2.0.1.0` recovery candidate |
+| Last verified | 2026-08-06 KST, including the public 2.0 metadata/payload mismatch and exact local `2.0.1.0` recovery candidate installed qualification on VS2022 and VS2026 |
 | Canonical repository | `C:\Git\RawBufferVisualizer` |
 | Branch / remote | Active worktree is `C:\Git\RawBufferVisualizer_2.0.0_release_followup` on `agent/2.0-release-followup`, tracking `origin/main`; repository `https://github.com/Noah8218/RawBufferVisualizer.git`. The preserved original checkout and its four excluded untracked paths must not be disturbed. |
-| Implementation baseline | Complete 2.0 feature source/evidence is pushed on `origin/main`; the current worktree adds the version-only `2.0.1` Marketplace recovery change and has not yet been committed or pushed. |
+| Implementation baseline | Complete 2.0 feature source/evidence and the version-only `2.0.1` Marketplace recovery source are pushed on `origin/main`; candidate source commit is `0d57e10`. |
 | Source and VSIX version | Current source and exact recovery candidate `2.0.1` / `2.0.1.0`; Gallery metadata is `2.0.0.0`, while its downloadable payload remains manifest `1.0.53.0` |
 | Visual Studio support | VS2022 `17.14+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64. The complete consolidated installed matrix passed on Community `17.14.37516.0` and `18.8.12023.21`; manifest range is `[17.14,18.0)`. |
 | Public Marketplace version | Gallery `2.0.0.0`, updated `2026-08-06T04:25:45.133Z`; downloadable payload manifest `1.0.53.0`, 1,914,615 bytes, SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3` |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | The 2.0 feature line is complete and qualified. Immediate priority is publishing the higher `2.0.1.0` recovery package after installed update verification, source push/CI, and final owner approval. |
-| Commit scope | The current uncommitted change raises release identity/communication to `2.0.1`, adds the exact recovery candidate record, and does not add product features. The explicitly excluded pre-existing untracked paths below do not belong to this work. |
+| Product stage | The 2.0 feature line and exact local `2.0.1.0` recovery candidate are qualified. Immediate priority is checking the existing Marketplace item form and obtaining final owner approval before publication. |
+| Commit scope | Commit `0d57e10` raises release identity/communication to `2.0.1`, records the exact recovery candidate, and does not add product features. The explicitly excluded pre-existing untracked paths below do not belong to this work. |
 
 Public links:
 
 - Marketplace: https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer
 - Repository: https://github.com/Noah8218/RawBufferVisualizer
-- CI evidence: https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31059894280
+- 2.0.1 CI evidence: https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31074717609
 
 Marketplace Gallery metadata reports `2.0.0.0`, last updated `2026-08-06T04:25:45.133Z`, but a cache-busted download of the current public payload is still the exact `1.0.53.0` package: 1,914,615 bytes with SHA-256 `E934F24A54F4D4265EA2A758E91A005FB58B84DD7B01CCF56F39F5610DCE8FA3`. Evidence is under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\prepublish-public-readback-20260806`. The exact `2.0.1.0` recovery candidate is recorded in [release-qualification-2.0.1.md](release-qualification-2.0.1.md). The original failed `1.0.51` and all preserved `2.0.0` candidates remain historical evidence and must not be substituted.
 
@@ -452,10 +452,11 @@ Current exact 2.0.1 recovery candidate:
 Version: 2.0.1.0
 Size: 1,923,778 bytes
 SHA256: 5E1C112089C7BE39067BC2B17C7E3D75659575356F1E8EF9FA06A7BDA955A20B
-Source: current worktree, not yet committed/pushed; CI pending
+Source: commit 0d57e10, pushed to origin/main
+CI: run 31074717609, successful
 ```
 
-This artifact passed the Release build, aggregate tests, release/environment contracts, package guards, exact manifest/identity inspection, and Marketplace dry run. Installed update verification is pending because Visual Studio is running; commit/push and CI are also pending. Rebuilding changes the VSIX hash and invalidates this exact record. Gallery metadata currently reports `2.0.0.0`, while its downloadable payload is the separate `1.0.53.0` binary above. See [release-qualification-2.0.1.md](release-qualification-2.0.1.md).
+This artifact passed the Release build, aggregate tests, release/environment contracts, package guards, exact manifest/identity inspection, Marketplace dry run, source push/CI, in-place installation on VS2022 and VS2026, 14/14 package-to-install assembly comparisons, and the required installed runtime scenarios. Rebuilding changes the VSIX hash and invalidates this exact record. Gallery metadata currently reports `2.0.0.0`, while its downloadable payload is the separate `1.0.53.0` binary above. Publication to the existing item and public readback remain owner-controlled. See [release-qualification-2.0.1.md](release-qualification-2.0.1.md).
 
 The prior 1,923,731-byte `2.0.0.0` candidate remains the qualified feature baseline and must not be uploaded to repair this higher-version Marketplace state.
 

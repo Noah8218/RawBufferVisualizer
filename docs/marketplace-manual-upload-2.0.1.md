@@ -23,11 +23,11 @@ Do not substitute the public `1.0.53.0` payload, any preserved `2.0.0.0` candida
 
 ## Required Gates Before Upload
 
-- Exact candidate installed-update verification is complete.
-- Matching source is committed and pushed.
-- CI succeeds for that exact commit.
-- Final Marketplace form shows `2.0.1.0`, the existing extension ID, and the expected Overview/release notes.
-- The owner explicitly approves the final public action.
+- [x] Exact candidate installed-update verification is complete on VS2022 and VS2026.
+- [x] Matching source commit `0d57e10` is pushed to `origin/main`.
+- [x] GitHub Actions run `31074717609` succeeded for that commit.
+- [ ] Final Marketplace form shows `2.0.1.0`, the existing extension ID, and the expected Overview/release notes.
+- [ ] The owner explicitly approves the final public action.
 
 ## Manual Update Steps
 

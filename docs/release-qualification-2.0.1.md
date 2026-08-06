@@ -41,26 +41,41 @@ This candidate changes the release identity and communication from `2.0.0` to `2
 - `Publish-VisualStudioExtension.ps1`: passed the hybrid package and registration guards and produced the exact candidate above.
 - `Publish-VisualStudioMarketplace.ps1 -DryRun`: passed; generated `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\marketplace\vs-publish.json` without publishing.
 - Package inspection: manifest `2.0.1.0`, unchanged extension ID, 94 entries, exact size and hash recorded above.
+- Candidate source commit `0d57e10` was pushed to `origin/main`; GitHub Actions run `31074717609` completed successfully.
+- In-place installation over the existing extension completed on VS2022 Community `17.14.37516.0` and VS2026 Community `18.8.12023.21` without uninstall, repair, or registration reset.
+- `Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.1.0`: passed on both IDE instances; installed manifest version and registration payload are valid and no legacy configuration key is visible.
+- All seven package-owned `RawBufferVisualizer*.dll` assemblies in the exact candidate match both installed copies by byte length and SHA-256: 14 comparisons, zero mismatches.
+- ReleaseAnnouncement, EnvironmentCheck, and AutomaticCollections installed-VSIX scenarios passed on both IDEs. Each host exposed one Open command and one Automatic Inspector command with zero package-protocol errors.
+- MultiLibraryHybrid passed on both IDEs with 9 documents, 0 product errors, 8 automatic candidates opened, the registered Bitmap path opened, one Open command, one scan command, and zero package-protocol errors.
+
+Installed evidence roots:
+
+```text
+VS2022: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\installed-vs2022
+VS2022 MultiLibraryHybrid: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\manual-vs2022
+VS2026: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\installed-vs2026
+VS2026 MultiLibraryHybrid: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\manual-vs2026
+```
+
+Two initial VS2022 MultiLibraryHybrid automation attempts timed out while selecting the visible Bitmap visualizer glyph because the harness fallback coordinate did not resolve the glyph element. A direct user-equivalent click on that same visible glyph immediately completed the handoff and the full scenario passed. This is a test-harness input-selection defect, not a product handoff failure; the failed attempts and click logs remain under `installed-vs2022`.
 
 Test `TEMP` and `TMP` were routed to `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.1\validation-20260806`; repository build output remains backed by the existing D-drive `.build` junction.
 
-## Pending Release Gates
+## Remaining Publication Gates
 
-- Close all Visual Studio windows, install the exact candidate over the currently installed `2.0.0.0`, and verify installed manifest/registration plus the core installed-VSIX smoke on supported IDEs.
-- Commit and push the exact source, then confirm successful CI for that commit.
 - Obtain explicit final approval before changing the public Marketplace item.
 - After publication, verify Gallery version `2.0.1.0`, downloadable VSIX length/SHA-256, manifest `2.0.1.0`, rendered Overview, and an actual Visual Studio update offer.
 
 ## Durable Checkpoint
 
-Status: Incomplete
+Status: Complete
 
-Scope: Marketplace recovery version bump, release communication, exact `2.0.1.0` candidate packaging, public mismatch readback, and no-write Marketplace validation.
+Scope: Pre-publication qualification of the exact `2.0.1.0` Marketplace recovery candidate, including version/identity, source build/tests, package guards, pushed source/CI, in-place installation, package-to-install equality, and installed runtime scenarios on VS2022 and VS2026.
 
-Acceptance criteria: version is higher than Gallery `2.0.0.0` -> pass; extension identity is unchanged -> pass; source build/tests and package guards pass -> pass; exact installed update -> pending; pushed source and CI -> pending; public `2.0.1.0` payload/readback -> pending.
+Acceptance criteria: version is higher than Gallery `2.0.0.0` -> pass; extension identity is unchanged -> pass; source build/tests and package guards -> pass; exact installed update on both supported IDE generations -> pass; candidate/install assembly equality -> 14/14 pass; required installed runtime scenarios -> pass; pushed source and CI -> pass.
 
 Verification: commands and outputs listed above.
 
 Evidence: exact candidate and D-drive validation/readback paths listed above.
 
-Boundary / next dependency: Visual Studio is currently running, so installed update verification has not been executed. Public publication remains owner-controlled and requires final approval after the upload form is checked.
+Boundary / next dependency: This proves local release readiness, not Marketplace publication or propagation. Public upload remains owner-controlled and requires final approval after the existing item upload form is checked; the public payload must then be read back and matched to the exact candidate. The two retained test IDE sessions contain only transient debug-solution state and have not been discarded without owner confirmation.
