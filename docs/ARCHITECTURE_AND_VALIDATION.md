@@ -422,12 +422,12 @@ Current unpublished `2.0.0.0` candidate, consolidated local qualification on 202
 - seven package assemblies match the candidate and both installations by SHA-256;
 - installed VS2022 and VS2026 each invalidated exactly five live sources after Continue while retaining the copied array, exposed and selected `Mono12PackedLsb 640 x 484 stride 960` draft-only until Save, and passed Buffer Doctor, Automatic Collections, Multi-Library Hybrid, and Environment toggle regressions with zero package-protocol errors;
 - evidence root `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\qualification-connect-doctor-docs-20260806`, with canonical verdict `consolidated-local-release-verdict.json`;
-- local qualification is complete. Commit/push, successful CI, owner upload approval, publication, and public readback remain separate gates.
+- qualification, source push at `0d3ac20`, and CI run `31059894280` are complete. The pre-publish clean/update gate, owner upload approval, publication, and public readback remain separate gates.
 
 Preserved unpublished `2.0.0.0` P0 full-safety qualification baseline, qualified 2026-08-06 KST:
 
 - artifact size 1,917,791 bytes, SHA-256 `3C2DCC1E9E38990D1C17547331E15C5EE344ABEA07D3936B722747B0670AE7EE`;
-- based on `origin/main` `3d88894` plus the current uncommitted P0 worktree change set;
+- built from `origin/main` `3d88894` plus the then-uncommitted P0 worktree change set;
 - current-source Release solution build and aggregate self-tests passed; descriptor overflow, undefined enums, disposed live-source reads, and handoff-generation transitions are covered;
 - the full legacy matrix passed for five Emgu CV and five OpenCvSharp package versions;
 - seven package-owned Raw Buffer Visualizer assemblies match the candidate, current Release build, VS2022 installation, and VS2026 installation by length and SHA-256;

@@ -80,7 +80,7 @@ powershell -STA -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts
 
 The VSIX to upload or smoke-test is:
 
-Use the exact consolidated candidate recorded in [release-qualification-2.0.0.md](release-qualification-2.0.0.md). It passed the local matrix; preserved P0 and superseded candidates remain evidence only and must not be uploaded. Before upload, record the matching pushed source commit and successful CI run without rebuilding or substituting the candidate bytes.
+Use the exact consolidated candidate recorded in [release-qualification-2.0.0.md](release-qualification-2.0.0.md). It passed the local matrix; preserved P0 and superseded candidates remain evidence only and must not be uploaded. Matching source commit `0d3ac20` is pushed, and CI run `31059894280` succeeded. Do not rebuild or substitute the candidate bytes.
 
 Validate the exact package and generated Marketplace manifest without publishing:
 

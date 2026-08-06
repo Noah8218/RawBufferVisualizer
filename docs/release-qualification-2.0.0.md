@@ -6,7 +6,7 @@ Last verified: 2026-08-06 KST.
 
 Visual Studio Marketplace still serves public `1.0.53.0`. The current local `2.0.0.0` candidate below now passes the complete consolidated local release matrix on the same exact bytes: source/build guards, five Emgu and five OpenCvSharp versions, package/build/install identity, Break-to-Continue safety, Connect Doctor, and installed regressions on Visual Studio 2022 and Visual Studio 2026.
 
-Matching pre-P0 source/evidence is integrated on `origin/main` at `3d88894`, and GitHub Actions run [#81](https://github.com/Noah8218/RawBufferVisualizer/actions/runs/30975139392) succeeded. The P0 and Connect Doctor follow-ups are currently an uncommitted worktree change based on that commit. Local qualification is complete, but the source must still be committed and pushed and CI must pass that exact commit before the owner may authorize upload. This record does not claim that Marketplace serves 2.0.0 and does not authorize upload, tag, GitHub Release creation, or public readback.
+Matching source/evidence is integrated on `origin/main` at `0d3ac2011c1bfd5104645e1d16cdf72f9eae9b26`, and GitHub Actions run [#31059894280](https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31059894280) succeeded. Qualification, source push, and CI are complete. The pre-publish clean/update gate and explicit owner approval remain required before upload. This record does not claim that Marketplace serves 2.0.0 and does not authorize upload, tag, GitHub Release creation, or public readback.
 
 ## Current Consolidated Local Release Candidate
 
@@ -16,8 +16,8 @@ Manifest version: 2.0.0.0
 Size: 1,923,731 bytes
 SHA-256: D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C
 Marketplace extension ID: RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f
-Source basis: origin/main 3d88894 plus the current uncommitted P0 and Connect Doctor worktree changes
-Disposition: complete local release qualification; hold upload until source commit/push, successful CI, and explicit owner approval
+Source basis: origin/main 0d3ac2011c1bfd5104645e1d16cdf72f9eae9b26; GitHub Actions 31059894280 succeeded
+Disposition: qualification, source push, and CI complete; hold upload until the pre-publish clean/update gate passes and the owner explicitly approves
 ```
 
 The feature stays inside the existing Connect Your Buffer dialog. **Diagnose interpretation** toggles a ranked result list; selecting a candidate changes the visible member-role draft and preview only, and only **Save Mapping** persists. Current width/height/stride format alternatives are retained in the top-eight visible set without altering their original scores. An interpretation that cannot be represented by the current members may preview, but Save is blocked with an explicit mismatch reason.
@@ -152,7 +152,7 @@ Verification: commands and installed matrix above; exact results are stored unde
 
 Evidence: exact consolidated candidate identity, `consolidated-local-release-verdict.json`, package/build/install equality reports, automated logs, canonical installed result JSON, and fresh UI captures listed above.
 
-Boundary / next dependency: Marketplace remains public `1.0.53.0`. Local qualification is complete, but the exact source change set is not committed or pushed and has no CI result. Commit/push, successful CI, explicit owner upload approval, publication, public update/readback, tag, and GitHub Release remain separate actions. Direct proprietary SDK work remains blocked by the vendor-license gate.
+Boundary / next dependency: Marketplace remains public `1.0.53.0`. Qualification, source push at `0d3ac20`, and CI run `31059894280` are complete. The pre-publish clean/update gate, explicit owner upload approval, publication, public update/readback, tag, and GitHub Release remain separate actions. Direct proprietary SDK work remains blocked by the vendor-license gate.
 
 ## Connect Doctor Durable Closure
 
@@ -166,4 +166,4 @@ Verification: commands, candidate identity, installed matrix, and consolidated e
 
 Evidence: 1,923,731-byte consolidated candidate, SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`; D-drive qualification root; source tests and smoke scripts.
 
-Boundary / next dependency: Complete for the neutral synthetic wrapper and the consolidated local release matrix. It does not certify a proprietary SDK or physical camera/board. Commit/push, successful CI, explicit owner approval, publication, and public update/readback remain separate actions.
+Boundary / next dependency: Complete for the neutral synthetic wrapper and the consolidated release matrix, including source push and CI. It does not certify a proprietary SDK or physical camera/board. The pre-publish clean/update gate, explicit owner approval, publication, and public update/readback remain separate actions.

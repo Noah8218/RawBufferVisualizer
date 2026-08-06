@@ -2,21 +2,23 @@
 
 Use this checklist only after the owner decides to publish version 2.0.0 **and** one consolidated current-source candidate has passed the complete release matrix, is committed/pushed, and has successful CI. The public Marketplace item currently remains `openvisionlab.RawBufferVisualizer` version `1.0.53.0`.
 
-## Current Blocker: Source Commit, CI, And Owner Approval
+## Current Blocker: Pre-Publish Update Gate And Owner Approval
 
-Do not upload the preserved P0 or superseded pre-P0 candidates. The exact consolidated candidate below passed the complete local matrix, but its matching source is still uncommitted and unpushed and therefore has no CI result for the final change set.
+Do not upload the preserved P0 or superseded pre-P0 candidates. The exact consolidated candidate below passed the complete local matrix, its matching source is pushed, and CI succeeded. The pre-publish clean/update gate and explicit owner approval remain required.
 
-Locally qualified exact candidate, held until the blocker above is cleared:
+Qualified exact candidate, held until the blocker above is cleared:
 
 ```text
 Path: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.0\candidate-connect-doctor-docs-20260806\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
 Version: 2.0.0.0
 Size: 1,923,731 bytes
 SHA-256: D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C
-Disposition: local qualification complete; do not upload before commit/push, successful CI, and explicit owner approval
+Source commit: 0d3ac2011c1bfd5104645e1d16cdf72f9eae9b26
+GitHub Actions: 31059894280 (success)
+Disposition: qualification, source push, and CI complete; do not upload before the pre-publish clean/update gate passes and the owner explicitly approves
 ```
 
-After commit/push and successful CI, append the exact source commit and CI run to this section before opening the Marketplace portal. Do not use `C:\Git\RawBufferVisualizer\artifacts\publish`, a preserved older candidate, or a fresh rebuild as a substitute for the exact bytes above.
+Do not use `C:\Git\RawBufferVisualizer\artifacts\publish`, a preserved older candidate, or a fresh rebuild as a substitute for the exact bytes above. Complete the clean install and exact public `1.0.53.0 -> 2.0.0.0` in-place update steps in [release-runbook.md](release-runbook.md) before opening the Marketplace portal.
 
 ## Marketplace Text
 

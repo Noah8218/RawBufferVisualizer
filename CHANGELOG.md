@@ -8,7 +8,7 @@ No post-`2.0.0` changes are queued; the unreleased `2.0.0` candidate contents ar
 
 ## [2.0.0] - 2026-08-06
 
-Release status: separate vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged. The P0 candidate passed installed VS2022/VS2026 Continue invalidation and local validation; commit/push/publication remain separate owner-controlled actions.
+Release status: qualified vendor-neutral 2D compatibility candidate. Public Marketplace `1.0.53` remains unchanged. The consolidated candidate passed installed VS2022/VS2026 Continue invalidation, local validation, source push, and CI; the pre-publish update gate and publication remain separate owner-controlled actions.
 
 ### Added
 

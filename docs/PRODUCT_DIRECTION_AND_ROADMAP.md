@@ -205,7 +205,7 @@ The [Vendor-Neutral 2D Buffer Compatibility Matrix](vendor-neutral-buffer-compat
 2. Separately identifiable `2.0.0` candidates were frozen without overwriting preserved 1.x or superseded 2.0 artifacts.
 3. The preserved P0 candidate passed package identity, installed VS2022/VS2026 Break-to-Continue invalidation, copied-array retention, shared descriptor/lifetime tests, and the ten-version OpenCvSharp/Emgu compatibility matrix.
 4. The active package hash, manifest, installed assembly hashes, Overview, and release notes identify the same 2.0 product line. Publication and public readback remain a separate explicit owner action.
-5. Pre-P0 source/evidence was integrated to `origin/main` at `3d88894`; GitHub Actions run `30975139392` passed, and the VS2026 Open Variable follow-up reached `Connect Your Buffer` without saving a user mapping. The P0 follow-up remains a local uncommitted change until the owner explicitly requests commit/push.
+5. Complete P0 and Connect Doctor source/evidence was integrated to `origin/main` at `0d3ac20`; GitHub Actions run `31059894280` passed, and the VS2026 Open Variable follow-up reached `Connect Your Buffer` without saving a user mapping.
 
 Public Marketplace `1.0.53.0` is the immutable published baseline and contains only vendor-neutral buffer paths. New direct proprietary integrations remain blocked by default.
 
@@ -259,11 +259,17 @@ Acceptance gate:
 
 Installed result: both supported IDE generations selected `Mono12PackedLsb 640 x 484 stride 960`, rendered candidate preview without saving, closed the result on the second toggle selection, saved explicitly, and automatically reopened the mapped live row with zero final errors. Evidence is under `D:\OpenVisionLab-TestData\RawBufferVisualizer\connect-doctor-20260806`.
 
-### Next priority: consolidate and requalify the exact 2.0 package
+### Completed priority: consolidate and requalify the exact 2.0 package
 
 Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-Freeze one new candidate from the completed worktree, then rerun the P0 release matrix against those exact bytes: full Release build/self-tests, release communication/package guards, ten-version OpenCvSharp/Emgu compatibility, candidate/build/install equality, installed Break-to-Continue invalidation and copied-array retention on both IDEs, and the Connect Doctor scenario. Only that consolidated candidate may replace the blocked upload instructions.
+The consolidated candidate passed the P0 release matrix against one exact byte set: full Release build/self-tests, release communication/package guards, ten-version OpenCvSharp/Emgu compatibility, candidate/build/install equality, installed Break-to-Continue invalidation and copied-array retention on both IDEs, and the Connect Doctor scenario. Matching source commit `0d3ac20` is pushed, and CI run `31059894280` succeeded.
+
+### Next priority: pre-publish clean and in-place update gate
+
+Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+Using the exact qualified candidate, prove a clean install and an exact public `1.0.53.0 -> 2.0.0.0` in-place update on current serviced VS2022 `17.14` without uninstall, repair, or skipped-package reset. Publication remains a separate explicit owner action.
 
 ### Next: supportability and compatibility growth
 
