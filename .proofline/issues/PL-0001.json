@@ -1,0 +1,112 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "PL-0001",
+    "aliases": [],
+    "type": "bug",
+    "mode": "simple",
+    "title": "Debugger handoff claim fails when TEMP makes the processing path exceed 259 characters",
+    "risk": "medium"
+  },
+  "origin": {
+    "kind": "VS 17.9 runtime qualification test",
+    "summary": "A workload-removal regression run exposed a reproducible handoff failure caused by the deliberately long D-drive test TEMP path.",
+    "refs": []
+  },
+  "state": {
+    "status": "resolved",
+    "current_summary": "A long TEMP root exposed a net472 claim-path overflow because the host appended .processing plus a GUID. The 2.0.2 repair uses the shorter exact .processing sibling while preserving the claim lock and ACK/NACK contract; focused tests and the exact installed VSIX now pass the former 263-character case on VS2022 17.9."
+  },
+  "problem": {
+    "claims": [
+      {
+        "id": "P1",
+        "state": "confirmed",
+        "text": "VisualizerHandoffInbox.TryClaimRequest cannot move a published request when the appended processing path exceeds the legacy Windows path boundary in the net472 Visual Studio host.",
+        "evidence_refs": [
+          "E1"
+        ]
+      }
+    ],
+    "impact": "A user with an unusually long TEMP root can invoke the registered debugger visualizer but receive no image because the VSSDK package cannot claim the handoff file."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "The net472 VSSDK host claims and opens a handoff whose current processing path would exceed 259 characters.",
+      "evidence_refs": [
+        "E3"
+      ]
+    },
+    {
+      "id": "C2",
+      "text": "Focused protocol tests and an installed-VSIX long-TEMP smoke test pass without adding a runtime workload or utility requirement.",
+      "evidence_refs": [
+        "E2",
+        "E3"
+      ]
+    }
+  ],
+  "relations": [],
+  "context": [
+    {
+      "kind": "implementation",
+      "location": "src/RawBufferVisualizer.VisualStudio/VisualizerHandoffInbox.cs:238"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "failed installed VSIX test",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/vs2022-17.9-runtime-qualification-20260806/smoke/professional-17.9-v4-no-extension-workload",
+      "summary": "Long-TEMP run with the unclaimed handoff and repeated Claim skipped log entries."
+    },
+    {
+      "kind": "passing installed VSIX test",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/vs2022-17.9-runtime-qualification-20260806/smoke/professional-17.9-v4-no-extension-workload-v2",
+      "summary": "Same installed candidate and workload state with a shorter TEMP root; 9 documents, 0 errors, and 0 package protocol errors."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "kind": "installed VSIX test",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/vs2022-17.9-runtime-qualification-20260806/smoke/professional-17.9-v4-no-extension-workload",
+      "observation": "The request path was 219 characters and the generated processing path was 263 characters; VS 17.9 repeatedly logged 'Claim skipped' and timed out. With the same installed candidate and workload still absent, the shorter D:/OpenVisionLab-TestData/RawBufferVisualizer/v179nw2 TEMP root passed with 9 documents, 0 errors, and 0 package protocol errors.",
+      "observed_at": "2026-08-06T10:16:18.4133631Z"
+    },
+    {
+      "id": "E2",
+      "kind": "focused protocol test",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.2/final-20260809/logs/aggregate-self-tests.log",
+      "observation": "The aggregate self-test suite passed with the focused long-path claim regression: the request reproduces a former processing path above 259 characters, the new .processing sibling is shorter than the request, content is preserved, ACK succeeds, and cleanup removes the owned artifacts.",
+      "observed_at": "2026-08-08T23:03:22.9410853Z"
+    },
+    {
+      "id": "E3",
+      "kind": "installed VSIX test",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.2/final-20260809/smoke/vs2022-17.9/MultiLibraryHybrid-LongTemp",
+      "observation": "The exact frozen 2.0.2 VSIX on VS2022 Professional 17.9.34902.65 published and opened a 219-character request whose former processing path would be 263 characters. The new processing path was 217 characters; MultiLibraryHybrid completed with 9 documents, 0 product errors, 0 package-protocol errors, and no new runtime utility requirement.",
+      "observed_at": "2026-08-08T23:49:51.6707145Z"
+    }
+  ],
+  "events": [
+    {
+      "id": "T1",
+      "kind": "transition",
+      "at": "2026-08-09T07:48:30.7742899+09:00",
+      "from": "open",
+      "to": "doing",
+      "summary": "Owner approved PL-0001 repair as part of final 2.0.2 preparation."
+    },
+    {
+      "id": "T2",
+      "kind": "transition",
+      "at": "2026-08-09T09:11:50.3250423+09:00",
+      "from": "doing",
+      "to": "resolved",
+      "summary": "PL-0001 resolved in the exact frozen 2.0.2 package after focused protocol and installed VS2022 17.9 long-TEMP verification."
+    }
+  ],
+  "created_at": "2026-08-06T10:16:18.4133631Z",
+  "updated_at": "2026-08-09T09:11:50.3250423+09:00"
+}

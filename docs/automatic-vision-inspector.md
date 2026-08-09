@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Automatic Vision Inspector scans the selected stack frame for safe unregistered image-buffer shapes and for initialized exact OpenCvSharp and Emgu CV Mat values. An optional persisted collection mode also expands exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, `OpenCvSharp.Mat[]`, and `Emgu.CV.Mat[]` roots. It remains the primary recovery path for company-specific debug values that cannot receive a normal debugger-visualizer icon because their runtime type was not registered when the VSIX was built.
+Automatic Vision Inspector scans the selected stack frame for safe unregistered image-buffer shapes and for initialized exact OpenCvSharp and Emgu CV Mat values. Every scan also expands exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, `OpenCvSharp.Mat[]`, and `Emgu.CV.Mat[]` roots. It remains the primary recovery path for company-specific debug values that cannot receive a normal debugger-visualizer icon because their runtime type was not registered when the VSIX was built.
 
 It does not dynamically register visualizers. Instead, the docked Raw Buffer Visualizer scans the current stack frame whenever Visual Studio enters Break Mode, recognizes safe image-buffer shapes, validates the current values, and adds successful images to the existing `Images` list. Exact OpenCvSharp `Mat` and Emgu CV `Mat` values use fixed supported metadata contracts and paused-process live memory; Smart Type Mapper remains the correction and persistence step for ambiguous or incomplete company wrappers.
 
@@ -10,7 +10,7 @@ The user workflow is deliberately non-modal:
 
 - opening the Raw Buffer Visualizer Tool Window expresses interest in automatic inspection;
 - **Auto Inspect on Break** defaults to enabled and is saved across Visual Studio restarts;
-- **Mat collections** defaults to disabled, is saved independently, and applies to both Break Mode refresh and **Scan Now**;
+- supported exact Mat collections are included automatically in Break Mode refresh and **Scan Now**, with no separate setting;
 - a breakpoint never forces the Tool Window to open or steal focus;
 - **Scan Now** remains available while automatic scanning is paused;
 - one failed candidate never prevents other recognized images from opening.
@@ -60,12 +60,12 @@ Safe GenICam PFNC aliases include `Mono10p`, `Mono12p`, Bayer RG/GR/GB/BG 8-bit,
 The docked window provides:
 
 - **Auto Inspect on Break**: refresh on the next Break Mode event; the choice is stored in `%APPDATA%\RawBufferVisualizer\automatic-inspector-settings.json`;
-- **Mat collections**: expand exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays; inspect at most 8 items per collection, 16 items and 8 collection roots per scan;
+- exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays: included automatically, with at most 8 items per collection, 16 items and 8 collection roots per scan;
 - **Scan Now**: rescan the current frame without waiting for another breakpoint;
 - confidence, inferred-member summary, and validation reason on the selected row;
 - **Edit Mapping** for ambiguous or incorrect inference.
 
-Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values are exceptions to the registered-type exclusion. They can open automatically through validated live process memory and still retain their registered debugger-visualizer icons. When collection inspection is enabled, the same fixed path is applied to expressions such as `frames[0]`; no collection object is copied into the extension process. OpenCvSharp uses `Data`, `Cols`, `Rows`, `Step()`, `Depth()`, and `Channels()`; Emgu uses `DataPointer`, `Cols`, `Rows`, `Step`, `Depth`, and `NumberOfChannels`. Only the fixed supported metadata query methods are evaluated; scanned objects cannot supply an arbitrary method name.
+Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values are exceptions to the registered-type exclusion. They can open automatically through validated live process memory and still retain their registered debugger-visualizer icons. The same fixed path always applies to supported indexed expressions such as `frames[0]`; no collection object is copied into the extension process. OpenCvSharp uses `Data`, `Cols`, `Rows`, `Step()`, `Depth()`, and `Channels()`; Emgu uses `DataPointer`, `Cols`, `Rows`, `Step`, `Depth`, and `NumberOfChannels`. Only the fixed supported metadata query methods are evaluated; scanned objects cannot supply an arbitrary method name.
 
 Registered `RawBufferSnapshot`, `RawBufferView`, `System.Drawing.Bitmap`, and the exact ImagePtr compatibility target stay on their registered debugger-visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which the scanner deliberately does not inject or invoke. Exact normalized runtime-type matching prevents similarly named company wrappers from being suppressed accidentally.
 
@@ -103,7 +103,7 @@ Malformed or unsupported preference JSON is non-fatal: the control falls back to
 - Every candidate is isolated by an exception boundary. An unexpected getter/debugger failure becomes one `[Failed]` row instead of aborting the scan.
 - Pointer-backed data reuses the existing paused-process memory path and therefore remains valid only while the debuggee is paused and owns the buffer.
 - Managed arrays are read through the VSSDK `IDebugProperty2` child enumerator in batches. If that path is unavailable, the EnvDTE fallback is capped at 256 elements to avoid unbounded debugger calls.
-- Exact OpenCvSharp/Emgu `Mat` `List<T>` and one-dimensional array roots can be expanded only when **Mat collections** is enabled. Element failures are isolated, and collection/scan/root caps are reported instead of silently traversing beyond the limit.
+- Exact OpenCvSharp/Emgu `Mat` `List<T>` and one-dimensional array roots are expanded by every scan. Element failures are isolated, and collection/scan/root caps are reported instead of silently traversing beyond the limit.
 - Bitmap collections, dictionaries, mixed `List<object>`, multidimensional or jagged arrays, and arbitrary `IEnumerable` values remain on the registered collection-visualizer path.
 - A simple mapped property expression may be evaluated by the debugger to obtain an array object. The scanner never constructs or invokes arbitrary SDK methods.
 - Exact OpenCvSharp/Emgu automatic capture evaluates only the extension-owned fixed metadata expressions listed above. Unsupported depth/channel combinations fail as one isolated automatic row.
@@ -136,7 +136,7 @@ Malformed or unsupported preference JSON is non-fatal: the control falls back to
 
 Status: Complete
 
-Scope: Current-frame locals and arguments, direct and one-level nested pointer/managed-array shapes, exact OpenCvSharp/Emgu live capture, optional bounded exact-Mat list/array expansion, confidence gating, partial-success isolation, persistent preferences, validation, mapping fallback, and duplicate-free refresh.
+Scope: Current-frame locals and arguments, direct and one-level nested pointer/managed-array shapes, exact OpenCvSharp/Emgu live capture, always-on bounded exact-Mat list/array expansion, confidence gating, partial-success isolation, the persisted Auto Inspect trigger preference, validation, mapping fallback, and duplicate-free refresh.
 
 Acceptance criteria:
 
@@ -153,16 +153,17 @@ Acceptance criteria:
 - a `SizeX` dimension is not misclassified as total buffer `Size` -> passed by deterministic inference regression and installed VSIX;
 - disabling **Auto Inspect on Break**, closing Visual Studio, and starting a second Visual Studio session restores the disabled state; **Scan Now** still works -> passed;
 - re-enabling the option persists, and the pre-test user settings file is restored -> passed;
-- responsive Auto Inspect UI at 540/900/1160 px -> passed.
+- responsive Auto Inspect UI, toolbar bounds, empty guidance, and splitter limits at 320/350/400/420/480/540/619/620/759/760/900/1039/1040/1160 px -> passed.
 - initialized OpenCvSharp and Emgu CV Mats open automatically on Break Mode and refresh without duplication on **Scan Now** -> passed exact `1.0.50` installed-VSIX `MultiLibraryHybrid`;
 - Bitmap, `RawBufferSnapshot`, and `RawBufferView` remain absent from automatic rows while Bitmap opens through its registered glyph -> passed exact `1.0.50` installed-VSIX `MultiLibraryHybrid`;
 - an assignment-line breakpoint is documented as pre-initialization and the installed scenario stops after image construction -> passed exact `1.0.50` installed-VSIX evidence;
 - top Inspector affordance matches narrow/medium/wide layout ownership at 540/900/1160 px -> passed.
 - exact supported collection type policy, 8/16 limits, stable element expressions, and broad collection rejection -> passed by current-source self-test;
 - `Bitmap[]` and Emgu `Mat[]` item transfer in the registered collection path -> passed by current-source self-test;
-- the new collection option renders in the approved location and defaults disabled -> passed current-source layout smoke;
-- a legacy settings file preserves its existing Auto Inspect choice and migrates collection inspection as disabled; enabled collection preference survives store recreation -> passed by current-source self-test;
-- installed VSIX `List<OpenCvSharp.Mat>` partial result (3 open/2 failed), `Emgu.CV.Mat[]` (2 open), duplicate-free rescan, and restored collection preference -> passed on the exact 2,011,587-byte `1.0.51` candidate; seven rows, five opens, two isolated failures, 141.37 ms scan, and zero protocol errors.
+- the retired collection checkbox is absent and every production manual/Break Mode scan enables supported exact-Mat collection discovery -> passed by source search, layout smoke, and installed VSIX;
+- a legacy settings file containing `includeImageCollections: false` preserves its Auto Inspect choice and omits the retired field on the next save -> passed by current-source self-test;
+- installed 2.0.2 `List<OpenCvSharp.Mat>` partial result (3 open/2 failed), `Emgu.CV.Mat[]` (2 open), and duplicate-free rescan -> passed on VS17.14 and VS18.8; each run reported seven rows, five opens, two isolated failures, always-on discovery, and zero protocol errors.
+- after an automatic collection scan, **Clear** removes all rows and diagnosis/pixel/marker/comparison state, shows the empty viewer, blanks/disables both Interpret layouts while preserving Inspector visibility, and a later **Scan Now** restores seven rows and repopulates Interpret controls -> passed on the exact frozen 2.0.2 candidate in VS17.14 and VS18.8.
 
 Verification:
 
@@ -202,5 +203,13 @@ Evidence:
 - `artifacts/ui/installed-vsix-new-features/AutomaticCollections-view-menu-after.png`
 - `artifacts/ui/installed-vsix-new-features/AutomaticCollections-installed-vsix.json`
 - `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-1.0.51\runtime\AutomaticCollections-installed-vsix.json` (exact `1.0.51` candidate)
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\ui-modernization-2.0.2\20260809\responsive-matrix-final3\layout-widths.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\ui-modernization-2.0.2\20260809\installed-vs17.14-final\AutomaticCollections\AutomaticCollections-installed-vsix.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\ui-modernization-2.0.2\20260809\installed-vs18.8-final\AutomaticCollections\AutomaticCollections-installed-vsix.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\clear-inspector-reset-2.0.2\20260809\docked-layout-release-final\layout-widths.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\clear-inspector-reset-2.0.2\20260809\exact-candidate-installed-vs2022\AutomaticCollections-installed-vsix.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\clear-inspector-reset-2.0.2\20260809\exact-candidate-installed-vs2026\AutomaticCollections-installed-vsix.json`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\clear-inspector-reset-2.0.2\20260809\exact-candidate-installed-vs2026\automatic-collections-before-clear.png`
+- `D:\OpenVisionLab-TestData\RawBufferVisualizer\clear-inspector-reset-2.0.2\20260809\exact-candidate-installed-vs2026\automatic-collections-after-clear.png`
 
-Boundary / next dependency: This feature record is complete for the exact local `1.0.51` candidate on VS2022. The overall `1.0.51` release remains incomplete until the unchanged candidate passes installed-runtime qualification on stable VS2026 and publication/update propagation closes. This does not prove Bitmap automatic collection capture, live vendor runtime objects, buffer lifetime, drivers, emulators, or hardware.
+Boundary / next dependency: This feature record is complete for the current 2.0.2 source and the installed VS17.14/VS18.8 scenarios. The current exact UI candidate was not run on the removed VS17.9 host; its current evidence is VSSDK 17.9 compile/package compatibility plus the earlier unchanged-architecture runtime qualification. This does not prove Bitmap automatic collection capture, live vendor runtime objects, buffer lifetime, drivers, emulators, or hardware.

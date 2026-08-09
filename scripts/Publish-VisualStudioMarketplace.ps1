@@ -156,16 +156,32 @@ function Find-VsixPublisher {
 }
 
 function Get-AssetFiles {
+    param([string]$MarkdownPath)
+
     $imageRoot = Join-Path $repoRoot 'docs\images'
     if (-not (Test-Path -LiteralPath $imageRoot -PathType Container)) {
         return @()
     }
 
-    return @(Get-ChildItem -LiteralPath $imageRoot -File -Include *.png, *.jpg, *.jpeg, *.gif -Recurse |
-        ForEach-Object {
-            $relative = $_.FullName.Substring($repoRoot.Length + 1).Replace('\', '/')
+    $markdown = Get-Content -LiteralPath $MarkdownPath -Raw
+    $assetPaths = @([regex]::Matches(
+            $markdown,
+            'docs/images/(?<path>[A-Za-z0-9._/-]+\.(?:png|jpe?g|gif))',
+            [System.Text.RegularExpressions.RegexOptions]::IgnoreCase) |
+        ForEach-Object { $_.Groups['path'].Value.Replace('/', '\') } |
+        Sort-Object -Unique)
+
+    return @($assetPaths | ForEach-Object {
+            $assetPath = Join-Path $imageRoot $_
+            Assert-FileExists -Path $assetPath -Message 'Marketplace Overview image was not found'
+            $resolved = (Resolve-Path -LiteralPath $assetPath).Path
+            if (-not $resolved.StartsWith($imageRoot + '\', [System.StringComparison]::OrdinalIgnoreCase)) {
+                throw "Marketplace Overview image escapes docs\images: $assetPath"
+            }
+
+            $relative = $resolved.Substring($repoRoot.Length + 1).Replace('\', '/')
             [ordered]@{
-                pathOnDisk = $_.FullName
+                pathOnDisk = $resolved
                 targetPath = $relative
             }
         })
@@ -270,7 +286,7 @@ $manifest = [ordered]@{
     repo           = $RepositoryUrl
 }
 
-$assetFiles = Get-AssetFiles
+$assetFiles = Get-AssetFiles -MarkdownPath $OverviewPath
 if ($assetFiles.Count -gt 0) {
     $manifest.assetFiles = $assetFiles
 }

@@ -18,12 +18,12 @@ $ErrorActionPreference = 'Stop'
 
 $extensionId = 'RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f'
 $toolWindowExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
-$minimumVisualStudioVersion = [Version]'17.14.0'
+$minimumVisualStudioVersion = [Version]'17.9.0'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
 $repairScript = Join-Path $repoRoot 'scripts\Repair-VisualStudioExtensionRegistration.ps1'
 if ([string]::IsNullOrWhiteSpace($VsixPath)) {
-    $VsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
+    $VsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
 }
 else {
     $VsixPath = [IO.Path]::GetFullPath($VsixPath)
@@ -301,21 +301,26 @@ function Test-DebuggerVisualizerVsixInstall {
         throw "Debugger object source is missing: $objectSource"
     }
 
-    $packageDll = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Extensibility.dll'
-    if (-not (Test-Path -LiteralPath $packageDll)) {
-        throw "Hybrid VSSDK package assembly is missing: $packageDll"
+    $providerDll = Join-Path $extensionPath 'OutOfProc\RawBufferVisualizer.VisualStudio.Extensibility.dll'
+    if (-not (Test-Path -LiteralPath $providerDll)) {
+        throw "Debugger provider assembly is missing: $providerDll"
     }
 
-    $pkgdef = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef'
+    $packageDll = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
+    if (-not (Test-Path -LiteralPath $packageDll)) {
+        throw "Isolated VSSDK package assembly is missing: $packageDll"
+    }
+
+    $pkgdef = Join-Path $extensionPath 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef'
     if (-not (Test-Path -LiteralPath $pkgdef)) {
-        throw "Hybrid VSSDK package registration is missing: $pkgdef"
+        throw "Isolated VSSDK package registration is missing: $pkgdef"
     }
 
     $pkgdefText = Get-Content -LiteralPath $pkgdef -Raw
     foreach ($requiredRegistration in @(
         '[$RootKey$\Packages\{1977574b-f107-465f-bfd1-5fc022907039}]',
         '"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"',
-        '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"',
+        '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Vssdk.dll"',
         '"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"',
         '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
     )) {

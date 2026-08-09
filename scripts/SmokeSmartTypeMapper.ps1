@@ -179,7 +179,13 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
 
 $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
 $assemblyDirectory = Split-Path -Parent $assemblyPath
-foreach ($dependency in @("RawBufferVisualizer.Core.dll", "RawBufferVisualizer.Sdk.dll", "RawBufferVisualizer.VisualStudio.ObjectSource.dll", "RawBufferVisualizer.VisualStudio.dll")) {
+foreach ($dependency in @(
+    "Microsoft.VisualStudio.Imaging.dll",
+    "Microsoft.VisualStudio.ImageCatalog.dll",
+    "RawBufferVisualizer.Core.dll",
+    "RawBufferVisualizer.Sdk.dll",
+    "RawBufferVisualizer.VisualStudio.ObjectSource.dll",
+    "RawBufferVisualizer.VisualStudio.dll")) {
     [Reflection.Assembly]::LoadFrom((Join-Path $assemblyDirectory $dependency)) | Out-Null
 }
 [Reflection.Assembly]::LoadFrom($assemblyPath) | Out-Null

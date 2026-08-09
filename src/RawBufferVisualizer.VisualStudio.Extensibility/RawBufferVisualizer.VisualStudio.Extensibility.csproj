@@ -1,85 +1,32 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFramework>net472</TargetFramework>
+    <TargetFramework>net8.0-windows8.0</TargetFramework>
     <UseWPF>true</UseWPF>
     <IsPackable>false</IsPackable>
-    <VssdkCompatibleExtension>true</VssdkCompatibleExtension>
-    <GeneratePkgDefFile>true</GeneratePkgDefFile>
-    <UseCodebase>true</UseCodebase>
-    <AssemblyVersion>2.0.1.0</AssemblyVersion>
-    <FileVersion>2.0.1.0</FileVersion>
-    <Version>2.0.1</Version>
+    <CreateVsixContainer>false</CreateVsixContainer>
+    <AssemblyVSIXSubPath>OutOfProc</AssemblyVSIXSubPath>
+    <AssemblyVersion>2.0.2.0</AssemblyVersion>
+    <FileVersion>2.0.2.0</FileVersion>
+    <Version>2.0.2</Version>
   </PropertyGroup>
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.14.40254" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.14.40254" PrivateAssets="all" />
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.9.37000" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.9.2092" PrivateAssets="all" />
   </ItemGroup>
-  <ItemGroup>
-    <VSCTCompile Include="RawBufferVisualizerCommands.vsct">
-      <ResourceName>Menus.ctmenu</ResourceName>
-    </VSCTCompile>
-  </ItemGroup>
+
   <ItemGroup>
     <None Remove="DockedVisualizerControl.xaml" />
     <EmbeddedResource Include="DockedVisualizerControl.xaml" />
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="Resources\Icon.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="Resources\ReleaseNotes.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <IncludeInVSIX>true</IncludeInVSIX>
-    </Content>
-    <Content Include="..\..\LICENSE" Link="LICENSE.txt">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\THIRD-PARTY-NOTICES.md" Link="THIRD-PARTY-NOTICES.md">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
-    <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj" />
     <ProjectReference Include="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.Core\$(Configuration)\net472\RawBufferVisualizer.Core.dll" Link="RawBufferVisualizer.Core.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.Sdk\$(Configuration)\net472\RawBufferVisualizer.Sdk.dll" Link="RawBufferVisualizer.Sdk.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.dll" Link="RawBufferVisualizer.VisualStudio.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.OpenGlCanvas\$(Configuration)\net472\RawBufferVisualizer.OpenGlCanvas.dll" Link="RawBufferVisualizer.OpenGlCanvas.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\RawBufferVisualizer.VisualStudio.Vssdk.dll" Link="RawBufferVisualizer.VisualStudio.Vssdk.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.dll" Link="SharpGL.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.SceneGraph.dll" Link="SharpGL.SceneGraph.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-    <Content Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$(Configuration)\net472\SharpGL.WinForms.dll" Link="SharpGL.WinForms.dll">
-      <Visible>false</Visible>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+
   <Target Name="BuildObjectSourceForVsix" BeforeTargets="AssignTargetPaths">
     <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj"
              Targets="Build"
@@ -91,6 +38,8 @@
       <_ObjectSourceVsixPayload Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.deps.json" />
       <Content Include="@(_ObjectSourceVsixPayload)">
         <Link>netstandard2.0\%(_ObjectSourceVsixPayload.Filename)%(_ObjectSourceVsixPayload.Extension)</Link>
+        <VSIXSubPath>netstandard2.0</VSIXSubPath>
+        <IncludeInVSIX>true</IncludeInVSIX>
         <Visible>false</Visible>
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </Content>

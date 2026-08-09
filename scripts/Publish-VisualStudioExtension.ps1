@@ -5,13 +5,14 @@ param(
     [string]$Configuration = 'Release',
     [string]$ViewerFramework = 'net472',
     [string]$PublishRoot = '',
+    [switch]$NoBuild,
     [switch]$NoZip
 )
 
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$project = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
+$project = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj'
 if ([string]::IsNullOrWhiteSpace($PublishRoot)) {
     $publishRoot = Join-Path $repoRoot 'artifacts\publish'
 }
@@ -21,7 +22,8 @@ else {
 $packageName = "RawBufferVisualizer-VisualStudioExtensibility-$Framework"
 $publishDir = Join-Path $publishRoot $packageName
 $zipPath = Join-Path $publishRoot "$packageName.zip"
-$buildOutput = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework"
+$buildOutput = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework"
+$providerOutput = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\net8.0-windows8.0"
 $vsixPath = Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.vsix'
 
 function Get-VsixEntryNames {
@@ -162,6 +164,8 @@ function Assert-ModernCollectionRegistrationsOpen {
         'typeof(List<>)',
         'typeof(Dictionary<,>)',
         'typeof(object[])',
+        'System.Collections.Generic.List`1, mscorlib, Version=4.0.0.0',
+        'System.Collections.Generic.Dictionary`2, mscorlib, Version=4.0.0.0',
         'System.Collections.Generic.List`1, System.Private.CoreLib',
         'System.Collections.Generic.Dictionary`2, System.Private.CoreLib',
         'OpenCvSharp.Mat[], OpenCvSharp',
@@ -176,15 +180,48 @@ function Assert-ModernCollectionRegistrationsOpen {
 function Assert-VssdkReferenceCompatibility {
     param([string]$AssemblyPath)
 
-    $maxThreadingVersion = [Version]'17.14.0.0'
+    $qualifiedThreadingVersion = [Version]'17.9.0.0'
     $references = [Reflection.Assembly]::ReflectionOnlyLoadFrom($AssemblyPath).GetReferencedAssemblies()
     $threading = $references | Where-Object { $_.Name -eq 'Microsoft.VisualStudio.Threading' } | Select-Object -First 1
     if ($null -eq $threading) {
         throw "VSSDK package does not reference Microsoft.VisualStudio.Threading: $AssemblyPath"
     }
 
-    if ($threading.Version -gt $maxThreadingVersion) {
-        throw "VSSDK package references Microsoft.VisualStudio.Threading $($threading.Version), but the 1.0.52 Marketplace support floor is Visual Studio 2022 17.14. Build against 17.14-compatible VSSDK references."
+    if ($threading.Version -ne $qualifiedThreadingVersion) {
+        throw "VSSDK package references Microsoft.VisualStudio.Threading $($threading.Version), but the qualified Visual Studio 2022 floor requires $qualifiedThreadingVersion. Requalify every supported Visual Studio generation before changing this dependency."
+    }
+}
+
+function Assert-VisualStudioCompatibilityContract {
+    param([xml]$Manifest)
+
+    $installationTargets = @($Manifest.PackageManifest.Installation.InstallationTarget)
+    $expectedIds = @(
+        'Microsoft.VisualStudio.Community',
+        'Microsoft.VisualStudio.Pro',
+        'Microsoft.VisualStudio.Enterprise'
+    )
+    foreach ($expectedId in $expectedIds) {
+        $target = $installationTargets |
+            Where-Object { [string]$_.Id -eq $expectedId } |
+            Select-Object -First 1
+        if ($null -eq $target) {
+            throw "VSIX manifest is missing installation target '$expectedId'."
+        }
+        if ([string]$target.Version -ne '[17.9,18.0)') {
+            throw "VSIX installation target '$expectedId' must declare [17.9,18.0), but found '$($target.Version)'."
+        }
+        if ([string]$target.ProductArchitecture -ne 'amd64') {
+            throw "VSIX installation target '$expectedId' must be amd64."
+        }
+    }
+
+    $coreEditor = @($Manifest.PackageManifest.Prerequisites.Prerequisite) |
+        Where-Object { [string]$_.Id -eq 'Microsoft.VisualStudio.Component.CoreEditor' } |
+        Select-Object -First 1
+    if ($null -eq $coreEditor -or [string]$coreEditor.Version -ne '[17.9,)') {
+        $actualVersion = if ($null -eq $coreEditor) { '<missing>' } else { [string]$coreEditor.Version }
+        throw "VSIX CoreEditor prerequisite must declare [17.9,), but found '$actualVersion'."
     }
 }
 
@@ -199,7 +236,7 @@ function Assert-HybridVssdkRegistration {
     foreach ($requiredRegistration in @(
         '[$RootKey$\Packages\{1977574b-f107-465f-bfd1-5fc022907039}]',
         '"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"',
-        '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"',
+        '"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Vssdk.dll"',
         '[$RootKey$\Menus]',
         '"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"',
         '[$RootKey$\ToolWindows\{a329e331-089a-4186-8fd7-57a241fd1917}]'
@@ -209,8 +246,8 @@ function Assert-HybridVssdkRegistration {
         }
     }
 
-    if ($pkgdef.Contains('RawBufferVisualizer.VisualStudio.Vssdk.dll')) {
-        throw "The VSSDK package must be owned by the hybrid extension assembly, not the ToolWindow support library: $PkgdefPath"
+    if ($pkgdef.Contains('RawBufferVisualizer.VisualStudio.Extensibility.dll')) {
+        throw "The in-process VSSDK package must not be owned by the newer out-of-process Extensibility assembly: $PkgdefPath"
     }
 
     if ($pkgdef.Contains('{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}')) {
@@ -228,13 +265,13 @@ function Assert-HybridVssdkRegistration {
     }
 
     $generatedManifest = Get-Content -Raw -LiteralPath $GeneratedManifestPath
-    if (-not $generatedManifest.Contains('Type="Microsoft.VisualStudio.VsPackage" Path="RawBufferVisualizer.VisualStudio.Extensibility.pkgdef"')) {
-        throw "Generated VSIX manifest does not reference the hybrid project's pkgdef: $GeneratedManifestPath"
+    if (-not $generatedManifest.Contains('Type="Microsoft.VisualStudio.VsPackage" Path="RawBufferVisualizer.VisualStudio.Vssdk.pkgdef"')) {
+        throw "Generated VSIX manifest does not reference the isolated VSSDK pkgdef: $GeneratedManifestPath"
     }
 
     $sourceManifest = Get-Content -Raw -LiteralPath $SourceManifestPath
-    if (-not $sourceManifest.Contains('Path="|%CurrentProject%;PkgdefProjectOutputGroup|"')) {
-        throw "Source VSIX manifest must use the current hybrid project's PkgdefProjectOutputGroup: $SourceManifestPath"
+    if (-not $sourceManifest.Contains('Path="RawBufferVisualizer.VisualStudio.Vssdk.pkgdef"')) {
+        throw "Source VSIX manifest must reference the isolated VSSDK pkgdef: $SourceManifestPath"
     }
 }
 
@@ -252,33 +289,37 @@ if (Test-Path -LiteralPath $zipPath) {
 
 New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
 
-Push-Location $repoRoot
-try {
-    & dotnet build $project --configuration $Configuration --framework $Framework /nodeReuse:false
-    if ($LASTEXITCODE -ne 0) {
-        throw "Visual Studio extension build failed with exit code $LASTEXITCODE"
+if (-not $NoBuild) {
+    Push-Location $repoRoot
+    try {
+        & dotnet build $project --configuration $Configuration /nodeReuse:false
+        if ($LASTEXITCODE -ne 0) {
+            throw "Visual Studio extension build failed with exit code $LASTEXITCODE"
+        }
+    }
+    finally {
+        Pop-Location
     }
 }
-finally {
-    Pop-Location
-}
 
-$extensionJsonPath = Join-Path $buildOutput '.vsextension\extension.json'
+$extensionJsonPath = Join-Path $providerOutput '.vsextension\extension.json'
 Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension metadata was not created'
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
 Assert-ModernDebuggerVisualizerProvidersPresent -ExtensionJsonPath $extensionJsonPath
 Assert-ModernCollectionRegistrationsOpen -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\ImageCollectionDebuggerVisualizerProvider.cs')
-Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') -Message 'Hybrid Visual Studio package registration was not created'
+Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Isolated Visual Studio package registration was not created'
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
-Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.dll')
+Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')
 Assert-FileExists -Path $vsixPath -Message 'Visual Studio extension VSIX was not created'
 
 $manifestPath = Join-Path $buildOutput 'extension.vsixmanifest'
 Assert-FileExists -Path $manifestPath -Message 'Visual Studio extension manifest was not created'
 
 [xml]$manifest = Get-Content -Raw -LiteralPath $manifestPath
-$sourceManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest'
+$sourceManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\source.extension.vsixmanifest'
 [xml]$sourceManifest = Get-Content -Raw -LiteralPath $sourceManifestPath
+Assert-VisualStudioCompatibilityContract -Manifest $sourceManifest
+Assert-VisualStudioCompatibilityContract -Manifest $manifest
 $generatedVersion = [string]$manifest.PackageManifest.Metadata.Identity.Version
 $sourceVersion = [string]$sourceManifest.PackageManifest.Metadata.Identity.Version
 if ($generatedVersion -ne $sourceVersion) {
@@ -291,7 +332,7 @@ if ($extensionType -ne 'VSSDK+VisualStudio.Extensibility') {
 }
 
 Assert-HybridVssdkRegistration `
-    -PkgdefPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') `
+    -PkgdefPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') `
     -GeneratedManifestPath $manifestPath `
     -SourceManifestPath $sourceManifestPath
 
@@ -299,10 +340,11 @@ $entryNames = Get-VsixEntryNames -Path $vsixPath
 $requiredEntries = @(
     'extension.vsixmanifest',
     '.vsextension/extension.json',
-    'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef',
-    'RawBufferVisualizer.VisualStudio.Extensibility.dll',
+    'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef',
+    'OutOfProc/RawBufferVisualizer.VisualStudio.Extensibility.dll',
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
     'RawBufferVisualizer.OpenGlCanvas.dll',
+    'netstandard2.0/RawBufferVisualizer.VisualStudio.ObjectSource.dll',
     'SharpGL.dll',
     'SharpGL.WinForms.dll'
 )
@@ -317,11 +359,12 @@ if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Classic.dll') {
     throw 'VSIX must not contain the obsolete Classic debugger visualizer assembly.'
 }
 
-if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') {
-    throw 'VSIX must not contain the obsolete split-project VSSDK pkgdef.'
+if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') {
+    throw 'VSIX must not contain the obsolete Extensibility-owned VSSDK pkgdef.'
 }
 
 [xml]$packagedManifest = Get-VsixEntryText -Path $vsixPath -EntryName 'extension.vsixmanifest'
+Assert-VisualStudioCompatibilityContract -Manifest $packagedManifest
 $packagedVersion = [string]$packagedManifest.PackageManifest.Metadata.Identity.Version
 if ($packagedVersion -ne $sourceVersion) {
     throw "Packaged VSIX manifest version $packagedVersion does not match source manifest version $sourceVersion. Do not publish or install the stale VSIX."
@@ -344,7 +387,7 @@ Set-Content -LiteralPath $readmePath -Encoding UTF8 -Value @(
     '- Marketplace-installed debugger providers that forward inspected values to the same docked image list',
     '',
     'Supported environment:',
-    '- Visual Studio 2022 17.14 or newer, or Visual Studio 2026 18.x',
+    '- Visual Studio 2022 17.9 or newer, or Visual Studio 2026 18.x',
     '',
     'Close Visual Studio before installing, then restart Visual Studio before debugger testing.'
 )

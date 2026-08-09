@@ -25,6 +25,9 @@ if ($VerifyDiagnosticSeamOnly) {
         throw "ToolWindow assembly was not found: $assemblyPath"
     }
 
+    foreach ($dependencyName in @("Microsoft.VisualStudio.Imaging.dll", "Microsoft.VisualStudio.ImageCatalog.dll")) {
+        [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path -Parent $assemblyPath) $dependencyName)) | Out-Null
+    }
     $assembly = [Reflection.Assembly]::LoadFrom($assemblyPath)
     $controlType = $assembly.GetType(
         "RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl",
@@ -40,7 +43,12 @@ if ($VerifyDiagnosticSeamOnly) {
     return
 }
 
-$outputRoot = Join-Path $repoRoot $OutputDir
+$outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+}
+else {
+    Join-Path $repoRoot $OutputDir
+}
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $rawPath = Join-Path $outputRoot "automatic-inspector-mono8.raw"
 $metadataPath = Join-Path $outputRoot "automatic-inspector-mono8.rbuf.json"
@@ -138,6 +146,9 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
 }
 
 $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
+foreach ($dependencyName in @("Microsoft.VisualStudio.Imaging.dll", "Microsoft.VisualStudio.ImageCatalog.dll")) {
+    [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path -Parent $assemblyPath) $dependencyName)) | Out-Null
+}
 [Reflection.Assembly]::LoadFrom($assemblyPath) | Out-Null
 
 $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl
@@ -227,8 +238,7 @@ $membersText = $control.FindName("AutomaticInspectionMembersText").Text
 $validation = $control.FindName("AutomaticInspectionValidationText").Text
 $expectFullInspector = $WindowWidth -ge 1040
 if (($expectFullInspector -and $panel.Visibility -ne [System.Windows.Visibility]::Visible) -or
-    ($null -eq $collectionBox) -or
-    ($collectionBox.Content.ToString() -ne "Mat collections") -or
+    ($null -ne $collectionBox) -or
     ($expectFullInspector -and $confidence -ne "Confidence 96%") -or
     ($expectFullInspector -and -not $membersText.Contains("Info.Width")) -or
     ($expectFullInspector -and -not $validation.Contains("validation passed"))) {
@@ -239,12 +249,12 @@ if (($expectFullInspector -and $panel.Visibility -ne [System.Windows.Visibility]
     Capture = $capturePath
     WindowWidth = $WindowWidth
     PanelVisible = ($panel.Visibility -eq [System.Windows.Visibility]::Visible)
-    CollectionOptionVisible = $true
-    CollectionOptionChecked = ($collectionBox.IsChecked -eq $true)
+    CollectionOptionAbsent = ($null -eq $collectionBox)
     Confidence = $confidence
     Members = $membersText
     Validation = $validation
 } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 
 $window.Close()
+$control.Dispose()
 Write-Host "Automatic Vision Inspector layout smoke passed. Capture: $capturePath"

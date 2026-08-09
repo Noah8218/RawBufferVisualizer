@@ -10,18 +10,31 @@
 
 Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-backed images, raw buffers, supported image collections, and structurally recognizable camera-frame wrappers in one docked Visual Studio 2022 or Visual Studio 2026 window. It combines registered debugger visualizers with safe current-frame discovery for C# machine-vision work.
 
-![Raw Buffer Visualizer inspecting a real industrial PCB image in Visual Studio](docs/images/industrial-pcb-auto-inspector-pixel.png)
+![Open an OpenCvSharp Mat from its code DataTip](docs/images/raw-buffer-visualizer-datatip-open.gif)
 
-[Demo image provenance and validation](docs/industrial-image-testing.md)
+Hover an initialized `Mat` or `Bitmap` in the code editor and select its visualizer magnifying-glass icon. The example opens a real 1280 x 720 `BGR24` industrial-machine photograph from an OpenCvSharp `Mat` directly into the docked viewer.
+
+![Open a real industrial Bitmap from a Visual Studio breakpoint](docs/images/raw-buffer-visualizer-breakpoint-open.gif)
+
+The breakpoint demo uses an actual Locals row and the registered Raw Buffer Visualizer entry to open a recognizable color PCB photograph in the docked viewer.
 
 ![Raw Buffer Visualizer debugger workflow in Visual Studio](docs/images/raw-buffer-visualizer-demo.gif)
 
+The six-second overview continues through live color pixels, automatic inspection, diagnostics, an intentionally wrong `BGR24` stride, and the restored color frame after applying the top Buffer Doctor candidate.
+
+![Raw Buffer Visualizer inspecting a real industrial PCB image in Visual Studio](docs/images/industrial-pcb-auto-inspector-pixel.png)
+
+[Demo image provenance, licenses, and validation](docs/industrial-image-testing.md)
+
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## Raw Buffer Visualizer 2.0.1
+## Raw Buffer Visualizer 2.0.2
 
-Version `2.0.1` delivers the complete 2.0 feature set:
+Version `2.0.2` restores Visual Studio 2022 `17.9+` support while retaining stable Visual Studio 2026 `18.x` compatibility and the complete 2.0 feature set:
 
+- Visual Studio 2022 `17.9+` Community, Professional, and Enterprise x64 support;
+- stable Visual Studio 2026 `18.x` compatibility through the same extension identity;
+- shorter debugger-handoff filenames so long writable temporary-storage paths do not block registered images;
 - one documented contract for registered `RawBufferView`/`RawBufferSnapshot`, mapped pointers, and mapped `byte[]`, `ushort[]`, and `float[]` buffers;
 - shared checked fail-closed validation for dimensions, stride, buffer length, format/order enum values, arithmetic overflow, and valid bits before metadata transfer;
 - preserved valid `Mono16` values and fixed 10/12-bit packed-layout rules;
@@ -29,7 +42,7 @@ Version `2.0.1` delivers the complete 2.0 feature set:
 - debugger-session gating that prevents delayed pre-Continue handoffs from reopening in Run Mode or a later Break;
 - **Connect Doctor** inside Connect Your Buffer: ranked bounded interpretations update only the visible draft and preview until **Save Mapping** is selected.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.1`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.2`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
 ### Environment Check
 
@@ -52,7 +65,7 @@ Open the docked Tool Window once, leave `Auto Inspect on Break` enabled, and sto
 - One failed candidate does not prevent the remaining images from opening.
 - `Auto Inspect on Break` is a per-user preference that persists across Visual Studio restarts. `Scan Now` still works while automatic scanning is off.
 
-Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values can use Automatic Inspector's validated live-memory path and still retain their debugger-visualizer icons. An optional persisted **Mat collections** mode expands exact Mat `List<T>` and one-dimensional arrays with bounded per-element success/failure rows. `System.Drawing.Bitmap`, `RawBufferSnapshot`, `RawBufferView`, and other registered collections remain on their registered visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which Automatic Inspector deliberately does not inject or invoke.
+Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values can use Automatic Inspector's validated live-memory path and still retain their debugger-visualizer icons. Exact Mat `List<T>` and one-dimensional arrays are included automatically with bounded per-element success/failure rows; no separate collection option is required. `System.Drawing.Bitmap`, `RawBufferSnapshot`, `RawBufferView`, and other registered collections remain on their registered visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which Automatic Inspector deliberately does not inject or invoke.
 
 ### Connect Your Buffer
 
@@ -72,28 +85,26 @@ The normal no-code route is **Save Mapping**. It invokes no object methods and s
 
 Visual Studio stops before executing the highlighted breakpoint statement. If the breakpoint is on `Bitmap bitmap = new Bitmap(...)`, `bitmap` is not initialized yet. Stop on the next executable line, or use **Scan Now** only after the image object exists in the selected stack frame.
 
-![Automatic Vision Inspector finds safe image-like values in the current stack frame](docs/images/automatic-vision-inspector.png)
-
 ### Vision Buffer Doctor
 
 When an image looks sheared, too dark, scrambled, or incorrectly packed, select `Interpret > Diagnose Buffer`. Buffer Doctor ranks plausible width, height, stride, pixel format, valid-bit, and byte-order interpretations from bounded samples. Selecting a candidate applies it immediately without another debugger round trip.
 
 Buffer Doctor is a buffer-layout assistant, not a semantic image detector. RGB/BGR and Bayer phase can remain inherently ambiguous, so the UI keeps tied candidates visible for the developer to confirm.
 
-Incorrect stride metadata shears the same industrial image:
+Incorrect stride metadata shears a dedicated color `BGR24` derivative of the industrial image. Its descriptor reports stride `7344`, while the stored rows use stride `7424` with 80 padding bytes:
 
 ![Buffer Doctor ranks interpretations for an industrial PCB image with incorrect stride metadata](docs/images/industrial-pcb-buffer-doctor-before.png)
 
-Selecting the top `Mono8`, stride `2560` interpretation restores the image:
+Selecting the top `BGR24`, stride `7424` interpretation restores both row alignment and the original color scene. Buffer Doctor changes the active interpretation metadata without modifying the paused application's source bytes:
 
-![Buffer Doctor restores the industrial PCB image after applying the correct stride](docs/images/industrial-pcb-buffer-doctor-recovered.png)
+![Buffer Doctor restores the color BGR24 PCB image after applying the correct stride](docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## One-Minute Quick Start
 
 1. Install the extension from [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer) and restart Visual Studio.
 2. Open `View > Other Windows > Raw Buffer Visualizer` once.
 3. Start debugging and stop where image variables or camera-frame wrappers are alive.
-4. Let `Auto Inspect on Break` open initialized OpenCvSharp/Emgu Mats and safe unregistered wrappers. Enable **Mat collections** when exact Mat lists/arrays should also expand automatically. For Bitmap and other registered collections, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
+4. Let `Auto Inspect on Break` open initialized OpenCvSharp/Emgu Mats, supported exact Mat lists/arrays, and safe unregistered wrappers. For Bitmap and other registered collections, click the `Raw Buffer Visualizer` icon in DataTip, Watch, Locals, or Autos.
 5. Select a thumbnail, zoom or pan, and inspect X/Y, GV or RGB values, raw bytes, stride, and pixel format.
 6. If a raw image looks wrong, run `Interpret > Diagnose Buffer` and select the most plausible candidate.
 
@@ -133,20 +144,18 @@ Other debugger visualizers have different feature sets. This comparison describe
 - A/B comparison MVP: set A/B, link pan/zoom, split view, diff view, and blink compare.
 - File-backed tiled display for very large raw payloads.
 
-![High-zoom pixel value overlay](docs/images/viewer-vs-docked-overlay.png)
-
 ## Install
 
 ### Visual Studio compatibility
 
 | Product | Supported versions | Current qualification |
 | --- | --- | --- |
-| Visual Studio 2022 | `17.14` or newer, x64 | Version `2.0.0.0` passed package equality, registration, release/environment UI, persisted settings, eight-buffer automatic inspection, and registered `RawBufferView` visualization on Community `17.14.37516.0`. |
-| Visual Studio 2026 | Stable `18.x`, x64 | The same `2.0.0.0` package passed the equivalent checks on Community `18.8.12023.21`. |
+| Visual Studio 2022 | `17.9` or newer, x64 | Version `2.0.2.0` restores the 17.9 floor; exact final-package qualification is recorded in the [2.0.2 release document](docs/release-qualification-2.0.2.md). |
+| Visual Studio 2026 | Stable `18.x`, x64 | The same `2.0.2.0` package retains the stable 18.x compatibility target. |
 
 Community, Professional, and Enterprise editions are installation targets. Visual Studio 2019, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets.
 
-The manifest uses the API range `[17.14,18.0)`. This is compatible with Visual Studio 2026 because VS2026 supports Visual Studio API version 17.x and evaluates the lower bound while ignoring the old product-version upper bound. See [Microsoft's extension compatibility model](https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility?view=visualstudio).
+The manifest uses the API range `[17.9,18.0)`. This is compatible with Visual Studio 2026 because VS2026 supports Visual Studio API version 17.x and evaluates the lower bound while ignoring the old product-version upper bound. See [Microsoft's extension compatibility model](https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility?view=visualstudio).
 
 ### Required software and optional utilities
 
@@ -158,7 +167,7 @@ Contributors and release maintainers use additional tools:
 
 | Role | Required tools |
 | --- | --- |
-| Build and test | Git, Windows PowerShell 5.1, .NET 8 SDK or newer, and Visual Studio 2022 17.14+ with the .NET desktop development workload |
+| Build and test | Git, Windows PowerShell 5.1, .NET 8 SDK or newer, and Visual Studio 2022 17.9+ with the .NET desktop development workload |
 | VS2026 compatibility check | Stable Visual Studio 2026 18.x in addition to the VS2022 baseline |
 | Marketplace publish | `VsixPublisher.exe`, normally restored through `Microsoft.VSSDK.BuildTools`, plus Marketplace publisher credentials and approval |
 | Demo GIF/MP4 creation | FFmpeg; optional and not used by the product at runtime |
@@ -182,7 +191,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` adds the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` added the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating. Version `2.0.2.0` restores Visual Studio 2022 `17.9+` support and repairs long temporary-path handoff claims.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -213,7 +222,7 @@ If the popup appears only when inspecting an image, check:
 %APPDATA%\Microsoft\VisualStudio\17.0_...\ActivityLog.xml
 ```
 
-Versions `1.0.25` through `1.0.51` retained the Visual Studio 2022 17.9 API floor. Version `1.0.52` intentionally moves the minimum to the serviced Visual Studio 2022 17.14 baseline because the newer Extensibility runtime is required for stable Visual Studio 2026 activation.
+Versions `1.0.52` through `2.0.1` used the Visual Studio 2022 17.14 floor. Version `2.0.2` restores the Visual Studio 2022 17.9 API floor by separating the in-process VSSDK package from the out-of-process provider while retaining stable Visual Studio 2026 compatibility.
 
 ### Uninstall
 
@@ -271,15 +280,13 @@ When an image cannot be opened, select its red error row. The viewer shows a sta
 
 Visual Studio requires generic debugger visualizers to register the open generic `List<>` and `Dictionary<,>` types. Raw Buffer Visualizer therefore appears for typed and mixed lists or dictionaries. It transfers supported image entries only; null, unsupported, and failed entries remain visible as error rows. Visual Studio's built-in `IEnumerable Visualizer` can remain in the visualizer menu, so select `Raw Buffer Visualizer` when more than one visualizer is offered.
 
-The toolbar intentionally stays small: `Open`, `Clear`, `Save`, `Fit`, `1:1`, `Inspector`, and `Link Views` when there is room. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
+The toolbar intentionally stays small and uses Visual Studio-native command icons. At narrow widths, the five primary image commands become icon-only controls with tooltips and accessible names; panel commands keep their text. Image-dependent commands remain disabled until an image is available, and the empty viewer explains how to begin. Detailed debugging controls stay in the Inspector or compact docked inspector so the Visual Studio workflow remains focused.
 
 The docked layout adapts to the available width:
 
 - Narrow: image list, viewer, Save, status strip, and an `Inspector` toggle.
 - Medium: image list, viewer, and bottom tab Inspector.
 - Wide: image list, viewer, Descriptor, and full right-side Inspector.
-
-![Failed opens remain visible as error rows](docs/images/viewer-vs-docked-error.png)
 
 ## Supported Inputs
 
@@ -293,7 +300,7 @@ The docked layout adapts to the available width:
 | OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs instead of requiring the debuggee's OpenCvSharp package version. |
 | Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. |
 | Image collections | Supported | Typed or mixed `List<T>`, `Dictionary<TKey, TValue>`, `ArrayList`, `Hashtable`, `object[]`, and supported image arrays. Up to 256 entries are processed per invocation. |
-| Automatic Mat collections | `1.0.52` candidate | Optional exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays; 8 items per collection, 16 items and 8 roots per scan. Bitmap and broad collections remain glyph-owned. |
+| Automatic Mat collections | Supported | Exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays are included automatically; 8 items per collection, 16 items and 8 roots per scan. Bitmap and broad collections remain glyph-owned. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
 | `.raw` / `.bin` only | Limited | Create a matching `.rbuf.json` descriptor first. |
 
@@ -503,7 +510,7 @@ Recorded evidence covers `2.0.0`, previous releases, and historical stress/compa
 Build prerequisites:
 
 - Windows x64, Git, and Windows PowerShell 5.1.
-- Visual Studio 2022 17.14 or newer with the .NET desktop development workload for IDE and installed-VSIX validation.
+- Visual Studio 2022 17.9 or newer with the .NET desktop development workload for IDE and installed-VSIX validation.
 - .NET 8 SDK or newer. The solution does not require the .NET 9 or .NET 10 SDK.
 - Internet access for the first NuGet restore, or a previously populated NuGet package cache.
 
@@ -516,7 +523,7 @@ dotnet restore .\RawBufferVisualizer.sln
 dotnet build .\RawBufferVisualizer.sln -c Release
 ```
 
-The hybrid `RawBufferVisualizer.VisualStudio.Extensibility` project owns debugger providers, the `RawBufferVisualizerPackage` registration shell, command table compilation, and the public VSIX. Its `PkgdefProjectOutputGroup` generates `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef` with a `CodeBase` under `$PackageFolder$`. The `RawBufferVisualizer.VisualStudio.Vssdk` project is a referenced ToolWindow/UI support library and must not produce the Marketplace package registration.
+`RawBufferVisualizer.VisualStudio.Vssdk` owns the in-process package, command table, generated `.pkgdef`, docked Tool Window, and composite VSIX. `RawBufferVisualizer.VisualStudio.Extensibility` contributes only the out-of-process debugger visualizer providers under `OutOfProc`.
 
 Build:
 
@@ -585,18 +592,18 @@ The Marketplace extension is distributed through Visual Studio Marketplace. Rele
 - Large file-backed snapshots and the standalone viewer.
 - Package-load smoke after update: Visual Studio must not show `RawBufferVisualizerPackage did not load correctly` on startup.
 - Upgrade recovery: update a `1.0.53` profile to `2.0.0`, then prove the View command, Environment Check, registered buffer handoff, automatic Mat, and mapped-buffer workflows without repair or `/ResetSkipPkgs`.
-- VSSDK package ownership: the generated `.pkgdef` must reference `RawBufferVisualizer.VisualStudio.Extensibility.dll`; the former split-project `.pkgdef` is prohibited.
+- VSSDK package ownership: the generated `.pkgdef` must reference `RawBufferVisualizer.VisualStudio.Vssdk.dll`; the out-of-process provider must not own a second package registration.
 - VSPackage/menu identity: the `2.0.0` `.pkgdef` must contain `{1977574b-f107-465f-bfd1-5fc022907039}`, exactly one `Menus.ctmenu, 2` entry, and no retired `1.0.47`/`1.0.48` GUID.
 - View menu: exactly one open command and one current-frame scan command.
 - Fit/Manual: Fit remains aspect-correct after resize; wheel, pan, and 1:1 remain Manual and preserve center/scale.
-- Hybrid package compatibility: `RawBufferVisualizer.VisualStudio.Extensibility.dll` must not reference `Microsoft.VisualStudio.Threading` newer than the declared Visual Studio 2022 `17.14` support floor.
+- Hybrid package compatibility: the in-process `RawBufferVisualizer.VisualStudio.Vssdk.dll` must remain on the declared Visual Studio 2022 `17.9` SDK floor; debugger providers remain out of process.
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview: [2.0.1 Overview](docs/marketplace-overview-2.0.1.md).
-Marketplace release text: [2.0.1 release notes](docs/marketplace-release-notes-2.0.1.md).
+Marketplace feature Overview: [2.0.2 Overview](docs/marketplace-overview-2.0.2.md).
+Marketplace release text: [2.0.2 release notes](docs/marketplace-release-notes-2.0.2.md).
 Complete user-visible history: [CHANGELOG](CHANGELOG.md).
-For the short product video, follow the [20-second demo recording guide](docs/demo-recording-guide.md).
+For the short product video, follow the [fast demo recording guide](docs/demo-recording-guide.md).
 
 ## License
 

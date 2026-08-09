@@ -1,18 +1,18 @@
 # Architecture And Validation
 
-This document describes the architecture shared by public `1.0.53.0`, the preserved unpublished `2.0.0.0` P0 safety baseline, and the current locally qualified consolidated Connect Doctor candidate while preserving earlier release baselines for regression history. Version `1.0.52` adopted the stable `17.14` Extensibility SDK line and explicit document/lease and handoff ownership; public `1.0.53` added the vendor-neutral Connect Your Buffer foundation; local `2.0.0` locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the architecture shared by the public 2.0 line and the isolated `2.0.2.0` Visual Studio 2022 17.9 compatibility work while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The unpublished 2.0.2 candidate separates the in-process `net472` VSSDK package from the out-of-process `net8` debugger providers so the package can bind to the Visual Studio 17.9 SDK without giving up the stable VS2026 path. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
 | Surface | Current target |
 | --- | --- |
-| Visual Studio extension | Visual Studio 2022 `17.14+` and stable Visual Studio 2026 `18.x`, Community/Professional/Enterprise x64; manifest API range `[17.14,18.0)` |
-| Extension/VSSDK projects | .NET Framework 4.7.2 (`net472`) |
+| Visual Studio extension | Public `2.0.1.0`: VS2022 `17.14+`; qualified unpublished `2.0.2.0`: VS2022 `17.9+`; both retain stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
+| Extension/VSSDK projects | VSSDK package `net472`; out-of-process provider `net8.0-windows8.0` |
 | Core/SDK/object source | `net472`, `netstandard2.0`, and/or `net8.0` depending on project |
 | Standalone WPF viewer | `net472` and `net8.0-windows` |
 | Build machine | Visual Studio 2022 with .NET desktop development and .NET 8 SDK or newer |
 
-The technical/API floor for `1.0.53` and `2.0.0` is Visual Studio 2022 `17.14`, matching the stable Extensibility SDK/runtime used to fix activation on VS2026. Visual Studio 2026 supports API version 17.x, evaluates the lower bound of the VSIX installation range, and ignores its product-version upper bound, so `[17.14,18.0)` remains valid on stable VS2026 `18.x`. Exact `2.0.0` installed runtime qualification passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`; see [release-qualification-2.0.0.md](release-qualification-2.0.0.md). Visual Studio 2019, Visual Studio 2022 `17.9`-`17.13`, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not current support claims.
+The public `2.0.1.0` package keeps its qualified `[17.14,18.0)` contract. The exact unpublished `2.0.2.0` development candidate uses VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. It passed installed scenarios on VS2022 `17.9.34902.65`, `17.14.37516.0`, and VS2026 `18.8.12023.21`; see [vs2022-17.9-compatibility-candidate.md](vs2022-17.9-compatibility-candidate.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
 
 ## System Shape
 
@@ -49,9 +49,9 @@ Connect Doctor does not add another service or pane. `TypeMappingDialog` creates
 | `RawBufferVisualizer.BitmapAdapter` | Bitmap-to-snapshot conversion used by standalone/sample paths. |
 | `RawBufferVisualizer.OpenCvSharpAdapter` | OpenCvSharp adapter used by standalone/sample paths; not the debugger compatibility mechanism. |
 | `RawBufferVisualizer.VisualStudio.ObjectSource` | Debuggee-side metadata, preview, chunk, reflection, pointer, collection extraction, saved mappings, and pure image-member inference. |
-| `RawBufferVisualizer.VisualStudio.Extensibility` | Owns debugger visualizer registration, transfer/handoff orchestration, `RawBufferVisualizerPackage`, debugger Break/Run event wiring, live-document invalidation, VSCT compilation, current-project `.pkgdef` generation, and the public hybrid VSIX. |
+| `RawBufferVisualizer.VisualStudio.Extensibility` | Owns only the out-of-process debugger visualizer providers and composite-extension metadata; it is packaged under `OutOfProc` and has no `AsyncPackage`, VSCT, or `.pkgdef` ownership. |
 | `RawBufferVisualizer.VisualStudio` | Shared inbox, claimed-handoff coordination, debugger-session generation admission, document-workspace ownership, temp/snapshot leases, process/instance routing, and support-report helpers. |
-| `RawBufferVisualizer.VisualStudio.Vssdk` | Referenced ToolWindow/UI support library: responsive IDE presentation, Break Mode automatic inspection, VSSDK managed-array extraction, and image-source/document presentation. It must not own the Marketplace package `.pkgdef`. |
+| `RawBufferVisualizer.VisualStudio.Vssdk` | Owns the in-process `AsyncPackage`, VSCT, generated `.pkgdef`, ToolWindow/UI, debugger events, Break Mode automatic inspection, VSSDK extraction, commands, and composite VSIX container. |
 | `RawBufferVisualizer.OpenGlCanvas` | Internal accelerated tiled canvas, progressive viewport scheduling, textures, interaction, and render metrics. The implementation name is not user-facing. |
 | `RawBufferVisualizer.Wpf` | Optional standalone snapshot viewer and validation host. |
 | `RawBufferVisualizer.VisualStudio.Classic` | Legacy compatibility/build metadata; obsolete Classic DLLs are removed during install. |
@@ -135,7 +135,7 @@ Automatic Vision Inspector complements provider registration; it does not change
 
 1. The package receives a Break Mode event and schedules the scan at WPF `DispatcherPriority.ContextIdle`.
 2. The scanner merges `Debugger.CurrentStackFrame.Locals` and `.Arguments`, deduplicated by root expression, while skipping primitives and unsupported root arrays/collections.
-3. When the persisted **Mat collections** option is enabled, exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, and corresponding one-dimensional arrays expand into indexed expressions. The policy caps work at 8 items per collection, 16 items and 8 collection roots per scan.
+3. Every scan expands exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, and corresponding one-dimensional arrays into indexed expressions. The policy caps work at 8 items per collection, 16 items and 8 collection roots per scan.
 4. Exact initialized OpenCvSharp `Mat` and Emgu CV `Mat` roots or indexed elements take a fixed known-type branch. OpenCvSharp reads `Data`, `Cols`, `Rows`, `Step()`, `Depth()`, and `Channels()`; Emgu reads `DataPointer`, `Cols`, `Rows`, `Step`, `Depth`, and `NumberOfChannels`.
 5. Known Mat metadata is converted to a validated descriptor and opened through paused-process live memory. Null/disposed collection elements become isolated `[Failed]` rows. Bitmap, `RawBufferSnapshot`, `RawBufferView`, the exact ImagePtr target, and unsupported collections remain registered-path owned.
 6. Each remaining unregistered root contributes at most 128 direct members and 64 one-level nested members. Unlimited recursion is prohibited.
@@ -146,7 +146,7 @@ Automatic Vision Inspector complements provider registration; it does not change
 11. Ambiguous/incomplete results at 40% or higher become visible `[Map]` candidates; lower-scoring objects are hidden. A recognized shape whose current pointer/array read fails becomes `[Failed]`, not a misleading mapping request.
 12. Every root/collection element is processed behind an exception boundary, so a failed candidate cannot block successful images. A successful row is selected in preference to an error row.
 13. Automatic rows are replaced by stable root/index-expression key on refresh, while manual/provider-handoff rows are preserved.
-14. **Auto Inspect on Break** and **Mat collections** are versioned per-user preferences. Auto Inspect defaults on and collection expansion defaults off; both persist across Visual Studio restarts. Restoring either option does not itself scan or force the Tool Window open. **Scan Now** respects the collection option and is independent of Auto Inspect on Break.
+14. **Auto Inspect on Break** is the only versioned per-user Automatic Inspector preference. It defaults on and persists across Visual Studio restarts. Restoring it does not itself scan or force the Tool Window open. **Scan Now** is independent of Auto Inspect on Break, and both scan paths always apply the bounded exact-Mat collection policy.
 
 The scanner reads debugger-visible fields and property getters. Exact OpenCvSharp/Emgu capture evaluates only the fixed extension-owned metadata expressions above; exact `List<T>.Count` or array `Length` is the only additional collection metadata evaluation. It does not execute arbitrary `IEnumerable`, inject Bitmap `LockBits`/`UnlockBits`, load SDK assemblies dynamically, decode private native layouts, or control an acquisition device. A breakpoint on an assignment statement stops before that statement executes, so the object must be constructed on an earlier line. See [automatic-vision-inspector.md](automatic-vision-inspector.md) for the detailed confidence/UX contract and current evidence.
 
@@ -249,7 +249,7 @@ Possible contents:
 Lifecycle:
 
 - Delete removes the selected row and disposes/deletes its owned temp directory;
-- Clear disposes all rows and owned directories;
+- Clear disposes all rows and owned directories, clears the active renderer and every document-owned presentation state, then exposes the empty-viewer guidance;
 - terminal ACK/NACK/conflict handoff artifacts are polled and cleaned for up to two minutes at 100 ms intervals;
 - timed-out Ready/Processing handoffs and their payloads are preserved so an in-flight consumer is not disrupted;
 - terminal markers produced after that two-minute cleanup window and Processing items stranded by process crash are not immediately reclaimed;
@@ -262,6 +262,18 @@ Lifecycle:
 After a process crash, an unlocked lease marker and its payload directory can remain until the later stale sweep. This is expected eventual cleanup, not an active-document deletion risk.
 
 When investigating disk usage, distinguish user-exported snapshots, smoke artifacts, current owned temp rows, and stale crash leftovers.
+
+### Tool Window Clear contract
+
+`Clear` is a complete document-presentation reset, not only a collection clear. After it returns:
+
+- the image list is empty, the accelerated image surface is hidden, the empty guidance is visible, and status is `0 images`;
+- Wide and Compact Interpret format/endian selections are unset, numeric fields are blank, and Apply/Diagnose are disabled;
+- Buffer Doctor status/candidates, pixel/neighborhood values, marker/pin state, histogram/diagnostics, and comparison A/B references are cleared;
+- responsive layout and the user's current Inspector open/closed state are preserved;
+- opening or scanning a new valid document populates and enables both Interpret layouts again.
+
+The 2.0.2 regression covers this contract at 540, 900, and 1160 px and in exact installed VSIX runs on VS17.14 and VS18.8. Test-only session JSON exposes these presentation fields only when `RAWBUFFERVISUALIZER_DOCKED_SESSION_JSON` is set; normal product behavior and storage are unchanged.
 
 ## Error And Support Flow
 

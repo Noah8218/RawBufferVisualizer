@@ -15,7 +15,7 @@ namespace RawBufferVisualizer.VisualStudio
     {
         private const string RequestSuffix = ".rbuf-handoff";
         private const string ClaimSuffix = ".claim";
-        private const string ProcessingSuffix = ".processing.";
+        private const string ProcessingExtension = ".processing";
         private const string AcknowledgementSuffix = ".ack";
         private const string RejectionSuffix = ".nack";
         private const string RejectionReasonSuffix = ".reason";
@@ -238,9 +238,7 @@ namespace RawBufferVisualizer.VisualStudio
         public static bool TryClaimRequest(string requestPath, out string processingPath)
         {
             var fullRequestPath = NormalizeRequestPath(requestPath);
-            processingPath = fullRequestPath
-                + ProcessingSuffix
-                + Guid.NewGuid().ToString("N");
+            processingPath = GetProcessingPath(fullRequestPath);
             var claimPath = fullRequestPath + ClaimSuffix;
             try
             {
@@ -376,7 +374,7 @@ namespace RawBufferVisualizer.VisualStudio
             TryDeleteRequest(GetRejectionPath(fullRequestPath));
             TryDeleteRequest(GetRejectionReasonPath(fullRequestPath));
             TryDeleteRequest(fullRequestPath + ClaimSuffix);
-            TryDeleteMatchingFiles(fullRequestPath + ProcessingSuffix + "*");
+            TryDeleteRequest(GetProcessingPath(fullRequestPath));
             TryDeleteMatchingFiles(fullRequestPath + PublishingSuffix + "*");
             TryDeleteMatchingFiles(
                 GetRejectionReasonPath(fullRequestPath) + PublishingSuffix + "*");
@@ -501,7 +499,7 @@ namespace RawBufferVisualizer.VisualStudio
                 return true;
             }
 
-            return HasMatchingFiles(fullRequestPath + ProcessingSuffix + "*")
+            return File.Exists(GetProcessingPath(fullRequestPath))
                 || HasMatchingFiles(fullRequestPath + PublishingSuffix + "*")
                 || HasMatchingFiles(
                     GetRejectionReasonPath(fullRequestPath)
@@ -619,21 +617,19 @@ namespace RawBufferVisualizer.VisualStudio
 
         private static bool HasProcessingRequest(string requestPath)
         {
-            var directory = Path.GetDirectoryName(requestPath);
-            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
-            {
-                return false;
-            }
-
-            return Directory.GetFiles(
-                directory,
-                Path.GetFileName(requestPath) + ProcessingSuffix + "*",
-                SearchOption.TopDirectoryOnly).Length > 0;
+            return File.Exists(GetProcessingPath(requestPath));
         }
 
         private static string GetRejectionReasonPath(string requestPath)
         {
             return GetRejectionPath(requestPath) + RejectionReasonSuffix;
+        }
+
+        private static string GetProcessingPath(string requestPath)
+        {
+            return Path.ChangeExtension(
+                NormalizeRequestPath(requestPath),
+                ProcessingExtension);
         }
 
         private static string NormalizeRequestPath(string requestPath)
@@ -660,17 +656,10 @@ namespace RawBufferVisualizer.VisualStudio
             string requestPath,
             string processingPath)
         {
-            var expectedPrefix = requestPath + ProcessingSuffix;
-            if (!processingPath.StartsWith(
-                    expectedPrefix,
-                    StringComparison.OrdinalIgnoreCase)
-                || processingPath.Length <= expectedPrefix.Length
-                || processingPath.IndexOf(
-                    Path.DirectorySeparatorChar,
-                    expectedPrefix.Length) >= 0
-                || processingPath.IndexOf(
-                    Path.AltDirectorySeparatorChar,
-                    expectedPrefix.Length) >= 0)
+            if (!string.Equals(
+                    processingPath,
+                    GetProcessingPath(requestPath),
+                    StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException(
                     "Processing path does not belong to the handoff request.",

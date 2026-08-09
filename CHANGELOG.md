@@ -4,7 +4,23 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.1` changes are queued.
+No post-`2.0.2` changes are queued.
+
+## [2.0.2] - 2026-08-09
+
+Raw Buffer Visualizer `2.0.2` restores the Visual Studio 2022 `17.9+` support floor while retaining stable Visual Studio 2026 `18.x` compatibility.
+
+### Improved
+
+- Split the in-process VSSDK package from the out-of-process debugger visualizer providers so the installed extension uses the Visual Studio 17.9 SDK line without changing the docked inspection workflow.
+- Kept Community, Professional, and Enterprise x64 installation targets on one unchanged Marketplace extension identity.
+- Added Visual Studio-native toolbar and inspector icons, compact icon-only primary commands, actionable empty-viewer guidance, and image-aware command states.
+- Removed the separate Mat collection setting; every manual or Break Mode scan now applies the existing bounded exact-Mat collection policy automatically.
+
+### Fixed
+
+- Shortened claimed debugger-handoff filenames so a long writable temporary-storage path no longer prevents a registered image from reaching the docked viewer.
+- Updated installation, packaging, and installed-smoke tooling for the Visual Studio 2022 `17.9+` compatibility contract.
 
 ## [2.0.1] - 2026-08-06
 
@@ -157,7 +173,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.2...HEAD
+[2.0.2]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...v2.0.0
 [1.0.53]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.53

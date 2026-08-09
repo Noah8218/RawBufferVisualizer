@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ReleaseAnnouncement", "EnvironmentCheck")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -14,7 +14,9 @@ param(
     [ValidateSet("Any", "Enabled", "Disabled")]
     [string]$ExpectedInitialAutoInspectPreference = "Any",
     [ValidateSet("Unchanged", "Enabled", "Disabled")]
-    [string]$SetAutoInspectPreference = "Unchanged"
+    [string]$SetAutoInspectPreference = "Unchanged",
+    [string]$IndustrialImagePath = "D:\OpenVisionLab-TestData\RawBufferVisualizer\industrial-image-tests-20260806\source\Printed_circuit_boards_20240831_083726-1280.jpg",
+    [string]$IndustrialDataTipImagePath = "D:\OpenVisionLab-TestData\RawBufferVisualizer\industrial-image-tests-20260809\source\Mesin_CNC-1280x720.jpg"
 )
 
 $ErrorActionPreference = "Stop"
@@ -133,6 +135,10 @@ public static class RawBufferInstalledVsixNative {
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint flags);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+    [DllImport("user32.dll")] public static extern bool GetCursorInfo(ref CURSORINFO cursorInfo);
+    [DllImport("user32.dll")] public static extern bool GetIconInfo(IntPtr hIcon, out ICONINFO iconInfo);
+    [DllImport("user32.dll")] public static extern bool DrawIconEx(IntPtr hdc, int xLeft, int yTop, IntPtr hIcon, int cxWidth, int cyWidth, uint stepIfAniCur, IntPtr hbrFlickerFreeDraw, uint diFlags);
+    [DllImport("gdi32.dll")] public static extern bool DeleteObject(IntPtr hObject);
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, int data, UIntPtr extraInfo);
     [DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint flags);
@@ -140,10 +146,21 @@ public static class RawBufferInstalledVsixNative {
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT { public int X; public int Y; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct CURSORINFO { public int Size; public int Flags; public IntPtr Cursor; public POINT ScreenPosition; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct ICONINFO { public bool IsIcon; public int HotspotX; public int HotspotY; public IntPtr MaskBitmap; public IntPtr ColorBitmap; }
+
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
     public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const int CURSOR_SHOWING = 0x00000001;
+    public const uint DI_NORMAL = 0x0003;
     public const uint ES_CONTINUOUS = 0x80000000;
     public const uint ES_SYSTEM_REQUIRED = 0x00000001;
     public const uint ES_DISPLAY_REQUIRED = 0x00000002;
@@ -296,7 +313,7 @@ function Focus-Window([IntPtr]$Handle, [int]$Width = 1920, [int]$Height = 1040) 
     }
 }
 
-function Capture-Window([IntPtr]$Handle, [string]$Path) {
+function Capture-Window([IntPtr]$Handle, [string]$Path, [switch]$IncludeCursor) {
     Focus-Window $Handle
     $rect = New-Object RawBufferInstalledVsixNative+RECT
     [RawBufferInstalledVsixNative]::GetWindowRect($Handle, [ref]$rect) | Out-Null
@@ -318,7 +335,7 @@ function Capture-Window([IntPtr]$Handle, [string]$Path) {
     [RawBufferInstalledVsixNative]::SetForegroundWindow($Handle) | Out-Null
     Start-Sleep -Milliseconds 250
     try {
-        Capture-ScreenRegion -X $rect.Left -Y $rect.Top -Width $width -Height $height -Path $Path
+        Capture-ScreenRegion -X $rect.Left -Y $rect.Top -Width $width -Height $height -Path $Path -IncludeCursor:$IncludeCursor
     }
     finally {
         [RawBufferInstalledVsixNative]::SetWindowPos(
@@ -332,7 +349,7 @@ function Capture-Window([IntPtr]$Handle, [string]$Path) {
     }
 }
 
-function Capture-ScreenRegion([int]$X, [int]$Y, [int]$Width, [int]$Height, [string]$Path) {
+function Capture-ScreenRegion([int]$X, [int]$Y, [int]$Width, [int]$Height, [string]$Path, [switch]$IncludeCursor) {
     if ($Width -le 0 -or $Height -le 0) {
         throw "Invalid screen region: $Width x $Height"
     }
@@ -341,12 +358,61 @@ function Capture-ScreenRegion([int]$X, [int]$Y, [int]$Width, [int]$Height, [stri
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     try {
         $graphics.CopyFromScreen($X, $Y, 0, 0, [Drawing.Size]::new($Width, $Height))
+        if ($IncludeCursor) {
+            $cursorInfo = New-Object RawBufferInstalledVsixNative+CURSORINFO
+            $cursorInfo.Size = [Runtime.InteropServices.Marshal]::SizeOf([type][RawBufferInstalledVsixNative+CURSORINFO])
+            if ([RawBufferInstalledVsixNative]::GetCursorInfo([ref]$cursorInfo) -and
+                ($cursorInfo.Flags -band [RawBufferInstalledVsixNative]::CURSOR_SHOWING) -ne 0 -and
+                $cursorInfo.ScreenPosition.X -ge $X -and $cursorInfo.ScreenPosition.X -lt ($X + $Width) -and
+                $cursorInfo.ScreenPosition.Y -ge $Y -and $cursorInfo.ScreenPosition.Y -lt ($Y + $Height)) {
+                $iconInfo = New-Object RawBufferInstalledVsixNative+ICONINFO
+                if ([RawBufferInstalledVsixNative]::GetIconInfo($cursorInfo.Cursor, [ref]$iconInfo)) {
+                    $hdc = $graphics.GetHdc()
+                    try {
+                        [RawBufferInstalledVsixNative]::DrawIconEx(
+                            $hdc,
+                            $cursorInfo.ScreenPosition.X - $X - $iconInfo.HotspotX,
+                            $cursorInfo.ScreenPosition.Y - $Y - $iconInfo.HotspotY,
+                            $cursorInfo.Cursor,
+                            0,
+                            0,
+                            0,
+                            [IntPtr]::Zero,
+                            [RawBufferInstalledVsixNative]::DI_NORMAL) | Out-Null
+                    }
+                    finally {
+                        $graphics.ReleaseHdc($hdc)
+                        if ($iconInfo.MaskBitmap -ne [IntPtr]::Zero) {
+                            [RawBufferInstalledVsixNative]::DeleteObject($iconInfo.MaskBitmap) | Out-Null
+                        }
+                        if ($iconInfo.ColorBitmap -ne [IntPtr]::Zero) {
+                            [RawBufferInstalledVsixNative]::DeleteObject($iconInfo.ColorBitmap) | Out-Null
+                        }
+                    }
+                }
+            }
+        }
         $bitmap.Save($Path, [Drawing.Imaging.ImageFormat]::Png)
     }
     finally {
         $graphics.Dispose()
         $bitmap.Dispose()
     }
+}
+
+function Capture-CurrentWindowWithCursor([IntPtr]$Handle, [string]$Path) {
+    $rect = New-Object RawBufferInstalledVsixNative+RECT
+    if (-not [RawBufferInstalledVsixNative]::GetWindowRect($Handle, [ref]$rect)) {
+        throw "Window bounds could not be read for cursor capture."
+    }
+
+    Capture-ScreenRegion `
+        -X $rect.Left `
+        -Y $rect.Top `
+        -Width ($rect.Right - $rect.Left) `
+        -Height ($rect.Bottom - $rect.Top) `
+        -Path $Path `
+        -IncludeCursor
 }
 
 function Get-AutomationRoot([IntPtr]$Handle) {
@@ -526,14 +592,28 @@ function Get-SelectedComboBoxItemName(
 
 function Click-VisualizerGlyph(
     [System.Windows.Automation.AutomationElement]$Root,
-    [System.Windows.Automation.AutomationElement]$TreeItem) {
+    [System.Windows.Automation.AutomationElement]$TreeItem,
+    [IntPtr]$CaptureHandle = [IntPtr]::Zero,
+    [string]$HoverCapturePath = "",
+    [string]$MenuCapturePath = "") {
     $localizedView = [string]([char]0xBCF4) + [string]([char]0xAE30)
     $rect = $TreeItem.Current.BoundingRectangle
     if ($rect.Width -lt 80 -or $rect.Height -lt 8 -or [bool]$TreeItem.Current.IsOffscreen) {
         throw "Variable row has invalid bounds: $($rect.Width) x $($rect.Height)"
     }
 
-    $glyphOffset = if ($rect.Width -lt 900) { 150 } elseif ($rect.Width -lt 1300) { 230 } else { 280 }
+    $requiresExplicitVisualizerSelection =
+        [Version]$vsInstance.installationVersion -lt [Version]'18.0'
+    $narrowGlyphOffset = if ([Version]$vsInstance.installationVersion -ge [Version]'18.0') {
+        150
+    }
+    elseif ($requiresExplicitVisualizerSelection) {
+        75
+    }
+    else {
+        110
+    }
+    $glyphOffset = if ($rect.Width -lt 900) { $narrowGlyphOffset } elseif ($rect.Width -lt 1300) { 230 } else { 280 }
     $hoverX = [int][Math]::Max($rect.Left + 20, $rect.Right - $glyphOffset)
     $hoverY = [int]($rect.Top + $rect.Height / 2)
     [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $hoverY) | Out-Null
@@ -590,8 +670,50 @@ function Click-VisualizerGlyph(
         $elementLog
     ) | Set-Content -LiteralPath $logPath -Encoding UTF8
     [RawBufferInstalledVsixNative]::SetCursorPos($x, $y) | Out-Null
+    Start-Sleep -Milliseconds 350
+    if ($CaptureHandle -ne [IntPtr]::Zero -and -not [string]::IsNullOrWhiteSpace($HoverCapturePath)) {
+        Capture-CurrentWindowWithCursor $CaptureHandle $HoverCapturePath
+    }
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+
+    if ($requiresExplicitVisualizerSelection) {
+        Start-Sleep -Milliseconds 350
+        $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+        $visualizerMenuItem = Get-ElementsByControlType $desktop ([System.Windows.Automation.ControlType]::MenuItem) |
+            Where-Object {
+                $_.Current.ProcessId -eq $Root.Current.ProcessId -and
+                -not [bool]$_.Current.IsOffscreen -and
+                [string]$_.Current.Name -like "*Raw Buffer Visualizer*"
+            } |
+            Select-Object -First 1
+        if ($visualizerMenuItem) {
+            $menuRect = $visualizerMenuItem.Current.BoundingRectangle
+            $menuItemX = [int]($menuRect.Left + $menuRect.Width / 2)
+            $menuItemY = [int]($menuRect.Top + $menuRect.Height / 2)
+            Add-Content -LiteralPath $logPath -Encoding UTF8 -Value (
+                "visualizerMenuItem=$($visualizerMenuItem.Current.Name) rect=$menuRect x=$menuItemX y=$menuItemY")
+            [RawBufferInstalledVsixNative]::SetCursorPos($menuItemX, $menuItemY) | Out-Null
+            Start-Sleep -Milliseconds 350
+            if ($CaptureHandle -ne [IntPtr]::Zero -and -not [string]::IsNullOrWhiteSpace($MenuCapturePath)) {
+                Capture-CurrentWindowWithCursor $CaptureHandle $MenuCapturePath
+            }
+            Click-AutomationElement $visualizerMenuItem
+        }
+        else {
+            $menuItemX = $x - 100
+            $menuItemY = $y + 22
+            Add-Content -LiteralPath $logPath -Encoding UTF8 -Value (
+                "visualizerMenuItem=not-found; fallbackX=$menuItemX fallbackY=$menuItemY")
+            [RawBufferInstalledVsixNative]::SetCursorPos($menuItemX, $menuItemY) | Out-Null
+            Start-Sleep -Milliseconds 350
+            if ($CaptureHandle -ne [IntPtr]::Zero -and -not [string]::IsNullOrWhiteSpace($MenuCapturePath)) {
+                Capture-CurrentWindowWithCursor $CaptureHandle $MenuCapturePath
+            }
+            [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+            [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+        }
+    }
 }
 
 function Dismiss-DebuggerEvaluationWarning {
@@ -953,6 +1075,345 @@ function Invoke-BufferDoctorScenario(
         candidateCount = $items.Count
         firstCandidateName = [string]$items[0].Current.Name
         pixelValue = $pixelText
+    }
+}
+
+function Invoke-IndustrialMarketplaceScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $resolvedIndustrialImage = (Resolve-Path -LiteralPath $IndustrialImagePath).Path
+    $sourceHash = (Get-FileHash -LiteralPath $resolvedIndustrialImage -Algorithm SHA256).Hash
+    $hoverPath = Join-Path $outputRoot "industrial-breakpoint-hover.png"
+    $menuPath = Join-Path $outputRoot "industrial-visualizer-menu.png"
+    $bitmapOpenPath = Join-Path $outputRoot "industrial-bitmap-open.png"
+    $bitmapPixelPath = Join-Path $outputRoot "industrial-bitmap-pixel.png"
+    $automaticPath = Join-Path $outputRoot "industrial-auto-inspector.png"
+    $diagnosticsPath = Join-Path $outputRoot "industrial-diagnostics.png"
+    $badStridePath = Join-Path $outputRoot "industrial-bad-stride.png"
+    $doctorCandidatesPath = Join-Path $outputRoot "industrial-doctor-candidates.png"
+    $doctorRecoveredPath = Join-Path $outputRoot "industrial-doctor-recovered.png"
+    $colorFinalPath = Join-Path $outputRoot "industrial-color-final.png"
+
+    function Get-IndustrialSessionState {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            Get-Content -LiteralPath $sessionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            $null
+        }
+    }
+
+    function Capture-IndustrialWindow([string]$Path, [switch]$Cursor) {
+        if ($Cursor) {
+            Capture-Window $MainHandle $Path -IncludeCursor
+        }
+        else {
+            Capture-Window $MainHandle $Path
+        }
+    }
+
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 500
+    $treeItem = Wait-Until "industrialBitmap in Locals" {
+        Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) "industrialBitmap"
+    } 60
+    Click-VisualizerGlyph `
+        (Get-AutomationRoot $MainHandle) `
+        $treeItem `
+        $MainHandle `
+        $hoverPath `
+        $menuPath
+    Start-Sleep -Milliseconds 500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+
+    $toolRoot = Wait-Until "Raw Buffer Visualizer industrial tool window" {
+        Find-RawBufferToolWindowElement $MainHandle
+    } 30
+    $bitmapState = Wait-Until "industrial Bitmap visualizer handoff" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        $state = Get-IndustrialSessionState
+        if (-not $state) { return $null }
+        $matches = @($state.documents | Where-Object {
+            [string]$_.sourceType -eq "System.Drawing.Bitmap" -and
+            -not [bool]$_.isError
+        })
+        if ($matches.Count -eq 1 -and [int]$matches[0].width -eq 1280 -and [int]$matches[0].height -eq 960) {
+            $state
+        }
+        else {
+            $null
+        }
+    } 60
+    Capture-IndustrialWindow $bitmapOpenPath
+
+    $imageView = Wait-Until "industrial Bitmap image canvas" {
+        $element = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "RawBufferOpenGlImageView"
+        if ($element -and -not [bool]$element.Current.IsOffscreen) { $element } else { $null }
+    } 30
+    $canvasBounds = $imageView.Current.BoundingRectangle
+    [RawBufferInstalledVsixNative]::SetCursorPos(
+        [int]($canvasBounds.Left + $canvasBounds.Width * 0.68),
+        [int]($canvasBounds.Top + $canvasBounds.Height * 0.38)) | Out-Null
+    Start-Sleep -Milliseconds 700
+    $pixelText = [string](Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::Text) |
+        Where-Object { [string]$_.Current.Name -match "^X=.*(B|G|R|GV)=" } |
+        Select-Object -First 1).Current.Name
+    if ([string]::IsNullOrWhiteSpace($pixelText)) {
+        throw "The industrial color pixel readout was not visible after hovering over the image."
+    }
+    Capture-IndustrialWindow $bitmapPixelPath -Cursor
+
+    $scanButton = Wait-Until "industrial Automatic Vision Inspector Scan Now" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+    } 30
+    $scanPattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$scanPattern)) {
+        throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$scanPattern).Invoke()
+    $automaticState = Wait-Until "industrial automatic inspection result" {
+        $state = Get-IndustrialSessionState
+        if (-not $state) { return $null }
+        $matches = @($state.documents | Where-Object {
+            [bool]$_.isAutomaticInspection -and
+            [string]$_.title -like "*industrialFrame*" -and
+            -not [bool]$_.isError -and
+            [int]$_.width -eq 1280 -and
+            [int]$_.height -eq 960
+        })
+        if ($matches.Count -ge 1) { $state } else { $null }
+    } 60
+
+    $automaticItem = @(Get-ImageListItems (Get-AutomationRoot $MainHandle)) |
+        Where-Object { [string]$_.Current.Name -like "*industrialFrame*" } |
+        Select-Object -First 1
+    if ($automaticItem) {
+        Select-AutomationItem $automaticItem
+        Start-Sleep -Milliseconds 350
+    }
+    $imageView = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "RawBufferOpenGlImageView"
+    $canvasBounds = $imageView.Current.BoundingRectangle
+    [RawBufferInstalledVsixNative]::SetCursorPos(
+        [int]($canvasBounds.Left + $canvasBounds.Width * 0.58),
+        [int]($canvasBounds.Top + $canvasBounds.Height * 0.58)) | Out-Null
+    Start-Sleep -Milliseconds 350
+    Capture-IndustrialWindow $automaticPath -Cursor
+
+    $diagnosticsTab = Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
+        Where-Object { [string]$_.Current.Name -eq "Diagnostics" -and -not [bool]$_.Current.IsOffscreen } |
+        Select-Object -First 1
+    if ($diagnosticsTab) {
+        Select-AutomationItem $diagnosticsTab
+        Start-Sleep -Milliseconds 300
+        Capture-IndustrialWindow $diagnosticsPath
+    }
+
+    $clearButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ClearButton"
+    $clearPattern = $null
+    if (-not $clearButton -or -not $clearButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$clearPattern)) {
+        throw "Clear button was not available before the isolated industrial Buffer Doctor capture."
+    }
+    ([System.Windows.Automation.InvokePattern]$clearPattern).Invoke()
+    Wait-Until "empty industrial session before Buffer Doctor" {
+        $state = Get-IndustrialSessionState
+        if ($state -and [int]$state.documentCount -eq 0) { $state } else { $null }
+    } 30 | Out-Null
+
+    $badStrideTreeItem = Wait-Until "industrialBadStrideSnapshot in Locals" {
+        Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) "industrialBadStrideSnapshot"
+    } 60
+    Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $badStrideTreeItem
+    Start-Sleep -Milliseconds 500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+    $badStrideState = Wait-Until "industrial bad-stride visualizer handoff" {
+        $state = Get-IndustrialSessionState
+        if (-not $state) { return $null }
+        $matches = @($state.documents | Where-Object {
+            -not [bool]$_.isError -and
+            [int]$_.width -eq 2448 -and
+            [int]$_.height -eq 2048 -and
+            [string]$_.pixelFormat -eq "BGR24"
+        })
+        if ($matches.Count -eq 1) { $state } else { $null }
+    } 60
+    Capture-IndustrialWindow $badStridePath
+
+    $interpretTab = Wait-Until "visible industrial Interpret tab" {
+        Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
+            Where-Object { [string]$_.Current.Name -eq "Interpret" -and -not [bool]$_.Current.IsOffscreen } |
+            Select-Object -First 1
+    } 30
+    Select-AutomationItem $interpretTab
+    Start-Sleep -Milliseconds 250
+    $diagnoseButton = Wait-Until "industrial Diagnose Buffer button" {
+        $root = Get-AutomationRoot $MainHandle
+        $button = Find-ElementByAutomationId $root "CompactDiagnoseBufferButton"
+        if ($button -and -not [bool]$button.Current.IsOffscreen) { return $button }
+        $button = Find-ElementByAutomationId $root "DiagnoseBufferButton"
+        if ($button -and -not [bool]$button.Current.IsOffscreen) { return $button }
+        $null
+    } 30
+    $diagnosePattern = $null
+    if (-not $diagnoseButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$diagnosePattern)) {
+        throw "Industrial Diagnose Buffer button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$diagnosePattern).Invoke()
+    $candidateList = Wait-Until "industrial Buffer Doctor candidates" {
+        $root = Get-AutomationRoot $MainHandle
+        $list = Find-ElementByAutomationId $root "CompactDiagnosisCandidateList"
+        if (-not $list -or [bool]$list.Current.IsOffscreen) {
+            $list = Find-ElementByAutomationId $root "DiagnosisCandidateList"
+        }
+        if ($list -and @(Get-ElementsByControlType $list ([System.Windows.Automation.ControlType]::ListItem)).Count -gt 0) {
+            $list
+        }
+        else {
+            $null
+        }
+    } 30
+    $candidateItems = @(Get-ElementsByControlType $candidateList ([System.Windows.Automation.ControlType]::ListItem))
+    $scrollItemPattern = $null
+    if ($candidateItems[0].TryGetCurrentPattern(
+        [System.Windows.Automation.ScrollItemPattern]::Pattern,
+        [ref]$scrollItemPattern)) {
+        ([System.Windows.Automation.ScrollItemPattern]$scrollItemPattern).ScrollIntoView()
+    }
+    Start-Sleep -Milliseconds 500
+    $candidateText = @(
+        [string]$candidateItems[0].Current.Name
+        Get-ElementsByControlType $candidateItems[0] ([System.Windows.Automation.ControlType]::Text) |
+            ForEach-Object { [string]$_.Current.Name }
+    ) -join " | "
+    Capture-IndustrialWindow $doctorCandidatesPath
+    if ($candidateText -notmatch "BGR24" -or $candidateText -notmatch "2448\s*[xX×]\s*2048" -or $candidateText -notmatch "7424") {
+        throw "Unexpected first industrial Buffer Doctor candidate: $candidateText"
+    }
+    Select-AutomationItem $candidateItems[0]
+    Start-Sleep -Milliseconds 750
+    Capture-IndustrialWindow $doctorRecoveredPath
+    Copy-Item -LiteralPath $bitmapPixelPath -Destination $colorFinalPath -Force
+
+    [ordered]@{
+        scenario = "IndustrialMarketplace"
+        industrialImagePath = $resolvedIndustrialImage
+        industrialImageSha256 = $sourceHash
+        hoverScreenshotPath = $hoverPath
+        visualizerMenuScreenshotPath = $menuPath
+        bitmapOpenScreenshotPath = $bitmapOpenPath
+        bitmapPixelScreenshotPath = $bitmapPixelPath
+        automaticInspectorScreenshotPath = $automaticPath
+        diagnosticsScreenshotPath = $diagnosticsPath
+        badStrideScreenshotPath = $badStridePath
+        doctorCandidatesScreenshotPath = $doctorCandidatesPath
+        doctorRecoveredScreenshotPath = $doctorRecoveredPath
+        colorFinalScreenshotPath = $colorFinalPath
+        bitmapSourceType = "System.Drawing.Bitmap"
+        bitmapWidth = 1280
+        bitmapHeight = 960
+        automaticDocumentCount = [int]$automaticState.documentCount
+        automaticScanStatus = [string]$automaticState.automaticScanStatus
+        badStrideWidth = 2448
+        badStrideHeight = 2048
+        declaredBadStride = 7344
+        recoveredStride = 7424
+        firstDoctorCandidate = $candidateText
+        pixelValue = $pixelText
+    }
+}
+
+function Invoke-IndustrialDataTipScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $root = Get-AutomationRoot $MainHandle
+    $baselinePath = Join-Path $outputRoot "industrial-datatip-baseline.png"
+    $hoverPath = Join-Path $outputRoot "industrial-datatip-hover.png"
+    $glyphPath = Join-Path $outputRoot "industrial-datatip-visualizer-glyph.png"
+    $menuPath = Join-Path $outputRoot "industrial-datatip-visualizer-menu.png"
+    $openPath = Join-Path $outputRoot "industrial-datatip-open.png"
+    Capture-Window $MainHandle $baselinePath
+    $windowRect = New-Object RawBufferInstalledVsixNative+RECT
+    [RawBufferInstalledVsixNative]::GetWindowRect($MainHandle, [ref]$windowRect) | Out-Null
+    $hoverX = $windowRect.Left + 390
+    $hoverY = $windowRect.Top + 718
+    [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $hoverY) | Out-Null
+    Start-Sleep -Milliseconds 1500
+    Capture-CurrentWindowWithCursor $MainHandle $hoverPath
+
+    # The debuggee alias is deliberately placed one line above Debugger.Break().
+    # With the verified 1880 x 1040 capture layout, its DataTip visualizer glyph
+    # is stable relative to the Visual Studio window while monitor origin varies.
+    $glyphX = $windowRect.Left + 214
+    $glyphY = $windowRect.Top + 736
+    [RawBufferInstalledVsixNative]::SetCursorPos($glyphX, $glyphY) | Out-Null
+    Start-Sleep -Milliseconds 500
+    Capture-CurrentWindowWithCursor $MainHandle $glyphPath
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+
+    Start-Sleep -Milliseconds 500
+    $desktop = [System.Windows.Automation.AutomationElement]::RootElement
+    $visualizerMenuItem = Get-ElementsByControlType $desktop ([System.Windows.Automation.ControlType]::MenuItem) |
+        Where-Object {
+            $_.Current.ProcessId -eq $Process.Id -and
+            -not [bool]$_.Current.IsOffscreen -and
+            [string]$_.Current.Name -like "*Raw Buffer Visualizer*"
+        } |
+        Select-Object -First 1
+    $usedVisualizerMenu = $false
+    if ($visualizerMenuItem) {
+        $menuRect = $visualizerMenuItem.Current.BoundingRectangle
+        [RawBufferInstalledVsixNative]::SetCursorPos(
+            [int]($menuRect.Left + $menuRect.Width / 2),
+            [int]($menuRect.Top + $menuRect.Height / 2)) | Out-Null
+        Start-Sleep -Milliseconds 300
+        Capture-CurrentWindowWithCursor $MainHandle $menuPath
+        Click-AutomationElement $visualizerMenuItem
+        $usedVisualizerMenu = $true
+    }
+
+    $openedState = Wait-Until "industrial DataTip visualizer handoff" {
+        if (-not (Test-Path -LiteralPath $sessionPath)) { return $null }
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+            $matches = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "OpenCvSharp.Mat" -and
+                [int]$_.width -eq 1280 -and
+                [int]$_.height -eq 720 -and
+                -not [bool]$_.isError
+            })
+            if ($matches.Count -eq 1) { $state } else { $null }
+        }
+        catch {
+            $null
+        }
+    } 60
+    Capture-Window $MainHandle $openPath
+
+    [ordered]@{
+        scenario = "IndustrialDataTip"
+        industrialImagePath = (Resolve-Path -LiteralPath $IndustrialDataTipImagePath).Path
+        industrialImageSha256 = (Get-FileHash -LiteralPath $IndustrialDataTipImagePath -Algorithm SHA256).Hash
+        baselineScreenshotPath = $baselinePath
+        hoverScreenshotPath = $hoverPath
+        visualizerGlyphScreenshotPath = $glyphPath
+        visualizerMenuScreenshotPath = if ($usedVisualizerMenu) { $menuPath } else { "" }
+        openScreenshotPath = $openPath
+        hoverPoint = [ordered]@{ x = $hoverX; y = $hoverY }
+        glyphPoint = [ordered]@{ x = $glyphX; y = $glyphY }
+        usedVisualizerMenu = $usedVisualizerMenu
+        openedSourceType = [string]$openedState.documents[0].sourceType
+        openedWidth = [int]$openedState.documents[0].width
+        openedHeight = [int]$openedState.documents[0].height
     }
 }
 
@@ -1657,18 +2118,9 @@ function Invoke-AutomaticCollectionsScenario(
     Show-RawBufferToolWindow $Process.Id
     Start-Sleep -Milliseconds 750
     $automationRoot = Get-AutomationRoot $MainHandle
-    $collectionBox = Wait-Until "Automatic collection preference check box" {
-        Find-ElementByAutomationId $automationRoot "AutomaticVisionIncludeCollectionsCheckBox"
-    } 30
-    $collectionTogglePattern = $null
-    if (-not $collectionBox.TryGetCurrentPattern(
-        [System.Windows.Automation.TogglePattern]::Pattern,
-        [ref]$collectionTogglePattern)) {
-        throw "Automatic collection preference check box does not support TogglePattern."
-    }
-    if (([System.Windows.Automation.TogglePattern]$collectionTogglePattern).Current.ToggleState -ne
-        [System.Windows.Automation.ToggleState]::On) {
-        throw "Automatic collection inspection was not restored as enabled."
+    $collectionBox = Find-ElementByAutomationId $automationRoot "AutomaticVisionIncludeCollectionsCheckBox"
+    if ($collectionBox) {
+        throw "The retired Automatic collection preference check box is still visible."
     }
 
     $scanButton = Wait-Until "Automatic collection Scan Now button" {
@@ -1750,12 +2202,280 @@ function Invoke-AutomaticCollectionsScenario(
     } 30
     $secondNames = @($secondState.documents | ForEach-Object { [string]$_.title })
 
-    $capturePath = Join-Path $outputRoot "automatic-collections.png"
-    Capture-Window $MainHandle $capturePath
+    $firstValidIndex = -1
+    for ($index = 0; $index -lt @($secondState.documents).Count; $index++) {
+        if (-not [bool]$secondState.documents[$index].isError) {
+            $firstValidIndex = $index
+            break
+        }
+    }
+    if ($firstValidIndex -lt 0) {
+        throw "Automatic collection scan did not expose a valid image row for the Clear contract."
+    }
+
+    $validTitle = [string]$secondState.documents[$firstValidIndex].title
+    $imageItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
+    if ($imageItems.Count -ne 7) {
+        throw "Installed Tool Window exposed $($imageItems.Count) image row(s); expected 7 before Clear."
+    }
+    Select-AutomationItem $imageItems[$firstValidIndex]
+    $loadedState = Wait-Until "active automatic collection image" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([string]$state.activeTitle -eq $validTitle -and
+                [bool]$state.interpretEnabled -and
+                [bool]$state.compactInterpretEnabled -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.interpretFormat) -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.interpretWidth) -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.interpretHeight) -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.interpretStride) -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.interpretBits) -and
+                -not [string]::IsNullOrWhiteSpace([string]$state.interpretEndian)) {
+                $state
+            }
+            else {
+                $null
+            }
+        }
+        catch {
+            $null
+        }
+    } 15
+
+    if (-not [bool]$loadedState.inspectorVisible -and
+        -not [bool]$loadedState.compactInspectorVisible) {
+        $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+        if (-not $inspectorToggle -or [bool]$inspectorToggle.Current.IsOffscreen) {
+            throw "The narrow installed Tool Window hid the Inspector without exposing its toggle."
+        }
+        $inspectorTogglePattern = $null
+        if (-not $inspectorToggle.TryGetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern,
+            [ref]$inspectorTogglePattern)) {
+            throw "Compact Inspector button does not support TogglePattern."
+        }
+        if (([System.Windows.Automation.TogglePattern]$inspectorTogglePattern).Current.ToggleState -ne
+            [System.Windows.Automation.ToggleState]::On) {
+            ([System.Windows.Automation.TogglePattern]$inspectorTogglePattern).Toggle()
+        }
+
+        $alternateValidIndex = -1
+        for ($index = 0; $index -lt @($secondState.documents).Count; $index++) {
+            if ($index -ne $firstValidIndex -and -not [bool]$secondState.documents[$index].isError) {
+                $alternateValidIndex = $index
+                break
+            }
+        }
+        if ($alternateValidIndex -lt 0) {
+            throw "Inspector state refresh requires a second valid automatic collection image."
+        }
+        Select-AutomationItem $imageItems[$alternateValidIndex]
+        Start-Sleep -Milliseconds 150
+        Select-AutomationItem $imageItems[$firstValidIndex]
+        $loadedState = Wait-Until "opened Compact Inspector state" {
+            try {
+                $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                if ([string]$state.activeTitle -eq $validTitle -and
+                    [bool]$state.compactInspectorVisible) {
+                    $state
+                }
+                else {
+                    $null
+                }
+            }
+            catch {
+                $null
+            }
+        } 15
+    }
+
+    if ([bool]$loadedState.compactInspectorVisible) {
+        $interpretTab = Wait-Until "visible Interpret tab for Clear contract" {
+            Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
+                Where-Object {
+                    [string]$_.Current.Name -eq "Interpret" -and
+                    -not [bool]$_.Current.IsOffscreen
+                } |
+                Select-Object -First 1
+        } 15
+        Select-AutomationItem $interpretTab
+        Start-Sleep -Milliseconds 250
+    }
+
+    $diagnoseButtonId = if ([bool]$loadedState.compactInspectorVisible) {
+        "CompactDiagnoseBufferButton"
+    }
+    else {
+        "DiagnoseBufferButton"
+    }
+    $diagnoseButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) $diagnoseButtonId
+    if (-not $diagnoseButton) {
+        throw "Installed Tool Window did not expose $diagnoseButtonId."
+    }
+    if (-not [bool]$diagnoseButton.Current.IsEnabled) {
+        throw "Installed Tool Window exposed a disabled $diagnoseButtonId for an active image."
+    }
+    $diagnosePattern = $null
+    if (-not $diagnoseButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$diagnosePattern)) {
+        throw "Diagnose Buffer button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$diagnosePattern).Invoke()
+    $diagnosisCandidateListId = if ([bool]$loadedState.compactInspectorVisible) {
+        "CompactDiagnosisCandidateList"
+    }
+    else {
+        "DiagnosisCandidateList"
+    }
+    Wait-Until "populated Buffer Doctor candidates before Clear" {
+        $candidateList = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) $diagnosisCandidateListId
+        if ($candidateList -and
+            @(Get-ElementsByControlType $candidateList ([System.Windows.Automation.ControlType]::ListItem)).Count -gt 0) {
+            return $candidateList
+        }
+
+        $null
+    } 30 | Out-Null
+
+    $beforeClearPath = Join-Path $outputRoot "automatic-collections-before-clear.png"
+    Capture-Window $MainHandle $beforeClearPath
+
+    $clearButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ClearButton"
+    if (-not $clearButton -or -not [bool]$clearButton.Current.IsEnabled) {
+        throw "Installed Tool Window did not expose an enabled Clear button."
+    }
+    $clearPattern = $null
+    if (-not $clearButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$clearPattern)) {
+        throw "Clear button does not support InvokePattern."
+    }
+
+    $beforeClearStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+    ([System.Windows.Automation.InvokePattern]$clearPattern).Invoke()
+    $clearedState = Wait-Until "complete Clear presentation reset" {
+        if (-not (Test-Path -LiteralPath $sessionPath) -or
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $beforeClearStamp) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $wideFields = @(
+                [string]$state.interpretFormat,
+                [string]$state.interpretWidth,
+                [string]$state.interpretHeight,
+                [string]$state.interpretStride,
+                [string]$state.interpretBits,
+                [string]$state.interpretEndian)
+            $compactFields = @(
+                [string]$state.compactInterpretFormat,
+                [string]$state.compactInterpretWidth,
+                [string]$state.compactInterpretHeight,
+                [string]$state.compactInterpretStride,
+                [string]$state.compactInterpretBits,
+                [string]$state.compactInterpretEndian)
+            if ([int]$state.documentCount -eq 0 -and
+                [string]::IsNullOrEmpty([string]$state.activeTitle) -and
+                [string]$state.status -eq "0 images" -and
+                -not [bool]$state.imageViewVisible -and
+                [bool]$state.emptyViewerVisible -and
+                -not [bool]$state.interpretEnabled -and
+                -not [bool]$state.compactInterpretEnabled -and
+                @($wideFields | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count -eq 0 -and
+                @($compactFields | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count -eq 0 -and
+                -not [bool]$state.diagnosisVisible -and
+                [string]::IsNullOrEmpty([string]$state.diagnosisStatus) -and
+                [int]$state.diagnosisCandidateCount -eq 0 -and
+                -not [bool]$state.compactDiagnosisVisible -and
+                [string]::IsNullOrEmpty([string]$state.compactDiagnosisStatus) -and
+                [int]$state.compactDiagnosisCandidateCount -eq 0 -and
+                [string]::IsNullOrEmpty([string]$state.pixelText) -and
+                [string]::IsNullOrEmpty([string]$state.compactPixelText) -and
+                [string]::IsNullOrEmpty([string]$state.markerText) -and
+                [string]::IsNullOrEmpty([string]$state.compactMarkerText) -and
+                [string]$state.comparisonText -match '^A: -\r?\nB: -$' -and
+                [bool]$state.inspectorVisible -eq [bool]$loadedState.inspectorVisible -and
+                [bool]$state.compactInspectorVisible -eq [bool]$loadedState.compactInspectorVisible) {
+                $state
+            }
+            else {
+                $null
+            }
+        }
+        catch {
+            $null
+        }
+    } 30
+
+    $postClearItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
+    $clearButtonAfter = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ClearButton"
+    if ($postClearItems.Count -ne 0 -or -not $clearButtonAfter -or [bool]$clearButtonAfter.Current.IsEnabled) {
+        throw "Clear did not leave an empty list with Clear disabled."
+    }
+    $afterClearPath = Join-Path $outputRoot "automatic-collections-after-clear.png"
+    Capture-Window $MainHandle $afterClearPath
+
+    $reopenStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+    $reopenedState = Wait-Until "automatic collection reopen after Clear" {
+        if (-not (Test-Path -LiteralPath $sessionPath) -or
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $reopenStamp) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([int]$state.documentCount -eq 7 -and [int]$state.errorCount -eq 2) {
+                $state
+            }
+            else {
+                $null
+            }
+        }
+        catch {
+            $null
+        }
+    } 30
+
+    $reopenedItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
+    if ($reopenedItems.Count -le $firstValidIndex) {
+        throw "Scan Now did not realize the valid image row needed after Clear."
+    }
+    Select-AutomationItem $reopenedItems[$firstValidIndex]
+    $repopulatedState = Wait-Until "Interpret controls repopulated after Clear" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([string]$state.activeTitle -eq $validTitle -and
+                [bool]$state.interpretEnabled -and
+                [bool]$state.compactInterpretEnabled -and
+                [string]$state.interpretFormat -eq [string]$loadedState.interpretFormat -and
+                [string]$state.interpretWidth -eq [string]$loadedState.interpretWidth -and
+                [string]$state.interpretHeight -eq [string]$loadedState.interpretHeight -and
+                [string]$state.interpretStride -eq [string]$loadedState.interpretStride -and
+                [string]$state.interpretBits -eq [string]$loadedState.interpretBits -and
+                [string]$state.interpretEndian -eq [string]$loadedState.interpretEndian) {
+                $state
+            }
+            else {
+                $null
+            }
+        }
+        catch {
+            $null
+        }
+    } 15
+
+    $afterReopenPath = Join-Path $outputRoot "automatic-collections-after-reopen.png"
+    Capture-Window $MainHandle $afterReopenPath
 
     [ordered]@{
         scenario = "AutomaticCollections"
-        screenshotPath = $capturePath
+        screenshotPath = $beforeClearPath
+        beforeClearScreenshotPath = $beforeClearPath
+        afterClearScreenshotPath = $afterClearPath
+        afterReopenScreenshotPath = $afterReopenPath
         rowsBeforeRepeatedScan = $firstNames
         rowsAfterRepeatedScan = $secondNames
         listInspected = $true
@@ -1764,7 +2484,16 @@ function Invoke-AutomaticCollectionsScenario(
         failedCount = 2
         partialFailureIsolated = $true
         duplicateFree = $true
-        collectionPreferenceRestored = $true
+        collectionOptionAbsent = $true
+        collectionDiscoveryAlwaysEnabled = $true
+        clearResetPassed = $true
+        clearInspectorVisibilityPreserved = $true
+        clearDiagnosisReset = $true
+        clearPixelAndComparisonReset = $true
+        clearInterpretationDisabledAndBlank = $true
+        reopenInterpretationRepopulated = $true
+        clearState = $clearedState
+        reopenState = $repopulatedState
         scanElapsedMilliseconds = [Math]::Round($scanStopwatch.Elapsed.TotalMilliseconds, 2)
     }
 }
@@ -2328,6 +3057,18 @@ $scenarioArgument = switch ($Scenario) {
     "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
     "AutomaticCollections" { "--automatic-collections-debug" }
     "MultiLibraryHybrid" { "--multi-library-debug" }
+    "IndustrialMarketplace" {
+        if (-not (Test-Path -LiteralPath $IndustrialImagePath)) {
+            throw "Industrial image was not found: $IndustrialImagePath"
+        }
+        '--industrial-image-debug "' + (Resolve-Path -LiteralPath $IndustrialImagePath).Path + '"'
+    }
+    "IndustrialDataTip" {
+        if (-not (Test-Path -LiteralPath $IndustrialDataTipImagePath)) {
+            throw "Industrial DataTip image was not found: $IndustrialDataTipImagePath"
+        }
+        '--industrial-image-debug "' + (Resolve-Path -LiteralPath $IndustrialDataTipImagePath).Path + '"'
+    }
     "ReleaseAnnouncement" { "--buffer-doctor-debug" }
     "EnvironmentCheck" { "--buffer-doctor-debug" }
     default { "--buffer-doctor-debug" }
@@ -2342,7 +3083,10 @@ try {
         }
         Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
     }
-    if ($Scenario -eq "MultiLibraryHybrid" -or $Scenario -eq "AutomaticCollections") {
+    if ($Scenario -eq "MultiLibraryHybrid" -or
+        $Scenario -eq "AutomaticCollections" -or
+        $Scenario -eq "IndustrialMarketplace" -or
+        $Scenario -eq "IndustrialDataTip") {
         $automaticPreferenceIsolated = $true
         $automaticPreferenceExisted = Test-Path -LiteralPath $automaticPreferencePath
         if ($automaticPreferenceExisted) {
@@ -2353,8 +3097,7 @@ try {
         New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
         $automaticPreferenceJson = [ordered]@{
             version = 1
-            autoScanOnBreak = $true
-            includeImageCollections = ($Scenario -eq "AutomaticCollections")
+            autoScanOnBreak = $Scenario -ne "IndustrialMarketplace" -and $Scenario -ne "IndustrialDataTip"
         } | ConvertTo-Json
         [IO.File]::WriteAllText(
             $automaticPreferencePath,
@@ -2424,6 +3167,12 @@ try {
         elseif ($Scenario -eq "AutomaticCollections") {
             (Find-TreeItem $root "partialOpenCvMatList") -ne $null
         }
+        elseif ($Scenario -eq "IndustrialMarketplace") {
+            (Find-TreeItem $root "industrialBitmap") -ne $null
+        }
+        elseif ($Scenario -eq "IndustrialDataTip") {
+            (Find-TreeItem $root "industrialBitmap") -ne $null
+        }
         elseif ($Scenario -eq "ReleaseAnnouncement" -or $Scenario -eq "EnvironmentCheck") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
@@ -2435,6 +3184,15 @@ try {
         }
     } 90 | Out-Null
 
+    # A newly installed VS 17.x profile can switch to a debug layout that hides
+    # tool windows opened before debugging. Re-showing is idempotent and keeps
+    # every scenario on the same visible docked window after the layout switch.
+    Show-RawBufferToolWindow $visualStudio.Id
+    Start-Sleep -Milliseconds 500
+    $toolElement = Wait-Until "Raw Buffer Visualizer debug-layout tool window element" {
+        Find-RawBufferToolWindowElement $mainHandle
+    } 30
+
     $scenarioResult = switch ($Scenario) {
         "BufferDoctor" { Invoke-BufferDoctorScenario $visualStudio $mainHandle }
         "SmartTypeMapper" { Invoke-SmartTypeMapperScenario $visualStudio $mainHandle }
@@ -2443,6 +3201,8 @@ try {
         "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
         "AutomaticCollections" { Invoke-AutomaticCollectionsScenario $visualStudio $mainHandle }
         "MultiLibraryHybrid" { Invoke-MultiLibraryHybridScenario $visualStudio $mainHandle }
+        "IndustrialMarketplace" { Invoke-IndustrialMarketplaceScenario $visualStudio $mainHandle }
+        "IndustrialDataTip" { Invoke-IndustrialDataTipScenario $visualStudio $mainHandle }
         "ReleaseAnnouncement" { Invoke-ReleaseAnnouncementScenario $visualStudio $mainHandle }
         "EnvironmentCheck" { Invoke-EnvironmentCheckScenario $mainHandle }
     }

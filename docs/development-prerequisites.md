@@ -23,7 +23,7 @@ Use this checklist after a Windows reinstall, on a new contributor PC, or before
 
 A normal user installs only:
 
-1. Visual Studio 2022 17.14+ x64 or stable Visual Studio 2026 18.x x64.
+1. Visual Studio 2022 17.14+ x64 for the current public `2.0.1.0` package, or Visual Studio 2022 17.9+ x64 for the qualified unpublished `2.0.2.0` candidate; stable Visual Studio 2026 18.x x64 is supported by both lines.
 2. Raw Buffer Visualizer from Visual Studio Marketplace or the exact approved VSIX.
 3. A Visual Studio restart after install or update.
 
@@ -33,7 +33,7 @@ The extension does not require a separate .NET SDK, OpenCvSharp, Emgu CV, SharpG
 
 Install or restore:
 
-- [Visual Studio](https://visualstudio.microsoft.com/downloads/) 2022 17.14+ with **.NET desktop development**. Stable Visual Studio 2026 18.x is an additional compatibility target, not a replacement for the VS2022 baseline.
+- [Visual Studio](https://visualstudio.microsoft.com/downloads/) 2022 17.9+ with **.NET desktop development** for the current development branch. Stable Visual Studio 2026 18.x is an additional compatibility target, not a replacement for the VS2022 baseline. The optional **Visual Studio extension development** workload is not required by the verified CLI build or installed extension runtime.
 - [.NET 8 SDK](https://dotnet.microsoft.com/en-us/download/dotnet/8.0) or newer. Prefer having an 8.0 SDK available because `net8.0-windows` is the test target; .NET 9 and 10 are not required.
 - [Git for Windows](https://git-scm.com/download/win).
 - Windows PowerShell 5.1 (`powershell.exe`), which the repository scripts target.
@@ -118,11 +118,11 @@ Route test-process `TEMP` and `TMP` there when practical. A machine without `D:`
 
 ## In-Product Environment Check
 
-Public Marketplace `1.0.53` and the locally qualified `2.0.0` candidate implement the approved **Environment** panel. The panel must report the version loaded by the current Visual Studio session; it is not evidence that Marketplace has already published the local candidate.
+Public Marketplace `2.0.1` and the unpublished `2.0.2` release candidate implement the approved **Environment** panel. The panel must report the version loaded by the current Visual Studio session; it is not evidence that Marketplace has already published the local candidate.
 
 The panel reports required runtime state first:
 
-1. Current Visual Studio file version, x64 process state, and the supported `17.14+`/stable `18.x` host rule.
+1. Current Visual Studio file version, x64 process state, and the `2.0.2` support rule of Visual Studio 2022 `17.9+` or stable Visual Studio 2026 `18.x`.
 2. Raw Buffer Visualizer version loaded in the current Visual Studio session.
 3. A create/write/delete probe below the extension's temporary-storage root.
 
