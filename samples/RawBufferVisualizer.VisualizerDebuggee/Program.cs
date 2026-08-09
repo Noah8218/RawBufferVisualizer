@@ -528,16 +528,16 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 var mono8 = ConvertBgr24ToMono8(bgr24, width, height);
                 const int doctorWidth = 2448;
                 const int doctorHeight = 2048;
-                const int doctorPadding = 112;
-                var doctorMono8 = ResizeMono8Nearest(
-                    mono8,
+                const int doctorPadding = 80;
+                var doctorBgr24 = ResizeBgr24Nearest(
+                    bgr24,
                     width,
                     height,
                     doctorWidth,
                     doctorHeight);
-                var paddedMono8 = AddRowPadding(
-                    doctorMono8,
-                    doctorWidth,
+                var paddedBgr24 = AddRowPadding(
+                    doctorBgr24,
+                    doctorWidth * 3,
                     doctorHeight,
                     doctorPadding);
 
@@ -548,12 +548,12 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     mono8,
                     CreateDescriptor(width, height, width, RawPixelFormat.Mono8, 8));
                 var industrialBadStrideSnapshot = RawBufferSnapshot.FromByteArray(
-                    paddedMono8,
+                    paddedBgr24,
                     CreateDescriptor(
                         doctorWidth,
                         doctorHeight,
-                        doctorWidth,
-                        RawPixelFormat.Mono8,
+                        doctorWidth * 3,
+                        RawPixelFormat.BGR24,
                         8));
                 var industrialFrameOwner = PinView(
                     pinnedViews,
@@ -574,9 +574,10 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     "Industrial image debugger smoke ready: " +
                     Path.GetFileName(path) + ", " +
                     width.ToString() + " x " + height.ToString() +
-                    ", BGR24/Mono8; Buffer Doctor Mono8 " +
+                    ", BGR24/Mono8; Buffer Doctor BGR24 " +
                     doctorWidth.ToString() + " x " + doctorHeight.ToString() +
                     " with " + doctorPadding.ToString() + " bytes of row padding.");
+                var dataTipIndustrialMat = industrialOpenCvMat;
                 if (shouldBreak)
                 {
                     Debugger.Break();
@@ -587,6 +588,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(industrialBadStrideSnapshot);
                 GC.KeepAlive(industrialFrame);
                 GC.KeepAlive(industrialOpenCvMat);
+                GC.KeepAlive(dataTipIndustrialMat);
                 GC.KeepAlive(industrialEmguMat);
                 GC.KeepAlive(industrialBitmap);
                 return 0;
@@ -667,33 +669,38 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             return mono8;
         }
 
-        private static byte[] AddRowPadding(byte[] source, int width, int height, int rowPadding)
+        private static byte[] AddRowPadding(byte[] source, int rowBytes, int height, int rowPadding)
         {
-            var stride = checked(width + rowPadding);
+            var stride = checked(rowBytes + rowPadding);
             var padded = new byte[checked(stride * height)];
             for (var y = 0; y < height; y++)
             {
-                Buffer.BlockCopy(source, y * width, padded, y * stride, width);
+                Buffer.BlockCopy(source, y * rowBytes, padded, y * stride, rowBytes);
             }
 
             return padded;
         }
 
-        private static byte[] ResizeMono8Nearest(
+        private static byte[] ResizeBgr24Nearest(
             byte[] source,
             int sourceWidth,
             int sourceHeight,
             int width,
             int height)
         {
-            var resized = new byte[checked(width * height)];
+            var resized = new byte[checked(width * height * 3)];
             for (var y = 0; y < height; y++)
             {
                 var sourceY = (int)((long)y * sourceHeight / height);
                 for (var x = 0; x < width; x++)
                 {
                     var sourceX = (int)((long)x * sourceWidth / width);
-                    resized[(y * width) + x] = source[(sourceY * sourceWidth) + sourceX];
+                    Buffer.BlockCopy(
+                        source,
+                        ((sourceY * sourceWidth) + sourceX) * 3,
+                        resized,
+                        ((y * width) + x) * 3,
+                        3);
                 }
             }
 

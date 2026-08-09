@@ -47,10 +47,11 @@ function Get-ThreePartVersion {
     return "$($parsed.Major).$($parsed.Minor).$($parsed.Build)"
 }
 
-$manifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest'
-$projectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
+$manifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\source.extension.vsixmanifest'
+$projectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj'
+$providerProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
 $classicProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj'
-$packageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizerPackage.cs'
+$packageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizerPackage.cs'
 $announcementPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio\ReleaseAnnouncement.cs'
 $toolWindowXamlPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferToolWindowControl.xaml'
 $toolWindowCodePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferToolWindowControl.xaml.cs'
@@ -61,6 +62,7 @@ $releaseWorkflowPath = Join-Path $repoRoot '.github\workflows\release.yml'
 foreach ($requiredPath in @(
     $manifestPath,
     $projectPath,
+    $providerProjectPath,
     $classicProjectPath,
     $packageSourcePath,
     $announcementPath,
@@ -94,6 +96,8 @@ $escapedAssemblyVersion = [regex]::Escape("$packageVersion.0")
 
 Assert-Contains $projectPath "<Version>$escapedPackageVersion</Version>" 'Hybrid project package version'
 Assert-Contains $projectPath "<AssemblyVersion>$escapedAssemblyVersion</AssemblyVersion>" 'Hybrid project assembly version'
+Assert-Contains $providerProjectPath "<Version>$escapedPackageVersion</Version>" 'Out-of-process provider package version'
+Assert-Contains $providerProjectPath "<AssemblyVersion>$escapedAssemblyVersion</AssemblyVersion>" 'Out-of-process provider assembly version'
 Assert-Contains $classicProjectPath "<Version>$escapedPackageVersion</Version>" 'Classic project package version'
 Assert-Contains $packageSourcePath ('InstalledProductRegistration\([^\r\n]+"' + $escapedPackageVersion + '"\)') 'Installed product version'
 Assert-Contains $announcementPath ('CurrentVersion\s*=\s*"' + $escapedPackageVersion + '"') 'In-product announcement version'

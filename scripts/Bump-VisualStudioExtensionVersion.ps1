@@ -3,6 +3,7 @@ param(
     [Parameter(Mandatory = $true)]
     [string]$Version,
     [string]$ProjectPath,
+    [string]$ProviderProjectPath,
     [string]$ClassicProjectPath,
     [string]$ManifestPath,
     [string]$PackageSourcePath
@@ -13,15 +14,19 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 
 if ([string]::IsNullOrWhiteSpace($ProjectPath)) {
-    $ProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
+    $ProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj'
+}
+
+if ([string]::IsNullOrWhiteSpace($ProviderProjectPath)) {
+    $ProviderProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizer.VisualStudio.Extensibility.csproj'
 }
 
 if ([string]::IsNullOrWhiteSpace($ManifestPath)) {
-    $ManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\source.extension.vsixmanifest'
+    $ManifestPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\source.extension.vsixmanifest'
 }
 
 if ([string]::IsNullOrWhiteSpace($PackageSourcePath)) {
-    $PackageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\RawBufferVisualizerPackage.cs'
+    $PackageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizerPackage.cs'
 }
 
 if ([string]::IsNullOrWhiteSpace($ClassicProjectPath)) {
@@ -89,6 +94,7 @@ function Write-Utf8NoBom {
 }
 
 Assert-FileExists -Path $ProjectPath -Message 'Visual Studio extension project was not found'
+Assert-FileExists -Path $ProviderProjectPath -Message 'Out-of-process provider project was not found'
 Assert-FileExists -Path $ClassicProjectPath -Message 'Classic Bitmap visualizer project was not found'
 Assert-FileExists -Path $ManifestPath -Message 'Visual Studio extension manifest was not found'
 Assert-FileExists -Path $PackageSourcePath -Message 'Hybrid VSSDK package source was not found'
@@ -100,6 +106,12 @@ $project = Replace-One -Content $project -Pattern '<AssemblyVersion>[^<]+</Assem
 $project = Replace-One -Content $project -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'FileVersion'
 $project = Replace-One -Content $project -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'Version'
 Write-Utf8NoBom -Path $ProjectPath -Content $project
+
+$providerProject = Get-Content -Raw -LiteralPath $ProviderProjectPath
+$providerProject = Replace-One -Content $providerProject -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'provider AssemblyVersion'
+$providerProject = Replace-One -Content $providerProject -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'provider FileVersion'
+$providerProject = Replace-One -Content $providerProject -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'provider Version'
+Write-Utf8NoBom -Path $ProviderProjectPath -Content $providerProject
 
 $classicProject = Get-Content -Raw -LiteralPath $ClassicProjectPath
 $classicProject = Replace-One -Content $classicProject -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'classic AssemblyVersion'
@@ -119,13 +131,13 @@ $packageSource = Replace-One `
     -Description 'InstalledProductRegistration version'
 Write-Utf8NoBom -Path $PackageSourcePath -Content $packageSource
 
-$generatedManifestRoot = Join-Path $repoRoot '.build\intermediate\RawBufferVisualizer.VisualStudio.Extensibility'
+$generatedManifestRoot = Join-Path $repoRoot '.build\intermediate\RawBufferVisualizer.VisualStudio.Vssdk'
 if (Test-Path -LiteralPath $generatedManifestRoot -PathType Container) {
     Get-ChildItem -LiteralPath $generatedManifestRoot -Filter 'extension.vsixmanifest' -File -Recurse |
         ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
 }
 
-$builtVsixRoot = Join-Path $repoRoot '.build\bin\RawBufferVisualizer.VisualStudio.Extensibility'
+$builtVsixRoot = Join-Path $repoRoot '.build\bin\RawBufferVisualizer.VisualStudio.Vssdk'
 if (Test-Path -LiteralPath $builtVsixRoot -PathType Container) {
     Get-ChildItem -LiteralPath $builtVsixRoot -Filter 'RawBufferVisualizer.VisualStudio.Extensibility.vsix' -File -Recurse |
         ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
@@ -135,6 +147,7 @@ Write-Host "Updated Visual Studio extension version:"
 Write-Host "  Package:  $($versions.Package)"
 Write-Host "  Assembly: $($versions.Assembly)"
 Write-Host "  Project:  $ProjectPath"
+Write-Host "  Provider: $ProviderProjectPath"
 Write-Host "  Classic:  $ClassicProjectPath"
 Write-Host "  Manifest: $ManifestPath"
 Write-Host "  VSSDK:    $PackageSourcePath"

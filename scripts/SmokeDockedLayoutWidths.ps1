@@ -3,6 +3,7 @@ param(
     [string]$Framework = "net472",
     [string]$OutputDir = "artifacts\ui\docked-layout-widths",
     [int[]]$Widths = @(540, 900, 1160),
+    [switch]$LayoutContractOnly,
     [switch]$NoBuild
 )
 
@@ -137,6 +138,9 @@ function Measure-NonDarkRatio([string]$path) {
 }
 
 $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
+foreach ($dependencyName in @("Microsoft.VisualStudio.Imaging.dll", "Microsoft.VisualStudio.ImageCatalog.dll")) {
+    [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path -Parent $assemblyPath) $dependencyName)) | Out-Null
+}
 [Reflection.Assembly]::LoadFrom($assemblyPath) | Out-Null
 
 $results = New-Object System.Collections.Generic.List[object]
@@ -152,17 +156,260 @@ foreach ($layoutWidth in $Widths) {
     $window.Content = $control
     $window.Show()
     Wait-Dispatcher 500
-    $control.OpenPath($metadataPath)
-    Wait-Dispatcher 1500
     $helper = New-Object System.Windows.Interop.WindowInteropHelper($window)
+    $windowFrameWidth = [Math]::Max(0, $window.ActualWidth - $control.ActualWidth)
+    $targetWindowWidth = [int][Math]::Ceiling($layoutWidth + $windowFrameWidth)
     [RawBufferDockedLayoutNative]::ShowWindow($helper.Handle, 9) | Out-Null
-    [RawBufferDockedLayoutNative]::SetWindowPos($helper.Handle, [RawBufferDockedLayoutNative]::HWND_TOPMOST, 20, 20, $layoutWidth, 520, 0x0040) | Out-Null
+    [RawBufferDockedLayoutNative]::SetWindowPos($helper.Handle, [RawBufferDockedLayoutNative]::HWND_TOPMOST, 20, 20, $targetWindowWidth, 520, 0x0040) | Out-Null
     [RawBufferDockedLayoutNative]::BringWindowToTop($helper.Handle) | Out-Null
     [RawBufferDockedLayoutNative]::SetForegroundWindow($helper.Handle) | Out-Null
     Wait-Dispatcher 500
+    if ([Math]::Abs($control.ActualWidth - $layoutWidth) -gt 1.5) {
+        throw "Requested content width $layoutWidth did not settle. Actual: $($control.ActualWidth)"
+    }
+
+    $openButton = $control.FindName("OpenButton")
+    $clearButton = $control.FindName("ClearButton")
+    $saveButton = $control.FindName("SaveVisiblePngButton")
+    $fitButton = $control.FindName("FitButton")
+    $actualSizeButton = $control.FindName("ActualSizeButton")
+    $emptyViewerPanel = $control.FindName("EmptyViewerPanel")
+    $emptyViewerGuidance = $control.FindName("EmptyViewerGuidanceText")
+    $interpretControls = $control.FindName("InterpretControls")
+    $compactInterpretControls = $control.FindName("CompactInterpretControls")
+    $interpretTextBoxes = @(
+        $control.FindName("InterpretWidthTextBox")
+        $control.FindName("InterpretHeightTextBox")
+        $control.FindName("InterpretStrideTextBox")
+        $control.FindName("InterpretValidBitsTextBox"))
+    $compactInterpretTextBoxes = @(
+        $control.FindName("CompactInterpretWidthTextBox")
+        $control.FindName("CompactInterpretHeightTextBox")
+        $control.FindName("CompactInterpretStrideTextBox")
+        $control.FindName("CompactInterpretValidBitsTextBox"))
+    $interpretComboBoxes = @(
+        $control.FindName("InterpretPixelFormatBox")
+        $control.FindName("InterpretByteOrderBox"))
+    $compactInterpretComboBoxes = @(
+        $control.FindName("CompactInterpretPixelFormatBox")
+        $control.FindName("CompactInterpretByteOrderBox"))
+    $collectionOption = $control.FindName("IncludeImageCollectionsBox")
+    $primaryLabels = @(
+        $control.FindName("OpenButtonText")
+        $control.FindName("ClearButtonText")
+        $control.FindName("SaveButtonText")
+        $control.FindName("FitButtonText")
+        $control.FindName("ActualSizeButtonText"))
+    $primaryButtons = @($openButton, $clearButton, $saveButton, $fitButton, $actualSizeButton)
+    $iconsPresent = @($primaryButtons | Where-Object {
+        $null -ne $_ -and
+        $null -ne $_.Content -and
+        $_.Content.Children.Count -gt 0 -and
+        $_.Content.Children[0].GetType().FullName -eq "Microsoft.VisualStudio.Imaging.CrispImage"
+    }).Count -eq $primaryButtons.Count
+    $iconOnlyDiscoverabilityValid = @($primaryButtons[0..2] | Where-Object {
+        $name = [System.Windows.Automation.AutomationProperties]::GetName($_)
+        -not [string]::IsNullOrWhiteSpace($name) -and
+        $_.ToolTip -is [string] -and
+        -not [string]::IsNullOrWhiteSpace([string]$_.ToolTip)
+    }).Count -eq 3
+    $primaryLabelStateValid = if ($layoutWidth -lt 760) {
+        @($primaryLabels[0..2] | Where-Object {
+            $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Collapsed
+        }).Count -eq 3 -and
+        @($primaryLabels[3..4] | Where-Object {
+            $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Visible
+        }).Count -eq 2
+    }
+    else {
+        @($primaryLabels | Where-Object {
+            $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Visible
+        }).Count -eq $primaryLabels.Count
+    }
+    $emptyCommandStateValid = $openButton.IsEnabled -and
+        -not $clearButton.IsEnabled -and
+        -not $saveButton.IsEnabled -and
+        -not $fitButton.IsEnabled -and
+        -not $actualSizeButton.IsEnabled
+    $emptyInterpretationStateValid = -not $interpretControls.IsEnabled -and
+        -not $compactInterpretControls.IsEnabled -and
+        @($interpretTextBoxes + $compactInterpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
+        @($interpretComboBoxes + $compactInterpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
+    $emptyGuidanceOrigin = $emptyViewerGuidance.TranslatePoint(
+        [System.Windows.Point]::new(0, 0),
+        $emptyViewerPanel)
+    $emptyGuidanceBoundsValid = $emptyGuidanceOrigin.X -ge -0.5 -and
+        $emptyGuidanceOrigin.Y -ge -0.5 -and
+        ($emptyGuidanceOrigin.X + $emptyViewerGuidance.ActualWidth) -le ($emptyViewerPanel.ActualWidth + 0.5) -and
+        ($emptyGuidanceOrigin.Y + $emptyViewerGuidance.ActualHeight) -le ($emptyViewerPanel.ActualHeight + 0.5)
+    if ($null -ne $collectionOption -or
+        -not $iconsPresent -or
+        -not $iconOnlyDiscoverabilityValid -or
+        -not $primaryLabelStateValid -or
+        -not $emptyCommandStateValid -or
+        -not $emptyInterpretationStateValid -or
+        -not $emptyGuidanceBoundsValid -or
+        $emptyViewerPanel.Visibility -ne [System.Windows.Visibility]::Visible) {
+        throw "Empty-state toolbar contract failed at width $layoutWidth."
+    }
+
+    $emptyCapturePath = Join-Path $outputRoot "empty-layout-$layoutWidth.png"
+    Capture-Window $helper.Handle $emptyCapturePath
+
+    $control.OpenPath($metadataPath)
+    Wait-Dispatcher 1500
+    $loadedCommandStateValid = $clearButton.IsEnabled -and
+        $saveButton.IsEnabled -and
+        $fitButton.IsEnabled -and
+        $actualSizeButton.IsEnabled -and
+        $emptyViewerPanel.Visibility -eq [System.Windows.Visibility]::Collapsed
+    $loadedInterpretationStateValid = $interpretControls.IsEnabled -and
+        $compactInterpretControls.IsEnabled -and
+        $interpretTextBoxes[0].Text -eq "640" -and
+        $interpretTextBoxes[1].Text -eq "480" -and
+        $interpretTextBoxes[2].Text -eq "640" -and
+        $interpretTextBoxes[3].Text -eq "8" -and
+        $compactInterpretTextBoxes[0].Text -eq "640" -and
+        $compactInterpretTextBoxes[1].Text -eq "480" -and
+        $compactInterpretTextBoxes[2].Text -eq "640" -and
+        $compactInterpretTextBoxes[3].Text -eq "8" -and
+        [string]($interpretComboBoxes[0].SelectedItem) -eq "Mono8" -and
+        [string]($compactInterpretComboBoxes[0].SelectedItem) -eq "Mono8"
+    if (-not $loadedCommandStateValid -or -not $loadedInterpretationStateValid) {
+        throw "Loaded-image toolbar contract failed at width $layoutWidth."
+    }
+
+    $toolbar = $control.FindName("ToolbarBorder")
+    $toolbarCommands = $control.FindName("ToolbarCommandsPanel")
+    $toolbarBoundsValid = $true
+    foreach ($child in $toolbarCommands.Children) {
+        if ($child.Visibility -ne [System.Windows.Visibility]::Visible) {
+            continue
+        }
+
+        $childOrigin = $child.TranslatePoint([System.Windows.Point]::new(0, 0), $toolbar)
+        if ($childOrigin.X -lt -0.5 -or
+            $childOrigin.Y -lt -0.5 -or
+            ($childOrigin.X + $child.ActualWidth) -gt ($toolbar.ActualWidth + 0.5) -or
+            ($childOrigin.Y + $child.ActualHeight) -gt ($toolbar.ActualHeight + 0.5)) {
+            $toolbarBoundsValid = $false
+            break
+        }
+    }
+    if (-not $toolbarBoundsValid) {
+        throw "A visible toolbar control was clipped at width $layoutWidth."
+    }
+
+    $mainContentGrid = $control.FindName("MainContentGrid")
+    $imagesColumn = $control.FindName("ImagesColumn")
+    $inspectorColumn = $control.FindName("InspectorColumn")
+    $compactInspectorRow = $control.FindName("CompactInspectorRow")
+    $inspectorToggle = $control.FindName("InspectorToggleButton")
+    $originalImagesWidth = $imagesColumn.Width
+    $originalInspectorWidth = $inspectorColumn.Width
+    $originalCompactHeight = $compactInspectorRow.Height
+    $originalInspectorToggle = $inspectorToggle.IsChecked
+    $splitCases = New-Object System.Collections.Generic.List[object]
+
+    $fixedRightWidth = if ($layoutWidth -ge 1040) { $inspectorColumn.ActualWidth + 10 } else { 5 }
+    $maximumImagesWidth = [Math]::Max(
+        160,
+        [Math]::Min(480, $mainContentGrid.ActualWidth - $fixedRightWidth - 140))
+    $imageSplitTargets = @(160, [Math]::Min(320, $maximumImagesWidth), $maximumImagesWidth) |
+        Select-Object -Unique
+    foreach ($targetWidth in $imageSplitTargets) {
+        $imagesColumn.Width = [System.Windows.GridLength]::new([double]$targetWidth)
+        $control.UpdateLayout()
+        Wait-Dispatcher 40
+        $viewerColumnWidth = $mainContentGrid.ColumnDefinitions[2].ActualWidth
+        if ($viewerColumnWidth -lt 139.5) {
+            throw "The image-list splitter reduced the viewer below 140 px at window width $layoutWidth."
+        }
+        $splitCases.Add([pscustomobject]@{
+            Axis = "Images"
+            Requested = [Math]::Round($targetWidth, 1)
+            Actual = [Math]::Round($imagesColumn.ActualWidth, 1)
+            Viewer = [Math]::Round($viewerColumnWidth, 1)
+        })
+    }
+    $imagesColumn.Width = $originalImagesWidth
+    $control.UpdateLayout()
+
+    if ($layoutWidth -ge 1040) {
+        $maximumInspectorWidth = [Math]::Max(
+            180,
+            [Math]::Min(420, $mainContentGrid.ActualWidth - $imagesColumn.ActualWidth - 10 - 140))
+        $inspectorSplitTargets = @(180, [Math]::Min(300, $maximumInspectorWidth), $maximumInspectorWidth) |
+            Select-Object -Unique
+        foreach ($targetWidth in $inspectorSplitTargets) {
+            $inspectorColumn.Width = [System.Windows.GridLength]::new([double]$targetWidth)
+            $control.UpdateLayout()
+            Wait-Dispatcher 40
+            $viewerColumnWidth = $mainContentGrid.ColumnDefinitions[2].ActualWidth
+            if ($viewerColumnWidth -lt 139.5) {
+                throw "The Inspector splitter reduced the viewer below 140 px at window width $layoutWidth."
+            }
+            $splitCases.Add([pscustomobject]@{
+                Axis = "Inspector"
+                Requested = [Math]::Round($targetWidth, 1)
+                Actual = [Math]::Round($inspectorColumn.ActualWidth, 1)
+                Viewer = [Math]::Round($viewerColumnWidth, 1)
+            })
+        }
+        $inspectorColumn.Width = $originalInspectorWidth
+    }
+    else {
+        if ($layoutWidth -lt 760) {
+            $inspectorToggle.IsChecked = $true
+            Wait-Dispatcher 80
+        }
+        foreach ($targetHeight in @(120, 168, 300)) {
+            $compactInspectorRow.Height = [System.Windows.GridLength]::new([double]$targetHeight)
+            $control.UpdateLayout()
+            Wait-Dispatcher 40
+            $mainRowHeight = $control.FindName("MainContentGrid").ActualHeight
+            if ($mainRowHeight -lt 99.5) {
+                throw "The compact Inspector splitter reduced the main content below 100 px at window width $layoutWidth."
+            }
+            $splitCases.Add([pscustomobject]@{
+                Axis = "CompactInspector"
+                Requested = $targetHeight
+                Actual = [Math]::Round($compactInspectorRow.ActualHeight, 1)
+                MainContent = [Math]::Round($mainRowHeight, 1)
+            })
+        }
+        $compactInspectorRow.Height = $originalCompactHeight
+        $inspectorToggle.IsChecked = $originalInspectorToggle
+    }
+    $control.UpdateLayout()
+    Wait-Dispatcher 80
 
     $capturePath = Join-Path $outputRoot "layout-$layoutWidth.png"
     Capture-Window $helper.Handle $capturePath
+
+    if ($LayoutContractOnly) {
+        $results.Add([pscustomobject]@{
+            Width = $layoutWidth
+            ActualControlWidth = [Math]::Round($control.ActualWidth, 1)
+            Capture = $capturePath
+            EmptyCapture = $emptyCapturePath
+            CollectionOptionAbsent = ($null -eq $collectionOption)
+            PrimaryIconsPresent = $iconsPresent
+            IconOnlyDiscoverabilityValid = $iconOnlyDiscoverabilityValid
+            PrimaryLabelStateValid = $primaryLabelStateValid
+            ToolbarBoundsValid = $toolbarBoundsValid
+            EmptyCommandStateValid = $emptyCommandStateValid
+            EmptyInterpretationStateValid = $emptyInterpretationStateValid
+            LoadedCommandStateValid = $loadedCommandStateValid
+            LoadedInterpretationStateValid = $loadedInterpretationStateValid
+            EmptyGuidanceBoundsValid = $emptyGuidanceBoundsValid
+            SplitCases = $splitCases.ToArray()
+        })
+        $window.Close()
+        $control.Dispose()
+        Wait-Dispatcher 100
+        continue
+    }
 
     $inspector = $control.FindName("InspectorPanel")
     $compact = $control.FindName("CompactInspectorPanel")
@@ -225,7 +472,7 @@ foreach ($layoutWidth in $Widths) {
         [RawBufferDockedLayoutNative]::HWND_TOPMOST,
         20,
         20,
-        $layoutWidth,
+        $targetWindowWidth,
         620,
         0x0040) | Out-Null
     Wait-Dispatcher 500
@@ -253,7 +500,7 @@ foreach ($layoutWidth in $Widths) {
         [RawBufferDockedLayoutNative]::HWND_TOPMOST,
         20,
         20,
-        $layoutWidth,
+        $targetWindowWidth,
         560,
         0x0040) | Out-Null
     Wait-Dispatcher 500
@@ -284,7 +531,7 @@ foreach ($layoutWidth in $Widths) {
         [RawBufferDockedLayoutNative]::HWND_TOPMOST,
         20,
         20,
-        $layoutWidth,
+        $targetWindowWidth,
         520,
         0x0040) | Out-Null
     Wait-Dispatcher 500
@@ -440,9 +687,89 @@ foreach ($layoutWidth in $Widths) {
         throw "Normal image did not recover after a malformed handoff at width $layoutWidth."
     }
 
+    $diagnoseButton = if ($compact.Visibility -eq [System.Windows.Visibility]::Visible) {
+        $control.FindName("CompactDiagnoseBufferButton")
+    }
+    else {
+        $control.FindName("DiagnoseBufferButton")
+    }
+    $diagnoseButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        Wait-Dispatcher 100
+        if ($null -ne $control.FindName("DiagnosisCandidateList").ItemsSource) {
+            break
+        }
+    }
+    $diagnosisPrepared = $null -ne $control.FindName("DiagnosisCandidateList").ItemsSource -and
+        $control.FindName("DiagnosisCandidateList").Items.Count -gt 0 -and
+        $null -ne $control.FindName("CompactDiagnosisCandidateList").ItemsSource -and
+        $control.FindName("CompactDiagnosisCandidateList").Items.Count -gt 0
+    if (-not $diagnosisPrepared) {
+        throw "Buffer Doctor did not prepare candidates before Clear at width $layoutWidth."
+    }
+
+    $inspectorVisibilityBeforeClear = $inspector.Visibility
+    $compactInspectorVisibilityBeforeClear = $compact.Visibility
+    $clearButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    Wait-Dispatcher 1000
+
+    $clearInterpretationStateValid = -not $interpretControls.IsEnabled -and
+        -not $compactInterpretControls.IsEnabled -and
+        @($interpretTextBoxes + $compactInterpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
+        @($interpretComboBoxes + $compactInterpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
+    $clearDiagnosisStateValid = $control.FindName("DiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        $control.FindName("CompactDiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        $null -eq $control.FindName("DiagnosisCandidateList").ItemsSource -and
+        $null -eq $control.FindName("CompactDiagnosisCandidateList").ItemsSource -and
+        [string]::IsNullOrEmpty($control.FindName("DiagnosisStatusText").Text) -and
+        [string]::IsNullOrEmpty($control.FindName("CompactDiagnosisStatusText").Text)
+    $clearInspectorStateValid = [string]::IsNullOrEmpty($control.FindName("MarkerText").Text) -and
+        [string]::IsNullOrEmpty($control.FindName("CompactMarkerText").Text) -and
+        $control.FindName("PixelHeadingText").Text -eq "Pixel" -and
+        $control.FindName("CompactPixelHeadingText").Text -eq "Current"
+    $clearLayoutStateValid = $inspector.Visibility -eq $inspectorVisibilityBeforeClear -and
+        $compact.Visibility -eq $compactInspectorVisibilityBeforeClear
+    $clearDocumentStateValid = $imageList.Items.Count -eq 0 -and
+        $emptyViewerPanel.Visibility -eq [System.Windows.Visibility]::Visible -and
+        $imageView.Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        -not $clearButton.IsEnabled -and
+        $statusText.Text -eq "0 images"
+    if (-not $clearInterpretationStateValid -or
+        -not $clearDiagnosisStateValid -or
+        -not $clearInspectorStateValid -or
+        -not $clearLayoutStateValid -or
+        -not $clearDocumentStateValid) {
+        throw "Clear did not reset the complete document-dependent UI state at width $layoutWidth. Interpret=$clearInterpretationStateValid Diagnosis=$clearDiagnosisStateValid Inspector=$clearInspectorStateValid Layout=$clearLayoutStateValid Document=$clearDocumentStateValid Status='$($statusText.Text)'."
+    }
+
+    $clearCapturePath = Join-Path $outputRoot "clear-after-$layoutWidth.png"
+    Capture-Window $helper.Handle $clearCapturePath
+
+    $control.OpenPath($metadataPath)
+    Wait-Dispatcher 500
+    $clearReopenStateValid = $interpretControls.IsEnabled -and
+        $compactInterpretControls.IsEnabled -and
+        $interpretTextBoxes[0].Text -eq "640" -and
+        $compactInterpretTextBoxes[0].Text -eq "640" -and
+        $clearButton.IsEnabled -and
+        $imageList.Items.Count -eq 1
+    if (-not $clearReopenStateValid) {
+        throw "Interpret controls did not restore after reopening an image at width $layoutWidth."
+    }
+
     $results.Add([pscustomobject]@{
         Width = $layoutWidth
         Capture = $capturePath
+        EmptyCapture = $emptyCapturePath
+        CollectionOptionAbsent = ($null -eq $collectionOption)
+        PrimaryIconsPresent = $iconsPresent
+        IconOnlyDiscoverabilityValid = $iconOnlyDiscoverabilityValid
+        PrimaryLabelStateValid = $primaryLabelStateValid
+        ToolbarBoundsValid = $toolbarBoundsValid
+        SplitCases = $splitCases.ToArray()
+        EmptyCommandStateValid = $emptyCommandStateValid
+        LoadedCommandStateValid = $loadedCommandStateValid
+        EmptyGuidanceVisible = $emptyGuidanceBoundsValid
         InspectorVisible = $inspector.Visibility.ToString()
         CompactInspectorVisible = $compact.Visibility.ToString()
         ImageViewWidth = [Math]::Round($imageView.ActualWidth, 1)
@@ -481,9 +808,19 @@ foreach ($layoutWidth in $Widths) {
         RecoveryFramebuffer = $recoveryFramebufferPath
         MalformedHandoffVisible = $malformedHandoffVisible
         MalformedHandoffRecovered = $malformedHandoffRecovered
+        DiagnosisPreparedBeforeClear = $diagnosisPrepared
+        ClearInterpretationStateValid = $clearInterpretationStateValid
+        ClearDiagnosisStateValid = $clearDiagnosisStateValid
+        ClearInspectorStateValid = $clearInspectorStateValid
+        ClearLayoutStateValid = $clearLayoutStateValid
+        ClearDocumentStateValid = $clearDocumentStateValid
+        ClearImageViewVisibility = $imageView.Visibility.ToString()
+        ClearReopenStateValid = $clearReopenStateValid
+        ClearCapture = $clearCapturePath
     })
 
     $window.Close()
+    $control.Dispose()
     Wait-Dispatcher 250
 }
 

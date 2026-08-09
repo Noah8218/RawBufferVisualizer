@@ -18,6 +18,12 @@ namespace RawBufferVisualizer.Tests
         private static void SupportedVisualStudioVersionsAreExplicit()
         {
             Assert(
+                VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.9.34728.123"),
+                "Visual Studio 2022 17.9 should be supported.");
+            Assert(
+                VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.9.34728.123 built by: d17.9"),
+                "Visual Studio 2022 17.9 file versions with a build suffix should be supported.");
+            Assert(
                 VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.14.37516.0"),
                 "Visual Studio 2022 17.14 should be supported.");
             Assert(
@@ -30,11 +36,11 @@ namespace RawBufferVisualizer.Tests
                 VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("18.8.12023.21 built by: d18.8"),
                 "Visual Studio 2026 file versions with a build suffix should be supported.");
             Assert(
-                !VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.13.0.0"),
-                "Visual Studio 2022 below 17.14 must be rejected.");
+                !VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.8.0.0"),
+                "Visual Studio 2022 below 17.9 must be rejected.");
             Assert(
-                !VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.13.99999.0 built by: d17.13"),
-                "Visual Studio 2022 below 17.14 must remain rejected when a build suffix is present.");
+                !VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("17.8.99999.0 built by: d17.8"),
+                "Visual Studio 2022 below 17.9 must remain rejected when a build suffix is present.");
             Assert(
                 !VisualizerEnvironmentCheck.IsSupportedVisualStudioVersion("Unknown"),
                 "Unknown Visual Studio versions must not be reported as supported.");

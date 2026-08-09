@@ -79,6 +79,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance();
                 VisualizerHandoffInboxPublishesRequestsAtomically();
                 VisualizerHandoffInboxClaimsRequestExactlyOnce();
+                VisualizerHandoffInboxClaimsLongRequestPathWithoutGrowingIt();
                 VisualizerHandoffInboxTracksExplicitCompletion();
                 VisualizerSupportReportContainsActionableContextWithoutImageData();
                 VisualStudioTempStoreDeletesOwnedSnapshotDirectories();
@@ -86,6 +87,7 @@ namespace RawBufferVisualizer.Tests
                 BitmapAdapterCreatesSnapshot();
                 MatAdapterCreatesSnapshot();
                 BufferDoctorFindsPaddedMono8Descriptor();
+                BufferDoctorFindsPaddedBgr24Descriptor();
                 BufferDoctorCorrectStrideWinsOnRowContinuity();
                 BufferDoctorPrefersCorrectEndianness();
                 BufferDoctorPrefersMatchingValidBits();
@@ -2186,6 +2188,67 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void VisualizerHandoffInboxClaimsLongRequestPathWithoutGrowingIt()
+        {
+            var baseDirectory = Path.Combine(
+                Path.GetTempPath(),
+                "RawBufferVisualizerTests");
+            var fileName = Guid.NewGuid().ToString("N").Substring(0, 24)
+                + ".rbuf-handoff";
+            var paddingLength = Math.Max(
+                32,
+                220 - baseDirectory.Length - fileName.Length - 2);
+            var directory = Path.Combine(
+                baseDirectory,
+                new string('l', paddingLength));
+            var requestPath = Path.Combine(directory, fileName);
+            var metadataPath = Path.Combine(baseDirectory, "long-path.rbuf.json");
+            try
+            {
+                Directory.CreateDirectory(directory);
+                File.WriteAllText(requestPath, Path.GetFullPath(metadataPath));
+                Assert(
+                    requestPath.Length + ".processing.".Length + 32 > 259,
+                    "The long-path claim test did not reproduce the former processing-path boundary.");
+
+                string processingPath;
+                Assert(
+                    VisualizerHandoffInbox.TryClaimRequest(
+                        requestPath,
+                        out processingPath),
+                    "A long handoff path could not be claimed.");
+                Assert(
+                    processingPath.Length < requestPath.Length,
+                    "The processing path must be shorter than the published request path.");
+                Assert(
+                    File.Exists(processingPath)
+                    && VisualizerHandoffInbox.GetRequestState(requestPath)
+                        == VisualizerHandoffRequestState.Processing,
+                    "The long handoff claim did not enter Processing state.");
+                Assert(
+                    VisualizerHandoffInbox.ReadSnapshotRequest(processingPath)
+                        == Path.GetFullPath(metadataPath),
+                    "The long handoff claim did not preserve its request content.");
+                Assert(
+                    VisualizerHandoffInbox.TryAcknowledgeRequest(
+                        requestPath,
+                        processingPath),
+                    "The long handoff claim could not publish completion.");
+                Assert(
+                    VisualizerHandoffInbox.GetRequestState(requestPath)
+                        == VisualizerHandoffRequestState.Acknowledged,
+                    "The long handoff claim did not reach Acknowledged state.");
+            }
+            finally
+            {
+                VisualizerHandoffInbox.CleanupRequestArtifacts(requestPath);
+                if (Directory.Exists(directory))
+                {
+                    Directory.Delete(directory, true);
+                }
+            }
+        }
+
         private static void VisualizerHandoffInboxTracksExplicitCompletion()
         {
             var visualStudioProcessId = CreateVisualizerTestProcessId();
@@ -2596,6 +2659,40 @@ namespace RawBufferVisualizer.Tests
                 var wrong = CreateDescriptor(2448, 2048, 2448, RawPixelFormat.Mono8, 8);
                 var wrongCandidate = ScoreDraft(source, wrong);
                 Assert(wrongCandidate.Score < top.Score, "The current wrong descriptor (stride = width) should score lower than the diagnosis top candidate.");
+            }
+        }
+
+        private static void BufferDoctorFindsPaddedBgr24Descriptor()
+        {
+            const int width = 2448;
+            const int height = 2048;
+            const int tightStride = width * 3;
+            const int paddedStride = 7424;
+            var buffer = new byte[paddedStride * height];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    var offset = (y * paddedStride) + (x * 3);
+                    buffer[offset] = (byte)((x + y) & 0xFF);
+                    buffer[offset + 1] = (byte)((x + (2 * y)) & 0xFF);
+                    buffer[offset + 2] = (byte)(((2 * x) + y) & 0xFF);
+                }
+            }
+
+            var wrongHint = CreateDescriptor(width, height, tightStride, RawPixelFormat.BGR24, 8);
+            using (var source = RawImageSource.FromMemory(buffer, wrongHint))
+            {
+                var result = BufferDoctor.Diagnose(source, CancellationToken.None);
+                Assert(result.Candidates.Count > 0, "Buffer Doctor returned no candidates for padded BGR24 data.");
+                var top = result.Candidates[0].Descriptor;
+                Assert(
+                    top.Width == width
+                        && top.Height == height
+                        && top.Stride == paddedStride
+                        && top.PixelFormat == RawPixelFormat.BGR24,
+                    "Buffer Doctor top candidate should preserve BGR24 and recover the 4096-byte padded stride, but was "
+                        + top.PixelFormat + " " + top.Width + "x" + top.Height + " stride " + top.Stride + ".");
             }
         }
 

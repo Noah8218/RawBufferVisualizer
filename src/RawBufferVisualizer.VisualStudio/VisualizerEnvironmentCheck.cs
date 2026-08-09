@@ -170,7 +170,7 @@ namespace RawBufferVisualizer.VisualStudio
             }
 
             return version.Major >= 18
-                || (version.Major == 17 && version.Minor >= 14);
+                || (version.Major == 17 && version.Minor >= 9);
         }
 
         private static void CaptureTempStorage(VisualizerEnvironmentSnapshot snapshot)

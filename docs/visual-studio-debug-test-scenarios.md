@@ -120,7 +120,7 @@ Expected at the initialized breakpoint:
 
 1. `industrialOpenCvMat`, `industrialEmguMat`, and `industrialFrame` preserve the same recognizable color scene through three supported memory representations.
 2. `industrialBitmap`, `industrialBgrSnapshot`, and `industrialMonoSnapshot` open through their registered debugger visualizers.
-3. `industrialBadStrideSnapshot` initially shows the real scene with a stride defect; Buffer Doctor ranks `Mono8`, 2448 x 2048, stride 2560 first, and applying it restores the image.
+3. `industrialBadStrideSnapshot` initially shows the real color scene with a stride defect; Buffer Doctor ranks `BGR24`, 2448 x 2048, stride 7424 first, and applying it restores the color image.
 4. Pixel hover, Fit, 1:1, wheel zoom, and pan remain usable on the real photograph.
 5. Capture evidence records the source page, license, downloaded-file SHA-256, Visual Studio version, and exact installed VSIX.
 

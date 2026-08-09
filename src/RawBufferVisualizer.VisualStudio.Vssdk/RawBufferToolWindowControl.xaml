@@ -2,9 +2,10 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:gl="clr-namespace:RawBufferVisualizer.OpenGlCanvas;assembly=RawBufferVisualizer.OpenGlCanvas"
-             MinWidth="420"
+             xmlns:imaging="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.Imaging"
+             xmlns:catalog="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.ImageCatalog"
+             MinWidth="320"
              MinHeight="260"
-             Background="#1E1E1E"
              SizeChanged="Root_SizeChanged">
     <UserControl.Resources>
         <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
@@ -32,7 +33,7 @@
             <Setter Property="MinWidth" Value="44"/>
             <Setter Property="MinHeight" Value="24"/>
             <Setter Property="Background" Value="{StaticResource CommandBrush}"/>
-            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="12"/>
@@ -50,11 +51,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandHoverBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#5A5A5A"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandPressedBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#1C97EA"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
@@ -74,7 +75,7 @@
             <Setter Property="MinWidth" Value="64"/>
             <Setter Property="MinHeight" Value="24"/>
             <Setter Property="Background" Value="{StaticResource CommandBrush}"/>
-            <Setter Property="BorderBrush" Value="#454545"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="FontSize" Value="12"/>
@@ -92,11 +93,11 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandHoverBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#5A5A5A"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource CommandPressedBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="#1C97EA"/>
+                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/>
@@ -140,7 +141,7 @@
             </Setter>
         </Style>
         <Style TargetType="{x:Type TabItem}">
-            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="Background" Value="{StaticResource CommandBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="Padding" Value="10,4"/>
@@ -186,7 +187,7 @@
             </Style.Triggers>
         </Style>
         <Style TargetType="{x:Type ListBox}">
-            <Setter Property="Background" Value="#1B1B1B"/>
+            <Setter Property="Background" Value="{StaticResource InputBrush}"/>
             <Setter Property="Foreground" Value="{StaticResource TextBrush}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
             <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
@@ -197,7 +198,7 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Background="#1E1E1E">
+    <Grid Background="{StaticResource InputBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -205,33 +206,73 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Background="#2D2D30" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
+        <Border x:Name="ToolbarBorder" Grid.Row="0" Background="{StaticResource CommandBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
             <DockPanel LastChildFill="True">
                 <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Zoom" Margin="0,0,6,0" Foreground="#CCCCCC" VerticalAlignment="Center"/>
+                    <TextBlock Text="Zoom" Margin="0,0,6,0" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center"/>
                     <TextBlock x:Name="ZoomText" Width="58" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
                 </StackPanel>
-                <WrapPanel VerticalAlignment="Center">
-                    <Button Content="Open" Click="Open_Click"/>
-                    <Button Content="Clear" Click="Clear_Click"/>
-                    <Button Content="Save" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click"/>
-                    <Button Content="Fit" Click="Fit_Click"/>
-                    <Button Content="1:1" Click="ActualSize_Click"/>
+                <WrapPanel x:Name="ToolbarCommandsPanel" VerticalAlignment="Center">
+                    <Button x:Name="OpenButton" ToolTip="Open a raw buffer metadata file" AutomationProperties.Name="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFile}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="OpenButtonText" Text="Open"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ClearButton" ToolTip="Clear all images" AutomationProperties.Name="Clear" AutomationProperties.AutomationId="ClearButton" Click="Clear_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="ClearButtonText" Text="Clear"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="SaveVisiblePngButton" ToolTip="Save the active image as a PNG" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="SaveButtonText" Text="Save"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="FitButton" ToolTip="Fit the active image to the viewer" AutomationProperties.Name="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.FitToScreen}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="FitButtonText" Text="Fit"/>
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="ActualSizeButton" ToolTip="Show the active image at 100%" AutomationProperties.Name="Actual size" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomOriginalSize}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="ActualSizeButtonText" Text="1:1"/>
+                        </StackPanel>
+                    </Button>
+                    <Border Width="1" Height="20" Background="{StaticResource BorderBrush}" Margin="0,2,6,2"/>
                     <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
                     <CheckBox x:Name="SelectionOverlayBox" Content="Selection" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="8,0,0,0" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"/>
-                    <ToggleButton x:Name="InspectorToggleButton" Content="Inspector" Visibility="Collapsed" Checked="InspectorToggleButton_Changed" Unchecked="InspectorToggleButton_Changed"/>
+                    <Border x:Name="ViewerToolbarSeparator" Width="1" Height="20" Background="{StaticResource BorderBrush}" Margin="8,2,6,2"/>
+                    <ToggleButton x:Name="InspectorToggleButton" Visibility="Collapsed" ToolTip="Show or hide the inspector" AutomationProperties.Name="Toggle inspector" Checked="InspectorToggleButton_Changed" Unchecked="InspectorToggleButton_Changed">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Inspect}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock Text="Inspector"/>
+                        </StackPanel>
+                    </ToggleButton>
                     <ToggleButton x:Name="WhatsNewButton"
-                                  Content="What's New"
                                   ToolTip="Show or hide the current Raw Buffer Visualizer release highlights"
                                   AutomationProperties.Name="Toggle release highlights"
                                   AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
-                                  Click="WhatsNew_Click"/>
+                                  Click="WhatsNew_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.New}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock Text="What's New"/>
+                        </StackPanel>
+                    </ToggleButton>
                     <ToggleButton x:Name="EnvironmentCheckButton"
-                                  Content="Environment"
                                   ToolTip="Show or hide runtime compatibility status"
                                   AutomationProperties.Name="Toggle environment check"
                                   AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
-                                  Click="EnvironmentCheck_Click"/>
+                                  Click="EnvironmentCheck_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Environment}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock Text="Environment"/>
+                        </StackPanel>
+                    </ToggleButton>
                     <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                 </WrapPanel>
             </DockPanel>
@@ -334,7 +375,7 @@
             </Border>
         </StackPanel>
 
-        <Grid Grid.Row="2">
+        <Grid x:Name="ResponsiveContentGrid" Grid.Row="2">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
                 <RowDefinition x:Name="CompactInspectorSplitterRow" Height="Auto"/>
@@ -376,17 +417,6 @@
                                 AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
                                 Click="ScanNow_Click"/>
                     </WrapPanel>
-                    <CheckBox x:Name="IncludeImageCollectionsBox"
-                              Content="Mat collections"
-                              IsChecked="False"
-                              Margin="18,4,0,0"
-                              Foreground="{StaticResource TextBrush}"
-                              VerticalAlignment="Center"
-                              ToolTip="Inspect exact OpenCvSharp/Emgu Mat List and one-dimensional array values. Up to 8 items per collection and 16 per scan. This choice is saved."
-                              AutomationProperties.Name="Include Mat collections"
-                              AutomationProperties.AutomationId="AutomaticVisionIncludeCollectionsCheckBox"
-                              Checked="IncludeImageCollectionsBox_Changed"
-                              Unchecked="IncludeImageCollectionsBox_Changed"/>
                     <TextBlock x:Name="AutomaticFrameText"
                                Text="Current stack frame"
                                Margin="0,6,0,0"
@@ -398,11 +428,11 @@
                                Text="Automatic inspection is ready."
                                Margin="0,3,0,0"
                                FontSize="11"
-                               Foreground="#9CDCFE"
+                               Foreground="{StaticResource MutedTextBrush}"
                                TextWrapping="Wrap"/>
                 </StackPanel>
 
-                    <ListBox Grid.Row="1" Margin="10,0,10,10" x:Name="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
+                    <ListBox Grid.Row="1" Margin="10,0,10,10" x:Name="ImageList" AutomationProperties.AutomationId="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
                         <ListBox.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
@@ -461,6 +491,20 @@
                 <Border Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
                     <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
                 </Border>
+                <Border x:Name="EmptyViewerPanel"
+                        Panel.ZIndex="1"
+                        IsHitTestVisible="False"
+                        AutomationProperties.AutomationId="EmptyViewerPanel">
+                    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="320" Margin="12">
+                        <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Image}" Width="32" Height="32" HorizontalAlignment="Center"/>
+                        <TextBlock x:Name="EmptyViewerGuidanceText"
+                                   Text="Break at an image variable or select Open."
+                                   Margin="0,10,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextAlignment="Center"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
                 <Border x:Name="ErrorPanel"
                         Visibility="Collapsed"
                         Panel.ZIndex="2"
@@ -478,8 +522,12 @@
                         <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
                         <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                         <WrapPanel Margin="0,12,0,0">
-                            <Button x:Name="CopyErrorReportButton" Content="Copy Report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click"/>
-                            <Button x:Name="OpenErrorLogsButton" Content="Open Logs" AutomationProperties.AutomationId="OpenErrorLogsButton" Click="OpenSupportLogs_Click"/>
+                            <Button x:Name="CopyErrorReportButton" AutomationProperties.Name="Copy report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click">
+                                <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Copy Report"/></StackPanel>
+                            </Button>
+                            <Button x:Name="OpenErrorLogsButton" AutomationProperties.Name="Open logs" AutomationProperties.AutomationId="OpenErrorLogsButton" Click="OpenSupportLogs_Click">
+                                <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFolder}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Open Logs"/></StackPanel>
+                            </Button>
                         </WrapPanel>
                     </StackPanel>
                 </Border>
@@ -493,7 +541,7 @@
                           ResizeDirection="Columns"
                           ResizeBehavior="PreviousAndNext"/>
 
-            <ScrollViewer x:Name="InspectorPanel" Grid.Column="4" Background="{StaticResource PanelBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ScrollViewer x:Name="InspectorPanel" AutomationProperties.AutomationId="InspectorPanel" Grid.Column="4" Background="{StaticResource PanelBrush}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                 <StackPanel Margin="10">
                     <Border x:Name="AutomaticInspectionPanel"
                             Visibility="Collapsed"
@@ -535,10 +583,14 @@
                     <TextBlock x:Name="RoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                     <TextBlock Text="Marker" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <WrapPanel>
-                        <Button Content="Pin" ToolTip="Pin the selected or hovered pixel and freeze inspector values" Click="PinMarker_Click"/>
-                        <Button Content="Clear" ToolTip="Clear pinned pixel" Click="ClearMarker_Click"/>
+                        <Button ToolTip="Pin the selected or hovered pixel and freeze inspector values" AutomationProperties.Name="Pin marker" Click="PinMarker_Click">
+                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Pin}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Pin"/></StackPanel>
+                        </Button>
+                        <Button ToolTip="Clear pinned pixel" AutomationProperties.Name="Clear marker" Click="ClearMarker_Click">
+                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Clear"/></StackPanel>
+                        </Button>
                     </WrapPanel>
-                    <TextBlock x:Name="MarkerText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
                     <TextBlock Text="Line" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <TextBlock x:Name="LineProfileText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
 
@@ -569,7 +621,7 @@
                     </Grid>
 
                     <TextBlock Text="Interpret" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
-                    <Grid>
+                    <Grid x:Name="InterpretControls">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="80"/>
                             <ColumnDefinition Width="*"/>
@@ -584,24 +636,25 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Format" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" Margin="0,0,0,6"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" AutomationProperties.AutomationId="InterpretPixelFormatBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" AutomationProperties.AutomationId="InterpretWidthTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" AutomationProperties.AutomationId="InterpretHeightTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" AutomationProperties.AutomationId="InterpretStrideTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Bits" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" AutomationProperties.AutomationId="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Endian" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="InterpretByteOrderBox" Margin="0,0,0,6"/>
+                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="InterpretByteOrderBox" AutomationProperties.AutomationId="InterpretByteOrderBox" Margin="0,0,0,6"/>
                         <WrapPanel Grid.Row="6" Grid.Column="1">
-                            <Button Content="Apply" Click="ApplyInterpretation_Click"/>
+                            <Button x:Name="ApplyInterpretationButton" Content="Apply" AutomationProperties.AutomationId="ApplyInterpretationButton" Click="ApplyInterpretation_Click"/>
                             <Button x:Name="DiagnoseBufferButton" Content="Diagnose Buffer" AutomationProperties.AutomationId="DiagnoseBufferButton" ToolTip="Suggest ranked width/height/stride/pixel-format interpretations for this buffer" Click="DiagnoseBuffer_Click"/>
                         </WrapPanel>
                     </Grid>
 
                     <Border x:Name="DiagnosisPanel"
+                            AutomationProperties.AutomationId="DiagnosisPanel"
                             Visibility="Collapsed"
                             Margin="0,10,0,0"
                             Padding="8"
@@ -613,7 +666,7 @@
                                 <Button x:Name="CloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
                                 <TextBlock Text="Diagnose Buffer" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             </DockPanel>
-                            <TextBlock x:Name="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                            <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                             <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" MaxHeight="280" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
@@ -654,8 +707,12 @@
 
                     <TextBlock Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
                     <WrapPanel Margin="0,0,0,6">
-                        <Button Content="Copy Report" ToolTip="Copy diagnostics and environment details without image data" Click="CopySupportReport_Click"/>
-                        <Button Content="Open Logs" ToolTip="Write the current report and open its log folder" Click="OpenSupportLogs_Click"/>
+                        <Button ToolTip="Copy diagnostics and environment details without image data" AutomationProperties.Name="Copy report" Click="CopySupportReport_Click">
+                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Copy Report"/></StackPanel>
+                        </Button>
+                        <Button ToolTip="Write the current report and open its log folder" AutomationProperties.Name="Open logs" Click="OpenSupportLogs_Click">
+                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFolder}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Open Logs"/></StackPanel>
+                        </Button>
                     </WrapPanel>
                     <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                     <ListBox x:Name="DiagnosticsList" Height="110"/>
@@ -673,6 +730,7 @@
                           Visibility="Collapsed"/>
 
             <Border x:Name="CompactInspectorPanel"
+                    AutomationProperties.AutomationId="CompactInspectorPanel"
                     Grid.Row="2"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrush}"
@@ -699,10 +757,14 @@
                                     <TextBlock x:Name="CompactRoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                                     <TextBlock Text="Marker" FontWeight="SemiBold" Margin="0,8,0,4"/>
                                     <WrapPanel>
-                                        <Button Content="Pin" ToolTip="Pin the selected or hovered pixel and freeze inspector values" Click="PinMarker_Click"/>
-                                        <Button Content="Clear" ToolTip="Clear pinned pixel" Click="ClearMarker_Click"/>
+                                        <Button ToolTip="Pin the selected or hovered pixel and freeze inspector values" AutomationProperties.Name="Pin marker" Click="PinMarker_Click">
+                                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Pin}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Pin"/></StackPanel>
+                                        </Button>
+                                        <Button ToolTip="Clear pinned pixel" AutomationProperties.Name="Clear marker" Click="ClearMarker_Click">
+                                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Clear"/></StackPanel>
+                                        </Button>
                                     </WrapPanel>
-                                    <TextBlock x:Name="CompactMarkerText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="38"/>
+                                    <TextBlock x:Name="CompactMarkerText" AutomationProperties.AutomationId="CompactMarkerText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="38"/>
                                 </StackPanel>
                             </Grid>
                         </ScrollViewer>
@@ -762,7 +824,7 @@
                                     </StackPanel>
                                 </Border>
 
-                                <Grid>
+                                <Grid x:Name="CompactInterpretControls">
                                     <Grid.ColumnDefinitions>
                                         <ColumnDefinition Width="64"/>
                                         <ColumnDefinition Width="*"/>
@@ -777,24 +839,25 @@
                                         <RowDefinition Height="Auto"/>
                                     </Grid.RowDefinitions>
                                     <TextBlock Grid.Row="0" Grid.Column="0" Text="Format" Margin="0,0,8,6"/>
-                                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CompactInterpretPixelFormatBox" Margin="0,0,0,6"/>
+                                    <ComboBox Grid.Row="0" Grid.Column="1" x:Name="CompactInterpretPixelFormatBox" AutomationProperties.AutomationId="CompactInterpretPixelFormatBox" Margin="0,0,0,6"/>
                                     <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Margin="0,0,8,6"/>
-                                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="CompactInterpretWidthTextBox" Margin="0,0,0,6"/>
+                                    <TextBox Grid.Row="1" Grid.Column="1" x:Name="CompactInterpretWidthTextBox" AutomationProperties.AutomationId="CompactInterpretWidthTextBox" Margin="0,0,0,6"/>
                                     <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Margin="0,0,8,6"/>
-                                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="CompactInterpretHeightTextBox" Margin="0,0,0,6"/>
+                                    <TextBox Grid.Row="2" Grid.Column="1" x:Name="CompactInterpretHeightTextBox" AutomationProperties.AutomationId="CompactInterpretHeightTextBox" Margin="0,0,0,6"/>
                                     <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
-                                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="CompactInterpretStrideTextBox" Margin="0,0,0,6"/>
+                                    <TextBox Grid.Row="3" Grid.Column="1" x:Name="CompactInterpretStrideTextBox" AutomationProperties.AutomationId="CompactInterpretStrideTextBox" Margin="0,0,0,6"/>
                                     <TextBlock Grid.Row="4" Grid.Column="0" Text="Bits" Margin="0,0,8,6"/>
-                                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="CompactInterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                                    <TextBox Grid.Row="4" Grid.Column="1" x:Name="CompactInterpretValidBitsTextBox" AutomationProperties.AutomationId="CompactInterpretValidBitsTextBox" Margin="0,0,0,6"/>
                                     <TextBlock Grid.Row="5" Grid.Column="0" Text="Endian" Margin="0,0,8,6"/>
-                                    <ComboBox Grid.Row="5" Grid.Column="1" x:Name="CompactInterpretByteOrderBox" Margin="0,0,0,6"/>
+                                    <ComboBox Grid.Row="5" Grid.Column="1" x:Name="CompactInterpretByteOrderBox" AutomationProperties.AutomationId="CompactInterpretByteOrderBox" Margin="0,0,0,6"/>
                                     <WrapPanel Grid.Row="6" Grid.Column="1">
-                                        <Button x:Name="CompactApplyInterpretationButton" Content="Apply" Click="ApplyInterpretation_Click"/>
+                                        <Button x:Name="CompactApplyInterpretationButton" Content="Apply" AutomationProperties.AutomationId="CompactApplyInterpretationButton" Click="ApplyInterpretation_Click"/>
                                         <Button x:Name="CompactDiagnoseBufferButton" Content="Diagnose Buffer" AutomationProperties.AutomationId="CompactDiagnoseBufferButton" ToolTip="Suggest ranked width/height/stride/pixel-format interpretations for this buffer" Click="DiagnoseBuffer_Click"/>
                                     </WrapPanel>
                                 </Grid>
 
                                 <Border x:Name="CompactDiagnosisPanel"
+                                        AutomationProperties.AutomationId="CompactDiagnosisPanel"
                                         Visibility="Collapsed"
                                         Margin="0,10,0,0"
                                         Padding="8"
@@ -806,7 +869,7 @@
                                             <Button x:Name="CompactCloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
                                             <TextBlock Text="Diagnose Buffer" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                                         </DockPanel>
-                                        <TextBlock x:Name="CompactDiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                                        <TextBlock x:Name="CompactDiagnosisStatusText" AutomationProperties.AutomationId="CompactDiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                                         <ListBox x:Name="CompactDiagnosisCandidateList" AutomationProperties.AutomationId="CompactDiagnosisCandidateList" MaxHeight="220" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
                                             <ListBox.ItemTemplate>
                                                 <DataTemplate>
@@ -841,8 +904,12 @@
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="4">
                                 <WrapPanel Margin="0,0,0,8">
-                                    <Button Content="Copy Report" ToolTip="Copy diagnostics and environment details without image data" Click="CopySupportReport_Click"/>
-                                    <Button Content="Open Logs" ToolTip="Write the current report and open its log folder" Click="OpenSupportLogs_Click"/>
+                                    <Button ToolTip="Copy diagnostics and environment details without image data" AutomationProperties.Name="Copy report" Click="CopySupportReport_Click">
+                                        <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Copy Report"/></StackPanel>
+                                    </Button>
+                                    <Button ToolTip="Write the current report and open its log folder" AutomationProperties.Name="Open logs" Click="OpenSupportLogs_Click">
+                                        <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFolder}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Open Logs"/></StackPanel>
+                                    </Button>
                                 </WrapPanel>
                                 <TextBlock x:Name="CompactPerformanceText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="10" Margin="0,0,0,8"/>
                                 <ItemsControl ItemsSource="{Binding ElementName=DiagnosticsList, Path=Items}">
@@ -862,6 +929,7 @@
         <Border Grid.Row="3" Height="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
             <DockPanel LastChildFill="True">
                 <TextBlock x:Name="StatusText"
+                           AutomationProperties.AutomationId="StatusText"
                            DockPanel.Dock="Right"
                            Width="220"
                            Margin="10,0,0,0"
