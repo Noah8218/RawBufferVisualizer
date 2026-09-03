@@ -37,6 +37,7 @@ namespace RawBufferVisualizer.Tests
                 Bgr24KeepsChannelOrder();
                 Bgra32KeepsChannelOrder();
                 BayerRggbRendersColor();
+                Int32RendersAndInspectsSignedValues();
                 AllSupportedFormatsRender();
                 TilePlannerSplitsLargeImage();
                 TilePlannerHandles100kImage();
@@ -46,7 +47,7 @@ namespace RawBufferVisualizer.Tests
                 ProcessMemorySourceRendersLikeMemory();
                 ProcessMemorySourceReadsLatestBytesAtSameAddress();
                 ProcessMemorySourceReadsReplacementAtReallocatedAddress();
-                ProcessMemorySourceReportsUnavailableAfterVirtualFree();
+                ProcessMemorySourceReportsUnavailableAfterVirtualDecommit();
                 DisposedProcessMemorySourceRejectsFurtherReads();
                 ProcessMemorySourceReportsUnavailableAfterProcessExit();
                 FileBackedSampledRenderHonorsCancellation();
@@ -73,7 +74,7 @@ namespace RawBufferVisualizer.Tests
                 RawBufferViewCreatesDescriptorAndChunks();
                 ProducerPointerReadsCurrentBytesAtSameAddress();
                 ProducerPointerReadsAcrossReadablePageBoundary();
-                ProducerPointerReadsFailClosedAfterFree();
+                ProducerPointerReadsFailClosedAfterDecommit();
                 ProducerPointerReadsRejectProtectedBoundary();
                 ImagePtrVisualizerObjectSourceCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
@@ -223,6 +224,35 @@ namespace RawBufferVisualizer.Tests
             Assert(rendered.Bgra32[center + 1] == 120, "Bayer green channel failed.");
             Assert(rendered.Bgra32[center + 2] == 240, "Bayer red channel failed.");
             Assert(rendered.Bgra32[center + 3] == 255, "Bayer alpha channel failed.");
+        }
+
+        private static void Int32RendersAndInspectsSignedValues()
+        {
+            var descriptor = CreateDescriptor(3, 2, 16, RawPixelFormat.Int32, 32);
+            var buffer = new byte[descriptor.Stride * descriptor.Height];
+            WriteInt32(buffer, 0, -1000, RawByteOrder.LittleEndian);
+            WriteInt32(buffer, 4, 0, RawByteOrder.LittleEndian);
+            WriteInt32(buffer, 8, 1000, RawByteOrder.LittleEndian);
+            WriteInt32(buffer, 16, -200, RawByteOrder.LittleEndian);
+            WriteInt32(buffer, 20, 250, RawByteOrder.LittleEndian);
+            WriteInt32(buffer, 24, 500, RawByteOrder.LittleEndian);
+
+            var rendered = RawBufferRenderer.Render(buffer, descriptor);
+            Assert(rendered.Bgra32[0] == 0, "Int32 minimum should render black.");
+            Assert(rendered.Bgra32[4] >= 127 && rendered.Bgra32[4] <= 128, "Int32 zero should render at the signed range midpoint.");
+            Assert(rendered.Bgra32[8] == 255, "Int32 maximum should render white.");
+
+            var description = RawPixelInspector.Describe(buffer, descriptor, 0, 1);
+            Assert(description.Contains("Value=-200"), "Int32 pixel inspector lost the signed value.");
+            Assert(description.Contains("Raw=38 FF FF FF"), "Int32 pixel inspector lost the little-endian raw bytes.");
+
+            var bigEndian = CreateDescriptor(2, 1, 8, RawPixelFormat.Int32, 32);
+            bigEndian.ByteOrder = RawByteOrder.BigEndian;
+            var bigEndianBuffer = new byte[8];
+            WriteInt32(bigEndianBuffer, 0, -2, RawByteOrder.BigEndian);
+            WriteInt32(bigEndianBuffer, 4, 258, RawByteOrder.BigEndian);
+            Assert(RawPixelInspector.DescribeValue(bigEndianBuffer, bigEndian, 0, 0) == "-2", "Int32 big-endian negative value failed.");
+            Assert(RawPixelInspector.Describe(bigEndianBuffer, bigEndian, 1, 0).Contains("Raw=00 00 01 02"), "Int32 big-endian raw bytes failed.");
         }
 
         private static void AllSupportedFormatsRender()
@@ -537,10 +567,11 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
-        private static void ProcessMemorySourceReportsUnavailableAfterVirtualFree()
+        private static void ProcessMemorySourceReportsUnavailableAfterVirtualDecommit()
         {
             const uint memCommit = 0x1000;
             const uint memReserve = 0x2000;
+            const uint memDecommit = 0x4000;
             const uint memRelease = 0x8000;
             const uint pageReadWrite = 0x04;
             var address = VirtualAlloc(
@@ -557,7 +588,6 @@ namespace RawBufferVisualizer.Tests
             }
 
             var descriptor = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
-            var released = false;
             try
             {
                 Marshal.WriteByte(address, 61);
@@ -570,8 +600,9 @@ namespace RawBufferVisualizer.Tests
                     Assert(
                         source.DescribePixel(0, 0).Contains("Value=61"),
                         "Allocated process memory was not readable before release.");
-                    released = VirtualFree(address, UIntPtr.Zero, memRelease);
-                    Assert(released, "VirtualFree failed for the process-memory release test.");
+                    Assert(
+                        VirtualFree(address, new UIntPtr(4096), memDecommit),
+                        "VirtualFree decommit failed for the process-memory release test.");
 
                     RawImageSourceUnavailableException? failure = null;
                     try
@@ -590,10 +621,7 @@ namespace RawBufferVisualizer.Tests
             }
             finally
             {
-                if (!released)
-                {
-                    VirtualFree(address, UIntPtr.Zero, memRelease);
-                }
+                VirtualFree(address, UIntPtr.Zero, memRelease);
             }
         }
 
@@ -1255,6 +1283,42 @@ namespace RawBufferVisualizer.Tests
                 2,
                 1);
             Assert(packedPreview.Buffer[0] == 0 && packedPreview.Buffer[4] == 255, "Sampled packed preview scaling failed.");
+
+            var int32Descriptor = CreateDescriptor(3, 2, 16, RawPixelFormat.Int32, 32);
+            var int32Buffer = new byte[int32Descriptor.Stride * int32Descriptor.Height];
+            WriteInt32(int32Buffer, 0, -100, RawByteOrder.LittleEndian);
+            WriteInt32(int32Buffer, 4, 0, RawByteOrder.LittleEndian);
+            WriteInt32(int32Buffer, 8, 100, RawByteOrder.LittleEndian);
+            WriteInt32(int32Buffer, 16, -50, RawByteOrder.LittleEndian);
+            WriteInt32(int32Buffer, 20, 25, RawByteOrder.LittleEndian);
+            WriteInt32(int32Buffer, 24, 75, RawByteOrder.LittleEndian);
+            var int32Preview = VisualizerSampledPreview.Create(
+                int32Buffer,
+                int32Descriptor,
+                "Test.Int32",
+                "labels",
+                3,
+                2);
+            Assert(int32Preview.Buffer[0] == 0, "Int32 sampled preview minimum failed.");
+            Assert(int32Preview.Buffer[8] == 255, "Int32 sampled preview maximum failed.");
+
+            var int32Handle = GCHandle.Alloc(int32Buffer, GCHandleType.Pinned);
+            try
+            {
+                var pointerInt32Preview = VisualizerSampledPreview.Create(
+                    int32Handle.AddrOfPinnedObject(),
+                    int32Buffer.LongLength,
+                    int32Descriptor,
+                    "Test.Int32.Pointer",
+                    "labels",
+                    3,
+                    2);
+                AssertBytesEqual(int32Preview.Buffer, pointerInt32Preview.Buffer, "Int32 byte and pointer sampled previews should match.");
+            }
+            finally
+            {
+                int32Handle.Free();
+            }
         }
 
         private static void VisualizerSnapshotStoreWritesChunkedSnapshot()
@@ -1421,21 +1485,21 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
-        private static void ProducerPointerReadsFailClosedAfterFree()
+        private static void ProducerPointerReadsFailClosedAfterDecommit()
         {
             const uint memCommit = 0x1000;
             const uint memReserve = 0x2000;
+            const uint memDecommit = 0x4000;
             const uint memRelease = 0x8000;
             const uint pageReadWrite = 0x04;
 
             var address = VirtualAlloc(
                 IntPtr.Zero,
-                new UIntPtr(1),
+                new UIntPtr(4096),
                 memCommit | memReserve,
                 pageReadWrite);
-            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the producer freed-pointer test.");
+            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the producer unreadable-pointer test.");
 
-            var allocated = true;
             try
             {
                 Marshal.WriteByte(address, 0, 42);
@@ -1452,9 +1516,8 @@ namespace RawBufferVisualizer.Tests
                 };
 
                 Assert(
-                    VirtualFree(address, UIntPtr.Zero, memRelease),
-                    "VirtualFree failed for the producer freed-pointer test.");
-                allocated = false;
+                    VirtualFree(address, new UIntPtr(4096), memDecommit),
+                    "VirtualFree decommit failed for the producer unreadable-pointer test.");
 
                 AssertProducerPointerReadFails(
                     () => RawBufferViewVisualizerTransfer.CreateChunk(
@@ -1464,7 +1527,7 @@ namespace RawBufferVisualizer.Tests
                             Offset = 0,
                             Count = 1
                         }),
-                    "Freed producer chunk");
+                    "Decommitted producer chunk");
                 AssertProducerPointerReadFails(
                     () => RawBufferViewVisualizerTransfer.CreatePreview(
                         view,
@@ -1474,14 +1537,11 @@ namespace RawBufferVisualizer.Tests
                             MaximumWidth = 1,
                             MaximumHeight = 1
                         }),
-                    "Freed producer preview");
+                    "Decommitted producer preview");
             }
             finally
             {
-                if (allocated)
-                {
-                    VirtualFree(address, UIntPtr.Zero, memRelease);
-                }
+                VirtualFree(address, UIntPtr.Zero, memRelease);
             }
         }
 
@@ -1905,6 +1965,28 @@ namespace RawBufferVisualizer.Tests
                 Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2, "Mat visualizer chunk failed.");
                 Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "Mat sampled preview failed.");
             }
+
+            using (var mat = new Mat(1, 3, MatType.CV_32SC1))
+            {
+                Marshal.Copy(new[] { -100, 0, 100 }, 0, mat.Data, 3);
+                var view = OpenCvSharpMatVisualizerTransfer.CreateView(mat, "labelMat");
+                var metadata = OpenCvSharpMatVisualizerTransfer.CreateMetadata(view);
+                var preview = OpenCvSharpMatVisualizerTransfer.CreatePreview(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 3,
+                        MaximumHeight = 1
+                    });
+                var snapshot = MatSnapshot.FromMat(mat);
+
+                Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.Int32, "OpenCvSharp CV_32SC1 mapping failed.");
+                Assert(metadata.Descriptor.ValidBits == 32 && metadata.Descriptor.Stride >= 12, "OpenCvSharp CV_32SC1 layout failed.");
+                Assert(preview.Buffer[0] == 0 && preview.Buffer[4] >= 127 && preview.Buffer[4] <= 128 && preview.Buffer[8] == 255, "OpenCvSharp CV_32SC1 preview scaling failed.");
+                Assert(snapshot.Descriptor.PixelFormat == RawPixelFormat.Int32, "OpenCvSharp adapter CV_32SC1 mapping failed.");
+                Assert(RawPixelInspector.DescribeValue(snapshot.Buffer, snapshot.Descriptor, 0, 0) == "-100", "OpenCvSharp adapter CV_32SC1 signed value failed.");
+            }
         }
 
         private static void OpenCvSharpMatVisualizerObjectSourceSupportsLegacyMatWithoutDims()
@@ -2103,6 +2185,24 @@ namespace RawBufferVisualizer.Tests
                 Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 1 && chunk.Buffer[2] == 5, "Emgu Mat visualizer chunk failed.");
                 Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "Emgu Mat sampled preview failed.");
             }
+
+            var int32Bytes = CreateInt32Bytes(new[] { -100, 0, 100 }, RawByteOrder.LittleEndian);
+            using (var mat = new Emgu.CV.Mat(1, 3, Emgu.CV.DepthType.Cv32S, 1, int32Bytes, 12))
+            {
+                var view = EmguCvMatVisualizerTransfer.CreateView(mat, "emguLabelMat");
+                var preview = EmguCvMatVisualizerTransfer.CreatePreview(
+                    view,
+                    new VisualizerSnapshotChunkRequest
+                    {
+                        Operation = VisualizerSnapshotOperation.Preview,
+                        MaximumWidth = 3,
+                        MaximumHeight = 1
+                    });
+
+                Assert(view.Descriptor.PixelFormat == RawPixelFormat.Int32, "Emgu CV CV_32SC1 mapping failed.");
+                Assert(view.Descriptor.ValidBits == 32 && view.Descriptor.Stride == 12, "Emgu CV CV_32SC1 layout failed.");
+                Assert(preview.Buffer[0] == 0 && preview.Buffer[8] == 255, "Emgu CV CV_32SC1 preview scaling failed.");
+            }
         }
 
         private static void ImageCollectionVisualizerHandlesListArrayAndDictionary()
@@ -2120,7 +2220,16 @@ namespace RawBufferVisualizer.Tests
                 3,
                 new byte[] { 3, 2, 1, 6, 5, 4 },
                 6))
+            using (var openCvInt32Mat = new Mat(1, 3, MatType.CV_32SC1))
+            using (var emguInt32Mat = new Emgu.CV.Mat(
+                1,
+                3,
+                Emgu.CV.DepthType.Cv32S,
+                1,
+                CreateInt32Bytes(new[] { -1, 0, 1 }, RawByteOrder.LittleEndian),
+                12))
             {
+                Marshal.Copy(new[] { -1, 0, 1 }, 0, openCvInt32Mat.Data, 3);
                 var list = new List<object>
                 {
                     bitmap,
@@ -2164,9 +2273,19 @@ namespace RawBufferVisualizer.Tests
                     });
                 Assert(openCvPreview.Buffer[0] == 3 && openCvPreview.Buffer[2] == 1, "Typed OpenCvSharp list preview failed.");
 
+                var openCvInt32ListView = ImageCollectionVisualizerTransfer.CreateView(new List<Mat> { openCvInt32Mat });
+                Assert(openCvInt32ListView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Int32, "Typed OpenCvSharp CV_32SC1 list transfer failed.");
+
+                var openCvInt32DictionaryView = ImageCollectionVisualizerTransfer.CreateView(
+                    new ConcurrentDictionary<string, Mat>(new[] { new KeyValuePair<string, Mat>("labels", openCvInt32Mat) }));
+                Assert(openCvInt32DictionaryView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Int32, "ConcurrentDictionary OpenCvSharp CV_32SC1 transfer failed.");
+
                 var emguListView = ImageCollectionVisualizerTransfer.CreateView(new List<Emgu.CV.Mat> { emguMat });
                 Assert(emguListView.Summary.TotalCount == 1, "Typed Emgu CV list count failed.");
                 Assert(emguListView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Typed Emgu CV list transfer failed.");
+
+                var emguInt32ArrayView = ImageCollectionVisualizerTransfer.CreateView(new[] { emguInt32Mat });
+                Assert(emguInt32ArrayView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Int32, "Typed Emgu CV CV_32SC1 array transfer failed.");
 
                 var bitmapListView = ImageCollectionVisualizerTransfer.CreateView(new List<Bitmap> { bitmap });
                 Assert(bitmapListView.Summary.TotalCount == 1, "Typed Bitmap list count failed.");
@@ -4246,6 +4365,8 @@ namespace RawBufferVisualizer.Tests
                     return new TinySample(new byte[] { 0, 0, 255, 255, 0, 255, 0, 255, 255, 0, 0, 255, 255, 255, 255, 255 }, CreateDescriptor(2, 2, 8, format, 8));
                 case RawPixelFormat.Float32:
                     return new TinySample(CreateFloatBytes(new[] { 0f, 1f, 2f, 3f }), CreateDescriptor(2, 2, 8, format, 32));
+                case RawPixelFormat.Int32:
+                    return new TinySample(CreateInt32Bytes(new[] { -100, 0, 50, 100 }, RawByteOrder.LittleEndian), CreateDescriptor(2, 2, 8, format, 32));
                 case RawPixelFormat.BayerRGGB8:
                 case RawPixelFormat.BayerGRBG8:
                 case RawPixelFormat.BayerGBRG8:
@@ -4279,6 +4400,35 @@ namespace RawBufferVisualizer.Tests
             }
 
             return buffer;
+        }
+
+        private static byte[] CreateInt32Bytes(int[] values, RawByteOrder byteOrder)
+        {
+            var buffer = new byte[values.Length * 4];
+            for (var i = 0; i < values.Length; i++)
+            {
+                WriteInt32(buffer, i * 4, values[i], byteOrder);
+            }
+
+            return buffer;
+        }
+
+        private static void WriteInt32(byte[] buffer, int offset, int value, RawByteOrder byteOrder)
+        {
+            var bits = unchecked((uint)value);
+            if (byteOrder == RawByteOrder.BigEndian)
+            {
+                buffer[offset] = (byte)(bits >> 24);
+                buffer[offset + 1] = (byte)(bits >> 16);
+                buffer[offset + 2] = (byte)(bits >> 8);
+                buffer[offset + 3] = (byte)bits;
+                return;
+            }
+
+            buffer[offset] = (byte)bits;
+            buffer[offset + 1] = (byte)(bits >> 8);
+            buffer[offset + 2] = (byte)(bits >> 16);
+            buffer[offset + 3] = (byte)(bits >> 24);
         }
 
         private static byte[] CreatePackedRows(int width, int height, int bitsPerPixel, int maxValue)
@@ -4342,6 +4492,7 @@ namespace Emgu.CV
     {
         Cv8U = 0,
         Cv16U = 2,
+        Cv32S = 4,
         Cv32F = 5
     }
 

@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.0.6";
+        public const string CurrentVersion = "2.0.7";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#206";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#207";
 
         public const string HighlightEnvironmentCheck =
-            "Package version advanced because public 2.0.5 is immutable";
+            "OpenCvSharp and Emgu CV signed CV_32SC1 Mats now open as Int32";
 
         public const string HighlightColdPreview =
-            "Pointer, object-name, and array behavior is unchanged";
+            "Automatic Inspector and supported collections include Int32 Mats";
 
         public const string HighlightPanelToggles =
-            "Visual Studio 2022 17.9+ compatibility is retained";
+            "Signed pixel values, raw bytes, autoscale, and padded stride are preserved";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

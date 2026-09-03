@@ -1033,6 +1033,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 case RawPixelFormat.Mono16:
                     return 16;
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return 32;
                 case RawPixelFormat.Binary:
                     return 1;

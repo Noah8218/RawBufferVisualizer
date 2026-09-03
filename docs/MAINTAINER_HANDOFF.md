@@ -6,16 +6,16 @@ This is the canonical continuation document for the next conversation. Read it a
 
 | Item | Verified state |
 | --- | --- |
-| Last verified | 2026-09-03 KST: official Gallery API reports public `2.0.5.0`; `2.0.6.0` release communication, routed Release build, aggregate self-tests, ten-version library matrix, package guards, exact artifact readback, installation, installed runtime qualification, refreshed current-version media, and Marketplace dry run pass. The exact 2.0.6 runtime matrix produced 15/15 passing records, with additional installed media scenarios passing on VS2022. |
+| Last verified | 2026-09-03 KST: official Gallery API reports public `2.0.6.0`; local `2.0.7.0` release communication, routed Release build, aggregate self-tests, ten-version library matrix, package guards, exact artifact readback, installation, signed-Int32 industrial runtime checks, and 540/900/1160 px layout smoke pass on the available VS2022 host. |
 | Active repository | `C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat` |
-| Branch / remote | The combined work through 2.0.6 is committed and pushed on `origin/agent/vs2022-17.9-compat`. No tag, 2.0.6 Marketplace upload, publication, deployment, or manual CI dispatch was performed. Repository: `https://github.com/Noah8218/RawBufferVisualizer.git`. |
-| Implementation baseline | Public 2.0.5 contains **Clear all**, object-name recovery, native `Ptr` versus pixel-address provenance, complete native-read enforcement, negative-stride Bitmap correction, and complete image-array registration. Local 2.0.6 changes only the immutable package and release identity. |
-| Source and VSIX version | Local source is `2.0.6` / `2.0.6.0`. Exact review VSIX: 2,510,240 bytes, SHA-256 `2ED03932358F45E6B9981DE830558CACD03E7677780BAB3DFA5F8593A0E77AEA`. Official Gallery API reports public `2.0.5.0`. |
-| Visual Studio support | Local 2.0.6 retains `[17.9,18.0)` and the 17.9 SDK/package boundary. Exact in-place update and installed runtime checks passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12105.206`; clean reinstall also passed on VS2022. Exact VS2022 17.9 runtime remains unverified because that host is not installed. |
-| Public Marketplace version | Official Gallery API `2.0.5.0`, updated `2026-09-01T15:14:49.537Z`, read back 2026-09-03 KST. Local 2.0.6 English/Korean Overview and release notes are owner-review inputs only. |
+| Branch / remote | `agent/vs2022-17.9-compat` is based on pushed commit `27b6d3ce75b44ab2c747428744e9f859138fed91`; the 2.0.7 feature, tests, documentation, and candidate are currently uncommitted. No 2.0.7 push, tag, Marketplace upload, publication, deployment, or manual CI dispatch was performed. Repository: `https://github.com/Noah8218/RawBufferVisualizer.git`. |
+| Implementation baseline | Public 2.0.6 retains **Clear all**, object-name recovery, native `Ptr` versus pixel-address provenance, complete native-read enforcement, negative-stride Bitmap correction, and complete image-array registration. Local 2.0.7 adds signed 32-bit single-channel paths for OpenCvSharp, Emgu CV, mapped arrays, and neutral pointer/snapshot sources. |
+| Source and VSIX version | Local source is `2.0.7` / `2.0.7.0`. Exact review VSIX: 2,513,312 bytes, SHA-256 `DC0648E72859A9019701A0ED075B9D4D757F85FAE2DC7F33591CBD448B33C9FF`. Official Gallery API reports public `2.0.6.0`. |
+| Visual Studio support | Local 2.0.7 retains `[17.9,18.0)` and the 17.9 SDK/package boundary. Exact installed signed-Int32 runtime checks passed on VS2022 `17.14.37516.0`. Stable VS2026 2.0.7 runtime and exact VS2022 17.9 runtime remain unverified. |
+| Public Marketplace version | Official Gallery API returned `2.0.6.0` on 2026-09-03 KST. Local 2.0.7 English/Korean Overview, release notes, VSIX, and qualification captures are owner-review inputs only. |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Public 2.0.5 is the externally verified Marketplace baseline. The pushed 2.0.6 branch is a version-only, installed-qualified owner-review candidate; CI, Marketplace upload, public readback, tag, and GitHub Release remain separate steps. |
-| Commit scope | The pushed branch change set includes the features represented by public 2.0.5 plus the 2.0.6 identity, current installed-2.0.6 Overview media, release notes, runbook/checklist, and qualification record. |
+| Product stage | Public 2.0.6 is the current Marketplace baseline. Local 2.0.7 is an available-host feature-qualified review candidate; owner review, stable VS2026 runtime, commit/push/CI, Marketplace upload/readback, tag, and GitHub Release remain separate steps. |
+| Commit scope | Current uncommitted work adds the Int32 format end to end, 2.0.7 identities/copy, deterministic library and layout coverage, and exact installed industrial evidence. Existing tracked Overview GIF/PNG media still represents installed 2.0.6 until the owner approves promotion of new 2.0.7 imagery. |
 
 Public links:
 
@@ -23,9 +23,15 @@ Public links:
 - Repository: https://github.com/Noah8218/RawBufferVisualizer
 - 2.0.1 CI evidence: https://github.com/Noah8218/RawBufferVisualizer/actions/runs/31074717609
 
-## 2.0.6 Immutable Package Review Candidate
+## 2.0.7 Signed Int32 Review Candidate
 
-The exact local `2.0.6.0` review VSIX is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 2,510,240 bytes, SHA-256 `2ED03932358F45E6B9981DE830558CACD03E7677780BAB3DFA5F8593A0E77AEA`. It retains the Marketplace extension ID, Community/Professional/Enterprise amd64 targets, `[17.9,18.0)` range, complete provider registrations, and all public 2.0.5 behavior. Release communication, routed Release build, aggregate self-tests, the five-version Emgu plus five-version OpenCvSharp matrix, package guards, and exact artifact readback pass. The frozen container also passed in-place update and installed runtime checks on VS2022 `17.14.37516.0` and VS2026 `18.8.12105.206`, plus clean reinstall on VS2022. Both installed roots matched all 71 VSIX payload files and the runtime evidence contains 15/15 passing result records. See [release-qualification-2.0.6.md](release-qualification-2.0.6.md) and `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\REPORT.md`.
+The exact local `2.0.7.0` review VSIX is `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 2,513,312 bytes, SHA-256 `DC0648E72859A9019701A0ED075B9D4D757F85FAE2DC7F33591CBD448B33C9FF`. It retains the Marketplace extension ID, Community/Professional/Enterprise amd64 targets, `[17.9,18.0)` range, provider registrations, and public 2.0.6 behavior. It adds `Int32` for OpenCvSharp `CV_32SC1`, Emgu CV `Cv32S` C1, mapped `int[]`, `RawBufferView`, and `RawBufferSnapshot`, including signed autoscale, exact signed pixel/raw-byte inspection, byte order, padded stride, and sampled/tiled sources.
+
+The exact package passed installed code-DataTip and Automatic Inspector checks on VS2022 `17.14.37516.0` with a real 1280 x 960 PCB source: direct OpenCvSharp stride 5120, five automatic results with zero failures, one collection item, and padded stride 5184. Full 540/900/1160 px layout smoke also passed after fixing test-only PowerShell encoding and foreground-input timing assumptions. See [release-qualification-2.0.7.md](release-qualification-2.0.7.md) and `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903`.
+
+## Public 2.0.6 Baseline And Preserved Candidate
+
+The preserved local `2.0.6.0` review VSIX is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 2,510,240 bytes, SHA-256 `2ED03932358F45E6B9981DE830558CACD03E7677780BAB3DFA5F8593A0E77AEA`. Its local qualification remains recorded in [release-qualification-2.0.6.md](release-qualification-2.0.6.md). The Gallery now reports public `2.0.6.0`; this metadata readback alone is not a byte-equality claim for the preserved local container.
 
 The English/Korean 2.0.6 Overview retains the complete product explanation and states that 2.0.6 advances the immutable package version without a functional or compatibility change. All six Overview media assets were regenerated from exact installed 2.0.6 runs on VS2022 `17.14.37516.0`; the DataTip and Locals entry paths plus the complete color Buffer Doctor workflow were visually reviewed and passed the Marketplace dry run.
 
@@ -400,19 +406,23 @@ Boundary: the removed direct debugger visualizer passed a technical experiment o
 
 ## Next Priorities
 
-The exact 2.0.6 review VSIX, English/Korean Marketplace copy, and refreshed installed-2.0.6 media are committed and pushed on the compatibility branch. Exact installed evidence is recorded for the available VS2022 and VS2026 hosts; it is not exact VS2022 17.9 runtime proof.
+The exact 2.0.7 review VSIX, English/Korean Marketplace copy, feature tests, and installed signed-Int32 captures exist locally but are not committed or pushed. Exact 2.0.7 installed evidence currently covers VS2022 `17.14.37516.0`; it is not stable VS2026 or exact VS2022 17.9 runtime proof.
 
-1. Run or review CI for the pushed 2.0.6 source | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
+1. Review the 2.0.7 Int32 screenshots, English/Korean copy, and exact VSIX as one candidate | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
 
-   The current branch push does not trigger the repository's `main`-only push workflow. CI must evaluate the pushed source before Marketplace upload; rebuilding the frozen VSIX creates a new byte identity and requires requalification.
+   Confirm that grayscale is appropriate for the single-channel signed label/result map and decide whether to promote the new qualification screenshot into tracked README/Marketplace media. Rebuilding the frozen VSIX creates a new byte identity and requires requalification.
 
-2. Review the exact 2.0.6 VSIX and English/Korean Overview for manual Marketplace upload | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
+2. Run the changed installed path on stable Visual Studio 2026 | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
-   Use [marketplace-overview-2.0.6.md](marketplace-overview-2.0.6.md), [marketplace-overview-2.0.6.ko.md](marketplace-overview-2.0.6.ko.md), [marketplace-release-notes-2.0.6.md](marketplace-release-notes-2.0.6.md), and [release-qualification-2.0.6.md](release-qualification-2.0.6.md). Use only the VSIX whose SHA-256 is `2ED03932358F45E6B9981DE830558CACD03E7677780BAB3DFA5F8593A0E77AEA`.
+   Install the unchanged SHA-256-recorded candidate and repeat at least direct/automatic Int32, collection, padded stride, release announcement, and environment checks. Do not substitute the VS2022 result as VS2026 proof.
 
-3. Upload only after CI and separate publication approval | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+3. Commit and push the reviewed 2.0.7 source, then run or review CI | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
 
-   The exact container installation/update, available-host runtime, and current media gates have passed. After separately authorized publication propagates, download the public VSIX and require exact size/hash/manifest equality. Tag and GitHub Release remain later explicit approvals.
+   Commit and push remain explicit user-authorized boundaries. CI must evaluate the exact pushed source before Marketplace upload.
+
+4. Upload only after CI and separate publication approval | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
+
+   Use [marketplace-overview-2.0.7.md](marketplace-overview-2.0.7.md), [marketplace-overview-2.0.7.ko.md](marketplace-overview-2.0.7.ko.md), [marketplace-release-notes-2.0.7.md](marketplace-release-notes-2.0.7.md), and [release-qualification-2.0.7.md](release-qualification-2.0.7.md). After separately authorized publication propagates, download the public VSIX and require exact size/hash/manifest equality. Tag and GitHub Release remain later approvals.
 
 Exact VS2022 17.9 runtime evidence is blocked until an exact 17.9 host is available. The manifest/build support contract remains, but do not spend additional model tokens or describe the available-host run as exact 17.9 proof before that prerequisite exists.
 
@@ -431,7 +441,7 @@ Boundary / next dependency: This contract later passed exact installed `2.0.0` q
 
 ## Exact Start For The Next Conversation
 
-Run the repository orientation commands, verify that the branch tip matches `origin/agent/vs2022-17.9-compat`, verify that the public Gallery still reports 2.0.5, and verify the frozen local 2.0.6 review artifact without rebuilding it:
+Run the repository orientation commands, verify that the public Gallery state has not changed, inspect the uncommitted 2.0.7 change set, and verify the frozen local 2.0.7 review artifact without rebuilding it:
 
 ```powershell
 Set-Location C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat
@@ -441,12 +451,12 @@ git branch --show-current
 git rev-parse HEAD
 git rev-parse origin/agent/vs2022-17.9-compat
 
-$candidate206 = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
-Get-Item -LiteralPath $candidate206 | Select-Object FullName, Length
-Get-FileHash -LiteralPath $candidate206 -Algorithm SHA256
+$candidate207 = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+Get-Item -LiteralPath $candidate207 | Select-Object FullName, Length
+Get-FileHash -LiteralPath $candidate207 -Algorithm SHA256
 ```
 
-Expected: clean worktree, matching local/remote branch tips, manifest `2.0.6.0`, 2,510,240 bytes, and SHA-256 `2ED03932358F45E6B9981DE830558CACD03E7677780BAB3DFA5F8593A0E77AEA`. Read [release-qualification-2.0.6.md](release-qualification-2.0.6.md) before any release action. Do not rebuild, reinstall, upload, tag, publish, deploy, or manually dispatch CI without the corresponding explicit authorization.
+Expected before review: branch base and remote both `27b6d3ce75b44ab2c747428744e9f859138fed91`, an intentionally dirty 2.0.7 worktree, manifest `2.0.7.0`, 2,513,312 bytes, and SHA-256 `DC0648E72859A9019701A0ED075B9D4D757F85FAE2DC7F33591CBD448B33C9FF`. Read [release-qualification-2.0.7.md](release-qualification-2.0.7.md) before any release action. Do not rebuild, commit, push, reinstall on another host, upload, tag, publish, deploy, or manually dispatch CI without the corresponding explicit authorization.
 
 ## Historical Exact-Start Record
 

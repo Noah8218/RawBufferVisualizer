@@ -4,8 +4,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
-    <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory).build\intermediate\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
-    <BaseOutputPath>$(MSBuildThisFileDirectory).build\bin\$(MSBuildProjectName)\</BaseOutputPath>
+    <RawBufferVisualizerBuildRoot Condition="'$(RawBufferVisualizerBuildRoot)' == ''">$(MSBuildThisFileDirectory).build</RawBufferVisualizerBuildRoot>
+    <BaseIntermediateOutputPath>$(RawBufferVisualizerBuildRoot)\intermediate\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <BaseOutputPath>$(RawBufferVisualizerBuildRoot)\bin\$(MSBuildProjectName)\</BaseOutputPath>
     <Authors>Noah Choi</Authors>
     <Company>Noah Choi</Company>
     <Copyright>Copyright (c) 2026 Noah Choi</Copyright>

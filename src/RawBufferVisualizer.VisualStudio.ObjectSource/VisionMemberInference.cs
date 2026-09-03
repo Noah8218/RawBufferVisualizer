@@ -219,6 +219,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case "SINGLE":
                     pixelFormat = RawPixelFormat.Float32;
                     return true;
+                case "INT32":
+                case "S32":
+                case "CV32S":
+                case "CV32SC1":
+                    pixelFormat = RawPixelFormat.Int32;
+                    return true;
                 case "BGR":
                 case "BGR8":
                 case "BGR24":
@@ -374,6 +380,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                         break;
                     case RawPixelFormat.BGRA32:
                     case RawPixelFormat.Float32:
+                    case RawPixelFormat.Int32:
                         rowBytes = checked(width * 4);
                         break;
                     default:
@@ -552,7 +559,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 || normalized == "uint16[]"
                 || normalized == "ushort[]"
                 || normalized == "single[]"
-                || normalized == "float[]";
+                || normalized == "float[]"
+                || normalized == "int32[]"
+                || normalized == "int[]";
         }
 
         private static bool IsIntegerType(string? typeName)
@@ -586,6 +595,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             if (normalized == "single[]" || normalized == "float[]")
             {
                 pixelFormat = RawPixelFormat.Float32;
+                return true;
+            }
+
+            if (normalized == "int32[]" || normalized == "int[]")
+            {
+                pixelFormat = RawPixelFormat.Int32;
                 return true;
             }
 

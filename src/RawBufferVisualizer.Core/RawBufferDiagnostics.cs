@@ -104,6 +104,11 @@ namespace RawBufferVisualizer.Core
                 diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Mono12PackedLsb requires 12 valid bits per pixel."));
             }
 
+            if (descriptor.PixelFormat == RawPixelFormat.Int32 && descriptor.ValidBits != 32)
+            {
+                diagnostics.Add(new RawDiagnostic(RawDiagnosticSeverity.Error, "Int32 requires 32 valid bits per pixel."));
+            }
+
             long requiredBytes;
             var hasRequiredBytes = descriptor.TryGetRequiredByteCount(out requiredBytes);
             if (hasMinimumStride && descriptor.Height > 0 && descriptor.Stride > 0 && !hasRequiredBytes)

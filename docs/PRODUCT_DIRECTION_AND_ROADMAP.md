@@ -160,11 +160,13 @@ Current maturity gaps:
 
 ## Roadmap
 
-### Current checkpoint: 2.0.6 immutable package successor
+### Current checkpoint: 2.0.7 signed single-channel matrices
 
-Official Gallery API readback on 2026-09-03 confirms public `2.0.5.0` as the Marketplace baseline. It includes the **Clear all** placement, direct bounded `ConcurrentDictionary<TKey,TValue>` visualization, first exact `Cressem.ImageModel.ImagePtr` cold handoff, exact debugger expression names, native `Ptr` versus pixel-address provenance, complete image-array registration, fail-closed pointer reads, and negative-stride Bitmap correction. Local `2.0.6.0` advances only the immutable package/release identity and does not change that product contract.
+Official Gallery API readback on 2026-09-03 confirms public `2.0.6.0` as the Marketplace baseline. It includes the **Clear all** placement, direct bounded `ConcurrentDictionary<TKey,TValue>` visualization, first exact `Cressem.ImageModel.ImagePtr` cold handoff, exact debugger expression names, native `Ptr` versus pixel-address provenance, complete image-array registration, fail-closed pointer reads, and negative-stride Bitmap correction.
 
-The frozen 2.0.6 container passed in-place update and installed runtime checks on VS2022 `17.14.37516.0` and VS2026 `18.8.12105.206`, plus a clean reinstall on VS2022. Installed payload equality was 71/71 files on both hosts and the runtime matrix passed 15/15 records. Exact runtime on VS2022 17.9 remains unverified because that host is not installed. Owner final review of the exact VSIX and English/Korean Overview is the next priority. Commit, push, Marketplace upload, public readback, tag, and GitHub Release remain separate approvals.
+Local `2.0.7.0` adds one reusable core format, `Int32`, instead of vendor-specific label-image branches. OpenCvSharp `CV_32SC1`, Emgu CV `Cv32S` C1, mapped `int[]`, and neutral pointer/snapshot inputs converge on signed min/max grayscale rendering with exact signed pixel and four-byte inspection. Direct, automatic, collection, padded-stride, sampled, tiled, byte-order, and Buffer Doctor paths are covered. Multi-channel signed matrices and 3D remain out of scope.
+
+The frozen 2.0.7 container passed installed direct/automatic industrial checks on VS2022 `17.14.37516.0` and full 540/900/1160 px layout smoke. Stable VS2026 2.0.7 runtime and exact VS2022 17.9 runtime remain unverified. Owner review of the exact VSIX, captures, and English/Korean Overview is the next priority. Commit, push, CI, Marketplace upload/readback, tag, and GitHub Release remain separate approvals.
 
 ### Version transition: public 1.0.53 to separate 2.0
 
@@ -277,11 +279,11 @@ Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
 The exact qualified candidate passed a clean install and an exact public `1.0.53.0 -> 2.0.0.0` in-place update on serviced VS2022 `17.14.37516.0` without uninstall, repair, or skipped-package reset. Core registered/mapped, Automatic Inspector, collection, mixed-library, menu-count, package-protocol, and viewer interaction checks passed. Publication remains a separate explicit owner action.
 
-### Next priority: owner review of the 2.0.6 candidate
+### Next priority: owner review and cross-host qualification of the 2.0.7 candidate
 
 Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-Review only the installed-qualified VSIX recorded in [Release Qualification 2.0.6](release-qualification-2.0.6.md) together with the [English Overview](marketplace-overview-2.0.6.md) and [Korean review copy](marketplace-overview-2.0.6.ko.md). After explicit approval, commit/push and CI come before Marketplace upload. Do not rebuild or substitute another candidate after review; public readback, real Marketplace update, tag, and GitHub Release remain later explicit steps.
+Review only the installed-qualified VSIX recorded in [Release Qualification 2.0.7](release-qualification-2.0.7.md) together with its real Int32 captures, [English Overview](marketplace-overview-2.0.7.md), and [Korean review copy](marketplace-overview-2.0.7.ko.md). If the visual/copy review passes, run the unchanged candidate's changed paths on stable VS2026. After explicit approval, commit/push and CI come before Marketplace upload. Do not rebuild or substitute another candidate after review; public readback, real Marketplace update, tag, and GitHub Release remain later explicit steps.
 
 ### Next: supportability and compatibility growth
 

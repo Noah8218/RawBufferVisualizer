@@ -1782,6 +1782,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return true;
             }
 
+            if (IsInt32ArrayType(dataTypeName))
+            {
+                int parsed;
+                if (!int.TryParse(GetLeadingToken(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
+                {
+                    return false;
+                }
+
+                var bytes = BitConverter.GetBytes(parsed);
+                Buffer.BlockCopy(bytes, 0, destination, offset, bytes.Length);
+                return true;
+            }
+
             return false;
         }
 
@@ -2063,7 +2076,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return 4;
             }
 
+            if (IsInt32ArrayType(dataTypeName))
+            {
+                return 4;
+            }
+
             return 0;
+        }
+
+        private static bool IsInt32ArrayType(string dataTypeName)
+        {
+            return string.Equals(dataTypeName, "System.Int32[]", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dataTypeName, "Int32[]", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(dataTypeName, "int[]", StringComparison.OrdinalIgnoreCase);
         }
 
         private void RememberExpression(string expressionText)
@@ -2285,6 +2310,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 case RawPixelFormat.Mono16:
                     return 16;
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return 32;
                 case RawPixelFormat.Binary:
                     return 1;
@@ -4281,6 +4307,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (descriptor.PixelFormat == RawPixelFormat.Float32)
             {
                 return ToByte((int)Math.Round(value * 255.0));
+            }
+
+            if (descriptor.PixelFormat == RawPixelFormat.Int32)
+            {
+                return ToByte((int)Math.Round((value - int.MinValue) / uint.MaxValue * 255.0));
             }
 
             var bits = descriptor.ValidBits <= 0 ? 8 : Math.Min(16, descriptor.ValidBits);

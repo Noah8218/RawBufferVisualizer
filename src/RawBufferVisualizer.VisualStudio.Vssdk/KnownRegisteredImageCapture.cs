@@ -269,6 +269,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return true;
             }
 
+            if (depth == 4 && channels == 1)
+            {
+                pixelFormat = RawPixelFormat.Int32;
+                validBits = 32;
+                return true;
+            }
+
             return false;
         }
 
@@ -302,6 +309,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     return true;
                 case "CV32F":
                     depth = 5;
+                    return true;
+                case "CV32S":
+                    depth = 4;
                     return true;
                 default:
                     depth = 0;

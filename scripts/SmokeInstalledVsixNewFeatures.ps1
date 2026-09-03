@@ -1,11 +1,12 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ImagePtrColdStart", "ConcurrentDictionary", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ImagePtrColdStart", "ConcurrentDictionary", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip", "Int32Industrial", "Int32IndustrialAutomatic")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
     [string]$VisualStudioInstanceId = "",
     [string]$OutputRoot = "",
+    [string]$TestBuildRoot = "",
     [ValidatePattern('^\d+\.\d+\.\d+$')]
     [string]$ExpectedReleaseVersion = "2.0.0",
     [switch]$NoBuild,
@@ -464,23 +465,34 @@ function Find-VisibleTextScreenPoint(
         return $null
     }
 
-    $range = ([System.Windows.Automation.TextPattern]$textPattern).DocumentRange.FindText(
-        $Text,
-        $false,
-        $false)
-    if (-not $range) {
-        return $null
-    }
-
-    foreach ($bounds in @($range.GetBoundingRectangles())) {
-        if ($bounds.Width -lt 1 -or $bounds.Height -lt 1) {
-            continue
+    $documentRange = ([System.Windows.Automation.TextPattern]$textPattern).DocumentRange
+    $searchRange = $documentRange.Clone()
+    $editorBounds = $editor.Current.BoundingRectangle
+    for ($attempt = 0; $attempt -lt 100; $attempt++) {
+        $range = $searchRange.FindText($Text, $false, $false)
+        if (-not $range) {
+            return $null
         }
 
-        return [pscustomobject]@{
-            X = [int]($bounds.Left + ($bounds.Width / 2))
-            Y = [int]($bounds.Top + ($bounds.Height / 2))
+        foreach ($bounds in @($range.GetBoundingRectangles())) {
+            $visible = $bounds.Width -ge 1 -and
+                $bounds.Height -ge 1 -and
+                $bounds.Right -gt $editorBounds.Left -and
+                $bounds.Left -lt $editorBounds.Right -and
+                $bounds.Bottom -gt $editorBounds.Top -and
+                $bounds.Top -lt $editorBounds.Bottom
+            if ($visible) {
+                return [pscustomobject]@{
+                    X = [int]($bounds.Left + ($bounds.Width / 2))
+                    Y = [int]($bounds.Top + ($bounds.Height / 2))
+                }
+            }
         }
+
+        $searchRange.MoveEndpointByRange(
+            [System.Windows.Automation.Text.TextPatternRangeEndpoint]::Start,
+            $range,
+            [System.Windows.Automation.Text.TextPatternRangeEndpoint]::End)
     }
 
     $null
@@ -1492,6 +1504,375 @@ function Invoke-IndustrialDataTipScenario(
         openedSourceType = [string]$openedState.documents[0].sourceType
         openedWidth = [int]$openedState.documents[0].width
         openedHeight = [int]$openedState.documents[0].height
+    }
+}
+
+function Invoke-Int32IndustrialScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $resolvedIndustrialImage = (Resolve-Path -LiteralPath $IndustrialImagePath).Path
+    $sourceHash = (Get-FileHash -LiteralPath $resolvedIndustrialImage -Algorithm SHA256).Hash
+    $hoverPath = Join-Path $outputRoot "int32-industrial-breakpoint-hover.png"
+    $glyphPath = Join-Path $outputRoot "int32-industrial-visualizer-glyph.png"
+    $menuPath = Join-Path $outputRoot "int32-industrial-visualizer-menu.png"
+    $directPath = Join-Path $outputRoot "int32-industrial-opencv-direct.png"
+    $automaticPath = Join-Path $outputRoot "int32-industrial-automatic-matrix.png"
+    $paddedPath = Join-Path $outputRoot "int32-industrial-padded-stride.png"
+    Remove-Item -LiteralPath $hoverPath, $glyphPath, $menuPath, $directPath, $automaticPath, $paddedPath -ErrorAction SilentlyContinue
+
+    function Get-Int32SessionState {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            Get-Content -LiteralPath $sessionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            $null
+        }
+    }
+
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 500
+    Invoke-Dte $Process.Id {
+        param($dte)
+        $dte.ActiveDocument.Activate()
+    }
+    $editor = Wait-Until "Visual Studio text editor for labelMat DataTip" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "WpfTextView"
+    } 30
+    $editor.SetFocus()
+    $labelPoint = Wait-Until "visible labelMat source expression" {
+        Find-VisibleTextScreenPoint (Get-AutomationRoot $MainHandle) "labelMat"
+    } 30
+    $windowRect = New-Object RawBufferInstalledVsixNative+RECT
+    [RawBufferInstalledVsixNative]::GetWindowRect($MainHandle, [ref]$windowRect) | Out-Null
+    [RawBufferInstalledVsixNative]::SetWindowPos(
+        $MainHandle,
+        [RawBufferInstalledVsixNative]::HWND_TOPMOST,
+        $windowRect.Left,
+        $windowRect.Top,
+        $windowRect.Right - $windowRect.Left,
+        $windowRect.Bottom - $windowRect.Top,
+        0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::BringWindowToTop($MainHandle) | Out-Null
+    [RawBufferInstalledVsixNative]::SetForegroundWindow($MainHandle) | Out-Null
+    Start-Sleep -Milliseconds 250
+    [RawBufferInstalledVsixNative]::SetCursorPos($windowRect.Left + 20, $windowRect.Top + 80) | Out-Null
+    Start-Sleep -Milliseconds 250
+    [RawBufferInstalledVsixNative]::SetCursorPos($labelPoint.X, $labelPoint.Y) | Out-Null
+    Start-Sleep -Milliseconds 4000
+    Capture-CurrentWindowWithCursor $MainHandle $hoverPath
+
+    $viewX = $labelPoint.X - 160
+    $viewY = $labelPoint.Y + 18
+    [RawBufferInstalledVsixNative]::SetCursorPos($viewX, $viewY) | Out-Null
+    Start-Sleep -Milliseconds 300
+    Capture-CurrentWindowWithCursor $MainHandle $glyphPath
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+    $launchOutcome = Wait-Until "Raw Buffer Visualizer DataTip action" {
+        $state = Get-Int32SessionState
+        $opened = @($state.documents | Where-Object {
+            [string]$_.sourceType -eq "OpenCvSharp.Mat" -and
+            [string]$_.pixelFormat -eq "Int32" -and
+            [int]$_.width -eq 1280 -and
+            [int]$_.height -eq 960 -and
+            [int]$_.stride -eq 5120 -and
+            -not [bool]$_.isError
+        })
+        if ($opened.Count -ge 1) {
+            return [pscustomobject]@{ Mode = "Opened"; MenuItem = $null }
+        }
+
+        $menuItem = Get-ElementsByControlType ([System.Windows.Automation.AutomationElement]::RootElement) ([System.Windows.Automation.ControlType]::MenuItem) |
+            Where-Object {
+                $_.Current.ProcessId -eq $Process.Id -and
+                -not [bool]$_.Current.IsOffscreen -and
+                [string]$_.Current.Name -like "*Raw Buffer Visualizer*"
+            } |
+            Select-Object -First 1
+        if ($menuItem) {
+            [pscustomobject]@{ Mode = "Menu"; MenuItem = $menuItem }
+        }
+    } 15
+    $usedVisualizerMenu = $launchOutcome.Mode -eq "Menu"
+    if ($usedVisualizerMenu) {
+        $visualizerMenuItem = $launchOutcome.MenuItem
+        $menuRect = $visualizerMenuItem.Current.BoundingRectangle
+        [RawBufferInstalledVsixNative]::SetCursorPos(
+            [int]($menuRect.Left + $menuRect.Width / 2),
+            [int]($menuRect.Top + $menuRect.Height / 2)) | Out-Null
+        Start-Sleep -Milliseconds 300
+        Capture-CurrentWindowWithCursor $MainHandle $menuPath
+        Click-AutomationElement $visualizerMenuItem
+    }
+    [RawBufferInstalledVsixNative]::SetWindowPos(
+        $MainHandle,
+        [RawBufferInstalledVsixNative]::HWND_NOTOPMOST,
+        $windowRect.Left,
+        $windowRect.Top,
+        $windowRect.Right - $windowRect.Left,
+        $windowRect.Bottom - $windowRect.Top,
+        0x0040) | Out-Null
+    Start-Sleep -Milliseconds 500
+    Dismiss-DebuggerEvaluationWarning | Out-Null
+
+    $directState = Wait-Until "direct OpenCvSharp CV_32SC1 visualizer handoff" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        $state = Get-Int32SessionState
+        if (-not $state) { return $null }
+        $matches = @($state.documents | Where-Object {
+            [string]$_.sourceType -eq "OpenCvSharp.Mat" -and
+            [string]$_.pixelFormat -eq "Int32" -and
+            [int]$_.width -eq 1280 -and
+            [int]$_.height -eq 960 -and
+            [int]$_.stride -eq 5120 -and
+            -not [bool]$_.isError
+        })
+        if ($matches.Count -ge 1 -and [int]$state.errorCount -eq 0) { $state } else { $null }
+    } 60
+
+    $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+    if ($inspectorToggle -and -not [bool]$inspectorToggle.Current.IsOffscreen) {
+        $togglePattern = $null
+        if (-not $inspectorToggle.TryGetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern,
+            [ref]$togglePattern)) {
+            throw "Compact Inspector button does not support TogglePattern."
+        }
+        if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
+            [System.Windows.Automation.ToggleState]::On) {
+            ([System.Windows.Automation.TogglePattern]$togglePattern).Toggle()
+        }
+    }
+
+    $interpretTab = Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
+        Where-Object { [string]$_.Current.Name -eq "Interpret" -and -not [bool]$_.Current.IsOffscreen } |
+        Select-Object -First 1
+    if ($interpretTab) {
+        Select-AutomationItem $interpretTab
+        Start-Sleep -Milliseconds 250
+    }
+
+    $formatBox = @(
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InterpretPixelFormatBox"
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "CompactInterpretPixelFormatBox"
+    ) | Where-Object { $_ -and -not [bool]$_.Current.IsOffscreen } | Select-Object -First 1
+    if (-not $formatBox -or (Get-SelectedComboBoxItemName $formatBox) -ne "Int32") {
+        throw "The installed viewer did not select Int32 for CV_32SC1."
+    }
+
+    $imageView = Wait-Until "CV_32SC1 industrial image canvas" {
+        $element = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "RawBufferOpenGlImageView"
+        if ($element -and -not [bool]$element.Current.IsOffscreen) { $element } else { $null }
+    } 30
+    $canvasBounds = $imageView.Current.BoundingRectangle
+    [RawBufferInstalledVsixNative]::SetCursorPos(
+        [int]($canvasBounds.Left + $canvasBounds.Width * 0.63),
+        [int]($canvasBounds.Top + $canvasBounds.Height * 0.42)) | Out-Null
+    Start-Sleep -Milliseconds 700
+    $toolRoot = Get-AutomationRoot $MainHandle
+    $pixelPositionText = [string](Find-ElementByAutomationId $toolRoot "PixelPositionText").Current.Name
+    $pixelValueText = [string](Find-ElementByAutomationId $toolRoot "PixelValueText").Current.Name
+    $pixelRawText = [string](Find-ElementByAutomationId $toolRoot "PixelRawText").Current.Name
+    $rawByteValues = @([regex]::Matches($pixelRawText, "\d+") | ForEach-Object { [int]$_.Value })
+    $hasFourRawBytes = $rawByteValues.Count -eq 4 -and
+        @($rawByteValues | Where-Object { $_ -lt 0 -or $_ -gt 255 }).Count -eq 0
+    if ($pixelPositionText -notmatch "^X \d+  Y \d+$" -or
+        $pixelValueText -notmatch "^Value -?\d+$" -or
+        -not $hasFourRawBytes) {
+        throw "The CV_32SC1 signed value and four raw bytes were not visible after hovering over the image."
+    }
+    $pixelText = "$pixelPositionText | $pixelValueText | $pixelRawText"
+    Capture-Window $MainHandle $directPath -IncludeCursor
+
+    Start-Sleep -Milliseconds 4000
+    $clearButton = Wait-Until "Clear direct CV_32SC1 result before automatic scan" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ClearButton"
+        if ($button -and [bool]$button.Current.IsEnabled) { $button } else { $null }
+    } 15
+    Click-AutomationElement $clearButton
+    Wait-Until "empty CV_32SC1 document list before automatic scan" {
+        $state = Get-Int32SessionState
+        if ($state -and [int]$state.documentCount -eq 0) { $true } else { $null }
+    } 15 | Out-Null
+
+    $scanButton = Wait-Until "CV_32SC1 Automatic Vision Inspector Scan Now" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+    } 30
+    $scanPattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$scanPattern)) {
+        throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$scanPattern).Invoke()
+
+    $automaticState = Wait-Until "CV_32SC1 automatic and collection results" {
+        $state = Get-Int32SessionState
+        if (-not $state) { return $null }
+        $documents = @($state.documents | Where-Object {
+            [string]$_.pixelFormat -eq "Int32" -and
+            [int]$_.width -eq 1280 -and
+            [int]$_.height -eq 960 -and
+            -not [bool]$_.isError
+        })
+        $hasOpenCv = @($documents | Where-Object { [string]$_.sourceType -eq "OpenCvSharp.Mat" }).Count -ge 1
+        $hasEmgu = @($documents | Where-Object { [string]$_.sourceType -eq "Emgu.CV.Mat" }).Count -ge 1
+        $hasCollection = @($documents | Where-Object { [string]$_.title -like "*labelMatList*" }).Count -ge 1
+        $hasPadded = @($documents | Where-Object {
+            [string]$_.title -like "*paddedInt32Frame*" -and [int]$_.stride -eq 5184
+        }).Count -ge 1
+        if ($hasOpenCv -and $hasEmgu -and $hasCollection -and $hasPadded -and
+            [int]$state.errorCount -eq 0) { $state } else { $null }
+    } 60
+    Capture-Window $MainHandle $automaticPath
+
+    $paddedIndex = -1
+    for ($index = 0; $index -lt @($automaticState.documents).Count; $index++) {
+        $document = $automaticState.documents[$index]
+        if ([string]$document.title -like "*paddedInt32Frame*" -and
+            [string]$document.pixelFormat -eq "Int32" -and
+            [int]$document.stride -eq 5184) {
+            $paddedIndex = $index
+            break
+        }
+    }
+    $imageItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
+    if ($paddedIndex -lt 0 -or $imageItems.Count -le $paddedIndex) {
+        throw "The padded CV_32SC1 row could not be selected."
+    }
+    Select-AutomationItem $imageItems[$paddedIndex]
+    $paddedState = Wait-Until "active padded CV_32SC1 frame" {
+        $state = Get-Int32SessionState
+        if ($state -and
+            [string]$state.activeTitle -like "*paddedInt32Frame*" -and
+            (([string]$state.interpretFormat -eq "Int32" -and [string]$state.interpretStride -eq "5184") -or
+             ([string]$state.compactInterpretFormat -eq "Int32" -and [string]$state.compactInterpretStride -eq "5184"))) {
+            $state
+        }
+        else {
+            $null
+        }
+    } 30
+    Capture-Window $MainHandle $paddedPath
+
+    [ordered]@{
+        scenario = "Int32Industrial"
+        industrialImagePath = $resolvedIndustrialImage
+        industrialImageSha256 = $sourceHash
+        hoverScreenshotPath = $hoverPath
+        visualizerGlyphScreenshotPath = $glyphPath
+        visualizerMenuScreenshotPath = if ($usedVisualizerMenu) { $menuPath } else { "" }
+        usedVisualizerMenu = $usedVisualizerMenu
+        directScreenshotPath = $directPath
+        automaticScreenshotPath = $automaticPath
+        paddedStrideScreenshotPath = $paddedPath
+        directDocumentCount = [int]$directState.documentCount
+        automaticDocumentCount = [int]$automaticState.documentCount
+        automaticScanStatus = [string]$automaticState.automaticScanStatus
+        paddedStride = 5184
+        pixelValue = $pixelText
+        activePaddedTitle = [string]$paddedState.activeTitle
+    }
+}
+
+function Invoke-Int32IndustrialAutomaticScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $resolvedIndustrialImage = (Resolve-Path -LiteralPath $IndustrialImagePath).Path
+    $sourceHash = (Get-FileHash -LiteralPath $resolvedIndustrialImage -Algorithm SHA256).Hash
+    $automaticPath = Join-Path $outputRoot "int32-industrial-automatic-matrix.png"
+    $paddedPath = Join-Path $outputRoot "int32-industrial-padded-stride.png"
+    Remove-Item -LiteralPath $automaticPath, $paddedPath -ErrorAction SilentlyContinue
+
+    function Get-Int32AutomaticSessionState {
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            Get-Content -LiteralPath $sessionPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        }
+        catch {
+            $null
+        }
+    }
+
+    Show-RawBufferToolWindow $Process.Id
+    $scanButton = Wait-Until "CV_32SC1 Automatic Vision Inspector Scan Now" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+        if ($button -and [bool]$button.Current.IsEnabled) { $button } else { $null }
+    } 30
+    $scanPattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$scanPattern)) {
+        throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
+    }
+    ([System.Windows.Automation.InvokePattern]$scanPattern).Invoke()
+
+    $automaticState = Wait-Until "CV_32SC1 automatic and collection results" {
+        $state = Get-Int32AutomaticSessionState
+        if (-not $state) { return $null }
+        $documents = @($state.documents | Where-Object {
+            [string]$_.pixelFormat -eq "Int32" -and
+            [int]$_.width -eq 1280 -and
+            [int]$_.height -eq 960 -and
+            -not [bool]$_.isError
+        })
+        $hasOpenCv = @($documents | Where-Object { [string]$_.sourceType -eq "OpenCvSharp.Mat" }).Count -ge 1
+        $hasEmgu = @($documents | Where-Object { [string]$_.sourceType -eq "Emgu.CV.Mat" }).Count -ge 1
+        $hasCollection = @($documents | Where-Object { [string]$_.title -like "*labelMatList*" }).Count -ge 1
+        $hasPadded = @($documents | Where-Object {
+            [string]$_.title -like "*paddedInt32Frame*" -and [int]$_.stride -eq 5184
+        }).Count -ge 1
+        if ($hasOpenCv -and $hasEmgu -and $hasCollection -and $hasPadded -and
+            [int]$state.errorCount -eq 0) { $state } else { $null }
+    } 60
+    Capture-Window $MainHandle $automaticPath
+
+    $paddedIndex = -1
+    for ($index = 0; $index -lt @($automaticState.documents).Count; $index++) {
+        $document = $automaticState.documents[$index]
+        if ([string]$document.title -like "*paddedInt32Frame*" -and
+            [string]$document.pixelFormat -eq "Int32" -and
+            [int]$document.stride -eq 5184) {
+            $paddedIndex = $index
+            break
+        }
+    }
+    $imageItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
+    if ($paddedIndex -lt 0 -or $imageItems.Count -le $paddedIndex) {
+        throw "The padded CV_32SC1 row could not be selected."
+    }
+    Select-AutomationItem $imageItems[$paddedIndex]
+    $paddedState = Wait-Until "active padded CV_32SC1 frame" {
+        $state = Get-Int32AutomaticSessionState
+        if ($state -and
+            [string]$state.activeTitle -like "*paddedInt32Frame*" -and
+            (([string]$state.interpretFormat -eq "Int32" -and [string]$state.interpretStride -eq "5184") -or
+             ([string]$state.compactInterpretFormat -eq "Int32" -and [string]$state.compactInterpretStride -eq "5184"))) {
+            $state
+        }
+        else {
+            $null
+        }
+    } 30
+    Capture-Window $MainHandle $paddedPath
+
+    [ordered]@{
+        scenario = "Int32IndustrialAutomatic"
+        industrialImagePath = $resolvedIndustrialImage
+        industrialImageSha256 = $sourceHash
+        automaticScreenshotPath = $automaticPath
+        paddedStrideScreenshotPath = $paddedPath
+        automaticDocumentCount = [int]$automaticState.documentCount
+        automaticScanStatus = [string]$automaticState.automaticScanStatus
+        paddedStride = 5184
+        activePaddedTitle = [string]$paddedState.activeTitle
     }
 }
 
@@ -3182,7 +3563,13 @@ if (-not (Test-Path -LiteralPath $devenvCandidate)) {
 }
 $devenvPath = (Resolve-Path -LiteralPath $devenvCandidate).Path
 $sampleProject = Join-Path $repoRoot "samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj"
-$debuggeePath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualizerDebuggee\Debug\net472\RawBufferVisualizer.VisualizerDebuggee.exe"
+$resolvedTestBuildRoot = if ([string]::IsNullOrWhiteSpace($TestBuildRoot)) {
+    Join-Path $repoRoot ".build"
+}
+else {
+    [IO.Path]::GetFullPath($TestBuildRoot)
+}
+$debuggeePath = Join-Path $resolvedTestBuildRoot "bin\RawBufferVisualizer.VisualizerDebuggee\Debug\net472\RawBufferVisualizer.VisualizerDebuggee.exe"
 
 if (-not $NoInstall) {
     $installArguments = @(
@@ -3205,7 +3592,7 @@ if (-not $NoInstall) {
 }
 
 if (-not $NoBuild) {
-    & dotnet build $sampleProject -c Debug
+    & dotnet build $sampleProject -c Debug "-p:RawBufferVisualizerBuildRoot=$resolvedTestBuildRoot"
     if ($LASTEXITCODE -ne 0) {
         throw "VisualizerDebuggee build failed with exit code $LASTEXITCODE."
     }
@@ -3258,6 +3645,18 @@ $scenarioArgument = switch ($Scenario) {
         }
         '--industrial-image-debug "' + (Resolve-Path -LiteralPath $IndustrialDataTipImagePath).Path + '"'
     }
+    "Int32Industrial" {
+        if (-not (Test-Path -LiteralPath $IndustrialImagePath)) {
+            throw "Industrial image was not found: $IndustrialImagePath"
+        }
+        '--int32-industrial-debug "' + (Resolve-Path -LiteralPath $IndustrialImagePath).Path + '"'
+    }
+    "Int32IndustrialAutomatic" {
+        if (-not (Test-Path -LiteralPath $IndustrialImagePath)) {
+            throw "Industrial image was not found: $IndustrialImagePath"
+        }
+        '--int32-industrial-debug "' + (Resolve-Path -LiteralPath $IndustrialImagePath).Path + '"'
+    }
     "ReleaseAnnouncement" { "--buffer-doctor-debug" }
     "EnvironmentCheck" { "--buffer-doctor-debug" }
     default { "--buffer-doctor-debug" }
@@ -3277,7 +3676,9 @@ try {
         $Scenario -eq "ConcurrentDictionary" -or
         $Scenario -eq "AutomaticCollections" -or
         $Scenario -eq "IndustrialMarketplace" -or
-        $Scenario -eq "IndustrialDataTip") {
+        $Scenario -eq "IndustrialDataTip" -or
+        $Scenario -eq "Int32Industrial" -or
+        $Scenario -eq "Int32IndustrialAutomatic") {
         $automaticPreferenceIsolated = $true
         $automaticPreferenceExisted = Test-Path -LiteralPath $automaticPreferencePath
         if ($automaticPreferenceExisted) {
@@ -3291,7 +3692,9 @@ try {
             autoScanOnBreak = $Scenario -ne "IndustrialMarketplace" -and
                 $Scenario -ne "IndustrialDataTip" -and
                 $Scenario -ne "ImagePtrColdStart" -and
-                $Scenario -ne "ConcurrentDictionary"
+                $Scenario -ne "ConcurrentDictionary" -and
+                $Scenario -ne "Int32Industrial" -and
+                $Scenario -ne "Int32IndustrialAutomatic"
         } | ConvertTo-Json
         [IO.File]::WriteAllText(
             $automaticPreferencePath,
@@ -3375,6 +3778,9 @@ try {
         elseif ($Scenario -eq "IndustrialDataTip") {
             (Find-TreeItem $root "industrialBitmap") -ne $null
         }
+        elseif ($Scenario -eq "Int32Industrial" -or $Scenario -eq "Int32IndustrialAutomatic") {
+            (Find-TreeItem $root "labelMat") -ne $null
+        }
         elseif ($Scenario -eq "ReleaseAnnouncement" -or $Scenario -eq "EnvironmentCheck") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
@@ -3412,6 +3818,8 @@ try {
         "ConcurrentDictionary" { Invoke-ConcurrentDictionaryScenario $visualStudio $mainHandle }
         "IndustrialMarketplace" { Invoke-IndustrialMarketplaceScenario $visualStudio $mainHandle }
         "IndustrialDataTip" { Invoke-IndustrialDataTipScenario $visualStudio $mainHandle }
+        "Int32Industrial" { Invoke-Int32IndustrialScenario $visualStudio $mainHandle }
+        "Int32IndustrialAutomatic" { Invoke-Int32IndustrialAutomaticScenario $visualStudio $mainHandle }
         "ReleaseAnnouncement" { Invoke-ReleaseAnnouncementScenario $visualStudio $mainHandle }
         "EnvironmentCheck" { Invoke-EnvironmentCheckScenario $mainHandle }
     }

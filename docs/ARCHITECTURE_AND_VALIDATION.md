@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This document describes the architecture implemented by public `2.0.5.0` and retained by the local `2.0.6.0` candidate while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The current hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.4 changed only the docked presentation of the existing complete viewer reset. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.6 changes only the immutable package/release identity and retains those boundaries. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the architecture implemented by public `2.0.6.0` and extended by the local `2.0.7.0` candidate while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The current hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.6 advanced only the immutable package identity. Version 2.0.7 adds signed 32-bit, one-channel matrix mapping and rendering without widening the multi-channel or 3D scope. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
@@ -95,7 +95,8 @@ Mapped shapes:
 - 8-bit C3 -> `BGR24`;
 - 8-bit C4 -> `BGRA32`;
 - 16-bit unsigned C1 -> `Mono16`;
-- 32-bit float C1 -> `Float32`.
+- 32-bit float C1 -> `Float32`;
+- 32-bit signed C1 (`CV_32SC1`) -> `Int32`.
 
 ### Emgu CV
 
@@ -105,7 +106,10 @@ Mapped shapes:
 
 - `Cv8U` C1/C3/C4;
 - `Cv16U` C1;
-- `Cv32F` C1.
+- `Cv32F` C1;
+- `Cv32S` C1 -> `Int32`.
+
+`Int32` keeps four bytes per pixel, signed little- or big-endian interpretation, exact signed values and raw bytes in pixel inspection, and min/max grayscale autoscaling for display. It does not imply 32 channels: `CV_32SC1` is one channel whose element depth is a signed 32-bit integer. Multi-channel signed matrices such as `CV_32SC2`, `CV_32SC3`, and `CV_32SC4` remain unsupported and fail visibly.
 
 ### Bitmap
 

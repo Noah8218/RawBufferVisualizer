@@ -76,6 +76,13 @@ namespace RawBufferVisualizer.OpenCvSharpAdapter
                     }
 
                     break;
+                case MatType.CV_32S:
+                    if (type.Channels == 1)
+                    {
+                        return RawPixelFormat.Int32;
+                    }
+
+                    break;
             }
 
             throw new NotSupportedException("Unsupported Mat type: " + type);
@@ -90,6 +97,7 @@ namespace RawBufferVisualizer.OpenCvSharpAdapter
                 case MatType.CV_16U:
                     return 16;
                 case MatType.CV_32F:
+                case MatType.CV_32S:
                     return 32;
                 default:
                     return 0;

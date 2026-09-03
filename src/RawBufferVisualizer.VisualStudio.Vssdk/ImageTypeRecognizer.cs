@@ -234,7 +234,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || typeName.IndexOf("UIntPtr", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("Byte[]", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("UInt16[]", StringComparison.OrdinalIgnoreCase) >= 0
-                || typeName.IndexOf("Single[]", StringComparison.OrdinalIgnoreCase) >= 0;
+                || typeName.IndexOf("Single[]", StringComparison.OrdinalIgnoreCase) >= 0
+                || string.Equals(typeName, "System.Int32[]", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(typeName, "Int32[]", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(typeName, "int[]", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsIntegerType(string typeName)

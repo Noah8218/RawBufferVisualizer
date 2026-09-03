@@ -299,7 +299,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             return pixelFormat == RawPixelFormat.Mono16 ? 2 :
                 pixelFormat == RawPixelFormat.BGR24 || pixelFormat == RawPixelFormat.RGB24 ? 3 :
-                pixelFormat == RawPixelFormat.BGRA32 || pixelFormat == RawPixelFormat.Float32 ? 4 :
+                pixelFormat == RawPixelFormat.BGRA32 || pixelFormat == RawPixelFormat.Float32 || pixelFormat == RawPixelFormat.Int32 ? 4 :
                 1;
         }
 
@@ -310,6 +310,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case RawPixelFormat.Mono16:
                     return 16;
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return 32;
                 case RawPixelFormat.Binary:
                     return 1;

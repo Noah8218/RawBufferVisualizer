@@ -321,6 +321,11 @@ namespace RawBufferVisualizer.Core
                     var floatByte = double.IsNaN(floatValue) || double.IsInfinity(floatValue) ? (byte)0 : ScaleToByte(floatValue, options);
                     WriteBgra(pixels, targetOffset, floatByte, floatByte, floatByte, 255);
                     break;
+                case RawPixelFormat.Int32:
+                    var int32 = RawBufferRenderer.ReadInt32(_buffer, row + (x * 4), SourceDescriptor.ByteOrder);
+                    var int32Value = ScaleToByte(int32, options);
+                    WriteBgra(pixels, targetOffset, int32Value, int32Value, int32Value, 255);
+                    break;
                 case RawPixelFormat.RGB24:
                     var rgbOffset = row + (x * 3);
                     WriteBgra(pixels, targetOffset, _buffer[rgbOffset + 2], _buffer[rgbOffset + 1], _buffer[rgbOffset], 255);
@@ -389,6 +394,8 @@ namespace RawBufferVisualizer.Core
                     return CreateFixedRangeOptions(4095);
                 case RawPixelFormat.Float32:
                     return CreateFixedRangeOptions(1);
+                case RawPixelFormat.Int32:
+                    return CreateInt32RangeOptions();
                 default:
                     return new RawRenderOptions();
             }
@@ -720,6 +727,11 @@ namespace RawBufferVisualizer.Core
                     var floatByte = double.IsNaN(floatValue) || double.IsInfinity(floatValue) ? (byte)0 : ScaleToByte(floatValue, options);
                     WriteBgra(pixels, targetOffset, floatByte, floatByte, floatByte, 255);
                     break;
+                case RawPixelFormat.Int32:
+                    var int32 = RawBufferRenderer.ReadInt32(rowBuffer, sourceOffset, SourceDescriptor.ByteOrder);
+                    var int32Value = ScaleToByte(int32, options);
+                    WriteBgra(pixels, targetOffset, int32Value, int32Value, int32Value, 255);
+                    break;
                 case RawPixelFormat.RGB24:
                     WriteBgra(pixels, targetOffset, rowBuffer[sourceOffset + 2], rowBuffer[sourceOffset + 1], rowBuffer[sourceOffset], 255);
                     break;
@@ -835,6 +847,7 @@ namespace RawBufferVisualizer.Core
                     return 3;
                 case RawPixelFormat.BGRA32:
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return 4;
                 default:
                     throw new NotSupportedException("File-backed tiled display does not support " + format + " yet.");
@@ -906,6 +919,48 @@ namespace RawBufferVisualizer.Core
             }
 
             return string.Join(" ", parts);
+        }
+
+        private RawRenderOptions CreateInt32RangeOptions()
+        {
+            const int maximumSampleRows = 64;
+            const int maximumSampleColumns = 512;
+            const long maximumSampleBytes = 32L * 1024L * 1024L;
+
+            var rowByteCount = checked(SourceDescriptor.Width * 4);
+            var byteLimitedRows = (int)Math.Max(1L, maximumSampleBytes / Math.Max(1, rowByteCount));
+            var sampledRows = Math.Min(SourceDescriptor.Height, Math.Min(maximumSampleRows, byteLimitedRows));
+            var sampledColumns = Math.Min(SourceDescriptor.Width, maximumSampleColumns);
+            var rowBuffer = new byte[rowByteCount];
+            var minimum = int.MaxValue;
+            var maximum = int.MinValue;
+
+            using (var stream = OpenRawReadStream())
+            {
+                for (var sampledY = 0; sampledY < sampledRows; sampledY++)
+                {
+                    var sourceY = sampledRows == 1
+                        ? 0
+                        : (int)((long)sampledY * (SourceDescriptor.Height - 1) / (sampledRows - 1));
+                    ReadRowSpan(stream, sourceY, 0, rowByteCount, rowBuffer);
+                    for (var sampledX = 0; sampledX < sampledColumns; sampledX++)
+                    {
+                        var sourceX = sampledColumns == 1
+                            ? 0
+                            : (int)((long)sampledX * (SourceDescriptor.Width - 1) / (sampledColumns - 1));
+                        var value = RawBufferRenderer.ReadInt32(rowBuffer, sourceX * 4, SourceDescriptor.ByteOrder);
+                        minimum = Math.Min(minimum, value);
+                        maximum = Math.Max(maximum, value);
+                    }
+                }
+            }
+
+            return new RawRenderOptions
+            {
+                AutoScale = false,
+                BlackLevel = minimum,
+                WhiteLevel = maximum <= minimum ? (double)minimum + 1 : maximum
+            };
         }
 
         private static RawRenderOptions CreateFixedRangeOptions(double whiteLevel)

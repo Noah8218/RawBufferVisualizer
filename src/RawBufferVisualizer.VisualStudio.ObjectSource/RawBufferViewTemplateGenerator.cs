@@ -96,6 +96,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     return "checked(" + width + " * 3)";
                 case RawPixelFormat.BGRA32:
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return "checked(" + width + " * 4)";
                 default:
                     return width;

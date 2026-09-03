@@ -14,7 +14,8 @@ namespace RawBufferVisualizer.Core
         BayerRGGB8,
         BayerGRBG8,
         BayerGBRG8,
-        BayerBGGR8
+        BayerBGGR8,
+        Int32
     }
 
     public enum RawByteOrder
@@ -50,6 +51,7 @@ namespace RawBufferVisualizer.Core
                     return 3;
                 case RawPixelFormat.BGRA32:
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return 4;
                 default:
                     return 1;

@@ -28,9 +28,11 @@ The six-second overview continues through live color pixels, automatic inspectio
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## Raw Buffer Visualizer 2.0.6
+## Raw Buffer Visualizer 2.0.7
 
-Version `2.0.6` republishes the validated 2.0.5 feature set under a new immutable Marketplace package version. It introduces no functional or compatibility change and retains the complete 2.0 feature set:
+Version `2.0.7` adds signed 32-bit, single-channel image support for OpenCvSharp `CV_32SC1`, Emgu CV `Cv32S` C1, mapped `int[]`, and vendor-neutral `RawBufferView`/`RawBufferSnapshot` buffers. It renders these matrices with signed min/max grayscale autoscaling while preserving exact signed pixel values and four source bytes in the inspector. Existing 2.0 features remain included:
+
+![Raw Buffer Visualizer 2.0.7 inspecting signed Int32 industrial images](docs/images/int32-industrial-automatic-matrix.png)
 
 - the exact debugger object/expression name above each thumbnail, including names such as `imageList[0]`, `imageDictionary[key]`, and `bitmapArray[1]`;
 - the source object's `Ptr`, `Buffer`, or captured `Scan0` separately from the `Pixels` address used to read image bytes;
@@ -52,6 +54,7 @@ Version `2.0.6` republishes the validated 2.0.5 feature set under a new immutabl
 - controlled `Unavailable` state after Continue/process exit, with live reads cancelled and copied managed buffers retained;
 - debugger-session gating that prevents delayed pre-Continue handoffs from reopening in Run Mode or a later Break;
 - **Connect Doctor** inside Connect Your Buffer: ranked bounded interpretations update only the visible draft and preview until **Save Mapping** is selected.
+- direct, automatic, and collection inspection of supported signed `CV_32SC1` Mats, including padded row stride.
 
 Address labels deliberately follow each library's public contract:
 
@@ -65,7 +68,7 @@ Address labels deliberately follow each library's public contract:
 
 `Ptr` identifies the native wrapper/source object when that library exposes one. `Pixels` is the address from which image bytes are actually read. The two values are not interchangeable for OpenCvSharp or Emgu CV.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.6`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.7`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
 ### Environment Check
 
@@ -173,8 +176,8 @@ Other debugger visualizers have different feature sets. This comparison describe
 
 | Product | Supported versions | Current qualification |
 | --- | --- | --- |
-| Visual Studio 2022 | `17.9` or newer, x64 | Exact 2.0.6 in-place update, clean reinstall, and installed runtime checks passed on `17.14.37516.0`. Exact 17.9 runtime remains unverified because that host is not installed. |
-| Visual Studio 2026 | Stable `18.x`, x64 | Exact 2.0.6 in-place update and installed runtime checks passed on `18.8.12105.206`. |
+| Visual Studio 2022 | `17.9` or newer, x64 | Exact 2.0.6 installed runtime checks passed on `17.14.37516.0`; local 2.0.7 qualification is recorded separately. Exact 17.9 runtime remains unverified because that host is not installed. |
+| Visual Studio 2026 | Stable `18.x`, x64 | Exact 2.0.6 installed runtime checks passed on `18.8.12105.206`; 2.0.7 retains the same host/API contract. |
 
 Community, Professional, and Enterprise editions are installation targets. Visual Studio 2019, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets.
 
@@ -214,7 +217,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` added the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating. Version `2.0.2.0` restored Visual Studio 2022 `17.9+` support and repaired long temporary-path handoff claims. Version `2.0.3.0` added direct concurrent dictionary visualization and fixed the first cold `ImagePtr` handoff. Version `2.0.4.0` moved the full viewer reset directly above the image list as **Clear all**. Version `2.0.5.0` distinguishes source pointers from pixel addresses, preserves debugger expression names, fixes direct image-array registration, enforces complete pointer reads, and corrects negative-stride Bitmap transfer. Version `2.0.6.0` advances the immutable public package version without changing that behavior.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` added the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating. Version `2.0.2.0` restored Visual Studio 2022 `17.9+` support and repaired long temporary-path handoff claims. Version `2.0.3.0` added direct concurrent dictionary visualization and fixed the first cold `ImagePtr` handoff. Version `2.0.4.0` moved the full viewer reset directly above the image list as **Clear all**. Version `2.0.5.0` distinguishes source pointers from pixel addresses, preserves debugger expression names, fixes direct image-array registration, enforces complete pointer reads, and corrects negative-stride Bitmap transfer. Version `2.0.6.0` advanced the immutable public package version. Version `2.0.7.0` adds signed 32-bit single-channel matrices without changing the Visual Studio support floor.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -317,13 +320,13 @@ The docked layout adapts to the available width:
 
 | Input | Status | Notes |
 | --- | --- | --- |
-| `RawBufferSnapshot` | Supported | SDK snapshot from `byte[]`, `ushort[]`, `float[]`, or `IntPtr`. |
+| `RawBufferSnapshot` | Supported | SDK snapshot from `byte[]`, `ushort[]`, `float[]`, `int[]`, or `IntPtr`. |
 | `RawBufferView` | Supported | Pointer-backed wrapper for common camera/frame-grabber image shapes. |
 | Unregistered camera/frame wrappers | Conditional | Automatic Inspector supports debugger-visible pointer/array, width, height, stride, and pixel-format shapes. Ambiguous enum/member roles require one saved mapping. |
 | Exact ImagePtr compatibility target | Limited | The debugger icon is registered for the existing `Cressem.ImageModel.ImagePtr` contract. Other types should use `RawBufferView` or Automatic Inspector. |
 | `System.Drawing.Bitmap` | Supported | 8bpp indexed, 24bpp RGB, and 32bpp RGB/ARGB/PARGB mappings. Its `Scan0 / Pixels` address is captured only while `LockBits` is active. |
-| OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, and 32-bit float Mat formats. Uses reflection over both legacy and current `Mat` APIs and reports `Ptr` separately from pixel `Data`. |
-| Emgu CV `Mat` | Supported | Extracted by reflection, so the extension does not require a direct Emgu dependency. Reports `Ptr` separately from `DataPointer`. |
+| OpenCvSharp `Mat` | Supported | Common 8-bit, 16-bit, 32-bit float, and signed `CV_32SC1` Mat formats. Uses reflection over both legacy and current `Mat` APIs and reports `Ptr` separately from pixel `Data`. |
+| Emgu CV `Mat` | Supported | Supports the corresponding common formats, including signed `Cv32S` C1. Extracted by reflection, so the extension does not require a direct Emgu dependency. Reports `Ptr` separately from `DataPointer`. |
 | Image collections | Supported | Typed or mixed `List<T>`, `Dictionary<TKey, TValue>`, `ConcurrentDictionary<TKey, TValue>`, `ArrayList`, `Hashtable`, `object[]`, and registered Bitmap/OpenCvSharp/Emgu/raw image arrays. Up to 256 entries are processed per invocation. |
 | Automatic Mat collections | Supported | Exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays are included automatically; 8 items per collection, 16 items and 8 roots per scan. Bitmap and broad collections remain glyph-owned. |
 | `.rbuf.json` + `.raw` | Supported | Snapshot metadata plus raw payload. |
@@ -376,6 +379,7 @@ public sealed class ImagePtr
 | `BGR24` | 3 bytes / pixel | 8 | Color, BGR byte order |
 | `BGRA32` | 4 bytes / pixel | 8 | Color with alpha |
 | `Float32` | 4 bytes / pixel | 32 | Grayscale |
+| `Int32` | 4 bytes / pixel | 32 | Signed min/max autoscaled grayscale; inspector retains exact signed value and four raw bytes |
 | `BayerRGGB8` | 1 byte / pixel | 8 | Simple Bayer preview |
 | `BayerGRBG8` | 1 byte / pixel | 8 | Simple Bayer preview |
 | `BayerGBRG8` | 1 byte / pixel | 8 | Simple Bayer preview |
@@ -397,11 +401,13 @@ Unsupported or malformed formats should fail with a visible error row and diagno
 | OpenCvSharp `CV_8UC4` | `BGRA32` |
 | OpenCvSharp `CV_16UC1` | `Mono16` |
 | OpenCvSharp `CV_32FC1` | `Float32` |
+| OpenCvSharp `CV_32SC1` | `Int32` |
 | Emgu CV `Cv8U`, 1 channel | `Mono8` |
 | Emgu CV `Cv8U`, 3 channels | `BGR24` |
 | Emgu CV `Cv8U`, 4 channels | `BGRA32` |
 | Emgu CV `Cv16U`, 1 channel | `Mono16` |
 | Emgu CV `Cv32F`, 1 channel | `Float32` |
+| Emgu CV `Cv32S`, 1 channel | `Int32` |
 
 ## Snapshot Files
 
@@ -625,8 +631,9 @@ The Marketplace extension is distributed through Visual Studio Marketplace. Rele
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview: [2.0.6 Overview](docs/marketplace-overview-2.0.6.md).
-Marketplace release text: [2.0.6 release notes](docs/marketplace-release-notes-2.0.6.md).
+Marketplace feature Overview: [2.0.7 Overview](docs/marketplace-overview-2.0.7.md).
+Korean review copy: [2.0.7 Overview (Korean)](docs/marketplace-overview-2.0.7.ko.md).
+Marketplace release text: [2.0.7 release notes](docs/marketplace-release-notes-2.0.7.md).
 Complete user-visible history: [CHANGELOG](CHANGELOG.md).
 For the short product video, follow the [fast demo recording guide](docs/demo-recording-guide.md).
 
