@@ -434,6 +434,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ImageList.Items.Refresh();
             if (activeInvalidated && _activeDocument != null)
             {
+                DescriptorText.Text = FormatDescriptor(_activeDocument);
                 OpenGlImageView.InvalidateSource();
                 ShowSourceUnavailableState(unavailableMessage);
             }
@@ -933,13 +934,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private ClaimedHandoffOpenResult OpenClaimedHandoff(
             VisualizerHandoffRequest request)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var resolvedDisplayName = DebuggerExpressionDisplayNameResolver.Resolve(_dte, request);
             if (request.IsError)
             {
-                var displayName = string.IsNullOrWhiteSpace(request.DisplayName)
+                var displayName = string.IsNullOrWhiteSpace(resolvedDisplayName)
                     ? (string.IsNullOrWhiteSpace(request.SourceType)
                         ? "Debugger visualizer"
                         : request.SourceType)
-                    : request.DisplayName;
+                    : resolvedDisplayName;
                 AddErrorDocument(
                     displayName,
                     request.SourceType,
@@ -954,17 +957,21 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             if (request.IsLiveMemory)
             {
-                OpenLiveMemory(request);
+                OpenLiveMemory(request, resolvedDisplayName);
                 return ClaimedHandoffOpenResult.Success();
             }
 
             var documentCountBeforeOpen = _documents.Count;
             OpenPath(
                 request.MetadataPath,
-                request.DisplayName,
+                resolvedDisplayName,
                 request.SourceType,
                 request.HandoffId,
-                request.IsPreview);
+                request.IsPreview,
+                request.DebuggeeProcessId,
+                request.DebuggeeBufferAddress,
+                request.SourcePointerAddress,
+                request.SourcePointerLabel);
             ImageDocument? openedDocument;
             if (!string.IsNullOrWhiteSpace(request.HandoffId))
             {
@@ -1004,7 +1011,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public void OpenPath(string path)
         {
-            OpenPath(path, null, null, null, false);
+            OpenPath(path, null, null, null, false, 0, 0, 0, null);
         }
 
         private void OpenPath(
@@ -1012,7 +1019,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string? title,
             string? sourceType,
             string? handoffId,
-            bool isPreview)
+            bool isPreview,
+            int debuggeeProcessId,
+            long dataAddress,
+            long sourcePointerAddress,
+            string? sourcePointerLabel)
         {
             if (!Dispatcher.CheckAccess())
             {
@@ -1022,7 +1033,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 // and Shell assemblies are unavailable, so the vs-threading JTF pattern cannot
                 // be used. Callers hold no locks and the UI thread never waits on these
                 // background handoff threads, so the synchronous marshal cannot deadlock.
-                Dispatcher.Invoke(() => OpenPath(path, title, sourceType, handoffId, isPreview));
+                Dispatcher.Invoke(() => OpenPath(
+                    path,
+                    title,
+                    sourceType,
+                    handoffId,
+                    isPreview,
+                    debuggeeProcessId,
+                    dataAddress,
+                    sourcePointerAddress,
+                    sourcePointerLabel));
 #pragma warning restore VSTHRD001
                 return;
             }
@@ -1047,7 +1067,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         title,
                         resolvedSourceType,
                         isPreview,
-                        ShouldDeleteSnapshotDirectoryOnDispose(fullPath));
+                        ShouldDeleteSnapshotDirectoryOnDispose(fullPath),
+                        debuggeeProcessId,
+                        dataAddress,
+                        sourcePointerAddress,
+                        sourcePointerLabel);
                     ImageList.Items.Refresh();
                     if (wasActive)
                     {
@@ -1081,7 +1105,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     resolvedSourceType,
                     ShouldDeleteSnapshotDirectoryOnDispose(fullPath),
                     handoffId,
-                    isPreview);
+                    isPreview,
+                    debuggeeProcessId,
+                    dataAddress,
+                    sourcePointerAddress,
+                    sourcePointerLabel);
                 _workspace.Add(document);
                 ActivateDocument(document);
                 DiagnosticsList.Items.Insert(0, string.Format(
@@ -1130,7 +1158,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void Clear_Click(object sender, RoutedEventArgs e)
         {
-            _workspace.Clear();
+            _syncingDocumentSelection = true;
+            try
+            {
+                _workspace.Clear();
+                ImageList.SelectedItem = null;
+            }
+            finally
+            {
+                _syncingDocumentSelection = false;
+            }
+
             _compareA = null;
             _compareB = null;
             _blinkTimer.Stop();
@@ -1200,6 +1238,58 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void ImageListContextMenu_Opening(object sender, RoutedEventArgs e)
         {
             UpdateMapThisTypeMenuItem();
+            UpdateCopyAddressMenuItems();
+        }
+
+        private void UpdateCopyAddressMenuItems()
+        {
+            var document = ImageList.SelectedItem as ImageDocument;
+            CopyPointerAddressMenuItem.IsEnabled = document != null
+                && document.HasSourcePointerAddress;
+            CopyDataAddressMenuItem.IsEnabled = document != null
+                && document.HasDataAddress;
+        }
+
+        private void CopyPointerAddress_Click(object sender, RoutedEventArgs e)
+        {
+            var document = ImageList.SelectedItem as ImageDocument;
+            if (document == null || !document.HasSourcePointerAddress)
+            {
+                SetTransientStatus("No pointer address is available");
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetText(document.FormattedSourcePointerAddress);
+                SetTransientStatus("Pointer address copied");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: pointer address copy failed. " + ex.Message);
+                SetTransientStatus("Address copy failed");
+            }
+        }
+
+        private void CopyDataAddress_Click(object sender, RoutedEventArgs e)
+        {
+            var document = ImageList.SelectedItem as ImageDocument;
+            if (document == null || !document.HasDataAddress)
+            {
+                SetTransientStatus("No data address is available");
+                return;
+            }
+
+            try
+            {
+                Clipboard.SetText(document.FormattedDataAddress);
+                SetTransientStatus("Pixel address copied");
+            }
+            catch (Exception ex)
+            {
+                DiagnosticsList.Items.Insert(0, "Error: data address copy failed. " + ex.Message);
+                SetTransientStatus("Address copy failed");
+            }
         }
 
         private void UpdateMapThisTypeMenuItem()
@@ -1263,7 +1353,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     processId,
                     buffer.Address,
                     buffer.BufferLength,
-                    buffer.Descriptor));
+                    buffer.Descriptor,
+                    sourcePointerAddress: buffer.SourcePointerAddress,
+                    sourcePointerLabel: buffer.SourcePointerLabel));
                 return true;
             }
             catch (Exception ex)
@@ -1425,7 +1517,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     processId,
                     address,
                     bufferLength,
-                    descriptor));
+                    descriptor,
+                    sourcePointerAddress: address,
+                    sourcePointerLabel: GetLeafMemberName(members.Data)));
             }
             catch (Exception ex)
             {
@@ -2607,7 +2701,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 openWatch.Elapsed.TotalMilliseconds));
         }
 
-        private void OpenLiveMemory(VisualizerHandoffRequest request)
+        private void OpenLiveMemory(
+            VisualizerHandoffRequest request,
+            string? displayNameOverride = null)
         {
             if (!request.IsLiveMemory || request.LiveDescriptor == null)
             {
@@ -2628,6 +2724,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var resolvedSourceType = string.IsNullOrWhiteSpace(request.SourceType)
                 ? "Debugger live memory"
                 : request.SourceType;
+            var resolvedDisplayName = string.IsNullOrWhiteSpace(displayNameOverride)
+                ? request.DisplayName
+                : displayNameOverride!;
             var existingDocument = FindHandoffDocument(request.HandoffId);
             if (existingDocument != null)
             {
@@ -2636,10 +2735,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     displayPath,
                     source,
                     request.LiveDescriptor,
-                    request.DisplayName,
+                    resolvedDisplayName,
                     resolvedSourceType,
                     false,
-                    false);
+                    false,
+                    request.LiveProcessId,
+                    request.LiveBufferAddress,
+                    request.SourcePointerAddress,
+                    request.SourcePointerLabel);
                 ImageList.Items.Refresh();
                 if (wasActive)
                 {
@@ -2662,12 +2765,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     displayPath,
                     source,
                     request.LiveDescriptor,
-                    request.DisplayName,
+                    resolvedDisplayName,
                     resolvedSourceType,
                     false,
                     request.HandoffId,
-                    false);
-            _workspace.Add(document);
+                    false,
+                    request.LiveProcessId,
+                    request.LiveBufferAddress,
+                    request.SourcePointerAddress,
+                    request.SourcePointerLabel);
+                _workspace.Add(document);
                 if (!_automaticScanRunning)
                 {
                     ActivateDocument(document);
@@ -2749,7 +2856,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ErrorMessage = document == null ? string.Empty : document.ErrorMessage,
                 ErrorDetails = document == null ? string.Empty : document.ErrorDetails,
                 Descriptor = document == null || document.IsError ? string.Empty : FormatDescriptorForReport(document),
-                DisplayPath = document == null ? string.Empty : document.DisplayPath,
+                DisplayPath = document == null
+                    ? string.Empty
+                    : document.HasDataAddress
+                        ? "Debugger memory source (address omitted)"
+                        : document.DisplayPath,
                 PackageLogPath = Path.Combine(VisualStudioTempStore.RootDirectory, "package.log"),
                 ActivityLogPath = GetLatestActivityLogPath()
             };
@@ -2971,6 +3082,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void ImageList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             UpdateMapThisTypeMenuItem();
+            UpdateCopyAddressMenuItems();
             if (_syncingDocumentSelection)
             {
                 return;
@@ -3449,6 +3561,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             ImageList.Items.Refresh();
+            DescriptorText.Text = FormatDescriptor(document);
             ShowSourceUnavailableState(e.Exception.Message);
         }
 
@@ -3456,7 +3569,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             DiagnosticsList.Items.Insert(
                 0,
-                "Warning: live debugger memory is unavailable. The last rendered image remains visible; pause at a valid breakpoint and open the visualizer again. "
+                "Warning: live debugger memory is unavailable. The viewer stopped reading this source; pause at a valid breakpoint and open the visualizer again. "
                 + message);
             _lastHoverX = -1;
             _lastHoverY = -1;
@@ -4246,7 +4359,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             var showPrimaryLabels = nextMode != LayoutMode.Narrow;
             OpenButtonText.Visibility = showPrimaryLabels ? Visibility.Visible : Visibility.Collapsed;
-            ClearButtonText.Visibility = showPrimaryLabels ? Visibility.Visible : Visibility.Collapsed;
             SaveButtonText.Visibility = showPrimaryLabels ? Visibility.Visible : Visibility.Collapsed;
             FitButtonText.Visibility = Visibility.Visible;
             ActualSizeButtonText.Visibility = Visibility.Visible;
@@ -4610,6 +4722,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     var document = _documents[i];
                     builder.AppendLine("    {");
+                    AppendJsonProperty(builder, "objectName", document.ObjectName, true, 6);
                     AppendJsonProperty(builder, "title", document.Title, true, 6);
                     AppendJsonProperty(builder, "summary", document.Summary, true, 6);
                     AppendJsonProperty(builder, "sourceType", document.SourceType, true, 6);
@@ -4618,6 +4731,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     AppendJsonProperty(builder, "stride", document.Descriptor.Stride, true, 6);
                     AppendJsonProperty(builder, "pixelFormat", document.Descriptor.PixelFormat.ToString(), true, 6);
                     AppendJsonProperty(builder, "sourceMode", GetSourceMode(document.Source), true, 6);
+                    AppendJsonProperty(builder, "sourceProcessId", document.DebuggeeProcessId, true, 6);
+                    AppendJsonProperty(builder, "sourceAddress", document.FormattedDataAddress, true, 6);
+                    AppendJsonProperty(builder, "sourcePointerLabel", document.SourcePointerLabel, true, 6);
+                    AppendJsonProperty(builder, "sourcePointerAddress", document.FormattedSourcePointerAddress, true, 6);
+                    AppendJsonProperty(builder, "sourceAddressState", document.SourceAddressState, true, 6);
                     AppendJsonProperty(builder, "isError", document.IsError, true, 6);
                     AppendJsonProperty(builder, "isAutomaticInspection", document.IsAutomaticInspection, true, 6);
                     AppendJsonProperty(builder, "automaticMappingRequired", document.AutomaticMappingRequired, true, 6);
@@ -5131,6 +5249,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 bitmap.Freeze();
                 return bitmap;
             }
+            catch (RawImageSourceUnavailableException)
+            {
+                // A live debugger source must prove that its current process/address
+                // can be read before the handoff is accepted. Other thumbnail-only
+                // failures may still fall back to a blank list thumbnail.
+                throw;
+            }
             catch
             {
                 return null;
@@ -5174,9 +5299,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     document.DisplayPath);
             }
 
-            return string.Format(
+            var builder = new StringBuilder();
+            builder.AppendFormat(
                 CultureInfo.InvariantCulture,
-                "Type       {0}\nWidth      {1}\nHeight     {2}\nStride     {3}\nMin Stride {4}\nFormat     {5}\nValid Bits {6}\nByte Order {7}\nBytes      {8:N0}\nExpected   {9:N0}\nFile       {10}",
+                "Type       {0}\nWidth      {1}\nHeight     {2}\nStride     {3}\nMin Stride {4}\nFormat     {5}\nValid Bits {6}\nByte Order {7}\nBytes      {8:N0}\nExpected   {9:N0}",
                 document.SourceType,
                 document.Descriptor.Width,
                 document.Descriptor.Height,
@@ -5186,14 +5312,49 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 document.Descriptor.ValidBits,
                 document.Descriptor.ByteOrder,
                 document.Source.Length,
-                document.Descriptor.GetRequiredByteCount(),
-                document.DisplayPath);
+                document.Descriptor.GetRequiredByteCount());
+            if (document.HasDataAddress)
+            {
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    "\nBacking    {0}\nProcess    {1}",
+                    document.SourceAddressState,
+                    document.DebuggeeProcessId);
+            }
+
+            if (document.HasSourcePointerAddress)
+            {
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    "\n{0} Addr  {1}",
+                    document.SourcePointerLabel,
+                    document.FormattedSourcePointerAddress);
+            }
+
+            if (document.HasDataAddress)
+            {
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    "\nPixel Addr {0}",
+                    document.FormattedDataAddress);
+            }
+
+            if (!document.Source.IsLiveProcessBacked)
+            {
+                builder.AppendFormat(
+                    CultureInfo.InvariantCulture,
+                    "\nFile       {0}",
+                    document.DisplayPath);
+            }
+
+            return builder.ToString();
         }
 
         private sealed class ImageDocument : IDisposable
         {
             public string DisplayPath { get; private set; }
             public string Title { get; private set; }
+            public string ObjectName { get; private set; }
             public string SourceType { get; private set; }
             public RawImageSource Source { get; private set; }
             public RawImageDescriptor Descriptor { get; private set; }
@@ -5210,6 +5371,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public List<VisualizerMemberInventoryItem>? MemberInventory { get; private set; }
             public string ItemAssemblyName { get; private set; }
             public int DebuggeeProcessId { get; private set; }
+            public long DataAddress { get; private set; }
+            public long SourcePointerAddress { get; private set; }
+            public string SourcePointerLabel { get; private set; }
             public bool IsAutomaticInspection { get; private set; }
             public int AutomaticConfidence { get; private set; }
             public string AutomaticMembersSummary { get; private set; }
@@ -5290,6 +5454,217 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 get { return !string.IsNullOrWhiteSpace(SourceUnavailableMessage); }
             }
 
+            public bool HasDataAddress
+            {
+                get
+                {
+                    return DebuggeeProcessId > 0
+                        && DataAddress != 0;
+                }
+            }
+
+            public string FormattedDataAddress
+            {
+                get
+                {
+                    return HasDataAddress
+                        ? "0x" + unchecked((ulong)DataAddress).ToString("X", CultureInfo.InvariantCulture)
+                        : string.Empty;
+                }
+            }
+
+            public bool HasSourcePointerAddress
+            {
+                get
+                {
+                    return DebuggeeProcessId > 0
+                        && SourcePointerAddress != 0;
+                }
+            }
+
+            public string FormattedSourcePointerAddress
+            {
+                get
+                {
+                    return HasSourcePointerAddress
+                        ? "0x" + unchecked((ulong)SourcePointerAddress).ToString("X", CultureInfo.InvariantCulture)
+                        : string.Empty;
+                }
+            }
+
+            public bool SourcePointerIsPixelAddress
+            {
+                get
+                {
+                    return HasSourcePointerAddress
+                        && HasDataAddress
+                        && SourcePointerAddress == DataAddress;
+                }
+            }
+
+            public string SourceAddressState
+            {
+                get
+                {
+                    if (!HasDataAddress)
+                    {
+                        return string.Empty;
+                    }
+
+                    if (IsSourceUnavailable)
+                    {
+                        return "UNAVAILABLE";
+                    }
+
+                    if (IsPreview)
+                    {
+                        return "PREVIEW";
+                    }
+
+                    return Source.IsLiveProcessBacked
+                        ? "LIVE"
+                        : "CAPTURED";
+                }
+            }
+
+            public string SourceAddressText
+            {
+                get
+                {
+                    if (!HasDataAddress || SourcePointerIsPixelAddress)
+                    {
+                        return string.Empty;
+                    }
+
+                    return string.Format(
+                        CultureInfo.InvariantCulture,
+                        "Pixels   {0}",
+                        FormattedDataAddress);
+                }
+            }
+
+            public string SourcePointerText
+            {
+                get
+                {
+                    if (!HasSourcePointerAddress)
+                    {
+                        return string.Empty;
+                    }
+
+                    return string.Format(
+                        CultureInfo.InvariantCulture,
+                        SourcePointerIsPixelAddress ? "{0} / Pixels   {1}" : "{0}   {1}",
+                        SourcePointerLabel,
+                        FormattedSourcePointerAddress);
+                }
+            }
+
+            public string SourceStateText
+            {
+                get
+                {
+                    if (!HasDataAddress && !HasSourcePointerAddress)
+                    {
+                        return string.Empty;
+                    }
+
+                    return string.Format(
+                        CultureInfo.InvariantCulture,
+                        IsSourceUnavailable
+                            ? "UNAVAILABLE · last PID {0}"
+                            : "{1} · PID {0}",
+                        DebuggeeProcessId,
+                        SourceAddressState);
+                }
+            }
+
+            public string SourceAddressToolTip
+            {
+                get
+                {
+                    if (!HasDataAddress && !HasSourcePointerAddress)
+                    {
+                        return string.Empty;
+                    }
+
+                    string meaning;
+                    switch (SourceAddressState)
+                    {
+                        case "LIVE":
+                            meaning = "Reads the current bytes at this PID/address. Meaningful only while paused and the original owner still owns the buffer; address reuse can show different data without an error.";
+                            break;
+                        case "PREVIEW":
+                            meaning = "Sampled preview captured from this location while the full image was loading.";
+                            break;
+                        case "CAPTURED":
+                            meaning = "Copied at visualization time. The address is historical provenance, not a live read.";
+                            break;
+                        default:
+                            meaning = "The last observed location is no longer readable by this viewer.";
+                            break;
+                    }
+
+                    var builder = new StringBuilder();
+                    if (HasSourcePointerAddress)
+                    {
+                        builder.AppendFormat(
+                            CultureInfo.InvariantCulture,
+                            "{0}: {1}\n",
+                            SourcePointerLabel,
+                            FormattedSourcePointerAddress);
+                    }
+
+                    if (HasDataAddress)
+                    {
+                        builder.AppendFormat(
+                            CultureInfo.InvariantCulture,
+                            "Pixel address: {0}\n",
+                            FormattedDataAddress);
+                    }
+
+                    builder.AppendFormat(
+                        CultureInfo.InvariantCulture,
+                        "Process: {0}\nState: {1}\n{2}\n",
+                        DebuggeeProcessId,
+                        SourceAddressState,
+                        meaning);
+                    if (string.Equals(SourcePointerLabel, "Scan0", StringComparison.Ordinal))
+                    {
+                        builder.Append("Bitmap Scan0 is observed only while LockBits is active and is shown as captured provenance, never as a live pointer.\n");
+                    }
+
+                    builder.Append("The source pointer identifies the wrapper/native source contract; the pixel address is used to read image bytes. They may differ.");
+                    return builder.ToString();
+                }
+            }
+
+            public string AccessibilityText
+            {
+                get
+                {
+                    return string.Join(
+                        ". ",
+                        new[] { ObjectName, Summary, SourcePointerText, SourceAddressText, SourceStateText }
+                            .Where(value => !string.IsNullOrWhiteSpace(value)));
+                }
+            }
+
+            public Visibility SourceAddressVisibility
+            {
+                get { return HasDataAddress && !SourcePointerIsPixelAddress ? Visibility.Visible : Visibility.Collapsed; }
+            }
+
+            public Visibility SourcePointerVisibility
+            {
+                get { return HasSourcePointerAddress ? Visibility.Visible : Visibility.Collapsed; }
+            }
+
+            public Visibility SourceStateVisibility
+            {
+                get { return HasDataAddress || HasSourcePointerAddress ? Visibility.Visible : Visibility.Collapsed; }
+            }
+
             public string Summary
             {
                 get
@@ -5305,8 +5680,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         CultureInfo.InvariantCulture,
                         "{0}{1}{2}{3} x {4}  {5}  stride {6}  {7}",
                         IsAutomaticInspection ? AutomaticConfidenceText + "  " : string.Empty,
-                        IsSourceUnavailable ? "Unavailable  " : string.Empty,
-                        IsPreview ? "Preview  " : string.Empty,
+                        !HasDataAddress && IsSourceUnavailable ? "Unavailable  " : string.Empty,
+                        !HasDataAddress && IsPreview ? "Preview  " : string.Empty,
                         Descriptor.Width,
                         Descriptor.Height,
                         Descriptor.PixelFormat,
@@ -5323,14 +5698,34 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 string sourceType,
                 bool deleteSnapshotDirectoryOnDispose = false,
                 string? handoffId = null,
-                bool isPreview = false)
+                bool isPreview = false,
+                int debuggeeProcessId = 0,
+                long dataAddress = 0,
+                long sourcePointerAddress = 0,
+                string? sourcePointerLabel = null)
             {
+                if ((dataAddress != 0 || sourcePointerAddress != 0) && debuggeeProcessId <= 0)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        "debuggeeProcessId",
+                        "A data address requires a positive debuggee process ID.");
+                }
+
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = string.IsNullOrWhiteSpace(title) ? CreateTitle(DisplayPath) : title!.Trim();
+                ObjectName = Title;
                 SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Source = source ?? throw new ArgumentNullException("source");
                 Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
-                Thumbnail = CreateThumbnailSource(Source, Descriptor);
+                try
+                {
+                    Thumbnail = CreateThumbnailSource(Source, Descriptor);
+                }
+                catch
+                {
+                    Source.Dispose();
+                    throw;
+                }
                 ErrorMessage = string.Empty;
                 ErrorType = string.Empty;
                 ErrorDetails = string.Empty;
@@ -5341,7 +5736,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SourceUnavailableMessage = string.Empty;
                 MemberInventory = null;
                 ItemAssemblyName = string.Empty;
-                DebuggeeProcessId = 0;
+                DebuggeeProcessId = debuggeeProcessId;
+                DataAddress = dataAddress;
+                SourcePointerAddress = sourcePointerAddress;
+                SourcePointerLabel = sourcePointerAddress == 0
+                    ? string.Empty
+                    : string.IsNullOrWhiteSpace(sourcePointerLabel) ? "Ptr" : sourcePointerLabel!.Trim();
                 IsAutomaticInspection = false;
                 AutomaticConfidence = 0;
                 AutomaticMembersSummary = string.Empty;
@@ -5372,6 +5772,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = "Open failed: " + CreateTitle(DisplayPath);
+                ObjectName = CreateTitle(DisplayPath);
                 SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Descriptor = new RawImageDescriptor
                 {
@@ -5395,6 +5796,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 MemberInventory = memberInventory;
                 ItemAssemblyName = itemAssemblyName ?? string.Empty;
                 DebuggeeProcessId = debuggeeProcessId;
+                DataAddress = 0;
+                SourcePointerAddress = 0;
+                SourcePointerLabel = string.Empty;
                 IsAutomaticInspection = false;
                 AutomaticConfidence = 0;
                 AutomaticMembersSummary = string.Empty;
@@ -5444,7 +5848,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     Title,
                     SourceType,
                     false,
-                    _snapshotLeaseOwner.HasLease);
+                    _snapshotLeaseOwner.HasLease,
+                    DebuggeeProcessId,
+                    DataAddress,
+                    SourcePointerAddress,
+                    SourcePointerLabel);
             }
 
             public void ReplaceSource(
@@ -5454,30 +5862,63 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 string? title,
                 string sourceType,
                 bool isPreview,
-                bool deleteSnapshotDirectoryOnDispose)
+                bool deleteSnapshotDirectoryOnDispose,
+                int debuggeeProcessId = 0,
+                long dataAddress = 0,
+                long sourcePointerAddress = 0,
+                string? sourcePointerLabel = null)
             {
                 if (source == null)
                 {
                     throw new ArgumentNullException("source");
                 }
 
+                if ((dataAddress != 0 || sourcePointerAddress != 0) && debuggeeProcessId <= 0)
+                {
+                    throw new ArgumentOutOfRangeException(
+                        "debuggeeProcessId",
+                        "A data address requires a positive debuggee process ID.");
+                }
+
                 var nextDisplayPath = GetDisplayPath(displayPath);
                 var nextDescriptor = descriptor == null
                     ? throw new ArgumentNullException("descriptor")
                     : descriptor.Clone();
-                var nextThumbnail = CreateThumbnailSource(source, nextDescriptor);
                 var previousSource = Source;
-                var previousSnapshotDirectory = _snapshotLeaseOwner.Replace(
-                    nextDisplayPath,
-                    deleteSnapshotDirectoryOnDispose);
+                BitmapSource? nextThumbnail;
+                string? previousSnapshotDirectory;
+                try
+                {
+                    nextThumbnail = CreateThumbnailSource(source, nextDescriptor);
+                    previousSnapshotDirectory = _snapshotLeaseOwner.Replace(
+                        nextDisplayPath,
+                        deleteSnapshotDirectoryOnDispose);
+                }
+                catch
+                {
+                    if (!ReferenceEquals(previousSource, source))
+                    {
+                        source.Dispose();
+                    }
+
+                    throw;
+                }
+
                 DisplayPath = nextDisplayPath;
                 Title = string.IsNullOrWhiteSpace(title) ? CreateTitle(DisplayPath) : title!.Trim();
+                ObjectName = Title;
                 SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Source = source;
                 Descriptor = nextDescriptor;
                 Thumbnail = nextThumbnail;
                 ViewState = null;
                 IsPreview = isPreview;
+                DebuggeeProcessId = debuggeeProcessId;
+                DataAddress = dataAddress;
+                SourcePointerAddress = sourcePointerAddress;
+                SourcePointerLabel = sourcePointerAddress == 0
+                    ? string.Empty
+                    : string.IsNullOrWhiteSpace(sourcePointerLabel) ? "Ptr" : sourcePointerLabel!.Trim();
                 ErrorMessage = string.Empty;
                 ErrorType = string.Empty;
                 ErrorDetails = string.Empty;

@@ -19,7 +19,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
     // The in-process package stays isolated from the newer out-of-process Extensibility SDK.
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.2")]
+    [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.6")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(
@@ -78,6 +79,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     _debuggerEvents = dte.Events.DebuggerEvents;
                     _debuggerEvents.OnEnterBreakMode += OnEnterBreakMode;
                     _debuggerEvents.OnEnterRunMode += OnEnterRunMode;
+                    _debuggerEvents.OnEnterDesignMode += OnEnterDesignMode;
                     WriteAutomationLog("DebuggerEvents subscribed");
                     try
                     {
@@ -99,15 +101,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
-                StartInboxWatcher();
-            }
-            catch (Exception ex)
-            {
-                WriteAutomationLog("StartInboxWatcher error " + ex);
-            }
-
-            try
-            {
                 _vsDebugger = await GetServiceAsync(typeof(SVsShellDebugger)) as IVsDebugger;
                 if (_vsDebugger != null)
                 {
@@ -120,7 +113,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 WriteAutomationLog("Native debugger callback subscribe error " + ex);
             }
 
-            ScheduleNextInboxPoll(ScanInbox());
+            // The out-of-process debugger visualizer can block DTE command
+            // dispatch until its control has been created. Listen before the
+            // first visualizer click so its newly published handoff can wake
+            // the docked window without loading this package recursively.
+            EnsureInboxMonitoringStarted();
             WriteAutomationLog("InitializeAsync end");
         }
 
@@ -135,6 +132,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     {
                         _debuggerEvents.OnEnterBreakMode -= OnEnterBreakMode;
                         _debuggerEvents.OnEnterRunMode -= OnEnterRunMode;
+                        _debuggerEvents.OnEnterDesignMode -= OnEnterDesignMode;
                     }
                     catch (Exception ex)
                     {
@@ -181,7 +179,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _watcher.Created += OnHandoffCreated;
             _watcher.Renamed += OnHandoffRenamed;
             _watcher.EnableRaisingEvents = true;
-            _inboxPollTimer = new Timer(_ => PollInbox(), null, InboxPollMinInterval, Timeout.InfiniteTimeSpan);
+            // Initialization only arms the file-system event path. Polling is
+            // enabled after a handoff event or an explicit ToolWindow command.
+            _inboxPollTimer = new Timer(_ => PollInbox(), null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        }
+
+        private void EnsureInboxMonitoringStarted()
+        {
+            if (_watcher != null)
+            {
+                return;
+            }
+
+            try
+            {
+                StartInboxWatcher();
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("StartInboxWatcher error " + ex);
+            }
         }
 
         private async Task RegisterCommandsAsync(CancellationToken cancellationToken)
@@ -255,6 +272,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void OnEnterRunMode(EnvDTE.dbgEventReason reason)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            LeaveBreakMode("Run mode entered");
+        }
+
+        private void OnEnterDesignMode(EnvDTE.dbgEventReason reason)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            LeaveBreakMode("Debug session ended");
+        }
+
+        private void LeaveBreakMode(string eventDescription)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
             _handoffSessionGate.EnterRunMode();
             VisualStudioDebugFrameContext.SetCurrentThread(null);
             try
@@ -262,13 +291,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
                 var invalidatedCount = window == null ? 0 : window.InvalidateLiveSources();
                 WriteAutomationLog(
-                    "Run mode entered; invalidated "
+                    eventDescription + "; invalidated "
                     + invalidatedCount.ToString(CultureInfo.InvariantCulture)
                     + " live source(s)");
             }
             catch (Exception ex)
             {
-                WriteAutomationLog("Run mode live-source invalidation error " + ex);
+                WriteAutomationLog(eventDescription + " live-source invalidation error " + ex);
             }
         }
 
@@ -518,6 +547,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             ErrorHandler.ThrowOnFailure(frame.Show());
+            EnsureInboxMonitoringStarted();
             return (RawBufferToolWindow)window;
         }
 

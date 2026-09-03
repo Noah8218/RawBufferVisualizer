@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.0.2";
+        public const string CurrentVersion = "2.0.6";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#202";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#206";
 
         public const string HighlightEnvironmentCheck =
-            "Visual Studio 2022 17.9+ support is restored";
+            "Package version advanced because public 2.0.5 is immutable";
 
         public const string HighlightColdPreview =
-            "Visual Studio-native icons and clearer empty-image guidance";
+            "Pointer, object-name, and array behavior is unchanged";
 
         public const string HighlightPanelToggles =
-            "Supported Mat collections are included automatically";
+            "Visual Studio 2022 17.9+ compatibility is retained";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

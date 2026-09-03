@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Sdk;
 
@@ -16,7 +17,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(outgoingData, GetView(target).Summary);
+            var summary = GetView(target).Summary;
+            summary.ExpressionIdentityHash = RuntimeHelpers.GetHashCode(target);
+            SerializeAsJson(outgoingData, summary);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
@@ -100,6 +103,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public int TotalCount { get; set; }
         public int ItemCount { get; set; }
         public string SourceType { get; set; } = string.Empty;
+        public int ExpressionIdentityHash { get; set; }
     }
 
     public sealed class VisualizerCollectionItemMetadata
@@ -280,7 +284,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     rawView.GetBufferLength(),
                     rawView.Buffer,
                     typeof(RawBufferView).FullName ?? nameof(RawBufferView),
-                    displayName);
+                    displayName,
+                    rawView.Buffer,
+                    "Buffer");
                 return new ImageCollectionItemTransfer(
                     metadata,
                     request => RawBufferViewVisualizerTransfer.CreateChunk(rawView, request),

@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Reflection.Emit;
@@ -42,6 +44,9 @@ namespace RawBufferVisualizer.Tests
                 TileRenderMatchesFullRender();
                 FileBackedSourceRendersLikeMemory();
                 ProcessMemorySourceRendersLikeMemory();
+                ProcessMemorySourceReadsLatestBytesAtSameAddress();
+                ProcessMemorySourceReadsReplacementAtReallocatedAddress();
+                ProcessMemorySourceReportsUnavailableAfterVirtualFree();
                 DisposedProcessMemorySourceRejectsFurtherReads();
                 ProcessMemorySourceReportsUnavailableAfterProcessExit();
                 FileBackedSampledRenderHonorsCancellation();
@@ -66,8 +71,13 @@ namespace RawBufferVisualizer.Tests
                 VisualizerSnapshotStoreWritesChunkedSnapshot();
                 VisualizerSnapshotStoreWritesCollection();
                 RawBufferViewCreatesDescriptorAndChunks();
+                ProducerPointerReadsCurrentBytesAtSameAddress();
+                ProducerPointerReadsAcrossReadablePageBoundary();
+                ProducerPointerReadsFailClosedAfterFree();
+                ProducerPointerReadsRejectProtectedBoundary();
                 ImagePtrVisualizerObjectSourceCreatesChunks();
                 BitmapVisualizerObjectSourceCreatesTransfer();
+                BitmapVisualizerObjectSourceNormalizesNegativeStride();
                 MatVisualizerObjectSourceCreatesChunks();
                 OpenCvSharpMatVisualizerObjectSourceSupportsLegacyMatWithoutDims();
                 EmguCvMatVisualizerObjectSourceCreatesChunks();
@@ -488,6 +498,159 @@ namespace RawBufferVisualizer.Tests
                 Assert(
                     failure!.Message.IndexOf("debuggee", StringComparison.OrdinalIgnoreCase) >= 0,
                     "Source-unavailable failure should identify the debuggee source.");
+            }
+        }
+
+        private static void ProcessMemorySourceReadsLatestBytesAtSameAddress()
+        {
+            var buffer = new byte[] { 17 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            var descriptor = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
+            try
+            {
+                var address = handle.AddrOfPinnedObject().ToInt64();
+                using (var firstObservation = RawImageSource.FromProcessMemory(
+                    Process.GetCurrentProcess().Id,
+                    address,
+                    buffer.LongLength,
+                    descriptor))
+                using (var secondObservation = RawImageSource.FromProcessMemory(
+                    Process.GetCurrentProcess().Id,
+                    address,
+                    buffer.LongLength,
+                    descriptor))
+                {
+                    Assert(
+                        firstObservation.DescribePixel(0, 0).Contains("Value=17"),
+                        "The first same-address observation did not read its initial value.");
+
+                    buffer[0] = 203;
+                    Assert(
+                        firstObservation.DescribePixel(0, 0).Contains("Value=203")
+                        && secondObservation.DescribePixel(0, 0).Contains("Value=203"),
+                        "Live sources at the same address should read the current bytes instead of acting as historical snapshots.");
+                }
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
+        private static void ProcessMemorySourceReportsUnavailableAfterVirtualFree()
+        {
+            const uint memCommit = 0x1000;
+            const uint memReserve = 0x2000;
+            const uint memRelease = 0x8000;
+            const uint pageReadWrite = 0x04;
+            var address = VirtualAlloc(
+                IntPtr.Zero,
+                new UIntPtr(4096),
+                memCommit | memReserve,
+                pageReadWrite);
+            if (address == IntPtr.Zero)
+            {
+                throw new InvalidOperationException(
+                    "VirtualAlloc failed for the process-memory release test. Win32 error "
+                    + Marshal.GetLastWin32Error().ToString(CultureInfo.InvariantCulture)
+                    + ".");
+            }
+
+            var descriptor = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
+            var released = false;
+            try
+            {
+                Marshal.WriteByte(address, 61);
+                using (var source = RawImageSource.FromProcessMemory(
+                    Process.GetCurrentProcess().Id,
+                    address.ToInt64(),
+                    1,
+                    descriptor))
+                {
+                    Assert(
+                        source.DescribePixel(0, 0).Contains("Value=61"),
+                        "Allocated process memory was not readable before release.");
+                    released = VirtualFree(address, UIntPtr.Zero, memRelease);
+                    Assert(released, "VirtualFree failed for the process-memory release test.");
+
+                    RawImageSourceUnavailableException? failure = null;
+                    try
+                    {
+                        source.RenderTile(0, 0, 1, 1, null);
+                    }
+                    catch (RawImageSourceUnavailableException ex)
+                    {
+                        failure = ex;
+                    }
+
+                    Assert(
+                        failure != null,
+                        "Released process memory should become a controlled source-unavailable failure.");
+                }
+            }
+            finally
+            {
+                if (!released)
+                {
+                    VirtualFree(address, UIntPtr.Zero, memRelease);
+                }
+            }
+        }
+
+        private static void ProcessMemorySourceReadsReplacementAtReallocatedAddress()
+        {
+            const uint memCommit = 0x1000;
+            const uint memReserve = 0x2000;
+            const uint memRelease = 0x8000;
+            const uint pageReadWrite = 0x04;
+            var address = VirtualAlloc(
+                IntPtr.Zero,
+                new UIntPtr(4096),
+                memCommit | memReserve,
+                pageReadWrite);
+            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the same-address replacement test.");
+
+            var allocated = true;
+            var descriptor = CreateDescriptor(1, 1, 1, RawPixelFormat.Mono8, 8);
+            try
+            {
+                Marshal.WriteByte(address, 41);
+                using (var source = RawImageSource.FromProcessMemory(
+                    Process.GetCurrentProcess().Id,
+                    address.ToInt64(),
+                    1,
+                    descriptor))
+                {
+                    Assert(
+                        source.DescribePixel(0, 0).Contains("Value=41"),
+                        "The original allocation was not readable before replacement.");
+
+                    Assert(
+                        VirtualFree(address, UIntPtr.Zero, memRelease),
+                        "VirtualFree failed before the same-address replacement.");
+                    allocated = false;
+                    var replacement = VirtualAlloc(
+                        address,
+                        new UIntPtr(4096),
+                        memCommit | memReserve,
+                        pageReadWrite);
+                    Assert(
+                        replacement == address,
+                        "Windows did not recreate the test allocation at the requested address.");
+                    allocated = true;
+                    Marshal.WriteByte(replacement, 219);
+
+                    Assert(
+                        source.DescribePixel(0, 0).Contains("Value=219"),
+                        "A live source should read replacement bytes when the address is reused before its next read.");
+                }
+            }
+            finally
+            {
+                if (allocated)
+                {
+                    VirtualFree(address, UIntPtr.Zero, memRelease);
+                }
             }
         }
 
@@ -1023,6 +1186,8 @@ namespace RawBufferVisualizer.Tests
             var snapshot = RawBufferSnapshot.FromByteArray(new byte[] { 1, 2, 3, 4, 5, 6 }, descriptor);
             var transfer = RawBufferSnapshotObjectSource.CreateTransfer(snapshot, "chunked");
             var metadata = VisualizerChunkedTransfer.CreateMetadata(transfer);
+            var identityTarget = new object();
+            VisualizerChunkedTransfer.AttachExpressionIdentity(metadata, identityTarget);
             var chunk = VisualizerChunkedTransfer.CreateChunk(
                 transfer,
                 new VisualizerSnapshotChunkRequest
@@ -1033,6 +1198,9 @@ namespace RawBufferVisualizer.Tests
 
             Assert(metadata.BufferLength == 6, "Chunk metadata buffer length failed.");
             Assert(metadata.ChunkSize == VisualizerChunkedTransfer.DefaultChunkSize, "Chunk metadata size failed.");
+            Assert(
+                metadata.ExpressionIdentityHash == System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(identityTarget),
+                "Debugger expression identity metadata failed.");
             Assert(chunk.Offset == 2, "Chunk offset failed.");
             Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 3 && chunk.Buffer[2] == 5, "Chunk data failed.");
             Assert(!chunk.IsLastChunk, "Chunk last flag failed.");
@@ -1141,7 +1309,9 @@ namespace RawBufferVisualizer.Tests
                 BufferLength = buffer.Length,
                 ChunkSize = 2,
                 SourceType = "Test.Image",
-                DisplayName = "[0]"
+                DisplayName = "[0]",
+                ProcessId = 4242,
+                BufferAddress = 0x12345678
             };
             var results = VisualizerSnapshotStore.WriteCollection(
                 new VisualizerCollectionSummary
@@ -1182,6 +1352,10 @@ namespace RawBufferVisualizer.Tests
             {
                 Assert(results.Count == 2, "Collection snapshot result count failed.");
                 Assert(!results[0].IsError && File.Exists(results[0].MetadataPath), "Collection success item was not stored.");
+                Assert(
+                    results[0].DebuggeeProcessId == metadata.ProcessId
+                    && results[0].DebuggeeBufferAddress == metadata.BufferAddress,
+                    "Collection snapshot did not preserve source address provenance for the Classic visualizer.");
                 Assert(results[1].IsError && results[1].ErrorMessage.Contains("Unsupported"), "Collection error item was not preserved.");
                 var restored = RawBufferSnapshot.Load(results[0].MetadataPath);
                 Assert(restored.Buffer[0] == 7 && restored.Buffer[3] == 10, "Collection stored snapshot data failed.");
@@ -1224,6 +1398,10 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.SupportsDirectMemory, "RawBufferView should advertise direct debugger memory.");
                 Assert(metadata.ProcessId == Process.GetCurrentProcess().Id, "RawBufferView direct-memory process ID failed.");
                 Assert(metadata.BufferAddress == view.Buffer.ToInt64(), "RawBufferView direct-memory address failed.");
+                Assert(
+                    metadata.SourcePointerAddress == view.Buffer.ToInt64()
+                    && metadata.SourcePointerLabel == "Buffer",
+                    "RawBufferView source-pointer provenance failed.");
 
                 var chunk = RawBufferViewVisualizerTransfer.CreateChunk(
                     view,
@@ -1241,6 +1419,237 @@ namespace RawBufferVisualizer.Tests
             {
                 handle.Free();
             }
+        }
+
+        private static void ProducerPointerReadsFailClosedAfterFree()
+        {
+            const uint memCommit = 0x1000;
+            const uint memReserve = 0x2000;
+            const uint memRelease = 0x8000;
+            const uint pageReadWrite = 0x04;
+
+            var address = VirtualAlloc(
+                IntPtr.Zero,
+                new UIntPtr(1),
+                memCommit | memReserve,
+                pageReadWrite);
+            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the producer freed-pointer test.");
+
+            var allocated = true;
+            try
+            {
+                Marshal.WriteByte(address, 0, 42);
+                var view = new RawBufferView
+                {
+                    Buffer = address,
+                    BufferLength = 1,
+                    Width = 1,
+                    Height = 1,
+                    Stride = 1,
+                    PixelFormat = RawPixelFormat.Mono8,
+                    Channels = 1,
+                    BitDepth = 8
+                };
+
+                Assert(
+                    VirtualFree(address, UIntPtr.Zero, memRelease),
+                    "VirtualFree failed for the producer freed-pointer test.");
+                allocated = false;
+
+                AssertProducerPointerReadFails(
+                    () => RawBufferViewVisualizerTransfer.CreateChunk(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Offset = 0,
+                            Count = 1
+                        }),
+                    "Freed producer chunk");
+                AssertProducerPointerReadFails(
+                    () => RawBufferViewVisualizerTransfer.CreatePreview(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Operation = VisualizerSnapshotOperation.Preview,
+                            MaximumWidth = 1,
+                            MaximumHeight = 1
+                        }),
+                    "Freed producer preview");
+            }
+            finally
+            {
+                if (allocated)
+                {
+                    VirtualFree(address, UIntPtr.Zero, memRelease);
+                }
+            }
+        }
+
+        private static void ProducerPointerReadsCurrentBytesAtSameAddress()
+        {
+            var buffer = new byte[] { 19 };
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var view = new RawBufferView
+                {
+                    Buffer = handle.AddrOfPinnedObject(),
+                    BufferLength = 1,
+                    Width = 1,
+                    Height = 1,
+                    Stride = 1,
+                    PixelFormat = RawPixelFormat.Mono8,
+                    Channels = 1,
+                    BitDepth = 8
+                };
+                var request = new VisualizerSnapshotChunkRequest
+                {
+                    Offset = 0,
+                    Count = 1
+                };
+
+                var first = RawBufferViewVisualizerTransfer.CreateChunk(view, request);
+                buffer[0] = 211;
+                var second = RawBufferViewVisualizerTransfer.CreateChunk(view, request);
+
+                Assert(first.Buffer[0] == 19, "The first producer read did not capture the initial byte.");
+                Assert(second.Buffer[0] == 211, "Reopening the same producer address did not read its current byte.");
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
+        private static void ProducerPointerReadsAcrossReadablePageBoundary()
+        {
+            const uint memCommit = 0x1000;
+            const uint memReserve = 0x2000;
+            const uint memRelease = 0x8000;
+            const uint pageReadWrite = 0x04;
+
+            var pageSize = Environment.SystemPageSize;
+            var address = VirtualAlloc(
+                IntPtr.Zero,
+                new UIntPtr((uint)(pageSize * 2)),
+                memCommit | memReserve,
+                pageReadWrite);
+            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the readable page-boundary test.");
+
+            try
+            {
+                var imageAddress = IntPtr.Add(address, pageSize - 2);
+                Marshal.Copy(new byte[] { 0, 0, 128, 63 }, 0, imageAddress, 4);
+                var descriptor = CreateDescriptor(1, 1, 4, RawPixelFormat.Float32, 32);
+                var preview = VisualizerSampledPreview.Create(
+                    imageAddress,
+                    4,
+                    descriptor,
+                    "Test.Float32Boundary",
+                    "boundary",
+                    1,
+                    1);
+
+                Assert(
+                    preview.Buffer.Length == 4
+                    && preview.Buffer[0] == 128
+                    && preview.Buffer[1] == 128
+                    && preview.Buffer[2] == 128
+                    && preview.Buffer[3] == 255,
+                    "A readable Float32 value spanning two pages was not previewed correctly.");
+            }
+            finally
+            {
+                VirtualFree(address, UIntPtr.Zero, memRelease);
+            }
+        }
+
+        private static void ProducerPointerReadsRejectProtectedBoundary()
+        {
+            const uint memCommit = 0x1000;
+            const uint memReserve = 0x2000;
+            const uint memRelease = 0x8000;
+            const uint pageNoAccess = 0x01;
+            const uint pageReadWrite = 0x04;
+
+            var pageSize = Environment.SystemPageSize;
+            var totalLength = checked(pageSize * 2);
+            var address = VirtualAlloc(
+                IntPtr.Zero,
+                new UIntPtr((uint)totalLength),
+                memCommit | memReserve,
+                pageReadWrite);
+            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the producer protected-boundary test.");
+
+            try
+            {
+                var imageAddress = IntPtr.Add(address, pageSize - 4);
+                Marshal.Copy(new byte[] { 1, 2, 3, 4 }, 0, imageAddress, 4);
+                uint previousProtection;
+                Assert(
+                    VirtualProtect(
+                        IntPtr.Add(address, pageSize),
+                        new UIntPtr((uint)pageSize),
+                        pageNoAccess,
+                        out previousProtection),
+                    "VirtualProtect failed for the producer protected-boundary test.");
+
+                var view = new RawBufferView
+                {
+                    Buffer = imageAddress,
+                    BufferLength = 8,
+                    Width = 8,
+                    Height = 1,
+                    Stride = 8,
+                    PixelFormat = RawPixelFormat.Mono8,
+                    Channels = 1,
+                    BitDepth = 8
+                };
+
+                AssertProducerPointerReadFails(
+                    () => RawBufferViewVisualizerTransfer.CreateChunk(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Offset = 0,
+                            Count = 8
+                        }),
+                    "Partial producer chunk");
+                AssertProducerPointerReadFails(
+                    () => RawBufferViewVisualizerTransfer.CreatePreview(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Operation = VisualizerSnapshotOperation.Preview,
+                            MaximumWidth = 8,
+                            MaximumHeight = 1
+                        }),
+                    "Partial producer preview");
+            }
+            finally
+            {
+                VirtualFree(address, UIntPtr.Zero, memRelease);
+            }
+        }
+
+        private static void AssertProducerPointerReadFails(Action action, string context)
+        {
+            IOException? failure = null;
+            try
+            {
+                action();
+            }
+            catch (IOException ex)
+            {
+                failure = ex;
+            }
+
+            Assert(failure != null, context + " did not fail with a controlled IOException.");
+            Assert(
+                failure!.Message.Contains("Requested", StringComparison.Ordinal)
+                && failure.Message.Contains("read", StringComparison.Ordinal)
+                && failure.Message.Contains("Win32 error", StringComparison.Ordinal),
+                context + " did not report requested/read byte counts and the native error.");
         }
 
         private static void BitmapVisualizerObjectSourceCreatesTransfer()
@@ -1281,6 +1690,13 @@ namespace RawBufferVisualizer.Tests
                 var transfer = BitmapVisualizerTransfer.CreateTransfer((object)bitmap, "bitmap0");
 
                 Assert(metadata.BufferLength >= 6, "Bitmap visualizer lazy metadata length failed.");
+                Assert(
+                    !metadata.SupportsDirectMemory
+                    && metadata.ProcessId == Process.GetCurrentProcess().Id
+                    && metadata.BufferAddress == view.CapturedScan0.ToInt64()
+                    && metadata.SourcePointerAddress == view.CapturedScan0.ToInt64()
+                    && metadata.SourcePointerLabel == "Scan0",
+                    "Bitmap Scan0 must be captured as non-live pointer provenance.");
                 Assert(preview.Buffer[0] == 30 && preview.Buffer[1] == 20 && preview.Buffer[2] == 10, "Bitmap sampled preview channel order failed.");
                 Assert(chunk.Buffer[0] == 30 && chunk.Buffer[1] == 20 && chunk.Buffer[2] == 10, "Bitmap lazy chunk channel order failed.");
                 Assert(transfer.DisplayName == "bitmap0", "Bitmap visualizer display name failed.");
@@ -1302,13 +1718,81 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void BitmapVisualizerObjectSourceNormalizesNegativeStride()
+        {
+            const int stride = 4;
+            const int height = 2;
+            var buffer = Marshal.AllocHGlobal(stride * height);
+            try
+            {
+                for (var index = 0; index < stride * height; index++)
+                {
+                    Marshal.WriteByte(buffer, index, 0);
+                }
+
+                var topRow = IntPtr.Add(buffer, stride);
+                Marshal.Copy(new byte[] { 30, 20, 10 }, 0, topRow, 3);
+                Marshal.Copy(new byte[] { 60, 50, 40 }, 0, buffer, 3);
+
+                using (var bitmap = new Bitmap(
+                    1,
+                    height,
+                    -stride,
+                    PixelFormat.Format24bppRgb,
+                    topRow))
+                {
+                    var view = BitmapVisualizerTransfer.CreateView(bitmap, "negative-stride");
+                    var chunk = BitmapVisualizerTransfer.CreateChunk(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Offset = 0,
+                            Count = stride * height
+                        });
+                    var preview = BitmapVisualizerTransfer.CreatePreview(
+                        view,
+                        new VisualizerSnapshotChunkRequest
+                        {
+                            Operation = VisualizerSnapshotOperation.Preview,
+                            MaximumWidth = 1,
+                            MaximumHeight = height
+                        });
+
+                    Assert(
+                        chunk.Buffer[0] == 30
+                        && chunk.Buffer[1] == 20
+                        && chunk.Buffer[2] == 10
+                        && chunk.Buffer[3] == 0,
+                        "Negative-stride Bitmap top row was not normalized.");
+                    Assert(
+                        chunk.Buffer[4] == 60
+                        && chunk.Buffer[5] == 50
+                        && chunk.Buffer[6] == 40
+                        && chunk.Buffer[7] == 0,
+                        "Negative-stride Bitmap bottom row was not normalized.");
+                    Assert(
+                        preview.Buffer[0] == 30
+                        && preview.Buffer[1] == 20
+                        && preview.Buffer[2] == 10
+                        && preview.Buffer[4] == 60
+                        && preview.Buffer[5] == 50
+                        && preview.Buffer[6] == 40,
+                        "Negative-stride Bitmap preview row order failed.");
+                }
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
         private static void ImagePtrVisualizerObjectSourceCreatesChunks()
         {
             var buffer = new byte[] { 3, 2, 1, 6, 5, 4 };
             var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
             try
             {
-                var image = new ImagePtrLike(handle.AddrOfPinnedObject(), buffer.Length, 2, 1, 6, 3);
+                var image = new Cressem.ImageModel.ImagePtr(handle.AddrOfPinnedObject(), buffer.Length, 2, 1, 6, 3);
                 var transferType = Type.GetType(
                     "RawBufferVisualizer.VisualStudio.ObjectSource.ImagePtrVisualizerTransfer, RawBufferVisualizer.VisualStudio.ObjectSource",
                     true) ?? throw new InvalidOperationException("ImagePtr visualizer transfer type was not found.");
@@ -1321,11 +1805,18 @@ namespace RawBufferVisualizer.Tests
                 Assert(descriptor.PixelFormat == RawPixelFormat.BGR24, "ImagePtr Bpp=3 should map to BGR24.");
 
                 var metadata = (VisualizerSnapshotMetadata)InvokeStatic(transferType, "CreateMetadata", view);
-                Assert(metadata.SourceType == typeof(ImagePtrLike).FullName, "ImagePtr metadata source type failed.");
+                Assert(metadata.SourceType == "Cressem.ImageModel.ImagePtr", "ImagePtr metadata source type failed.");
+                Assert(image.GetType().Assembly.GetName().Name == "Cressem.ImageModel"
+                    && image.GetType().Assembly.GetName().Version == new Version(1, 0, 0, 0),
+                    "ImagePtr fixture must match the exact registered assembly identity.");
                 Assert(metadata.SupportsDirectMemory
                     && metadata.ProcessId == Process.GetCurrentProcess().Id
                     && metadata.BufferAddress == handle.AddrOfPinnedObject().ToInt64(),
                     "ImagePtr direct-memory metadata failed.");
+                Assert(
+                    metadata.SourcePointerAddress == handle.AddrOfPinnedObject().ToInt64()
+                    && metadata.SourcePointerLabel == "Ptr",
+                    "ImagePtr Ptr provenance failed.");
 
                 var chunk = (VisualizerSnapshotChunk)InvokeStatic(
                     transferType,
@@ -1406,6 +1897,11 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.Descriptor.Width == 2 && metadata.Descriptor.Height == 1, "Mat visualizer dimensions failed.");
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Mat visualizer pixel format failed.");
                 Assert(metadata.BufferLength >= 6, "Mat visualizer buffer length failed.");
+                Assert(
+                    metadata.BufferAddress == mat.Data.ToInt64()
+                    && metadata.SourcePointerAddress == mat.CvPtr.ToInt64()
+                    && metadata.SourcePointerLabel == "Ptr",
+                    "OpenCvSharp Ptr and pixel Data provenance failed.");
                 Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2, "Mat visualizer chunk failed.");
                 Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "Mat sampled preview failed.");
             }
@@ -1440,6 +1936,7 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.Descriptor.Stride == 6, "Legacy Mat stride failed.");
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Legacy Mat pixel format failed.");
                 Assert(metadata.BufferLength == 6, "Legacy Mat buffer length failed.");
+                Assert(metadata.SourcePointerAddress == 0, "Legacy Mat without a pointer contract should not invent Ptr provenance.");
                 Assert(chunk.Buffer.Length == 4 && chunk.Buffer[0] == 2 && chunk.Buffer[3] == 5, "Legacy Mat chunk failed.");
             }
             finally
@@ -1593,6 +2090,16 @@ namespace RawBufferVisualizer.Tests
                 Assert(metadata.Descriptor.Width == 2 && metadata.Descriptor.Height == 1, "Emgu Mat visualizer dimensions failed.");
                 Assert(metadata.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu Mat visualizer pixel format failed.");
                 Assert(metadata.BufferLength == 6, "Emgu Mat visualizer buffer length failed.");
+                var emguPointerProperty = mat.GetType().GetProperty(
+                    "Ptr",
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                var emguPointer = (IntPtr)(emguPointerProperty?.GetValue(mat)
+                    ?? throw new MissingMemberException(mat.GetType().FullName, "Ptr"));
+                Assert(
+                    metadata.BufferAddress == mat.DataPointer.ToInt64()
+                    && metadata.SourcePointerAddress == emguPointer.ToInt64()
+                    && metadata.SourcePointerLabel == "Ptr",
+                    "Emgu CV Ptr and pixel DataPointer provenance failed.");
                 Assert(chunk.Buffer.Length == 3 && chunk.Buffer[0] == 1 && chunk.Buffer[2] == 5, "Emgu Mat visualizer chunk failed.");
                 Assert(preview.Buffer[0] == 3 && preview.Buffer[1] == 2 && preview.Buffer[2] == 1, "Emgu Mat sampled preview failed.");
             }
@@ -1707,6 +2214,33 @@ namespace RawBufferVisualizer.Tests
                 Assert(dictionaryView.GetMetadata(0).DisplayName == "[input]", "Collection dictionary key name failed.");
                 Assert(dictionaryView.GetMetadata(0).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Collection dictionary snapshot failed.");
                 Assert(!string.IsNullOrWhiteSpace(dictionaryView.GetMetadata(1).Error), "Unsupported dictionary item should report an error.");
+
+                var concurrentDictionary = new ConcurrentDictionary<string, object>();
+                concurrentDictionary["input"] = snapshot;
+                concurrentDictionary["invalid"] = 42;
+                var concurrentDictionaryView = ImageCollectionVisualizerTransfer.CreateView(concurrentDictionary);
+                Assert(concurrentDictionaryView.Summary.TotalCount == 2, "ConcurrentDictionary count failed.");
+                var concurrentInputIndex = -1;
+                var concurrentInvalidIndex = -1;
+                for (var index = 0; index < concurrentDictionaryView.Summary.ItemCount; index++)
+                {
+                    var displayName = concurrentDictionaryView.GetMetadata(index).DisplayName;
+                    if (displayName == "[input]") concurrentInputIndex = index;
+                    if (displayName == "[invalid]") concurrentInvalidIndex = index;
+                }
+                Assert(concurrentInputIndex >= 0, "ConcurrentDictionary image key failed.");
+                Assert(concurrentInvalidIndex >= 0, "ConcurrentDictionary unsupported key failed.");
+                Assert(concurrentDictionaryView.GetMetadata(concurrentInputIndex).Metadata?.Descriptor.PixelFormat == RawPixelFormat.Mono8, "ConcurrentDictionary snapshot failed.");
+                Assert(!string.IsNullOrWhiteSpace(concurrentDictionaryView.GetMetadata(concurrentInvalidIndex).Error), "Unsupported ConcurrentDictionary item should report an error.");
+
+                var twenty = new object[20];
+                for (var index = 0; index < twenty.Length; index++)
+                {
+                    twenty[index] = snapshot;
+                }
+
+                var twentyView = ImageCollectionVisualizerTransfer.CreateView(twenty);
+                Assert(twentyView.Summary.TotalCount == 20 && twentyView.Summary.ItemCount == 20, "A 20-image collection should transfer all 20 entries.");
 
                 var many = new object[ImageCollectionVisualizerTransfer.MaximumItemsPerOpen + 5];
                 for (var index = 0; index < many.Length; index++)
@@ -1876,7 +2410,13 @@ namespace RawBufferVisualizer.Tests
                     "bitmapBgr24",
                     "System.Drawing.Bitmap",
                     "handoff-42",
-                    isPreview: true);
+                    true,
+                    4242,
+                    0x12345678,
+                    0x23456789,
+                    "Scan0",
+                    0x10203040,
+                    "System.Collections.Concurrent.ConcurrentDictionary`2");
                 var typedRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(typedRequestPath);
                 var errorRequestPath = VisualizerHandoffInbox.WriteErrorRequest(
                     secondVisualStudioProcessId,
@@ -1896,7 +2436,11 @@ namespace RawBufferVisualizer.Tests
                     liveDescriptor,
                     "cameraLive",
                     "OpenCvSharp.Mat",
-                    "handoff-live");
+                    "handoff-live",
+                    0x23456789,
+                    "Ptr",
+                    0x50607080,
+                    "System.Collections.Generic.List`1");
                 var liveRequest = VisualizerHandoffInbox.ReadSnapshotRequestInfo(liveRequestPath);
 
                 Assert(File.Exists(requestPath), "Handoff request file was not created.");
@@ -1911,6 +2455,25 @@ namespace RawBufferVisualizer.Tests
                 Assert(typedRequest.DisplayName == "bitmapBgr24", "Handoff display name roundtrip failed.");
                 Assert(typedRequest.SourceType == "System.Drawing.Bitmap", "Handoff source type roundtrip failed.");
                 Assert(typedRequest.HandoffId == "handoff-42" && typedRequest.IsPreview, "Preview handoff identity roundtrip failed.");
+                Assert(
+                    typedRequest.HasDebuggeeBufferAddress
+                    && typedRequest.DebuggeeProcessId == 4242
+                    && typedRequest.DebuggeeBufferAddress == 0x12345678,
+                    "Snapshot source address roundtrip failed.");
+                Assert(
+                    typedRequest.HasSourcePointerAddress
+                    && typedRequest.SourcePointerAddress == 0x23456789
+                    && typedRequest.SourcePointerLabel == "Scan0",
+                    "Snapshot source pointer roundtrip failed.");
+                Assert(
+                    typedRequest.ExpressionIdentityHash == 0x10203040,
+                    "Snapshot expression identity roundtrip failed.");
+                Assert(
+                    typedRequest.ExpressionSourceType == "System.Collections.Concurrent.ConcurrentDictionary`2",
+                    "Snapshot expression source type roundtrip failed.");
+                Assert(
+                    !request.HasDebuggeeBufferAddress,
+                    "Address-free legacy snapshot handoff should remain compatible.");
                 Assert(Path.GetDirectoryName(errorRequestPath) == secondInbox, "Error handoff was not routed to the target Visual Studio inbox.");
                 Assert(errorRequest.IsError, "Error handoff was not identified as an error.");
                 Assert(errorRequest.MetadataPath == string.Empty, "Error handoff should not contain a metadata path.");
@@ -1924,6 +2487,22 @@ namespace RawBufferVisualizer.Tests
                 Assert(liveRequest.MetadataPath == string.Empty, "Live-memory handoff should not contain a metadata path.");
                 Assert(liveRequest.LiveProcessId == 4242, "Live-memory process ID roundtrip failed.");
                 Assert(liveRequest.LiveBufferAddress == 0x12345678 && liveRequest.LiveBufferLength == 32, "Live-memory buffer roundtrip failed.");
+                Assert(
+                    liveRequest.HasDebuggeeBufferAddress
+                    && liveRequest.DebuggeeProcessId == liveRequest.LiveProcessId
+                    && liveRequest.DebuggeeBufferAddress == liveRequest.LiveBufferAddress,
+                    "Live-memory source provenance should match the live source.");
+                Assert(
+                    liveRequest.HasSourcePointerAddress
+                    && liveRequest.SourcePointerAddress == 0x23456789
+                    && liveRequest.SourcePointerLabel == "Ptr",
+                    "Live-memory source pointer roundtrip failed.");
+                Assert(
+                    liveRequest.ExpressionIdentityHash == 0x50607080,
+                    "Live-memory expression identity roundtrip failed.");
+                Assert(
+                    liveRequest.ExpressionSourceType == "System.Collections.Generic.List`1",
+                    "Live-memory expression source type roundtrip failed.");
                 Assert(liveRequest.LiveDescriptor != null
                     && liveRequest.LiveDescriptor.Width == 8
                     && liveRequest.LiveDescriptor.Height == 4
@@ -3075,6 +3654,10 @@ namespace RawBufferVisualizer.Tests
                     metadata.Metadata.Descriptor.Width == width && metadata.Metadata.Descriptor.Height == height && metadata.Metadata.Descriptor.Stride == width,
                     "Mapped descriptor mismatch.");
                 Assert(metadata.Metadata.BufferAddress == handle.AddrOfPinnedObject().ToInt64(), "Mapped buffer address mismatch.");
+                Assert(
+                    metadata.Metadata.SourcePointerAddress == handle.AddrOfPinnedObject().ToInt64()
+                    && metadata.Metadata.SourcePointerLabel == "ImageAddress",
+                    "Mapped source-pointer provenance mismatch.");
 
                 var chunk = view.GetChunk(0, new VisualizerSnapshotChunkRequest { Offset = 0, Count = buffer.Length });
                 AssertBytesEqual(buffer, chunk.Buffer, "Mapped pointer chunk read failed.");
@@ -3621,6 +4204,26 @@ namespace RawBufferVisualizer.Tests
             out int lpBytesReturned,
             IntPtr lpOverlapped);
 
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr VirtualAlloc(
+            IntPtr address,
+            UIntPtr size,
+            uint allocationType,
+            uint protect);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool VirtualFree(
+            IntPtr address,
+            UIntPtr size,
+            uint freeType);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool VirtualProtect(
+            IntPtr address,
+            UIntPtr size,
+            uint newProtection,
+            out uint oldProtection);
+
         private static TinySample CreateTinySample(RawPixelFormat format)
         {
             switch (format)
@@ -3710,26 +4313,6 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
-        private sealed class ImagePtrLike
-        {
-            public IntPtr Ptr { get; private set; }
-            public long Length { get; private set; }
-            public int Width { get; private set; }
-            public int Height { get; private set; }
-            public int Step { get; private set; }
-            public int Bpp { get; private set; }
-
-            public ImagePtrLike(IntPtr ptr, long length, int width, int height, int step, int bpp)
-            {
-                Ptr = ptr;
-                Length = length;
-                Width = width;
-                Height = height;
-                Step = step;
-                Bpp = bpp;
-            }
-        }
-
         private static byte[] PackLsb(int[] values, int bitsPerPixel)
         {
             var buffer = new byte[((values.Length * bitsPerPixel) + 7) / 8];
@@ -3779,6 +4362,8 @@ namespace Emgu.CV
         {
             get { return _handle.AddrOfPinnedObject(); }
         }
+
+        private IntPtr Ptr { get; } = new IntPtr(0x13579BDF);
 
         public Mat(int rows, int cols, DepthType depth, int numberOfChannels, byte[] buffer, int step)
         {

@@ -162,6 +162,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var view = new ImagePtrView
             {
                 Buffer = pointer,
+                SourcePointerLabel = GetLeafName(members.Data),
                 BufferLength = bufferLength,
                 Descriptor = descriptor,
                 SourceType = typeName,

@@ -95,7 +95,31 @@ The exact BGR24 geometry is covered by `BufferDoctorFindsPaddedBgr24Descriptor`.
 - Reviewed captures and GIF contact sheets: `D:\OpenVisionLab-TestData\RawBufferVisualizer\marketplace-media-2.0.2\20260809-color-datatip`.
 - Tracked SHA-256: DataTip GIF `5645B03A8CFC8DF8B4B04990AA5AF2FF3BDF28D170BA0AFD93DB6E01A5F73DFC`; Locals GIF `B11744D4FC74E7B89C66999DDADC9A3DBC8B04E642C10EC7FB560540561C7BC1`; complete GIF `32E18864B8F685BB96A151B63F5BE0CC6824908FFC8D42FC593AFA99F0725E56`; Automatic Inspector `B7ABBCC19E7BC9DDCD1ECF46A9BFE2F83036FF50B62978701A5E1F61D12000D1`; Doctor before `F18F07DC358C45BE52D80705123861F7173996C60EEEB297780CF1F842486FAD`; Doctor recovered `1E392EA21A0B64F93C40AE2736D63E909AEAF62EE649D51AC75D465E7F90C8FE`.
 
-## Documentation Refresh Closure
+## Documentation Refresh - 2026-08-25 (2.0.4)
+
+- Host: exact installed `2.0.4.0` review VSIX on Visual Studio 2022 Community `17.14.37516.0`; capture window on the dynamically selected left monitor `\\.\DISPLAY2` (`-1920,365`, `1920 x 1080`) at `-1900,385`, `1880 x 1040`, Windows scale 125%, dark theme.
+- Code DataTip: `dataTipIndustrialMat` exposed the actual OpenCvSharp visualizer glyph and opened the separate 1280 x 720 `BGR24` CC0 industrial-machine image. Evidence: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.4\20260825\installed-vs2022-industrial-datatip-final3`.
+- Locals and complete workflow: the registered Bitmap path opened the 1280 x 960 PCB image, Automatic Inspector reported `5 detected: 5 opened, 0 need mapping, 0 failed`, and Buffer Doctor restored the color image from declared stride 7344 to actual stride 7424. Evidence: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.4\20260825\installed-vs2022-industrial-marketplace-final2`.
+- DataTip GIF: 960 x 532, 12 frames at 4 fps, 3.0 seconds, 226,577 bytes.
+- Locals GIF: 960 x 532, 13 frames at 4 fps, 3.25 seconds, 1,915,939 bytes.
+- Complete GIF: 960 x 532, 24 frames at 4 fps, 6.0 seconds, 4,110,265 bytes. Its eight states are held for 0.75 seconds each.
+- Static screenshots: all three are 1880 x 1040 and show the current UI, including the labelled **Clear all** action above the image list.
+- Reviewed source frames, final GIF contact sheets, and staged media: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.4\20260825\marketplace-media-final`.
+- Tracked SHA-256: DataTip GIF `F284D65BBDE9BFB1466BFA756E2282A91FD4929F92E581A4D9D6B306D5AD862A`; Locals GIF `45BA65AF255C9D15D910A87982AB490710614C8DBE4DCACD74C86713C8701A11`; complete GIF `6AEC2449C25DEE827845E670EE8A7A0C650038DF141041E6C0672CD304F9715D`; Automatic Inspector `521F74B81B0ADB6D67ADB2D8F582B19EF37C719BE47D0CD5F4C6531989CBC489`; Doctor before `C9A576853DF46D3207E0CE26728655EC76D9DF0CB288878EA10B0285B22A27F4`; Doctor recovered `A98F443BE2BE4634A20F7AC488360EF7ED87CD77E542E7A6B28EC0EC8D9E667E`.
+- Marketplace dry run resolved exactly these six assets from the 2.0.4 English Overview and did not publish. Manifest: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.4\20260825\marketplace-dry-run-final\vs-publish.json`.
+
+## 2.0.4 Documentation Refresh Closure
+
+```text
+Status: Complete
+Scope: Replace all six Marketplace media files with exact installed-2.0.4 current-UI captures while retaining separate DataTip and Locals entry GIFs and the complete color Buffer Doctor sequence.
+Acceptance criteria: DataTip object/glyph/click/result visible -> pass; Locals visualizer flow retained -> pass; industrial images remain color -> pass; Doctor top stride 7424 restores the color scene -> pass; complete GIF is 5-8 seconds with no state over 1.5 seconds -> pass; English/Korean Overview uses the same six files -> pass.
+Verification: exact installed IndustrialDataTip and IndustrialMarketplace scenarios passed; source and encoded contact sheets were visually reviewed; GIF duration/frame/dimension/size and all six SHA-256 values were measured; Marketplace dry run resolved exactly six assets without publication.
+Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.4\20260825\marketplace-media-final and the tracked hashes above.
+Boundary / next dependency: Media and copy are local review inputs. No commit, push, Marketplace upload, or public readback was performed.
+```
+
+## Superseded 2.0.2 Documentation Refresh Closure
 
 ```text
 Status: Complete
@@ -104,6 +128,30 @@ Acceptance criteria: DataTip object, tooltip, magnifying-glass icon, click, and 
 Verification: aggregate Release self-tests passed; Debug debuggee build passed with 0 warnings/0 errors; installed `IndustrialMarketplace` and `IndustrialDataTip` scenarios passed; source and encoded contact sheets visually reviewed; GIF dimensions/frame durations/file sizes and SHA-256 verified; Marketplace dry run resolved exactly six assets and did not publish.
 Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\marketplace-media-2.0.2\20260809-color-datatip and the tracked hashes above.
 Boundary / next dependency: No commit, push, CI, Marketplace upload, or public readback was performed. The sample/test/media/document changes require owner review before repository publication.
+```
+
+## Documentation Refresh - 2026-09-03 (2.0.6)
+
+- Host: exact installed `2.0.6.0` review VSIX on Visual Studio 2022 Community `17.14.37516.0`; the monitor was selected dynamically as `\\.\DISPLAY1` (`0,0`, `1920 x 1080`) and the verified Visual Studio rectangle was `20,20`, `1880 x 1040`.
+- Code DataTip: UI Automation located the visible `dataTipIndustrialMat` token instead of relying on a source-line coordinate. Hover exposed the OpenCvSharp `Mat` DataTip, the actual magnifying-glass affordance was clicked, and the separate 1280 x 720 `BGR24` industrial-machine image opened in the docked viewer.
+- Locals and complete workflow: the registered Bitmap path opened the 1280 x 960 PCB image, Automatic Inspector reported `5 detected: 5 opened, 0 need mapping, 0 failed`, and Buffer Doctor restored the color image from declared stride 7344 to actual stride 7424.
+- DataTip GIF: 960 x 532, 12 frames at 4 fps, 3.0 seconds, 356,082 bytes.
+- Locals GIF: 960 x 532, 13 frames at 4 fps, 3.25 seconds, 2,499,942 bytes. The transient Visual Studio loading surface is held for one 0.25-second frame.
+- Complete GIF: 960 x 532, 24 frames at 4 fps, 6.0 seconds, 4,254,049 bytes; no state is held longer than 0.75 seconds.
+- Static screenshots: all three are 1880 x 1040 and show the installed 2.0.6 UI, object names, pointer/pixel provenance, the labelled **Clear all** action, color `BGR24` diagnosis, and the aligned recovery result.
+- Reviewed source frames, final GIF contact sheets, and staged media: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\marketplace-media-2.0.6`.
+- Tracked SHA-256: DataTip GIF `7BD5E2B3BE933AF0ACDD91302792CACE0DE5042C9174585E05F72361E1672630`; Locals GIF `E49A575C8EBC016AE8A53B387C8FEBD3E4F975367A6781FA9676C1A4A5A6A9BE`; complete GIF `63DE414FDD424438B30064401FCC0F8C0F87F2F5AA4B093C2EC6E2DBAAF7BBBA`; Automatic Inspector `7546A8A272FA3DA53EAF39F0148E83390CD0609F839ED4E00738477315DABC6A`; Doctor before `2FA321961FCA01CA7636057FF8ED76B511DB540BA04EE33ABD6E3E1129BA5451`; Doctor recovered `F9B852827F64B7059375B966F577A39D8A3B3BEC9F8DFA0BE4F00F1135AC7246`.
+- Marketplace dry run resolved the English 2.0.6 Overview, the exact frozen VSIX, and all six current assets without publishing. Manifest: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\marketplace-media-2.0.6\dry-run\vs-publish.json`.
+
+## 2.0.6 Documentation Refresh Closure
+
+```text
+Status: Complete
+Scope: Replace all six Overview media files with exact installed-2.0.6 captures, retain separate code-DataTip and Locals entry GIFs, and keep the complete color Buffer Doctor workflow within six seconds.
+Acceptance criteria: DataTip object/tooltip/glyph/click/result visible -> pass; Locals visualizer path retained -> pass; current object-name and pointer/pixel rows visible -> pass; Doctor remains BGR24 and stride 7424 restores color -> pass; all GIFs use the installed 2.0.6 UI and no state exceeds 1.25 seconds -> pass; English/Korean Overview references the same six paths -> pass.
+Verification: installed IndustrialMarketplace and IndustrialDataTip scenarios passed on VS2022 17.14.37516.0; source and encoded contact sheets were visually reviewed; GIF frame count/rate/duration/dimensions/size and all six SHA-256 values were measured; Marketplace dry run passed without publication.
+Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\20260903\marketplace-media-2.0.6 and the tracked hashes above.
+Boundary / next dependency: This proves the documented debugger workflows on the available VS2022 host. It does not prove exact VS2022 17.9 runtime, a physical camera, a proprietary SDK, Marketplace publication, or public-package readback.
 ```
 
 ## Boundary

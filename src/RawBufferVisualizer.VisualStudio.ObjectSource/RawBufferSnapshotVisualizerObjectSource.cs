@@ -16,10 +16,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             SerializeAsJson(
                 outgoingData,
-                VisualizerChunkedTransfer.CreateMetadata(
-                    snapshot.Descriptor,
-                    snapshot.Buffer.LongLength,
-                    typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot)));
+                VisualizerChunkedTransfer.AttachExpressionIdentity(
+                    VisualizerChunkedTransfer.CreateMetadata(
+                        snapshot.Descriptor,
+                        snapshot.Buffer.LongLength,
+                        typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot)),
+                    target));
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)

@@ -8,6 +8,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     internal sealed class KnownRegisteredImageBuffer
     {
         public long Address { get; set; }
+        public long SourcePointerAddress { get; set; }
+        public string SourcePointerLabel { get; set; } = string.Empty;
         public long BufferLength { get; set; }
         public RawImageDescriptor Descriptor { get; set; } = new RawImageDescriptor();
     }
@@ -60,6 +62,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             int stride;
             int depth;
             int channels;
+            long sourcePointerAddress;
+            string ignoredPointerError;
+            if (!TryReadPointer(debugger, baseExpression + ".CvPtr", out sourcePointerAddress, out ignoredPointerError))
+            {
+                TryReadPointer(debugger, baseExpression + ".Ptr", out sourcePointerAddress, out ignoredPointerError);
+            }
             if (!TryReadPointer(debugger, baseExpression + ".Data", out address, out error)
                 || !TryReadPositiveInt(debugger, baseExpression + ".Cols", out width, out error)
                 || !TryReadPositiveInt(debugger, baseExpression + ".Rows", out height, out error)
@@ -89,6 +97,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 stride,
                 pixelFormat,
                 validBits,
+                sourcePointerAddress,
+                "Ptr",
                 out buffer,
                 out error);
         }
@@ -109,6 +119,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             int stride;
             int channels;
             string depthValue;
+            long sourcePointerAddress;
+            string ignoredPointerError;
+            TryReadPointer(debugger, baseExpression + ".Ptr", out sourcePointerAddress, out ignoredPointerError);
             if (!TryReadPointer(debugger, baseExpression + ".DataPointer", out address, out error)
                 || !TryReadPositiveInt(debugger, baseExpression + ".Cols", out width, out error)
                 || !TryReadPositiveInt(debugger, baseExpression + ".Rows", out height, out error)
@@ -145,6 +158,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 stride,
                 pixelFormat,
                 validBits,
+                sourcePointerAddress,
+                "Ptr",
                 out buffer,
                 out error);
         }
@@ -156,6 +171,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             int stride,
             RawPixelFormat pixelFormat,
             int validBits,
+            long sourcePointerAddress,
+            string sourcePointerLabel,
             out KnownRegisteredImageBuffer buffer,
             out string error)
         {
@@ -201,6 +218,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             buffer = new KnownRegisteredImageBuffer
             {
                 Address = address,
+                SourcePointerAddress = sourcePointerAddress,
+                SourcePointerLabel = sourcePointerAddress == 0 ? string.Empty : sourcePointerLabel,
                 BufferLength = bufferLength,
                 Descriptor = descriptor
             };

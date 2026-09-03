@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
 
@@ -15,7 +14,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(outgoingData, ImagePtrVisualizerTransfer.CreateMetadata(GetView(target)));
+            SerializeAsJson(
+                outgoingData,
+                VisualizerChunkedTransfer.AttachExpressionIdentity(
+                    ImagePtrVisualizerTransfer.CreateMetadata(GetView(target)),
+                    target));
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
@@ -50,6 +53,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     public sealed class ImagePtrView
     {
         public IntPtr Buffer { get; set; }
+        public string SourcePointerLabel { get; set; } = string.Empty;
         public long BufferLength { get; set; }
         public RawImageDescriptor Descriptor { get; set; } = new RawImageDescriptor();
         public string SourceType { get; set; } = string.Empty;
@@ -66,7 +70,17 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             var type = target.GetType();
-            var ptr = GetValue<IntPtr>(target, "Ptr", "Buffer", "Data", "DataPointer", "_ptr", "_buffer", "_data");
+            string sourcePointerLabel;
+            var ptr = GetPointerValue(
+                target,
+                out sourcePointerLabel,
+                "Ptr",
+                "Buffer",
+                "Data",
+                "DataPointer",
+                "_ptr",
+                "_buffer",
+                "_data");
             if (ptr == IntPtr.Zero)
             {
                 throw new ArgumentException("Image pointer is empty.", nameof(target));
@@ -110,6 +124,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return new ImagePtrView
             {
                 Buffer = ptr,
+                SourcePointerLabel = sourcePointerLabel,
                 BufferLength = length,
                 Descriptor = descriptor,
                 SourceType = type.FullName ?? type.Name,
@@ -129,7 +144,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 view.BufferLength,
                 view.Buffer,
                 view.SourceType,
-                view.DisplayName);
+                view.DisplayName,
+                view.Buffer,
+                view.SourcePointerLabel);
         }
 
         public static VisualizerSnapshotChunk CreateChunk(ImagePtrView view, VisualizerSnapshotChunkRequest request)
@@ -164,7 +181,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var buffer = new byte[length];
             if (length > 0)
             {
-                Marshal.Copy(Add(view.Buffer, request.Offset), buffer, 0, length);
+                new CurrentProcessMemoryReader(view.Buffer, view.BufferLength)
+                    .CopyTo(request.Offset, buffer, 0, length);
             }
 
             return new VisualizerSnapshotChunk
@@ -358,6 +376,30 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             throw new MissingMemberException(target.GetType().FullName, string.Join("/", names));
         }
 
+        private static IntPtr GetPointerValue(object target, out string label, params string[] names)
+        {
+            foreach (var name in names)
+            {
+                var member = FindMember(target.GetType(), name);
+                if (member == null)
+                {
+                    continue;
+                }
+
+                var value = GetMemberValue(target, member);
+                if (value == null)
+                {
+                    continue;
+                }
+
+                label = name.TrimStart('_');
+                return ConvertValue<IntPtr>(value);
+            }
+
+            label = string.Empty;
+            throw new MissingMemberException(target.GetType().FullName, string.Join("/", names));
+        }
+
         private static int GetOptionalInt(object target, params string[] names)
         {
             return TryGetOptionalValue(target, out int value, names) ? value : 0;
@@ -441,9 +483,5 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture);
         }
 
-        private static IntPtr Add(IntPtr pointer, long offset)
-        {
-            return new IntPtr(checked(pointer.ToInt64() + offset));
-        }
     }
 }

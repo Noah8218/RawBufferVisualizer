@@ -108,7 +108,7 @@ Interaction rules:
 
 ## Current Product Stage
 
-The product is a public Marketplace Preview with a mature core workflow and broad regression coverage. It is not an experimental prototype, but it is still in stability-hardening rather than a final compatibility guarantee.
+The product is a public Marketplace extension with a mature core workflow and broad regression coverage. It is not an experimental prototype, but it is still in stability-hardening rather than a final compatibility guarantee.
 
 Current strengths:
 
@@ -159,6 +159,12 @@ Current maturity gaps:
 - requiring users to install a second viewer extension or a rendering runtime separately.
 
 ## Roadmap
+
+### Current checkpoint: 2.0.6 immutable package successor
+
+Official Gallery API readback on 2026-09-03 confirms public `2.0.5.0` as the Marketplace baseline. It includes the **Clear all** placement, direct bounded `ConcurrentDictionary<TKey,TValue>` visualization, first exact `Cressem.ImageModel.ImagePtr` cold handoff, exact debugger expression names, native `Ptr` versus pixel-address provenance, complete image-array registration, fail-closed pointer reads, and negative-stride Bitmap correction. Local `2.0.6.0` advances only the immutable package/release identity and does not change that product contract.
+
+The frozen 2.0.6 container passed in-place update and installed runtime checks on VS2022 `17.14.37516.0` and VS2026 `18.8.12105.206`, plus a clean reinstall on VS2022. Installed payload equality was 71/71 files on both hosts and the runtime matrix passed 15/15 records. Exact runtime on VS2022 17.9 remains unverified because that host is not installed. Owner final review of the exact VSIX and English/Korean Overview is the next priority. Commit, push, Marketplace upload, public readback, tag, and GitHub Release remain separate approvals.
 
 ### Version transition: public 1.0.53 to separate 2.0
 
@@ -271,11 +277,11 @@ Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
 The exact qualified candidate passed a clean install and an exact public `1.0.53.0 -> 2.0.0.0` in-place update on serviced VS2022 `17.14.37516.0` without uninstall, repair, or skipped-package reset. Core registered/mapped, Automatic Inspector, collection, mixed-library, menu-count, package-protocol, and viewer interaction checks passed. Publication remains a separate explicit owner action.
 
-### Next priority: owner-approved Marketplace publication
+### Next priority: owner review of the 2.0.6 candidate
 
 Recommended model: `gpt-5.6-terra` | Reasoning effort: `low`
 
-After explicit owner approval, upload only the exact qualified VSIX recorded in [Release Qualification 2.0.0](release-qualification-2.0.0.md). Do not rebuild or substitute another candidate. Public readback, real Marketplace update, tag, and GitHub Release remain later verification steps.
+Review only the installed-qualified VSIX recorded in [Release Qualification 2.0.6](release-qualification-2.0.6.md) together with the [English Overview](marketplace-overview-2.0.6.md) and [Korean review copy](marketplace-overview-2.0.6.ko.md). After explicit approval, commit/push and CI come before Marketplace upload. Do not rebuild or substitute another candidate after review; public readback, real Marketplace update, tag, and GitHub Release remain later explicit steps.
 
 ### Next: supportability and compatibility growth
 

@@ -1,7 +1,7 @@
 # Vendor-Neutral 2D Buffer Compatibility Matrix
 
 Status: Complete for the contract, shared transfer validation, and repository fixtures.
-Last verified: 2026-08-05 KST.
+Last verified: 2026-08-31 KST.
 
 ## Scope
 
@@ -18,7 +18,7 @@ The matrix does not claim compatibility with a camera, frame grabber, transport 
 5. An image pointer offset from a separately exposed base buffer is not guessed. The application may instead expose the actual image-start pointer through `RawBufferView`.
 6. Managed carriers are limited to `byte[]`, `ushort[]`, and `float[]`. The actual array byte length is authoritative.
 7. `Mono16` uses explicit valid bits and byte order. Packed 10/12-bit formats use their fixed implemented LSB layouts.
-8. Pointer-backed data is live only while the debuggee is paused and owns the buffer. Continue, reuse, disposal, or process exit makes the source unavailable.
+8. Pointer-backed data is meaningful only while the debuggee is paused and the original owner still owns the buffer. Continue or process exit invalidates the source. Disposal or address reuse may either make reads fail or silently redirect a `LIVE` row to different bytes; an address is not an object identity.
 9. Only fields and readable property getters, with at most one nested member level, participate in generic mapping. Arbitrary methods are never invoked.
 
 ## Verified Supported Shapes
@@ -35,6 +35,9 @@ The matrix does not claim compatibility with a camera, frame grabber, transport 
 | `VNB-S08` | One-level nested mapped members | data/dimensions/format within root plus one child | Member paths resolve and transfer | `Program.TypeMappingReadsOneLevelNestedMemberPaths` |
 | `VNB-S09` | Conservative PFNC-style names | one implemented, unambiguous 2D layout | `Mono10p`, `Mono12p`, Bayer 8-bit phases, RGB8/BGR8 packed resolve | `IndustrialCameraContractTests.GenICamPfncAliasesResolveConservatively` |
 | `VNB-S10` | Live pointer after source process exits | previously valid process ID/address | Read becomes a controlled source-unavailable error | `Program.ProcessMemorySourceReportsUnavailableAfterProcessExit` |
+| `VNB-S11` | Freed address reallocated before the next live read | same process ID/address, different allocation | Existing live source reads the replacement bytes; no object identity is inferred | `Program.ProcessMemorySourceReadsReplacementAtReallocatedAddress` |
+| `VNB-S12` | Producer pointer spanning two readable pages | valid Float32 bytes across the page boundary | Sampled preview reads both pages and preserves the value | `Program.ProducerPointerReadsAcrossReadablePageBoundary` |
+| `VNB-S13` | Negative-stride Bitmap | valid locked rows with `Scan0` at the logical top row | Chunk and preview normalize rows to top-to-bottom positive stride | `Program.BitmapVisualizerObjectSourceNormalizesNegativeStride` |
 
 ## Verified Fail-Closed Shapes
 
@@ -52,10 +55,14 @@ The matrix does not claim compatibility with a camera, frame grabber, transport 
 | `VNB-F10` | ambiguous/unsupported pixel layout such as legacy packed mono, planar RGB, YUV, RGBA, or 3D coordinates | keep explicit; do not map by a similar name | `IndustrialCameraContractTests.GenICamPfncAliasesResolveConservatively` |
 | `VNB-F11` | unknown byte-order value | reject mapping | `IndustrialCameraContractTests.MappedCoreContractsFailClosed` |
 | `VNB-F12` | `Mono16` valid bits outside `1..16`, or packed-format valid bits that differ from the fixed layout | reject descriptor in registered and mapped paths | `IndustrialCameraContractTests.MappedCoreContractsFailClosed`, `ValidBitsContractsAreStrictAndPreserved` |
+| `VNB-F13` | producer address freed before chunk or preview | reject with controlled `IOException`; return no partial image | `Program.ProducerPointerReadsFailClosedAfterFree` |
+| `VNB-F14` | producer request crosses from readable into protected memory | reject the incomplete native read; return no partial/zero-filled image | `Program.ProducerPointerReadsRejectProtectedBoundary` |
 
 ## Implemented Shared Validation Checkpoint
 
 `VisualizerChunkedTransfer.CreateMetadataCore` now applies `RawBufferDiagnostics.AnalyzeLength` before creating metadata. Registered `RawBufferView`, registered library adapters, snapshots, and mapped managed/pointer carriers therefore share the same fail-closed dimension, stride, length, and valid-bits boundary.
+
+Registered unmanaged producer transfers additionally share `CurrentProcessMemoryReader`. Its `ReadProcessMemory` contract requires the native call to succeed and report the complete requested byte count. Chunk and page-cached sampled-preview reads therefore reject freed, protected, or partial ranges consistently. A new transfer rereads current bytes at the address; it does not infer object or allocation identity.
 
 `Mono16` accepts valid-bit counts `1..16`; repository fixtures explicitly preserve 10, 12, 14, and 16. `Mono10PackedLsb` requires 10 and `Mono12PackedLsb` requires 12. Incompatible values are errors rather than advisory diagnostics. No UI, SDK adapter, or offset abstraction was added.
 
@@ -65,7 +72,7 @@ The matrix does not claim compatibility with a camera, frame grabber, transport 
 - No vendor assembly, SDK binary, installer, header, sample, or vendor-named runtime type is used.
 - Supported fixtures assert descriptor fields and transferred bytes, not inference confidence alone.
 - Rejected fixtures assert the user-visible failure reason.
-- Pointer fixtures assert process/address ownership or controlled unavailability.
+- Pointer fixtures assert process/address ownership, current-byte rereads, readable page crossings, or controlled unavailability.
 - Tests run with physical temporary output under `D:\OpenVisionLab-TestData\RawBufferVisualizer\2.0-buffer-matrix` on this workstation.
 
 ## Durable Closure
@@ -73,6 +80,6 @@ The matrix does not claim compatibility with a camera, frame grabber, transport 
 Status: Complete
 Scope: Vendor-neutral 2D carrier/layout compatibility contract, shared metadata validation, and supported/fail-closed repository fixtures
 Acceptance criteria: managed arrays and pointers covered; dimensions/stride/length/offset/format/valid-bits/byte-order/lifetime decisions recorded; registered and mapped metadata reject invalid dimensions/stride/length/valid-bits; valid Mono16 and packed values preserved; proprietary SDK, UI, and 3D scope absent
-Verification: aggregate Release self-tests passed; Release solution build passed with 0 errors and the 18 pre-existing `VSTHRD010` warnings; changed-document links and `git diff --check` passed
-Evidence: `src\RawBufferVisualizer.Core\RawBufferDiagnostics.cs`; `src\RawBufferVisualizer.VisualStudio.ObjectSource\VisualizerChunkedTransfer.cs`; `tests\RawBufferVisualizer.Tests\IndustrialCameraContractTests.cs`; and this matrix
-Boundary / next dependency: The exact frozen `2.0.0.0` VSIX later passed dual-IDE installed qualification; see [release-qualification-2.0.0.md](release-qualification-2.0.0.md). Marketplace publication/readback and proprietary SDK or hardware claims remain outside this contract. Test TEMP/TMP used `D:\OpenVisionLab-TestData\RawBufferVisualizer\2.0-buffer-validation\final`.
+Verification: aggregate Release self-tests passed; the ObjectSource net472/netstandard2.0/net8.0 build and Release solution build passed with 0 errors and only the 18 pre-existing solution `VSTHRD010` warnings; an 8192 x 8192 unmanaged Mono8 preview completed at 512 x 512 in 26 ms under the 5000 ms gate; changed-document links and `git diff --check` passed
+Evidence: `src\RawBufferVisualizer.Core\RawBufferDiagnostics.cs`; `src\RawBufferVisualizer.VisualStudio.ObjectSource\VisualizerChunkedTransfer.cs`; `src\RawBufferVisualizer.VisualStudio.ObjectSource\CurrentProcessMemoryReader.cs`; `tests\RawBufferVisualizer.Tests\IndustrialCameraContractTests.cs`; `tests\RawBufferVisualizer.Tests\Program.cs`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\producer-pointer-safety\sampled-preview-page-cache.json`; and this matrix
+Boundary / next dependency: Source/build/self-test evidence does not prove an installed VS 17.9 runtime; the unchanged targeting contract still requires a real 17.9 host for exact runtime proof. A readable buffer that mutates during transfer is not an atomic snapshot, and a reused address cannot identify its allocation. Marketplace publication/readback and proprietary SDK or hardware claims remain outside this contract.

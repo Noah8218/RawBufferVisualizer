@@ -4,7 +4,75 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.2` changes are queued.
+No post-`2.0.6` changes are queued.
+
+## [2.0.6] - 2026-09-03
+
+Raw Buffer Visualizer `2.0.6` advances the immutable Marketplace package version after `2.0.5.0` became public. It contains no functional or compatibility change from the validated 2.0.5 behavior.
+
+### Changed
+
+- Advances the extension, assembly, and package identity to `2.0.6`/`2.0.6.0` instead of attempting to overwrite public `2.0.5.0`.
+- Retains exact debugger expression names, native `Ptr` versus `Pixels` provenance, complete image-array registration, fail-closed pointer reads, negative-stride Bitmap correction, and the existing Visual Studio support contract.
+
+## [2.0.5] - 2026-09-03
+
+Raw Buffer Visualizer `2.0.5` distinguishes an image object's native pointer from the address used to read its pixels, keeps the debugger expression name visible above each thumbnail, and rejects incomplete native-memory reads instead of presenting partial image data.
+
+### Added
+
+- Shows the exact debugger object/expression name above each thumbnail, including collection roots such as `imageList[0]` and `imageDictionary[key]`.
+- Shows OpenCvSharp/Emgu `Ptr` separately from `Pixels` (`Data`/`DataPointer`), uses `Ptr / Pixels` for ImagePtr, `Buffer / Pixels` for `RawBufferView`, and records Bitmap `Scan0 / Pixels` as captured provenance.
+- Adds separate **Copy pointer address** and **Copy pixel address** actions, with the same values in Descriptor details and structured workspace export.
+- Shows the process ID and `LIVE`, `CAPTURED`, `PREVIEW`, or `UNAVAILABLE` state when source-location information is available.
+
+### Fixed
+
+- Reopening the same address observes its current bytes instead of treating the address as an object identity.
+- Released, inaccessible, or partially readable pointer ranges fail with a controlled error before incomplete image data is accepted.
+- Corrects top-to-bottom transfer for `System.Drawing.Bitmap` images whose native stride is negative.
+- Registers Bitmap, OpenCvSharp Mat, and Emgu Mat arrays with complete assembly-qualified identities so Visual Studio does not reject their visualizer metadata with a version-string error.
+
+### Compatibility
+
+- Retains the same Marketplace extension identity, Visual Studio 2022 `17.9+` support floor, stable Visual Studio 2026 `18.x` target, and existing 2.0 workflows.
+
+## [2.0.4] - 2026-08-25
+
+Raw Buffer Visualizer `2.0.4` puts the full-viewer reset where accumulated images are managed and keeps the action explicit at narrow and wide docked sizes.
+
+### Changed
+
+- Moved the existing full reset from the top toolbar to a clearly labelled **Clear all** button directly above the image list.
+- Keeps **Clear all** disabled when the image list is empty and enables it as soon as an image is loaded.
+- Clarifies in the tooltip that clearing removes every loaded image and resets the viewer without changing data in the paused debuggee.
+
+### Verified
+
+- A direct 20-image collection transfers all 20 entries, and one **Clear all** action removes the complete accumulated list and document-dependent viewer state.
+- Narrow, medium, and wide docked layouts retain the full **Images** and **Clear all** labels without clipping.
+
+### Compatibility
+
+- Retains Visual Studio 2022 `17.9+` and stable Visual Studio 2026 `18.x` support through the existing Marketplace extension identity.
+
+## [2.0.3] - 2026-08-24
+
+Raw Buffer Visualizer `2.0.3` adds a direct debugger-visualizer path for concurrent image dictionaries and repairs the first registered `ImagePtr` handoff when the docked viewer has not been opened yet.
+
+### Added
+
+- Registered open generic `ConcurrentDictionary<TKey,TValue>` targets for .NET Framework and current .NET so the collection can be opened directly from DataTip, Locals, Autos, or Watch.
+- Preserved dictionary keys as image-row names, isolated unsupported entries as visible failures, and retained the existing 256-entry bound.
+
+### Fixed
+
+- Preloads the lightweight VSSDK package when debugging begins and passively arms its handoff listener before the first visualizer click, preventing the first registered `ImagePtr` handoff from re-entering the package while it is loading.
+- Corrected installed-package validation to inspect `RawBufferVisualizer.VisualStudio.Vssdk.dll` and its matching `.pkgdef` after the 17.9 compatibility split.
+
+### Compatibility
+
+- Retains Visual Studio 2022 `17.9+` and stable Visual Studio 2026 `18.x` support through the existing Marketplace extension identity.
 
 ## [2.0.2] - 2026-08-09
 
@@ -173,7 +241,11 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.2...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.6...HEAD
+[2.0.6]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.5...v2.0.6
+[2.0.5]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.4...v2.0.5
+[2.0.4]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.3...v2.0.4
+[2.0.3]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.2...v2.0.3
 [2.0.2]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.1...v2.0.2
 [2.0.1]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...v2.0.0

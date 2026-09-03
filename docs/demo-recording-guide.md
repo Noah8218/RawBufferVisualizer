@@ -62,7 +62,7 @@ Use the MP4 for social posts and the GIF for README or Marketplace Markdown. If 
 
 ## Create A Continuous GIF And MP4
 
-The tracked `2.0.2` documentation assets are a reviewed 3.0-second, four-frame code-DataTip GIF, a 3.25-second, four-frame Locals GIF, and the 6.0-second, eight-frame complete sequence above. All use frames captured from the installed extension and contain no procedural stripe or gradient fixture. The FFmpeg workflow below is optional for maintainers who start from a continuous screen recording; FFmpeg is not required to install or use Raw Buffer Visualizer.
+The tracked `2.0.6` documentation assets are a reviewed 3.0-second, 12-frame code-DataTip GIF, a 3.25-second, 13-frame Locals GIF, and the 6.0-second, 24-frame complete sequence above. All are 960 x 532 at 4 fps, use frames captured from the exact installed 2.0.6 extension, show the current labelled **Clear all** UI, and contain no procedural stripe or gradient fixture. The FFmpeg workflow below is optional for maintainers who start from a continuous screen recording; FFmpeg is not required to install or use Raw Buffer Visualizer.
 
 The repository does not install FFmpeg automatically. Install a Windows build from the [official FFmpeg download page](https://ffmpeg.org/download.html), or use Winget manually:
 

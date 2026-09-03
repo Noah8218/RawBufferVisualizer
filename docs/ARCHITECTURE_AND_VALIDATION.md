@@ -1,18 +1,18 @@
 # Architecture And Validation
 
-This document describes the architecture shared by the public 2.0 line and the isolated `2.0.2.0` Visual Studio 2022 17.9 compatibility work while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The unpublished 2.0.2 candidate separates the in-process `net472` VSSDK package from the out-of-process `net8` debugger providers so the package can bind to the Visual Studio 17.9 SDK without giving up the stable VS2026 path. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the architecture implemented by public `2.0.5.0` and retained by the local `2.0.6.0` candidate while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The current hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.4 changed only the docked presentation of the existing complete viewer reset. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.6 changes only the immutable package/release identity and retains those boundaries. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
 | Surface | Current target |
 | --- | --- |
-| Visual Studio extension | Public `2.0.1.0`: VS2022 `17.14+`; qualified unpublished `2.0.2.0`: VS2022 `17.9+`; both retain stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
+| Visual Studio extension | Public `2.0.3.0` and local `2.0.4.0`: VS2022 `17.9+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
 | Extension/VSSDK projects | VSSDK package `net472`; out-of-process provider `net8.0-windows8.0` |
 | Core/SDK/object source | `net472`, `netstandard2.0`, and/or `net8.0` depending on project |
 | Standalone WPF viewer | `net472` and `net8.0-windows` |
 | Build machine | Visual Studio 2022 with .NET desktop development and .NET 8 SDK or newer |
 
-The public `2.0.1.0` package keeps its qualified `[17.14,18.0)` contract. The exact unpublished `2.0.2.0` development candidate uses VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. It passed installed scenarios on VS2022 `17.9.34902.65`, `17.14.37516.0`, and VS2026 `18.8.12023.21`; see [vs2022-17.9-compatibility-candidate.md](vs2022-17.9-compatibility-candidate.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
+The public `2.0.3.0` package and local `2.0.4.0` candidate use VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. The 2.0.4 change does not alter the debugger-provider or VSSDK dependency graph. Exact 2.0.4 installed-host evidence belongs in [release-qualification-2.0.4.md](release-qualification-2.0.4.md); historical 2.0.3 evidence remains in [release-qualification-2.0.3.md](release-qualification-2.0.3.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
 
 ## System Shape
 
@@ -71,8 +71,15 @@ Current registrations include:
 - versioned and unversioned OpenCvSharp `Mat` assembly names;
 - legacy/current Emgu `Mat` assembly names;
 - one exact ImagePtr compatibility target: `Cressem.ImageModel.ImagePtr, Cressem.ImageModel`;
-- open generic `List<>` and `Dictionary<,>`;
+- open generic `List<>`, `Dictionary<,>`, and `ConcurrentDictionary<,>` for .NET Framework and current .NET;
 - `ArrayList`, `Hashtable`, `object[]`, and registered image arrays.
+
+Third-party array registrations must use complete assembly-qualified identities. Visual Studio parses the target type before invoking the provider; incomplete strings such as `System.Drawing.Bitmap[], System.Drawing` can fail inside Visual Studio with `ArgumentException: version string portion is too short or too long`. The current array registrations therefore cover:
+
+- `System.Drawing.Bitmap[]` in .NET Framework `System.Drawing, Version=4.0.0.0` and `System.Drawing.Common` assembly versions 4 through 10;
+- `OpenCvSharp.Mat[]` assembly versions `1.0.0.0` and `4.0.0.0`;
+- the tested Emgu array identities `Emgu.CV.World 3.4.3.3016`, `Emgu.CV.World.NetStandard 1.0.0.0`, `Emgu.CV.Platform.NetStandard 4.5.5.4823`, `Emgu.CV 4.8.1.5350`, and `Emgu.CV 4.13.0.5924`;
+- product-owned `RawBufferSnapshot[]` and `RawBufferView[]` through `typeof(...)`, so their generated identity stays aligned with the built SDK assembly.
 
 Always validate the generated `.vsextension/extension.json` inside the VSIX after changing provider targets. `Publish-VisualStudioExtension.ps1` performs structural checks and fails packaging when required targets/providers are missing.
 
@@ -103,6 +110,24 @@ Mapped shapes:
 ### Bitmap
 
 Bitmap uses .NET Framework drawing APIs and supports indexed 8bpp, 24bpp RGB storage mapped to BGR, and common 32bpp RGB/ARGB/PARGB mappings.
+
+### Object pointer and pixel-address provenance
+
+`VisualizerSnapshotMetadata` keeps `SourcePointerAddress`/`SourcePointerLabel` separate from `BufferAddress`. The Tool Window calls the latter `Pixels` because it is the address used for byte reads. It never substitutes a pixel pointer for a library object's native pointer.
+
+| Source | `SourcePointerLabel` / source address | `BufferAddress` / pixel address | Lifetime shown |
+| --- | --- | --- | --- |
+| OpenCvSharp `Mat` | `Ptr` from `CvPtr` | `Data` | `CAPTURED`, `LIVE`, `PREVIEW`, or `UNAVAILABLE`, according to the selected transfer path and current lifetime |
+| Emgu CV `Mat` | `Ptr` | `DataPointer` | `CAPTURED`, `LIVE`, `PREVIEW`, or `UNAVAILABLE`, according to the selected transfer path and current lifetime |
+| ImagePtr | `Ptr` | the same `Ptr` | `CAPTURED`, `LIVE`, `PREVIEW`, or `UNAVAILABLE`, according to the selected transfer path and current lifetime |
+| `RawBufferView` | `Buffer` | the same `Buffer` | `CAPTURED`, `LIVE`, `PREVIEW`, or `UNAVAILABLE`, according to the selected transfer path and current lifetime |
+| `System.Drawing.Bitmap` | `Scan0` observed while `LockBits` is active | the same captured `Scan0` | always `CAPTURED`, never live Bitmap memory |
+
+When source and pixel addresses are equal, the row renders one combined label such as `Ptr / Pixels`, `Buffer / Pixels`, or `Scan0 / Pixels`. When they differ, `Ptr` and `Pixels` are rendered on separate wrapped lines. The context menu likewise keeps **Copy pointer address** and **Copy pixel address** separate. The debugger object/expression name is a separate bold line above provenance and thumbnail content.
+
+The pointer fields describe provenance; they do not by themselves make a row live. A small registered-object handoff can copy all bytes immediately and retain the originating addresses as `CAPTURED`, as exercised in the direct-type runtime screenshots. `LIVE` is reserved for a document that still reads the paused debuggee process directly. Large direct-memory transfers, automatic inspection, and mapped buffers can therefore be live while eligible, whereas a completed copied handoff remains captured.
+
+Visual Studio 17.9 does not expose the newer original-expression API used by later debugger hosts. For registered reference objects, the handoff therefore carries `RuntimeHelpers.GetHashCode(target)` plus source type. `DebuggerExpressionDisplayNameResolver` correlates that identity with current-frame Locals/Arguments and falls back to a unique pointer/type match. Collections correlate the root object and append the item selector, producing names such as `imageList[0]`, `imageDictionary[key]`, and `bitmapArray[1]`. If the match is not unique, the provider-supplied display name remains the safe fallback.
 
 ### ImagePtr and SDK buffers
 
@@ -152,8 +177,10 @@ The scanner reads debugger-visible fields and property getters. Exact OpenCvShar
 
 ## Individual Transfer Flow
 
+When the debugging UI context activates, the VSSDK package preloads asynchronously, registers its commands/events, and arms only the file-system event listener. It does not open the ToolWindow or scan the inbox during package initialization. Polling begins only after a new handoff event or an explicit ToolWindow command.
+
 1. The provider asks the object source for `VisualizerSnapshotMetadata`.
-2. Metadata includes descriptor, source type/name, buffer length, and direct-memory fields when the source supports them.
+2. Metadata includes descriptor, source type/name, expression identity, buffer length, source-pointer provenance, and direct pixel-memory fields when the source supports them.
 3. For buffers below 64 MiB, the extension writes descriptor metadata and requests raw chunks into an owned `.raw` file.
 4. For buffers at or above 64 MiB, the extension first requests a sampled preview bounded to 512 x 512.
 5. If the large source supports direct memory and has a valid process ID/address, the docked viewer receives a live process-memory request after the preview.
@@ -163,6 +190,10 @@ The scanner reads debugger-visible fields and property getters. Exact OpenCvShar
 9. `ClaimedHandoffOpenCoordinator` reads the processing file and publishes an explicit ACK only after the ToolWindow-supplied opener adds the image/error document successfully. A failed open atomically publishes its reason before a NACK marker.
 10. The producer treats only ACK as success. Disappearance of the ready file means Processing, not acknowledgement; NACK and conflicting terminal markers are failures.
 11. The temporary Modern host closes after every request reaches a successful ACK; the docked VSSDK window remains. Modern timeout/cancel and Classic fire-and-forget both schedule the shared terminal-artifact cleanup.
+
+Registered unmanaged producers (`RawBufferView`, ImagePtr, OpenCvSharp Mat, Emgu Mat, and Bitmap) route chunk and sampled-preview reads through `CurrentProcessMemoryReader`. It uses current-process `ReadProcessMemory` and accepts a request only when the complete requested byte count is returned. Freed memory, inaccessible pages, and partial native reads therefore become a controlled `IOException`; a partially filled or zero-filled image is not returned as valid data. Sampled preview uses one bounded page cache per transfer. Bitmap reads remain inside `LockBits`/`UnlockBits`, and a negative native stride is normalized from the lowest row address so the transferred descriptor keeps top-to-bottom row order.
+
+Each new transfer reads the bytes currently stored at the supplied address. Reusing the same address for another allocation is indistinguishable from mutating the original object, because a pointer is not an object identity. A successful read also is not an atomic snapshot of a buffer being modified concurrently; the caller must keep the source paused, alive, and stable for the transfer.
 
 Transient handoff reads and terminal-marker moves retry `IOException` and `UnauthorizedAccessException` up to 10 total attempts at 50 ms intervals. Persistent I/O failure or JSON parse/validation failure remains an error. `ScheduleTerminalArtifactCleanup` polls every 100 ms for up to two minutes and removes ACK/NACK/conflict terminal artifacts only. Locked ACK/NACK cleanup is retried, and a request must be observed Missing consecutively before it leaves the pending set. It never deletes Ready or Processing on timeout because another consumer may still own in-flight work. Outer non-cancellation exception catches also schedule the same cleanup. On producer cancellation/exception, any owned request that is still non-Missing causes its snapshot payload directory to be preserved. A marker that terminalizes after the two-minute window and a Processing file stranded by process crash are not immediately reclaimed; stale-session cleanup remains the eventual recovery boundary.
 
@@ -177,7 +208,7 @@ The 64 MiB threshold is `PreviewFirstThreshold` in `DebuggerVisualizerLaunch.cs`
 3. Up to 256 entries are processed per invocation.
 4. Each entry is mapped through the same raw/Bitmap/OpenCvSharp/Emgu/ImagePtr logic.
 5. Valid entries become image rows; null, unsupported, or failed entries become error rows.
-6. Entry names use index or dictionary key labels such as `[0]` or `[key]`.
+6. Entry names preserve the resolved collection root and append index or dictionary-key labels such as `imageList[0]` or `imageDictionary[key]`; provider labels remain the fallback when the root cannot be resolved uniquely.
 7. Large entries can use the same preview/direct-memory path.
 
 Do not replace this with broad `IEnumerable` execution while the debugger is paused; user iterators can have side effects, block, or mutate state.
@@ -366,8 +397,8 @@ After changes to providers, handoff, packaging, or ToolWindow code:
 2. Install/reinstall the Release VSIX.
 3. Restart Visual Studio 2022.
 4. Run `RawBufferVisualizer.VisualizerDebuggee` under the debugger.
-5. Inspect all individual raw/registered-pointer/Bitmap/OpenCvSharp/Emgu cases, and confirm any claimed sample pointer type exactly matches a provider target.
-6. Inspect typed lists/dictionaries, mixed collections, and arrays.
+5. Inspect all individual raw/registered-pointer/Bitmap/OpenCvSharp/Emgu cases. Confirm the title is the debugger expression name; OpenCvSharp/Emgu show native `Ptr` separately from `Pixels`; ImagePtr/RawBufferView combine equal addresses; Bitmap shows captured `Scan0 / Pixels` and never claims live memory.
+6. Inspect typed lists/dictionaries, mixed collections, and arrays. Confirm list/dictionary/array rows retain the root expression name and that direct Bitmap/OpenCvSharp/Emgu arrays open without Visual Studio target-type parse errors.
 7. Confirm all rows land in the same docked viewer.
 8. Confirm valid/error row recovery, pixel values, Save, Delete, Clear, Fit, wheel zoom, and drag pan. Fit must remain aspect-correct after resize; Manual zoom/pan must preserve scale and center.
 9. Continue/exit after a live large Mat and confirm controlled source-unavailable behavior.

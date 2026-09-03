@@ -97,8 +97,10 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     .ToObject<VisualizerSnapshotMetadata>()
                     ?? throw new InvalidDataException("The debugger visualizer returned no metadata.");
 
-                displayName = string.IsNullOrWhiteSpace(metadata.DisplayName) ? displayName : metadata.DisplayName;
                 sourceType = string.IsNullOrWhiteSpace(metadata.SourceType) ? sourceType : metadata.SourceType;
+                displayName = string.IsNullOrWhiteSpace(metadata.DisplayName)
+                    ? GetShortTypeName(sourceType)
+                    : metadata.DisplayName;
                 metadataPath = VisualizerSnapshotStore.WriteSnapshot(
                     metadata,
                     request => objectProvider2.TransferDeserializableObject(request)
@@ -109,7 +111,15 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     visualStudioProcessId,
                     metadataPath,
                     displayName,
-                    sourceType));
+                    sourceType,
+                    null,
+                    false,
+                    metadata.ProcessId,
+                    metadata.BufferAddress,
+                    metadata.SourcePointerAddress,
+                    metadata.SourcePointerLabel,
+                    metadata.ExpressionIdentityHash,
+                    metadata.ExpressionSourceType));
             }
             catch (Exception ex)
             {
@@ -129,6 +139,19 @@ namespace RawBufferVisualizer.VisualStudio.Classic
 
             ScheduleTerminalCleanup(requestPaths);
             WakeDockedToolWindow(visualStudioProcessId);
+        }
+
+        private static string GetShortTypeName(string sourceType)
+        {
+            if (string.IsNullOrWhiteSpace(sourceType))
+            {
+                return "Raw buffer";
+            }
+
+            var comma = sourceType.IndexOf(',');
+            var typeName = comma >= 0 ? sourceType.Substring(0, comma) : sourceType;
+            var dot = typeName.LastIndexOf('.');
+            return (dot >= 0 ? typeName.Substring(dot + 1) : typeName).Trim();
         }
 
         internal static void ScheduleTerminalCleanup(IEnumerable<string> requestPaths)

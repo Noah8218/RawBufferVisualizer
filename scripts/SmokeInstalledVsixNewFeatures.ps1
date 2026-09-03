@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ImagePtrColdStart", "ConcurrentDictionary", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -130,6 +130,7 @@ using System;
 using System.Runtime.InteropServices;
 
 public static class RawBufferInstalledVsixNative {
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr dpiContext);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
@@ -157,6 +158,7 @@ public static class RawBufferInstalledVsixNative {
 
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     public static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+    public static readonly IntPtr DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = new IntPtr(-4);
     public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
     public const uint MOUSEEVENTF_LEFTUP = 0x0004;
     public const int CURSOR_SHOWING = 0x00000001;
@@ -167,6 +169,9 @@ public static class RawBufferInstalledVsixNative {
 }
 '@
 }
+
+[RawBufferInstalledVsixNative]::SetProcessDpiAwarenessContext(
+    [RawBufferInstalledVsixNative]::DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) | Out-Null
 
 if (-not ("RawBufferInstalledVsixRot" -as [type])) {
     Add-Type @'
@@ -444,6 +449,43 @@ function Get-ElementsByControlType([System.Windows.Automation.AutomationElement]
     $elements
 }
 
+function Find-VisibleTextScreenPoint(
+    [System.Windows.Automation.AutomationElement]$Root,
+    [string]$Text) {
+    $editor = Find-ElementByAutomationId $Root "WpfTextView"
+    if (-not $editor) {
+        return $null
+    }
+
+    $textPattern = $null
+    if (-not $editor.TryGetCurrentPattern(
+        [System.Windows.Automation.TextPattern]::Pattern,
+        [ref]$textPattern)) {
+        return $null
+    }
+
+    $range = ([System.Windows.Automation.TextPattern]$textPattern).DocumentRange.FindText(
+        $Text,
+        $false,
+        $false)
+    if (-not $range) {
+        return $null
+    }
+
+    foreach ($bounds in @($range.GetBoundingRectangles())) {
+        if ($bounds.Width -lt 1 -or $bounds.Height -lt 1) {
+            continue
+        }
+
+        return [pscustomobject]@{
+            X = [int]($bounds.Left + ($bounds.Width / 2))
+            Y = [int]($bounds.Top + ($bounds.Height / 2))
+        }
+    }
+
+    $null
+}
+
 function Find-TreeItem([System.Windows.Automation.AutomationElement]$Root, [string]$Name) {
     foreach ($element in Get-ElementsByControlType $Root ([System.Windows.Automation.ControlType]::TreeItem)) {
         if ([string]::Equals($element.Current.Name, $Name, [StringComparison]::Ordinal)) {
@@ -604,17 +646,10 @@ function Click-VisualizerGlyph(
 
     $requiresExplicitVisualizerSelection =
         [Version]$vsInstance.installationVersion -lt [Version]'18.0'
-    $narrowGlyphOffset = if ([Version]$vsInstance.installationVersion -ge [Version]'18.0') {
-        150
-    }
-    elseif ($requiresExplicitVisualizerSelection) {
-        75
-    }
-    else {
-        110
-    }
-    $glyphOffset = if ($rect.Width -lt 900) { $narrowGlyphOffset } elseif ($rect.Width -lt 1300) { 230 } else { 280 }
-    $hoverX = [int][Math]::Max($rect.Left + 20, $rect.Right - $glyphOffset)
+    # The debugger TreeGrid exposes the row but not its Value-cell visualizer
+    # button through UI Automation. The button stays near the Value/Type
+    # boundary, at about 78% of the row width, across narrow and wide layouts.
+    $hoverX = [int]($rect.Left + ($rect.Width * 0.78))
     $hoverY = [int]($rect.Top + $rect.Height / 2)
     [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $hoverY) | Out-Null
     Start-Sleep -Milliseconds 200
@@ -777,13 +812,38 @@ function Invoke-Dte([int]$ProcessId, [scriptblock]$Action) {
 function Show-RawBufferToolWindow([int]$ProcessId) {
     Invoke-Dte $ProcessId {
         param($dte)
-        $commands = $dte.GetType().InvokeMember("Commands", [Reflection.BindingFlags]::GetProperty, $null, $dte, @())
-        $commands.GetType().InvokeMember(
-            "Raise",
-            [Reflection.BindingFlags]::InvokeMethod,
-            $null,
-            $commands,
-            @("{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}", 0x0100, $null, $null)) | Out-Null
+        $commands = $null
+        $lastError = $null
+        for ($attempt = 0; $attempt -lt 120 -and $null -eq $commands; $attempt++) {
+            try {
+                $commands = $dte.GetType().InvokeMember("Commands", [Reflection.BindingFlags]::GetProperty, $null, $dte, @())
+            }
+            catch {
+                $lastError = $_.Exception.Message
+                Start-Sleep -Milliseconds 500
+            }
+        }
+        if ($null -eq $commands) {
+            throw "Visual Studio Commands collection remained unavailable. Last error: $lastError"
+        }
+
+        for ($attempt = 0; $attempt -lt 120; $attempt++) {
+            try {
+                $commands.GetType().InvokeMember(
+                    "Raise",
+                    [Reflection.BindingFlags]::InvokeMethod,
+                    $null,
+                    $commands,
+                    @("{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}", 0x0100, $null, $null)) | Out-Null
+                return
+            }
+            catch {
+                $lastError = $_.Exception.Message
+                Start-Sleep -Milliseconds 500
+            }
+        }
+
+        throw "Raw Buffer Visualizer Tool Window command remained unavailable. Last error: $lastError"
     }
 }
 
@@ -1343,19 +1403,37 @@ function Invoke-IndustrialDataTipScenario(
     Capture-Window $MainHandle $baselinePath
     $windowRect = New-Object RawBufferInstalledVsixNative+RECT
     [RawBufferInstalledVsixNative]::GetWindowRect($MainHandle, [ref]$windowRect) | Out-Null
-    $hoverX = $windowRect.Left + 390
-    $hoverY = $windowRect.Top + 718
+    Invoke-Dte $Process.Id {
+        param($dte)
+        $dte.ActiveDocument.Activate()
+    }
+    Start-Sleep -Milliseconds 500
+    $editor = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "WpfTextView"
+    if (-not $editor) {
+        throw "Visual Studio text editor was not found for the DataTip scenario."
+    }
+    $editor.SetFocus()
+    $aliasPoint = Wait-Until "visible DataTip industrial Mat alias" {
+        Find-VisibleTextScreenPoint (Get-AutomationRoot $MainHandle) "dataTipIndustrialMat"
+    } 15
+    $hoverX = $aliasPoint.X
+    $hoverY = $aliasPoint.Y
+    [RawBufferInstalledVsixNative]::SetCursorPos($windowRect.Left + 20, $windowRect.Top + 80) | Out-Null
+    Start-Sleep -Milliseconds 250
     [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $hoverY) | Out-Null
-    Start-Sleep -Milliseconds 1500
+    Start-Sleep -Milliseconds 4000
     Capture-CurrentWindowWithCursor $MainHandle $hoverPath
 
-    # The debuggee alias is deliberately placed one line above Debugger.Break().
-    # With the verified 1880 x 1040 capture layout, its DataTip visualizer glyph
-    # is stable relative to the Visual Studio window while monitor origin varies.
-    $glyphX = $windowRect.Left + 214
-    $glyphY = $windowRect.Top + 736
-    [RawBufferInstalledVsixNative]::SetCursorPos($glyphX, $glyphY) | Out-Null
-    Start-Sleep -Milliseconds 500
+    $editorBounds = $editor.Current.BoundingRectangle
+    $glyphX = [int]($editorBounds.Left + 60)
+    $glyphY = $hoverY + 18
+    foreach ($x in @(($hoverX - 10), ($hoverX - 60), ($hoverX - 110), ($hoverX - 160), $glyphX)) {
+        [RawBufferInstalledVsixNative]::SetCursorPos(
+            $x,
+            $glyphY) | Out-Null
+        Start-Sleep -Milliseconds 40
+    }
+    Start-Sleep -Milliseconds 100
     Capture-CurrentWindowWithCursor $MainHandle $glyphPath
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
@@ -2215,8 +2293,8 @@ function Invoke-AutomaticCollectionsScenario(
 
     $validTitle = [string]$secondState.documents[$firstValidIndex].title
     $imageItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
-    if ($imageItems.Count -ne 7) {
-        throw "Installed Tool Window exposed $($imageItems.Count) image row(s); expected 7 before Clear."
+    if ($imageItems.Count -le $firstValidIndex) {
+        throw "Installed Tool Window did not realize the valid image row needed for the Clear contract."
     }
     Select-AutomationItem $imageItems[$firstValidIndex]
     $loadedState = Wait-Until "active automatic collection image" {
@@ -2807,6 +2885,115 @@ function Invoke-MultiLibraryHybridScenario(
     }
 }
 
+function Invoke-ImagePtrColdStartScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    if (Find-RawBufferToolWindowElement $MainHandle) {
+        throw "The Raw Buffer Visualizer Tool Window was already open before the ImagePtr visualizer was invoked; this is not a cold-start test."
+    }
+
+    $treeItem = Wait-Until "imagePtrBgr24 Locals row" {
+        Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) "imagePtrBgr24"
+    } 60
+    Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
+
+    $finalState = Wait-Until "ImagePtr cold-start visualizer handoff" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $matches = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "Cressem.ImageModel.ImagePtr" -and
+                -not [bool]$_.isError -and
+                [int]$_.width -eq 640 -and
+                [int]$_.height -eq 484 -and
+                [int]$_.stride -eq 1920 -and
+                [string]$_.pixelFormat -eq "BGR24"
+            })
+            if ($matches.Count -eq 1 -and [int]$state.errorCount -eq 0) { $state } else { $null }
+        }
+        catch {
+            $null
+        }
+    } 60
+
+    $toolElement = Wait-Until "Raw Buffer Visualizer opened by ImagePtr" {
+        Find-RawBufferToolWindowElement $MainHandle
+    } 30
+    if (-not $toolElement) {
+        throw "The ImagePtr visualizer did not open the Raw Buffer Visualizer Tool Window."
+    }
+
+    $capturePath = Join-Path $outputRoot "imageptr-cold-start.png"
+    Capture-Window $MainHandle $capturePath
+
+    [ordered]@{
+        scenario = "ImagePtrColdStart"
+        screenshotPath = $capturePath
+        sourceType = "Cressem.ImageModel.ImagePtr"
+        documentCount = [int]$finalState.documentCount
+        errorCount = [int]$finalState.errorCount
+        width = 640
+        height = 484
+        stride = 1920
+        pixelFormat = "BGR24"
+    }
+}
+
+function Invoke-ConcurrentDictionaryScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $treeItem = Wait-Until "concurrentImageDictionary Locals row" {
+        Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) "concurrentImageDictionary"
+    } 60
+
+    $beforeClickPath = Join-Path $outputRoot "concurrent-dictionary-before-click.png"
+    Capture-Window $MainHandle $beforeClickPath
+    Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
+
+    $finalState = Wait-Until "ConcurrentDictionary registered visualizer handoff" {
+        Dismiss-DebuggerEvaluationWarning | Out-Null
+        if (-not (Test-Path -LiteralPath $sessionPath)) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $matches = @($state.documents | Where-Object {
+                [string]$_.title -eq "concurrentImageDictionary[concurrent-snapshot]" -and
+                [string]$_.objectName -eq "concurrentImageDictionary[concurrent-snapshot]" -and
+                [string]$_.sourceType -eq "RawBufferVisualizer.Sdk.RawBufferSnapshot" -and
+                -not [bool]$_.isError -and
+                [int]$_.width -eq 640 -and
+                [int]$_.height -eq 484 -and
+                [int]$_.stride -eq 1920 -and
+                [string]$_.pixelFormat -eq "BGR24"
+            })
+            if ($matches.Count -eq 1 -and [int]$state.errorCount -eq 0) { $state } else { $null }
+        }
+        catch {
+            $null
+        }
+    } 60
+
+    $capturePath = Join-Path $outputRoot "concurrent-dictionary-opened.png"
+    Capture-Window $MainHandle $capturePath
+
+    [ordered]@{
+        scenario = "ConcurrentDictionary"
+        beforeClickScreenshotPath = $beforeClickPath
+        screenshotPath = $capturePath
+        collectionType = "System.Collections.Concurrent.ConcurrentDictionary<TKey,TValue>"
+        entryTitle = "concurrentImageDictionary[concurrent-snapshot]"
+        sourceType = "RawBufferVisualizer.Sdk.RawBufferSnapshot"
+        documentCount = [int]$finalState.documentCount
+        errorCount = [int]$finalState.errorCount
+    }
+}
+
 function Invoke-OpenVariableScenario(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
@@ -3057,6 +3244,8 @@ $scenarioArgument = switch ($Scenario) {
     "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
     "AutomaticCollections" { "--automatic-collections-debug" }
     "MultiLibraryHybrid" { "--multi-library-debug" }
+    "ImagePtrColdStart" { "--imageptr-cold-start-debug" }
+    "ConcurrentDictionary" { "--concurrent-dictionary-debug" }
     "IndustrialMarketplace" {
         if (-not (Test-Path -LiteralPath $IndustrialImagePath)) {
             throw "Industrial image was not found: $IndustrialImagePath"
@@ -3084,6 +3273,8 @@ try {
         Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
     }
     if ($Scenario -eq "MultiLibraryHybrid" -or
+        $Scenario -eq "ImagePtrColdStart" -or
+        $Scenario -eq "ConcurrentDictionary" -or
         $Scenario -eq "AutomaticCollections" -or
         $Scenario -eq "IndustrialMarketplace" -or
         $Scenario -eq "IndustrialDataTip") {
@@ -3097,7 +3288,10 @@ try {
         New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
         $automaticPreferenceJson = [ordered]@{
             version = 1
-            autoScanOnBreak = $Scenario -ne "IndustrialMarketplace" -and $Scenario -ne "IndustrialDataTip"
+            autoScanOnBreak = $Scenario -ne "IndustrialMarketplace" -and
+                $Scenario -ne "IndustrialDataTip" -and
+                $Scenario -ne "ImagePtrColdStart" -and
+                $Scenario -ne "ConcurrentDictionary"
         } | ConvertTo-Json
         [IO.File]::WriteAllText(
             $automaticPreferencePath,
@@ -3143,12 +3337,14 @@ try {
     } 180
 
     Focus-Window $mainHandle 1920 1040
-    $menuContract = Assert-RawBufferViewMenuContract $visualStudio $mainHandle
-    Show-RawBufferToolWindow $visualStudio.Id
-    Start-Sleep -Milliseconds 1500
-    $toolElement = Wait-Until "Raw Buffer Visualizer tool window element" { Find-RawBufferToolWindowElement $mainHandle } 30
-    if (-not $toolElement) {
-        throw "Raw Buffer Visualizer tool window element was not found."
+    if ($Scenario -ne "ImagePtrColdStart") {
+        $menuContract = Assert-RawBufferViewMenuContract $visualStudio $mainHandle
+        Show-RawBufferToolWindow $visualStudio.Id
+        Start-Sleep -Milliseconds 1500
+        $toolElement = Wait-Until "Raw Buffer Visualizer tool window element" { Find-RawBufferToolWindowElement $mainHandle } 30
+        if (-not $toolElement) {
+            throw "Raw Buffer Visualizer tool window element was not found."
+        }
     }
     Start-Debugging $visualStudio.Id
     Show-LocalsWindow $visualStudio.Id
@@ -3163,6 +3359,12 @@ try {
         }
         elseif ($Scenario -eq "MultiLibraryHybrid") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
+        }
+        elseif ($Scenario -eq "ImagePtrColdStart") {
+            (Find-TreeItem $root "imagePtrBgr24") -ne $null
+        }
+        elseif ($Scenario -eq "ConcurrentDictionary") {
+            (Find-TreeItem $root "concurrentImageDictionary") -ne $null
         }
         elseif ($Scenario -eq "AutomaticCollections") {
             (Find-TreeItem $root "partialOpenCvMatList") -ne $null
@@ -3187,11 +3389,16 @@ try {
     # A newly installed VS 17.x profile can switch to a debug layout that hides
     # tool windows opened before debugging. Re-showing is idempotent and keeps
     # every scenario on the same visible docked window after the layout switch.
-    Show-RawBufferToolWindow $visualStudio.Id
-    Start-Sleep -Milliseconds 500
-    $toolElement = Wait-Until "Raw Buffer Visualizer debug-layout tool window element" {
-        Find-RawBufferToolWindowElement $mainHandle
-    } 30
+    if ($Scenario -ne "ImagePtrColdStart") {
+        $toolElement = Find-RawBufferToolWindowElement $mainHandle
+        if (-not $toolElement) {
+            Show-RawBufferToolWindow $visualStudio.Id
+            Start-Sleep -Milliseconds 500
+            $toolElement = Wait-Until "Raw Buffer Visualizer debug-layout tool window element" {
+                Find-RawBufferToolWindowElement $mainHandle
+            } 30
+        }
+    }
 
     $scenarioResult = switch ($Scenario) {
         "BufferDoctor" { Invoke-BufferDoctorScenario $visualStudio $mainHandle }
@@ -3201,10 +3408,16 @@ try {
         "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
         "AutomaticCollections" { Invoke-AutomaticCollectionsScenario $visualStudio $mainHandle }
         "MultiLibraryHybrid" { Invoke-MultiLibraryHybridScenario $visualStudio $mainHandle }
+        "ImagePtrColdStart" { Invoke-ImagePtrColdStartScenario $visualStudio $mainHandle }
+        "ConcurrentDictionary" { Invoke-ConcurrentDictionaryScenario $visualStudio $mainHandle }
         "IndustrialMarketplace" { Invoke-IndustrialMarketplaceScenario $visualStudio $mainHandle }
         "IndustrialDataTip" { Invoke-IndustrialDataTipScenario $visualStudio $mainHandle }
         "ReleaseAnnouncement" { Invoke-ReleaseAnnouncementScenario $visualStudio $mainHandle }
         "EnvironmentCheck" { Invoke-EnvironmentCheckScenario $mainHandle }
+    }
+
+    if ($Scenario -eq "ImagePtrColdStart") {
+        $menuContract = Assert-RawBufferViewMenuContract $visualStudio $mainHandle
     }
 
     if ($Scenario -eq "AutomaticVisionInspector") {
@@ -3237,6 +3450,26 @@ try {
         $packageProtocolErrors |
             Set-Content -LiteralPath (Join-Path $outputRoot "$Scenario-package-protocol-errors.log") -Encoding UTF8
         throw "Raw Buffer Visualizer package log contains $($packageProtocolErrors.Count) protocol or settings error(s) from this smoke session."
+    }
+    if ($Scenario -eq "ImagePtrColdStart") {
+        $initializeStartIndex = -1
+        $initializeEndIndex = -1
+        $commandIndex = -1
+        $openIndex = -1
+        for ($index = 0; $index -lt $newPackageLogLines.Count; $index++) {
+            $line = [string]$newPackageLogLines[$index]
+            if ($initializeStartIndex -lt 0 -and $line -like "*InitializeAsync start*") { $initializeStartIndex = $index }
+            if ($initializeEndIndex -lt 0 -and $line -like "*InitializeAsync end*") { $initializeEndIndex = $index }
+            if ($commandIndex -lt 0 -and $line -like "*Command invoked*") { $commandIndex = $index }
+            if ($openIndex -lt 0 -and $line -like "*Open start*") { $openIndex = $index }
+        }
+        if ($initializeStartIndex -lt 0 -or
+            $initializeEndIndex -le $initializeStartIndex -or
+            $openIndex -le $initializeEndIndex -or
+            ($commandIndex -ge 0 -and $commandIndex -le $initializeEndIndex)) {
+            throw "ImagePtr cold-start package ordering failed: InitializeAsync must finish before the inbox event or command opens the handoff."
+        }
+        $scenarioResult.packageWakePath = if ($commandIndex -ge 0 -and $commandIndex -lt $openIndex) { "Command" } else { "InboxWatcher" }
     }
     if ($Scenario -eq "AutomaticVisionInspector" -and
         @($newPackageLogLines | Where-Object { $_ -like "*Run mode entered; invalidated 5 live source(s)*" }).Count -ne 1) {

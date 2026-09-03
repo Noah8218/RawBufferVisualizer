@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -42,6 +44,21 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             if (Array.IndexOf(args, "--multi-library-debug") >= 0)
             {
                 return RunMultiLibraryDebug();
+            }
+
+            if (Array.IndexOf(args, "--imageptr-cold-start-debug") >= 0)
+            {
+                return RunImagePtrColdStartDebug();
+            }
+
+            if (Array.IndexOf(args, "--concurrent-dictionary-debug") >= 0)
+            {
+                return RunConcurrentDictionaryDebug();
+            }
+
+            if (Array.IndexOf(args, "--visualizer-registry-debug") >= 0)
+            {
+                return RunVisualizerRegistryDebug();
             }
 
             if (Array.IndexOf(args, "--automatic-collections-debug") >= 0)
@@ -880,6 +897,142 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 Console.ReadLine();
                 return 0;
             }
+        }
+
+        private static int RunImagePtrColdStartDebug()
+        {
+            const int width = Width;
+            const int height = Height;
+            var stride = width * 3;
+            var buffer = CreateBgr24Buffer(width, height, stride);
+            var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+            try
+            {
+                var imagePtrBgr24 = new Cressem.ImageModel.ImagePtr(
+                    handle.AddrOfPinnedObject(),
+                    buffer.LongLength,
+                    width,
+                    height,
+                    stride,
+                    3);
+
+                Debugger.Break();
+
+                GC.KeepAlive(imagePtrBgr24);
+                return 0;
+            }
+            finally
+            {
+                handle.Free();
+            }
+        }
+
+        private static int RunConcurrentDictionaryDebug()
+        {
+            const int width = Width;
+            const int height = Height;
+            var stride = width * 3;
+            var snapshot = RawBufferSnapshot.FromByteArray(
+                CreateBgr24Buffer(width, height, stride),
+                CreateDescriptor(width, height, stride, RawPixelFormat.BGR24, 8));
+            var concurrentImageDictionary = new ConcurrentDictionary<string, object>();
+            concurrentImageDictionary["concurrent-snapshot"] = snapshot;
+
+            Debugger.Break();
+
+            GC.KeepAlive(concurrentImageDictionary);
+            GC.KeepAlive(snapshot);
+            return 0;
+        }
+
+        private static int RunVisualizerRegistryDebug()
+        {
+            const int width = Width;
+            const int height = Height;
+            var stride = width * 3;
+            var registrySnapshot = RawBufferSnapshot.FromByteArray(
+                CreateBgr24Buffer(width, height, stride),
+                CreateDescriptor(width, height, stride, RawPixelFormat.BGR24, 8));
+
+            var imageList = new List<object> { registrySnapshot };
+            var imageDictionary = new Dictionary<string, object>
+            {
+                ["dictionary-snapshot"] = registrySnapshot
+            };
+            var concurrentImageDictionary = new ConcurrentDictionary<string, object>();
+            concurrentImageDictionary["concurrent-snapshot"] = registrySnapshot;
+            var imageArrayList = new ArrayList { registrySnapshot };
+            var imageHashtable = new Hashtable
+            {
+                ["hashtable-snapshot"] = registrySnapshot
+            };
+            var imageObjectArray = new object[] { registrySnapshot };
+            var imageSnapshotArray = new[] { registrySnapshot };
+
+            using (var primaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
+            using (var secondaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
+            using (var primaryOpenCvMat = new Mat(height, width, MatType.CV_8UC3))
+            using (var secondaryOpenCvMat = new Mat(height, width, MatType.CV_8UC3))
+            using (var primaryEmguMat = new Emgu.CV.Mat(height, width, Emgu.CV.CvEnum.DepthType.Cv8U, 3))
+            using (var secondaryEmguMat = new Emgu.CV.Mat(height, width, Emgu.CV.CvEnum.DepthType.Cv8U, 3))
+            {
+                using (var graphics = Graphics.FromImage(primaryBitmap))
+                {
+                    graphics.Clear(Color.FromArgb(31, 71, 131));
+                }
+
+                using (var graphics = Graphics.FromImage(secondaryBitmap))
+                {
+                    graphics.Clear(Color.FromArgb(211, 137, 43));
+                }
+
+                primaryOpenCvMat.SetTo(new Scalar(23, 73, 123));
+                secondaryOpenCvMat.SetTo(new Scalar(173, 83, 33));
+                primaryEmguMat.SetTo(new Emgu.CV.Structure.MCvScalar(23, 73, 123));
+                secondaryEmguMat.SetTo(new Emgu.CV.Structure.MCvScalar(173, 83, 33));
+
+                var bitmapArray = new[] { primaryBitmap, secondaryBitmap };
+                var openCvMatArray = new[] { primaryOpenCvMat, secondaryOpenCvMat };
+                var emguMatArray = new[] { primaryEmguMat, secondaryEmguMat };
+                var imageViewArray = new[]
+                {
+                    new RawBufferView
+                    {
+                        Buffer = primaryOpenCvMat.Data,
+                        BufferLength = (long)stride * height,
+                        Width = width,
+                        Height = height,
+                        Stride = stride,
+                        PixelFormat = RawPixelFormat.BGR24,
+                        Channels = 3,
+                        BitDepth = 8,
+                        Name = "registry-view"
+                    }
+                };
+
+                Debugger.Break();
+
+                GC.KeepAlive(imageList);
+                GC.KeepAlive(imageDictionary);
+                GC.KeepAlive(concurrentImageDictionary);
+                GC.KeepAlive(imageArrayList);
+                GC.KeepAlive(imageHashtable);
+                GC.KeepAlive(imageObjectArray);
+                GC.KeepAlive(imageSnapshotArray);
+                GC.KeepAlive(primaryBitmap);
+                GC.KeepAlive(secondaryBitmap);
+                GC.KeepAlive(primaryOpenCvMat);
+                GC.KeepAlive(secondaryOpenCvMat);
+                GC.KeepAlive(primaryEmguMat);
+                GC.KeepAlive(secondaryEmguMat);
+                GC.KeepAlive(bitmapArray);
+                GC.KeepAlive(openCvMatArray);
+                GC.KeepAlive(emguMatArray);
+                GC.KeepAlive(imageViewArray);
+                GC.KeepAlive(registrySnapshot);
+            }
+
+            return 0;
         }
 
         private static int RunLargeMatDebug(string[] args)

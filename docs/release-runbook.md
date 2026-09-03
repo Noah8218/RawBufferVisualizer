@@ -1,4 +1,4 @@
-﻿# Release Runbook
+# Release Runbook
 
 Use this for a Marketplace update after the normal CI build is green.
 
@@ -19,7 +19,7 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 Use the bump script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 2.0.2
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 2.0.6
 ```
 
 This updates all five version sources:
@@ -33,13 +33,13 @@ This updates all five version sources:
 Example:
 
 ```xml
-<AssemblyVersion>2.0.2.0</AssemblyVersion>
-<FileVersion>2.0.2.0</FileVersion>
-<Version>2.0.2</Version>
+<AssemblyVersion>2.0.6.0</AssemblyVersion>
+<FileVersion>2.0.6.0</FileVersion>
+<Version>2.0.6</Version>
 ```
 
 ```xml
-<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="2.0.2.0" Language="en-US" Publisher="Noah Choi" />
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="2.0.6.0" Language="en-US" Publisher="Noah Choi" />
 ```
 
 ## Release communication gate
@@ -55,7 +55,7 @@ The bump script changes binary version sources only. For every release, intentio
 Run the coherence guard:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.2
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.6
 ```
 
 The guard fails when any version, Overview product heading/current-version section, path, manifest metadata, or GitHub Release notes flow is stale. `Publish-VisualStudioMarketplace.ps1` requires an explicit `-VsixPath`, rejects a VSIX whose manifest version differs from the current extension project version, and defaults only the Overview to `docs\marketplace-overview-<VSIX version>.md`; it no longer uploads the root README as the Overview. Never depend on a repository publish folder containing the current qualified candidate.
@@ -70,11 +70,11 @@ Run this before pushing the version bump:
 dotnet restore C:\Git\RawBufferVisualizer\RawBufferVisualizer.sln
 dotnet build C:\Git\RawBufferVisualizer\RawBufferVisualizer.sln --configuration Release --no-restore
 dotnet run --project C:\Git\RawBufferVisualizer\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.2
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-EnvironmentCheckContracts.ps1
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.2\candidate -NoZip
-powershell -STA -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.2\fit-stability
-powershell -STA -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\SmokeDockedMemorySoak.ps1 -Configuration Release -Framework net472 -NoBuild
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.6
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-EnvironmentCheckContracts.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\candidate -NoZip
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\fit-stability
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedMemorySoak.ps1 -Configuration Release -Framework net472 -NoBuild
 ```
 
 `Publish-VisualStudioExtension.ps1` is also the hybrid package-registration guard. It must produce `RawBufferVisualizer.VisualStudio.Vssdk.pkgdef` with `CodeBase="$PackageFolder$\RawBufferVisualizer.VisualStudio.Vssdk.dll"`, Package GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, and exactly one `"{1977574b-f107-465f-bfd1-5fc022907039}"=", Menus.ctmenu, 2"` registration. It must package the Extensibility provider under `OutOfProc`, reject the obsolete Extensibility-owned `.pkgdef`, duplicate package/menu/ToolWindow registrations, and the retired Package GUID.
@@ -83,29 +83,29 @@ When the exact `.build` VSIX has already passed an explicit current-source Relea
 
 The VSIX to upload or smoke-test is:
 
-Use only the exact candidate recorded in [release-qualification-2.0.2.md](release-qualification-2.0.2.md). Do not upload it until the matching source is committed and pushed, CI passes for that commit, and the owner explicitly authorizes publication. Do not rebuild or substitute the candidate bytes after qualification.
+Use only the exact candidate recorded in [release-qualification-2.0.6.md](release-qualification-2.0.6.md). Do not upload it until the owner approves the candidate and copy, the matching source is committed and pushed, CI passes for that commit, and the exact bytes pass installed qualification. Do not rebuild or substitute the candidate bytes after qualification.
 
 Validate the exact package and generated Marketplace manifest without publishing:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath <FULLY_QUALIFIED_2_0_2_VSIX> -OverviewPath C:\Git\RawBufferVisualizer\docs\marketplace-overview-2.0.2.md -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.2\marketplace\vs-publish.json -DryRun
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath <FULLY_QUALIFIED_2_0_6_VSIX> -OverviewPath .\docs\marketplace-overview-2.0.6.md -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.6\marketplace\vs-publish.json -DryRun
 ```
 
-Omitting `-VsixPath` is an error. Passing public `2.0.1`, the historical development v4 candidate, or any superseded `2.0.0` VSIX is also an error. Before upload, the source must be committed/pushed, CI must pass for that commit, and the exact candidate path, length, and SHA-256 must match [release-qualification-2.0.2.md](release-qualification-2.0.2.md). Marketplace upload remains owner-controlled.
+Omitting `-VsixPath` is an error. Passing public `2.0.5`, frozen local `2.0.4`, or any earlier/superseded candidate as `2.0.6` is also an error. Before upload, the source must be committed/pushed, CI must pass for that commit, installed qualification must pass, and the exact candidate path, length, and SHA-256 must match [release-qualification-2.0.6.md](release-qualification-2.0.6.md). Marketplace upload remains owner-controlled.
 
 ## Pre-publish clean/update gate
 
-Before uploading, perform both a clean install and an in-place update from exact public `2.0.1` on a serviced Visual Studio 2022 profile. Also qualify the same bytes on real VS2022 `17.9` and stable VS2026 `18.x`. Do not uninstall the public baseline, run registration repair, or clear skipped-package state before the update test.
+Before uploading, perform both a clean install and an in-place update from exact public `2.0.5` on a serviced Visual Studio 2022 profile. Also qualify the same bytes on real VS2022 `17.9` when that host is available and stable VS2026 `18.x`. Do not uninstall the public baseline, run registration repair, or clear skipped-package state before the update test.
 
 1. Install the exact candidate VSIX.
 2. Restart Visual Studio.
 3. Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.2.0
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticVisionInspector -Configuration Release -NoBuild -NoInstall
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticCollections -Configuration Release -NoBuild -NoInstall
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.6.0
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticVisionInspector -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticCollections -Configuration Release -NoBuild -NoInstall
+powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
 ```
 
 `Install-VisualStudioExtension.ps1` requires all `devenv.exe` processes to be closed. During quiet reinstall it waits for the direct VSIXInstaller process rather than long-lived descendants and removes idle `Microsoft.ServiceHub.Controller` processes between uninstall/install operations. If a manual install returns exit code `2004`, inspect the newest `%TEMP%\dd_VSIXInstaller_*.log` for the blocking process before retrying.
@@ -115,7 +115,7 @@ powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Smok
 6. Confirm Fit remains aspect-correct after resize and Manual zoom/pan remains stable.
 7. Record the candidate SHA-256, Windows/Visual Studio versions, result JSON, screenshots, `package.log`, and relevant `ActivityLog.xml`.
 
-Install the same unchanged VSIX on real Visual Studio 2022 `17.9`, the current serviced Visual Studio 2022 instance, and stable Visual Studio 2026 `18.x`; repeat at least `ReleaseAnnouncement`, `AutomaticCollections`, `MultiLibraryHybrid`, and `EnvironmentCheck`. Pass `-VisualStudioInstanceId` explicitly so installation and smoke evidence name the intended product generation. The `2.0.2` VSIX manifest uses `[17.9,18.0)`; Visual Studio 2026 supports API version 17.x and evaluates only the lower bound for compatibility. Record each exact host build and do not substitute a Preview/Insiders build.
+Install the same unchanged VSIX on real Visual Studio 2022 `17.9` when available, the current serviced Visual Studio 2022 instance, and stable Visual Studio 2026 `18.x`; repeat at least `ImagePtrColdStart`, `ConcurrentDictionary`, `ReleaseAnnouncement`, `AutomaticCollections`, `MultiLibraryHybrid`, `EnvironmentCheck`, and the pointer provenance/safety changed path. Pass `-VisualStudioInstanceId` explicitly so installation and smoke evidence name the intended product generation. The `2.0.6` VSIX manifest uses `[17.9,18.0)`; Visual Studio 2026 supports API version 17.x and evaluates only the lower bound for compatibility. Record each exact host build and do not substitute a Preview/Insiders build.
 
 Before the VS2026 install, run `Test-VisualStudioMarketplaceUpdate.ps1` or inspect both `%LOCALAPPDATA%\Microsoft\VisualStudio\18.0_<instance>\Extensions` and `<VS2026>\Common7\IDE\VSExtensions`. A historical extension migrated into the per-machine `VSExtensions` root owns the same extension ID and cannot be replaced by an ordinary per-user developer install. Remove or update it through Visual Studio **Manage Extensions** or Visual Studio Installer with administrator rights. Never delete the `Program Files` extension directory manually. Preserve the newest `dd_VSIXInstaller_*.log` if the setup catalog no longer contains that historical component.
 
@@ -137,7 +137,7 @@ Recommended inputs:
 | `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
 | `internal_name` | `RawBufferVisualizer` |
 | `categories` | `other` |
-| `expected_version` | Exact VSIX version, for example `2.0.2.0`. |
+| `expected_version` | Exact VSIX version, for example `2.0.6.0`. |
 
 The workflow publishes only when `publish=true`; the default path is a dry validation build.
 
@@ -145,7 +145,7 @@ The tag workflow creates the GitHub Release from the same curated `docs\marketpl
 
 ## Visual Studio update smoke
 
-Use a real supported Visual Studio 2022 machine that already has public `2.0.1` installed. After that update passes, test the identical VSIX on real VS2022 `17.9`, a current serviced VS2022 instance, and stable VS2026 `18.x`.
+Use a real supported Visual Studio 2022 machine that already has public `2.0.5` installed. After that update passes, test the identical VSIX on real VS2022 `17.9` when available, a current serviced VS2022 instance, and stable VS2026 `18.x`.
 
 1. Wait for Marketplace propagation after publishing.
 2. Open Visual Studio.
@@ -156,7 +156,7 @@ Use a real supported Visual Studio 2022 machine that already has public `2.0.1` 
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.2.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.6.0
 ```
 
 8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
@@ -174,14 +174,14 @@ powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Test
 If an upgraded developer profile reports `RawBufferVisualizerPackage did not load correctly`, preserve `ActivityLog.xml` and `package.log`. The repair script may be used only to confirm a stale legacy registration:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File C:\Git\RawBufferVisualizer\scripts\Repair-VisualStudioExtensionRegistration.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\Repair-VisualStudioExtensionRegistration.ps1
 ```
 
 Then restart Visual Studio, reinstall the candidate without repair, and repeat the smoke. A repair-only success is not release evidence.
 
 Root cause to check in `ActivityLog.xml`: Visual Studio may keep a stale VSSDK `CodeBase` pointing to a deleted folder under `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<id>\Extensions`. Version `1.0.24.0` and later no longer auto-loads the package on startup; the docked window loads when the visualizer command is invoked.
 
-If the popup appears only when inspecting an image, also check whether `ActivityLog.xml` reports a missing or mismatched `Microsoft.VisualStudio.Threading` or Extensibility contract assembly. In 2.0.2 the in-process `RawBufferVisualizer.VisualStudio.Vssdk.dll` is pinned to the qualified 17.9 threading contract and the provider is packaged under `OutOfProc`; the release package step rejects a newer VSSDK threading reference or a mismatched `[17.9,18.0)` declaration.
+If the popup appears only when inspecting an image, also check whether `ActivityLog.xml` reports a missing or mismatched `Microsoft.VisualStudio.Threading` or Extensibility contract assembly. In 2.0.6 the in-process `RawBufferVisualizer.VisualStudio.Vssdk.dll` is pinned to the qualified 17.9 threading contract, preloads asynchronously in the Debugging UI context, and the provider is packaged under `OutOfProc`; the release package step rejects a newer VSSDK threading reference, missing preload contract, unsafe initialization, or mismatched `[17.9,18.0)` declaration.
 
 The package also writes a small diagnostic log here:
 
@@ -207,5 +207,5 @@ The package also writes a small diagnostic log here:
 - Initialized OpenCvSharp/Emgu Mats do not open automatically, Bitmap appears as an automatic row, or repeated **Scan Now** duplicates rows.
 - Fit changes image aspect after resize, or Manual resize resets zoom/center.
 - The clean-PC smoke passes only after a registry repair.
-- The update from public `2.0.1` to candidate/public `2.0.2` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
+- The update from public `2.0.5` to candidate/public `2.0.6` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
 - The unchanged candidate has not passed the stable VS2026 installed-runtime core matrix.

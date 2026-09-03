@@ -52,10 +52,39 @@ for ($y = 0; $y -lt $height; $y++) {
     byteOrder = "LittleEndian"
 } | ConvertTo-Json | Set-Content -LiteralPath $metadataPath -Encoding UTF8
 
+$twentyMetadataPaths = @(
+    for ($index = 0; $index -lt 20; $index++) {
+        $itemMetadataPath = Join-Path $sampleRoot ("layout-mono8-{0:D2}.rbuf.json" -f $index)
+        @{
+            rawFile = "layout-mono8.raw"
+            width = $width
+            height = $height
+            stride = $width
+            pixelFormat = "Mono8"
+            validBits = 8
+            byteOrder = "LittleEndian"
+        } | ConvertTo-Json | Set-Content -LiteralPath $itemMetadataPath -Encoding UTF8
+        $itemMetadataPath
+    }
+)
+
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+$screens = @([System.Windows.Forms.Screen]::AllScreens)
+$testScreen = if ($screens.Count -eq 2) {
+    $screens |
+        Sort-Object @{ Expression = { $_.Bounds.Width * $_.Bounds.Height } }, @{ Expression = { $_.Bounds.Left } } |
+        Select-Object -First 1
+}
+else {
+    [System.Windows.Forms.Screen]::PrimaryScreen
+}
+$testX = $testScreen.WorkingArea.Left + 20
+$testY = $testScreen.WorkingArea.Top + 20
 
 $interopCandidates = @(
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll",
@@ -78,8 +107,19 @@ public static class RawBufferDockedLayoutNative {
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
+    [DllImport("user32.dll")] public static extern bool SetCursorPos(int X, int Y);
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(IntPtr hWnd, ref POINT point);
+    [DllImport("user32.dll")] public static extern void mouse_event(uint flags, int dx, int dy, int data, UIntPtr extraInfo);
+    [DllImport("user32.dll")] public static extern void keybd_event(byte virtualKey, byte scanCode, uint flags, UIntPtr extraInfo);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
+    public const uint MOUSEEVENTF_LEFTDOWN = 0x0002;
+    public const uint MOUSEEVENTF_LEFTUP = 0x0004;
+    public const byte VK_SPACE = 0x20;
+    public const uint KEYEVENTF_KEYUP = 0x0002;
 }
 '@
 }
@@ -104,7 +144,15 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
     $bitmap = New-Object System.Drawing.Bitmap $captureWidth, $captureHeight
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
     try {
-        $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, [System.Drawing.Size]::new($captureWidth, $captureHeight))
+        $hdc = $graphics.GetHdc()
+        try {
+            if (-not [RawBufferDockedLayoutNative]::PrintWindow($hwnd, $hdc, 2)) {
+                throw "PrintWindow failed for handle $hwnd."
+            }
+        }
+        finally {
+            $graphics.ReleaseHdc($hdc)
+        }
         $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
     }
     finally {
@@ -157,13 +205,23 @@ foreach ($layoutWidth in $Widths) {
     $window.Show()
     Wait-Dispatcher 500
     $helper = New-Object System.Windows.Interop.WindowInteropHelper($window)
+    $dpi = [RawBufferDockedLayoutNative]::GetDpiForWindow($helper.Handle)
+    $dpiScale = $dpi / 96.0
     $windowFrameWidth = [Math]::Max(0, $window.ActualWidth - $control.ActualWidth)
     $targetWindowWidth = [int][Math]::Ceiling($layoutWidth + $windowFrameWidth)
+    $targetWindowWidthPixels = [int][Math]::Ceiling($targetWindowWidth * $dpiScale)
     [RawBufferDockedLayoutNative]::ShowWindow($helper.Handle, 9) | Out-Null
-    [RawBufferDockedLayoutNative]::SetWindowPos($helper.Handle, [RawBufferDockedLayoutNative]::HWND_TOPMOST, 20, 20, $targetWindowWidth, 520, 0x0040) | Out-Null
+    [RawBufferDockedLayoutNative]::SetWindowPos($helper.Handle, [RawBufferDockedLayoutNative]::HWND_TOPMOST, $testX, $testY, $targetWindowWidthPixels, [int][Math]::Ceiling(520 * $dpiScale), 0x0040) | Out-Null
     [RawBufferDockedLayoutNative]::BringWindowToTop($helper.Handle) | Out-Null
     [RawBufferDockedLayoutNative]::SetForegroundWindow($helper.Handle) | Out-Null
     Wait-Dispatcher 500
+    $actualWindowRect = New-Object RawBufferDockedLayoutNative+RECT
+    [RawBufferDockedLayoutNative]::GetWindowRect($helper.Handle, [ref]$actualWindowRect) | Out-Null
+    $intersectionWidth = [Math]::Max(0, [Math]::Min($actualWindowRect.Right, $testScreen.Bounds.Right) - [Math]::Max($actualWindowRect.Left, $testScreen.Bounds.Left))
+    $intersectionHeight = [Math]::Max(0, [Math]::Min($actualWindowRect.Bottom, $testScreen.Bounds.Bottom) - [Math]::Max($actualWindowRect.Top, $testScreen.Bounds.Top))
+    if ($intersectionWidth -le 0 -or $intersectionHeight -le 0) {
+        throw "Test window did not intersect the selected monitor $($testScreen.DeviceName)."
+    }
     if ([Math]::Abs($control.ActualWidth - $layoutWidth) -gt 1.5) {
         throw "Requested content width $layoutWidth did not settle. Actual: $($control.ActualWidth)"
     }
@@ -194,37 +252,44 @@ foreach ($layoutWidth in $Widths) {
         $control.FindName("CompactInterpretPixelFormatBox")
         $control.FindName("CompactInterpretByteOrderBox"))
     $collectionOption = $control.FindName("IncludeImageCollectionsBox")
-    $primaryLabels = @(
+    $imageListHeader = $control.FindName("ImageListHeader")
+    $imagesHeadingText = $control.FindName("ImagesHeadingText")
+    $toolbarLabels = @(
         $control.FindName("OpenButtonText")
-        $control.FindName("ClearButtonText")
         $control.FindName("SaveButtonText")
         $control.FindName("FitButtonText")
         $control.FindName("ActualSizeButtonText"))
-    $primaryButtons = @($openButton, $clearButton, $saveButton, $fitButton, $actualSizeButton)
+    $clearButtonText = $control.FindName("ClearButtonText")
+    $toolbarButtons = @($openButton, $saveButton, $fitButton, $actualSizeButton)
+    $primaryButtons = @($toolbarButtons + $clearButton)
     $iconsPresent = @($primaryButtons | Where-Object {
         $null -ne $_ -and
         $null -ne $_.Content -and
         $_.Content.Children.Count -gt 0 -and
         $_.Content.Children[0].GetType().FullName -eq "Microsoft.VisualStudio.Imaging.CrispImage"
     }).Count -eq $primaryButtons.Count
-    $iconOnlyDiscoverabilityValid = @($primaryButtons[0..2] | Where-Object {
+    $iconOnlyDiscoverabilityValid = @($primaryButtons | Where-Object {
         $name = [System.Windows.Automation.AutomationProperties]::GetName($_)
         -not [string]::IsNullOrWhiteSpace($name) -and
         $_.ToolTip -is [string] -and
         -not [string]::IsNullOrWhiteSpace([string]$_.ToolTip)
-    }).Count -eq 3
+    }).Count -eq $primaryButtons.Count
+    $clearDiscoverabilityValid = $clearButtonText.Text -eq "Clear all" -and
+        $clearButtonText.Visibility -eq [System.Windows.Visibility]::Visible -and
+        [System.Windows.Automation.AutomationProperties]::GetName($clearButton) -eq "Clear all images" -and
+        [string]$clearButton.ToolTip -eq "Remove all loaded images and reset the viewer. Debuggee data is unchanged."
     $primaryLabelStateValid = if ($layoutWidth -lt 760) {
-        @($primaryLabels[0..2] | Where-Object {
+        @($toolbarLabels[0..1] | Where-Object {
             $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Collapsed
-        }).Count -eq 3 -and
-        @($primaryLabels[3..4] | Where-Object {
+        }).Count -eq 2 -and
+        @($toolbarLabels[2..3] | Where-Object {
             $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Visible
         }).Count -eq 2
     }
     else {
-        @($primaryLabels | Where-Object {
+        @($toolbarLabels | Where-Object {
             $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Visible
-        }).Count -eq $primaryLabels.Count
+        }).Count -eq $toolbarLabels.Count
     }
     $emptyCommandStateValid = $openButton.IsEnabled -and
         -not $clearButton.IsEnabled -and
@@ -245,6 +310,7 @@ foreach ($layoutWidth in $Widths) {
     if ($null -ne $collectionOption -or
         -not $iconsPresent -or
         -not $iconOnlyDiscoverabilityValid -or
+        -not $clearDiscoverabilityValid -or
         -not $primaryLabelStateValid -or
         -not $emptyCommandStateValid -or
         -not $emptyInterpretationStateValid -or
@@ -324,6 +390,18 @@ foreach ($layoutWidth in $Widths) {
         $viewerColumnWidth = $mainContentGrid.ColumnDefinitions[2].ActualWidth
         if ($viewerColumnWidth -lt 139.5) {
             throw "The image-list splitter reduced the viewer below 140 px at window width $layoutWidth."
+        }
+        $clearOrigin = $clearButton.TranslatePoint([System.Windows.Point]::new(0, 0), $imageListHeader)
+        $headingOrigin = $imagesHeadingText.TranslatePoint([System.Windows.Point]::new(0, 0), $imageListHeader)
+        if ($clearOrigin.X -lt -0.5 -or
+            $clearOrigin.Y -lt -0.5 -or
+            ($clearOrigin.X + $clearButton.ActualWidth) -gt ($imageListHeader.ActualWidth + 0.5) -or
+            ($clearOrigin.Y + $clearButton.ActualHeight) -gt ($imageListHeader.ActualHeight + 0.5) -or
+            $clearButtonText.ActualWidth -le 0 -or
+            $headingOrigin.X -lt -0.5 -or
+            ($headingOrigin.X + $imagesHeadingText.ActualWidth) -gt ($imageListHeader.ActualWidth + 0.5) -or
+            $imagesHeadingText.ActualWidth -lt 49.5) {
+            throw "Clear all was clipped at image-list width $targetWidth and window width $layoutWidth."
         }
         $splitCases.Add([pscustomobject]@{
             Axis = "Images"
@@ -470,10 +548,10 @@ foreach ($layoutWidth in $Widths) {
     [RawBufferDockedLayoutNative]::SetWindowPos(
         $helper.Handle,
         [RawBufferDockedLayoutNative]::HWND_TOPMOST,
-        20,
-        20,
-        $targetWindowWidth,
-        620,
+        $testX,
+        $testY,
+        $targetWindowWidthPixels,
+        [int][Math]::Ceiling(620 * $dpiScale),
         0x0040) | Out-Null
     Wait-Dispatcher 500
     $resizedFitState = $imageView.GetViewState()
@@ -498,10 +576,10 @@ foreach ($layoutWidth in $Widths) {
     [RawBufferDockedLayoutNative]::SetWindowPos(
         $helper.Handle,
         [RawBufferDockedLayoutNative]::HWND_TOPMOST,
-        20,
-        20,
-        $targetWindowWidth,
-        560,
+        $testX,
+        $testY,
+        $targetWindowWidthPixels,
+        [int][Math]::Ceiling(560 * $dpiScale),
         0x0040) | Out-Null
     Wait-Dispatcher 500
     $manualAfterResize = $imageView.GetViewState()
@@ -529,10 +607,10 @@ foreach ($layoutWidth in $Widths) {
     [RawBufferDockedLayoutNative]::SetWindowPos(
         $helper.Handle,
         [RawBufferDockedLayoutNative]::HWND_TOPMOST,
-        20,
-        20,
-        $targetWindowWidth,
-        520,
+        $testX,
+        $testY,
+        $targetWindowWidthPixels,
+        [int][Math]::Ceiling(520 * $dpiScale),
         0x0040) | Out-Null
     Wait-Dispatcher 500
 
@@ -687,6 +765,19 @@ foreach ($layoutWidth in $Widths) {
         throw "Normal image did not recover after a malformed handoff at width $layoutWidth."
     }
 
+    $clearButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    Wait-Dispatcher 250
+    foreach ($itemMetadataPath in $twentyMetadataPaths) {
+        $control.OpenPath($itemMetadataPath)
+    }
+    Wait-Dispatcher 1200
+    $twentyImageStateValid = $imageList.Items.Count -eq 20 -and $clearButton.IsEnabled
+    if (-not $twentyImageStateValid) {
+        throw "The docked viewer did not accumulate all 20 images before Clear all at width $layoutWidth. Count: $($imageList.Items.Count)"
+    }
+    $twentyImageCapturePath = Join-Path $outputRoot "twenty-images-before-clear-$layoutWidth.png"
+    Capture-Window $helper.Handle $twentyImageCapturePath
+
     $diagnoseButton = if ($compact.Visibility -eq [System.Windows.Visibility]::Visible) {
         $control.FindName("CompactDiagnoseBufferButton")
     }
@@ -710,7 +801,39 @@ foreach ($layoutWidth in $Widths) {
 
     $inspectorVisibilityBeforeClear = $inspector.Visibility
     $compactInspectorVisibilityBeforeClear = $compact.Visibility
-    $clearButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    [RawBufferDockedLayoutNative]::BringWindowToTop($helper.Handle) | Out-Null
+    [RawBufferDockedLayoutNative]::SetForegroundWindow($helper.Handle) | Out-Null
+    [RawBufferDockedLayoutNative]::SetCursorPos($testScreen.WorkingArea.Right - 8, $testScreen.WorkingArea.Bottom - 8) | Out-Null
+    Wait-Dispatcher 150
+    $clearMouseLeaveStateValid = -not $clearButton.IsMouseOver
+    $clientOrigin = New-Object RawBufferDockedLayoutNative+POINT
+    [RawBufferDockedLayoutNative]::ClientToScreen($helper.Handle, [ref]$clientOrigin) | Out-Null
+    $clearButtonPoint = $clearButton.TranslatePoint(
+        [System.Windows.Point]::new($clearButton.ActualWidth / 2, $clearButton.ActualHeight / 2),
+        $control)
+    $clearButtonScreenX = $clientOrigin.X + [int][Math]::Round($clearButtonPoint.X * $dpiScale)
+    $clearButtonScreenY = $clientOrigin.Y + [int][Math]::Round($clearButtonPoint.Y * $dpiScale)
+    [RawBufferDockedLayoutNative]::SetCursorPos($clearButtonScreenX, $clearButtonScreenY) | Out-Null
+    Wait-Dispatcher 300
+    $clearHoverStateValid = $clearButton.IsMouseOver
+    $clearHoverCapturePath = Join-Path $outputRoot "clear-hover-$layoutWidth.png"
+    Capture-Window $helper.Handle $clearHoverCapturePath
+    $null = $clearButton.Focus()
+    $null = [System.Windows.Input.Keyboard]::Focus($clearButton)
+    Wait-Dispatcher 100
+    $clearFocusStateValid = $clearButton.IsKeyboardFocused
+    $clearFocusCapturePath = Join-Path $outputRoot "clear-focused-$layoutWidth.png"
+    Capture-Window $helper.Handle $clearFocusCapturePath
+    [RawBufferDockedLayoutNative]::mouse_event([RawBufferDockedLayoutNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    try {
+        Wait-Dispatcher 150
+        $clearPressedStateValid = $clearButton.IsPressed
+        $clearPressedCapturePath = Join-Path $outputRoot "clear-pressed-$layoutWidth.png"
+        Capture-Window $helper.Handle $clearPressedCapturePath
+    }
+    finally {
+        [RawBufferDockedLayoutNative]::mouse_event([RawBufferDockedLayoutNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+    }
     Wait-Dispatcher 1000
 
     $clearInterpretationStateValid = -not $interpretControls.IsEnabled -and
@@ -741,6 +864,9 @@ foreach ($layoutWidth in $Widths) {
         -not $clearDocumentStateValid) {
         throw "Clear did not reset the complete document-dependent UI state at width $layoutWidth. Interpret=$clearInterpretationStateValid Diagnosis=$clearDiagnosisStateValid Inspector=$clearInspectorStateValid Layout=$clearLayoutStateValid Document=$clearDocumentStateValid Status='$($statusText.Text)'."
     }
+    if (-not $clearMouseLeaveStateValid -or -not $clearHoverStateValid -or -not $clearFocusStateValid -or -not $clearPressedStateValid) {
+        throw "Clear all visual-state contract failed at width $layoutWidth. Leave=$clearMouseLeaveStateValid Hover=$clearHoverStateValid Focus=$clearFocusStateValid Pressed=$clearPressedStateValid"
+    }
 
     $clearCapturePath = Join-Path $outputRoot "clear-after-$layoutWidth.png"
     Capture-Window $helper.Handle $clearCapturePath
@@ -757,7 +883,201 @@ foreach ($layoutWidth in $Widths) {
         throw "Interpret controls did not restore after reopening an image at width $layoutWidth."
     }
 
+    $liveBuffer = [byte[]]$buffer.Clone()
+    $liveHandle = [Runtime.InteropServices.GCHandle]::Alloc(
+        $liveBuffer,
+        [Runtime.InteropServices.GCHandleType]::Pinned)
+    try {
+        $liveProcessId = [Diagnostics.Process]::GetCurrentProcess().Id
+        $liveAddress = $liveHandle.AddrOfPinnedObject().ToInt64()
+        $expectedAddress = "0x{0:X}" -f [uint64]$liveAddress
+        $liveDescriptor = New-Object RawBufferVisualizer.Core.RawImageDescriptor
+        $liveDescriptor.Width = $width
+        $liveDescriptor.Height = $height
+        $liveDescriptor.Stride = $width
+        $liveDescriptor.PixelFormat = [RawBufferVisualizer.Core.RawPixelFormat]::Mono8
+        $liveDescriptor.ValidBits = 8
+        $liveDescriptor.ByteOrder = [RawBufferVisualizer.Core.RawByteOrder]::LittleEndian
+
+        $capturedARequestPath = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteSnapshotRequest(
+            $liveProcessId,
+            $metadataPath,
+            "capturedImagePtrA",
+            "Cressem.ImageModel.ImagePtr",
+            "layout-captured-a-$layoutWidth",
+            $false,
+            $liveProcessId,
+            $liveAddress,
+            $liveAddress,
+            "Ptr")
+        $control.OpenHandoffRequest($capturedARequestPath)
+
+        $liveBuffer[0] = 203
+        $capturedBMetadataPath = Join-Path $sampleRoot "same-address-b-$layoutWidth.rbuf.json"
+        $null = [RawBufferVisualizer.Sdk.RawBufferSnapshot]::Save(
+            $capturedBMetadataPath,
+            $liveBuffer,
+            $liveDescriptor)
+        $capturedBRequestPath = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteSnapshotRequest(
+            $liveProcessId,
+            $capturedBMetadataPath,
+            "capturedImagePtrB",
+            "Cressem.ImageModel.ImagePtr",
+            "layout-captured-b-$layoutWidth",
+            $false,
+            $liveProcessId,
+            $liveAddress,
+            $liveAddress,
+            "Ptr")
+        $control.OpenHandoffRequest($capturedBRequestPath)
+
+        $liveRequestPath = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteLiveMemoryRequest(
+            $liveProcessId,
+            $liveProcessId,
+            $liveAddress,
+            $liveBuffer.LongLength,
+            $liveDescriptor,
+            "liveImagePtr",
+            "Cressem.ImageModel.ImagePtr",
+            "layout-live-$layoutWidth",
+            $liveAddress,
+            "Ptr")
+        $control.OpenHandoffRequest($liveRequestPath)
+        Wait-Dispatcher 750
+
+        $capturedAItem = $imageList.Items[$imageList.Items.Count - 3]
+        $capturedBItem = $imageList.Items[$imageList.Items.Count - 2]
+        $liveItem = $imageList.Items[$imageList.Items.Count - 1]
+        $imageList.SelectedItem = $liveItem
+        $imageList.ScrollIntoView($liveItem)
+        $imageList.UpdateLayout()
+        Wait-Dispatcher 250
+        $addressRowsValid = $imageList.Items.Count -eq 4 -and
+            $capturedAItem.SourceAddressState -eq "CAPTURED" -and
+            $capturedBItem.SourceAddressState -eq "CAPTURED" -and
+            $liveItem.SourceAddressState -eq "LIVE" -and
+            $capturedAItem.DebuggeeProcessId -eq $liveProcessId -and
+            $capturedBItem.DebuggeeProcessId -eq $liveProcessId -and
+            $liveItem.DebuggeeProcessId -eq $liveProcessId -and
+            $capturedAItem.FormattedDataAddress -eq $expectedAddress -and
+            $capturedBItem.FormattedDataAddress -eq $expectedAddress -and
+            $liveItem.FormattedDataAddress -eq $expectedAddress -and
+            $capturedAItem.FormattedSourcePointerAddress -eq $expectedAddress -and
+            $capturedBItem.FormattedSourcePointerAddress -eq $expectedAddress -and
+            $liveItem.FormattedSourcePointerAddress -eq $expectedAddress -and
+            $capturedAItem.SourcePointerText.Contains("Ptr / Pixels") -and
+            $capturedBItem.SourcePointerText.Contains("Ptr / Pixels") -and
+            $liveItem.SourcePointerText.Contains("Ptr / Pixels") -and
+            $capturedAItem.SourceStateText.Contains("PID $liveProcessId") -and
+            $capturedBItem.SourceStateText.Contains("PID $liveProcessId") -and
+            $liveItem.SourceStateText.Contains("PID $liveProcessId")
+        if (-not $addressRowsValid) {
+            throw "Captured/live same-address rows were not preserved independently at width $layoutWidth."
+        }
+
+        $liveBuffer[0] = 211
+        $sameAddressSemanticsValid =
+            $capturedAItem.Source.DescribePixel(0, 0).Contains("Value=32") -and
+            $capturedBItem.Source.DescribePixel(0, 0).Contains("Value=203") -and
+            $liveItem.Source.DescribePixel(0, 0).Contains("Value=211")
+        if (-not $sameAddressSemanticsValid) {
+            throw "Same-address captured/live value semantics failed at width $layoutWidth."
+        }
+
+        $descriptorText = $control.FindName("DescriptorText")
+        $descriptorAddressValid = $descriptorText.Text.Contains("Process    $liveProcessId") -and
+            $descriptorText.Text.Contains("Ptr Addr  $expectedAddress") -and
+            $descriptorText.Text.Contains("Pixel Addr $expectedAddress") -and
+            -not $descriptorText.Text.Contains("File       debuggee-")
+        if (-not $descriptorAddressValid) {
+            throw "The full live data address was not available in Descriptor at width $layoutWidth."
+        }
+
+        $copyPointerAddressMenuItem = @($imageList.ContextMenu.Items | Where-Object {
+            $_ -is [System.Windows.Controls.MenuItem] -and
+            [string]$_.Header -eq "Copy pointer address"
+        })[0]
+        $copyDataAddressMenuItem = @($imageList.ContextMenu.Items | Where-Object {
+            $_ -is [System.Windows.Controls.MenuItem] -and
+            [string]$_.Header -eq "Copy pixel address"
+        })[0]
+        $imageList.ContextMenu.PlacementTarget = $imageList
+        $imageList.ContextMenu.IsOpen = $true
+        Wait-Dispatcher 250
+        $copyAddressEnabled = $copyPointerAddressMenuItem.IsEnabled -and $copyDataAddressMenuItem.IsEnabled
+        $copyPointerAddressMenuItem.RaiseEvent(
+            (New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.MenuItem]::ClickEvent)))
+        Wait-Dispatcher 250
+        $copyPointerAddressValid = [System.Windows.Clipboard]::ContainsText() -and
+            [System.Windows.Clipboard]::GetText() -eq $expectedAddress
+        $copyDataAddressMenuItem.RaiseEvent(
+            (New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.MenuItem]::ClickEvent)))
+        Wait-Dispatcher 250
+        $imageList.ContextMenu.IsOpen = $false
+        $copyAddressValid = $copyAddressEnabled -and $copyPointerAddressValid -and
+            [System.Windows.Clipboard]::ContainsText() -and
+            [System.Windows.Clipboard]::GetText() -eq $expectedAddress
+        if (-not $copyAddressValid) {
+            $clipboardAddress = if ([System.Windows.Clipboard]::ContainsText()) {
+                [System.Windows.Clipboard]::GetText()
+            }
+            else {
+                "<no text>"
+            }
+            throw "Copy data address did not copy the selected full address at width $layoutWidth. Enabled=$copyAddressEnabled Expected='$expectedAddress' Actual='$clipboardAddress' Status='$($statusText.Text)'."
+        }
+
+        $imageList.SelectedIndex = 0
+        Wait-Dispatcher 100
+        $copyAddressDisabledWithoutProvenanceValid =
+            -not $copyPointerAddressMenuItem.IsEnabled -and
+            -not $copyDataAddressMenuItem.IsEnabled
+        if (-not $copyAddressDisabledWithoutProvenanceValid) {
+            throw "Copy data address remained enabled for a source without address provenance at width $layoutWidth."
+        }
+        $imageList.SelectedItem = $liveItem
+        $imageList.ScrollIntoView($liveItem)
+        $imageList.UpdateLayout()
+        Wait-Dispatcher 100
+
+        $addressCapturePath = Join-Path $outputRoot "address-live-$layoutWidth.png"
+        Capture-Window $helper.Handle $addressCapturePath
+
+        $invalidatedAddressCount = $control.InvalidateLiveSources()
+        Wait-Dispatcher 250
+        $addressUnavailableValid = $invalidatedAddressCount -eq 1 -and
+            $capturedAItem.SourceAddressState -eq "CAPTURED" -and
+            $capturedBItem.SourceAddressState -eq "CAPTURED" -and
+            $liveItem.SourceAddressState -eq "UNAVAILABLE" -and
+            $liveItem.FormattedDataAddress -eq $expectedAddress -and
+            $liveItem.SourceStateText.StartsWith("UNAVAILABLE · last PID", [StringComparison]::Ordinal) -and
+            $descriptorText.Text.Contains("Backing    UNAVAILABLE")
+        if (-not $addressUnavailableValid) {
+            throw "Live address did not retain its last provenance after invalidation at width $layoutWidth."
+        }
+
+        $addressUnavailableCapturePath = Join-Path $outputRoot "address-unavailable-$layoutWidth.png"
+        Capture-Window $helper.Handle $addressUnavailableCapturePath
+    }
+    finally {
+        $liveHandle.Free()
+    }
+
+    $null = $clearButton.Focus()
+    $null = [System.Windows.Input.Keyboard]::Focus($clearButton)
+    [RawBufferDockedLayoutNative]::keybd_event([RawBufferDockedLayoutNative]::VK_SPACE, 0, 0, [UIntPtr]::Zero)
+    [RawBufferDockedLayoutNative]::keybd_event([RawBufferDockedLayoutNative]::VK_SPACE, 0, [RawBufferDockedLayoutNative]::KEYEVENTF_KEYUP, [UIntPtr]::Zero)
+    Wait-Dispatcher 500
+    $clearKeyboardStateValid = $imageList.Items.Count -eq 0 -and -not $clearButton.IsEnabled
+    if (-not $clearKeyboardStateValid) {
+        throw "Clear all did not execute from the keyboard at width $layoutWidth."
+    }
+
     $results.Add([pscustomobject]@{
+        Monitor = $testScreen.DeviceName
+        MonitorBounds = "$($testScreen.Bounds.Left),$($testScreen.Bounds.Top),$($testScreen.Bounds.Width),$($testScreen.Bounds.Height)"
+        WindowRect = "$($actualWindowRect.Left),$($actualWindowRect.Top),$($actualWindowRect.Right - $actualWindowRect.Left),$($actualWindowRect.Bottom - $actualWindowRect.Top)"
+        Dpi = $dpi
         Width = $layoutWidth
         Capture = $capturePath
         EmptyCapture = $emptyCapturePath
@@ -816,6 +1136,24 @@ foreach ($layoutWidth in $Widths) {
         ClearDocumentStateValid = $clearDocumentStateValid
         ClearImageViewVisibility = $imageView.Visibility.ToString()
         ClearReopenStateValid = $clearReopenStateValid
+        AddressRowsValid = $addressRowsValid
+        SameAddressSemanticsValid = $sameAddressSemanticsValid
+        DescriptorAddressValid = $descriptorAddressValid
+        CopyAddressValid = $copyAddressValid
+        CopyAddressDisabledWithoutProvenanceValid = $copyAddressDisabledWithoutProvenanceValid
+        AddressUnavailableValid = $addressUnavailableValid
+        AddressCapture = $addressCapturePath
+        AddressUnavailableCapture = $addressUnavailableCapturePath
+        TwentyImageStateValid = $twentyImageStateValid
+        TwentyImageCapture = $twentyImageCapturePath
+        ClearMouseLeaveStateValid = $clearMouseLeaveStateValid
+        ClearHoverStateValid = $clearHoverStateValid
+        ClearFocusStateValid = $clearFocusStateValid
+        ClearPressedStateValid = $clearPressedStateValid
+        ClearKeyboardStateValid = $clearKeyboardStateValid
+        ClearHoverCapture = $clearHoverCapturePath
+        ClearFocusCapture = $clearFocusCapturePath
+        ClearPressedCapture = $clearPressedCapturePath
         ClearCapture = $clearCapturePath
     })
 

@@ -1,17 +1,14 @@
-Raw Buffer Visualizer 2.0.2
+Raw Buffer Visualizer 2.0.6
 
-IMPROVED
-- Visual Studio 2022 17.9+ support is restored for x64 Community, Professional, and Enterprise.
-- Stable Visual Studio 2026 18.x support is retained through the existing Marketplace extension identity.
-- Visual Studio-native toolbar and inspector icons, responsive command labels, empty-viewer guidance, and image-aware command states improve the docked workflow.
-- Supported exact OpenCvSharp/Emgu Mat lists and one-dimensional arrays are included automatically without a separate collection setting.
-
-FIXED
-- Long writable temporary-storage paths no longer block registered debugger images from reaching the docked viewer.
-- The in-process package and out-of-process debugger providers now use the Visual Studio 17.9 SDK compatibility line.
+PACKAGE UPDATE
+- Advances the Marketplace package identity from public 2.0.5.0 to 2.0.6.0 because published versions are immutable.
+- Makes no functional or compatibility change to the validated 2.0.5 behavior.
 
 INCLUDED
-- Connect Doctor, checked 2D buffer validation, automatic inspection, registered Bitmap/OpenCvSharp/Emgu paths, and live-source invalidation remain included.
+- Exact debugger expression names and native Ptr versus Pixels provenance remain included.
+- Complete image-array registration, fail-closed pointer reads, and negative-stride Bitmap correction remain included.
+- Clear all, direct concurrent dictionaries, first-use ImagePtr handoff, Connect Doctor, automatic inspection, and registered Bitmap/OpenCvSharp/Emgu paths remain included.
+- Visual Studio 2022 17.9+ and stable Visual Studio 2026 18.x remain the supported installation targets.
 
 SCOPE
 - Camera acquisition/control, lighting, PLC/I/O, 3D visualization, and proprietary SDK adapters remain outside this release.
@@ -19,4 +16,4 @@ SCOPE
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
 
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#202
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#206

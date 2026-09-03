@@ -21,6 +21,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\Cressem.ImageModel.TestFixture\Cressem.ImageModel.TestFixture.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />

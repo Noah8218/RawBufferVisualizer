@@ -5,6 +5,7 @@
     <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\samples\Cressem.ImageModel.TestFixture\Cressem.ImageModel.TestFixture.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.BitmapAdapter\RawBufferVisualizer.BitmapAdapter.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.OpenCvSharpAdapter\RawBufferVisualizer.OpenCvSharpAdapter.csproj" />

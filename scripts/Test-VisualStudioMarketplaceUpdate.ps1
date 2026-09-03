@@ -89,14 +89,14 @@ foreach ($instance in $instances) {
                 else {
                     ''
                 }
-                $expectedCodeBase = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Extensibility.dll'
+                $expectedCodeBase = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
                 $codeBaseMatchesInstall = -not [string]::IsNullOrWhiteSpace($codeBase) `
                     -and (Test-Path -LiteralPath $codeBase -PathType Leaf) `
                     -and [string]::Equals(
                         [IO.Path]::GetFullPath($codeBase),
                         [IO.Path]::GetFullPath($expectedCodeBase),
                         [StringComparison]::OrdinalIgnoreCase)
-                $pkgdefPath = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef'
+                $pkgdefPath = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef'
                 $pkgdefText = if (Test-Path -LiteralPath $pkgdefPath -PathType Leaf) {
                     Get-Content -Raw -LiteralPath $pkgdefPath
                 }
@@ -105,7 +105,7 @@ foreach ($instance in $instances) {
                 }
                 $registrationPayloadValid = $pkgdefText.Contains($packageRegistrationHeader) `
                     -and $pkgdefText.Contains('"Class"="RawBufferVisualizer.VisualStudio.Vssdk.RawBufferVisualizerPackage"') `
-                    -and $pkgdefText.Contains('"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Extensibility.dll"') `
+                    -and $pkgdefText.Contains('"CodeBase"="$PackageFolder$\RawBufferVisualizer.VisualStudio.Vssdk.dll"') `
                     -and $pkgdefText.Contains($menuRegistration) `
                     -and $pkgdefText.Contains($toolWindowRegistrationHeader) `
                     -and [regex]::Matches($pkgdefText, [regex]::Escape($packageRegistrationHeader)).Count -eq 1 `

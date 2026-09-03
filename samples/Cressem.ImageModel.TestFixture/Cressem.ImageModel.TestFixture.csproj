@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net472;net8.0</TargetFrameworks>
+    <AssemblyName>Cressem.ImageModel</AssemblyName>
+    <RootNamespace>Cressem.ImageModel</RootNamespace>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+</Project>
