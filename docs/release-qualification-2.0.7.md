@@ -10,7 +10,7 @@ This candidate adds `Int32` 2D image support for OpenCvSharp `CV_32SC1`, Emgu CV
 
 `CV_32SC1` is one channel of signed 32-bit integers. It is not 32 channels. `CV_32SC2`, `CV_32SC3`, `CV_32SC4`, arbitrary 32-channel data, and 3D containers remain outside this candidate.
 
-The working source is based on commit `27b6d3ce75b44ab2c747428744e9f859138fed91` on `agent/vs2022-17.9-compat` with uncommitted 2.0.7 changes. No commit, push, tag, GitHub Release, Marketplace upload, publication, or deployment was performed for 2.0.7.
+The feature, tests, English/Korean Overview, release notes, and reviewed Int32 images are committed as `33b0a0b4855ce02aeed05f0726bf0071418611fa` on `agent/vs2022-17.9-compat`. The owner authorized that commit plus this handoff closure as one branch-push batch. Tagging, GitHub Release, Marketplace upload/publication, and deployment are not included.
 
 ## Exact Review VSIX
 
@@ -59,6 +59,8 @@ The five successful rows covered OpenCvSharp `labelMat`, Emgu CV `emguLabelMat`,
 | Installed `Int32Industrial` scenario | Passed; direct DataTip, signed pixel/raw bytes, five automatic results, collection row, padded stride, zero package-protocol errors |
 | Independent `Int32IndustrialAutomatic` scenario | Passed; five documents, zero errors, padded frame selection |
 | Full docked layout smoke | Passed at 540, 900, and 1160 px; Int32 selector, toolbar bounds, addresses, same-address semantics, invalidation provenance, Clear all pointer/keyboard paths, error/recovery, and split layout checks passed |
+| Release-ready short rebuild and repeated self-test | Passed; focused Release build produced 0 warnings and 0 errors, followed by two consecutive aggregate self-test passes |
+| Marketplace dry run | Passed for version `2.0.7.0`, English Overview, and seven referenced media assets; no Marketplace publication was executed |
 
 The earlier address-provenance smoke failure was a Windows PowerShell 5 test-literal issue: the product state contained the correct `UNAVAILABLE`, last PID, and last address, but a BOM-less script compared a non-ASCII middle-dot literal incorrectly. The test now checks the ASCII state prefix and PID suffix independently. Synthetic mouse/keyboard input was also bounded and retried after explicitly restoring the test window foreground; product logic was not changed for either harness correction.
 
@@ -69,16 +71,17 @@ The earlier address-provenance smoke failure was a Windows PowerShell 5 test-lit
 - Independent automatic result: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\installed-int32-automatic-vs2022\Int32IndustrialAutomatic-installed-vsix.json`
 - Layout result: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\final-layout-widths\layout-widths.json`
 - Marketplace Gallery readback: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\marketplace-gallery-readback.json`
+- Release-ready short checks: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\release-ready-test-build-final.log` and `release-ready-short-self-tests-final.log`
+- Marketplace dry run: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\marketplace-ready\vs-publish.json`
 - English Overview: [marketplace-overview-2.0.7.md](marketplace-overview-2.0.7.md)
 - Korean review copy: [marketplace-overview-2.0.7.ko.md](marketplace-overview-2.0.7.ko.md)
 - Marketplace release notes: [marketplace-release-notes-2.0.7.md](marketplace-release-notes-2.0.7.md)
 
 ## Remaining Release Gates
 
-1. Review the source diff and exact 2.0.7 Overview/candidate as one change set.
-2. Commit and push only after explicit authorization, then run or review CI for that exact commit.
-3. Run the changed installed path on stable Visual Studio 2026 before treating 2.0.7 as publication-ready. Exact VS2022 17.9 runtime remains unavailable; retain the manifest compatibility contract but do not describe the 17.14 run as exact 17.9 proof.
-4. Marketplace upload, public readback, tag, GitHub Release, and deployment remain separate approvals. Do not rebuild or substitute the recorded VSIX after owner approval without producing a new hash and repeating proportionate qualification.
+1. Confirm `origin/agent/vs2022-17.9-compat` equals local HEAD, then run or review CI for that exact source state if required for publication.
+2. Run the changed installed path on stable Visual Studio 2026 before treating 2.0.7 as fully matrix-qualified. Exact VS2022 17.9 runtime remains unavailable; retain the manifest compatibility contract but do not describe the 17.14 run as exact 17.9 proof.
+3. Marketplace upload, public readback, tag, GitHub Release, and deployment remain separate approvals. Do not rebuild or substitute the recorded VSIX after owner approval without producing a new hash and repeating proportionate qualification.
 
 ## Feature Qualification Closure
 
@@ -88,5 +91,5 @@ Scope: Signed 32-bit single-channel 2D visualization on direct, automatic, colle
 Acceptance criteria: CV_32SC1/Cv32S C1 map to Int32 -> pass; real industrial scalar image renders -> pass; exact signed value and four bytes remain inspectable -> pass; automatic OpenCvSharp/Emgu/application-wrapper/collection paths open -> pass; padded stride 5184 remains intact -> pass; 540/900/1160 layout and address lifetime checks pass -> pass.
 Verification: Release build/self-tests, ten-version library matrix, no-break fixture, release communication, package guard, exact VSIX install, installed Int32Industrial and Int32IndustrialAutomatic scenarios, and full three-width UI smoke passed.
 Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903 and the exact files listed above.
-Boundary / next dependency: This is local feature qualification on VS2022 17.14, not release authorization. Stable VS2026 2.0.7 runtime, exact VS2022 17.9 runtime, source commit/push/CI, Marketplace publication/readback, tag, GitHub Release, physical camera, multi-channel signed matrices, and 3D remain unproven or out of scope.
+Boundary / next dependency: This is feature qualification on VS2022 17.14 plus an owner-authorized source/copy/media branch-push batch, not Marketplace publication. Stable VS2026 2.0.7 runtime, exact VS2022 17.9 runtime, CI, Marketplace publication/readback, tag, GitHub Release, physical camera, multi-channel signed matrices, and 3D remain unproven or out of scope.
 ```
