@@ -2,7 +2,6 @@ using System;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
 
@@ -15,7 +14,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(outgoingData, EmguCvMatVisualizerTransfer.CreateMetadata(GetView(target)));
+            SerializeAsJson(
+                outgoingData,
+                VisualizerChunkedTransfer.AttachExpressionIdentity(
+                    EmguCvMatVisualizerTransfer.CreateMetadata(GetView(target)),
+                    target));
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
@@ -50,6 +53,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     public sealed class EmguCvMatView
     {
         public IntPtr Buffer { get; set; }
+        public IntPtr SourcePointer { get; set; }
         public long BufferLength { get; set; }
         public RawImageDescriptor Descriptor { get; set; } = new RawImageDescriptor();
         public string SourceType { get; set; } = string.Empty;
@@ -102,9 +106,16 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentException("Emgu Mat data pointer is empty.", nameof(mat));
             }
 
+            var sourcePointer = Get<IntPtr>(mat, "Ptr");
+            if (sourcePointer == IntPtr.Zero)
+            {
+                throw new ArgumentException("Emgu Mat object pointer is empty.", nameof(mat));
+            }
+
             return new EmguCvMatView
             {
                 Buffer = data,
+                SourcePointer = sourcePointer,
                 BufferLength = checked((long)stride * height),
                 Descriptor = descriptor,
                 SourceType = MatFullName,
@@ -124,7 +135,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 view.BufferLength,
                 view.Buffer,
                 view.SourceType,
-                view.DisplayName);
+                view.DisplayName,
+                view.SourcePointer,
+                "Ptr");
         }
 
         public static VisualizerSnapshotChunk CreateChunk(EmguCvMatView view, VisualizerSnapshotChunkRequest request)
@@ -159,7 +172,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var buffer = new byte[length];
             if (length > 0)
             {
-                Marshal.Copy(Add(view.Buffer, request.Offset), buffer, 0, length);
+                new CurrentProcessMemoryReader(view.Buffer, view.BufferLength)
+                    .CopyTo(request.Offset, buffer, 0, length);
             }
 
             return new VisualizerSnapshotChunk
@@ -265,7 +279,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private static T Get<T>(object instance, string propertyName)
         {
-            var property = instance.GetType().GetProperty(propertyName, BindingFlags.Instance | BindingFlags.Public);
+            var property = FindProperty(instance.GetType(), propertyName);
             if (property == null)
             {
                 throw new MissingMemberException(instance.GetType().FullName, propertyName);
@@ -280,9 +294,21 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return (T)value;
         }
 
-        private static IntPtr Add(IntPtr pointer, long offset)
+        private static PropertyInfo? FindProperty(Type type, string propertyName)
         {
-            return new IntPtr(checked(pointer.ToInt64() + offset));
+            for (var current = type; current != null; current = current.BaseType)
+            {
+                var property = current.GetProperty(
+                    propertyName,
+                    BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.DeclaredOnly);
+                if (property != null)
+                {
+                    return property;
+                }
+            }
+
+            return null;
         }
+
     }
 }

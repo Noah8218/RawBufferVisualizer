@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Sdk;
 
@@ -15,7 +14,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new NotSupportedException("Only RawBufferView is supported.");
             }
 
-            SerializeAsJson(outgoingData, RawBufferViewVisualizerTransfer.CreateMetadata(view));
+            SerializeAsJson(
+                outgoingData,
+                VisualizerChunkedTransfer.AttachExpressionIdentity(
+                    RawBufferViewVisualizerTransfer.CreateMetadata(view),
+                    target));
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
@@ -55,7 +58,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 view.GetBufferLength(),
                 view.Buffer,
                 typeof(RawBufferView).FullName ?? nameof(RawBufferView),
-                view.Name);
+                view.Name,
+                view.Buffer,
+                "Buffer");
         }
 
         public static VisualizerSnapshotChunk CreateChunk(RawBufferView view, VisualizerSnapshotChunkRequest request)
@@ -91,7 +96,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var chunk = new byte[length];
             if (length > 0)
             {
-                Marshal.Copy(Add(view.Buffer, request.Offset), chunk, 0, length);
+                new CurrentProcessMemoryReader(view.Buffer, totalLength)
+                    .CopyTo(request.Offset, chunk, 0, length);
             }
 
             return new VisualizerSnapshotChunk
@@ -122,9 +128,5 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 request.MaximumHeight);
         }
 
-        private static IntPtr Add(IntPtr pointer, long offset)
-        {
-            return new IntPtr(checked(pointer.ToInt64() + offset));
-        }
     }
 }

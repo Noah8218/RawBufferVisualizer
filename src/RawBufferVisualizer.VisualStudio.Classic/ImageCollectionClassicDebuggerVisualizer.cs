@@ -80,7 +80,9 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                             result.ErrorMessage,
                             memberInventory: result.MemberInventory,
                             itemAssemblyName: result.ItemAssemblyName,
-                            debuggeeProcessId: result.DebuggeeProcessId));
+                            debuggeeProcessId: result.DebuggeeProcessId,
+                            expressionIdentityHash: summary.ExpressionIdentityHash,
+                            expressionSourceType: summary.SourceType));
                         continue;
                     }
 
@@ -90,7 +92,15 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                             visualStudioProcessId,
                             result.MetadataPath,
                             result.DisplayName,
-                            result.SourceType));
+                            result.SourceType,
+                            null,
+                            false,
+                            result.DebuggeeProcessId,
+                            result.DebuggeeBufferAddress,
+                            result.SourcePointerAddress,
+                            result.SourcePointerLabel,
+                            summary.ExpressionIdentityHash,
+                            summary.SourceType));
                     }
                     catch (Exception ex)
                     {

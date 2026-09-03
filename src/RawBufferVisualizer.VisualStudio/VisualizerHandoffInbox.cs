@@ -44,9 +44,52 @@ namespace RawBufferVisualizer.VisualStudio
             string? handoffId = null,
             bool isPreview = false)
         {
+            return WriteSnapshotRequest(
+                visualStudioProcessId,
+                metadataPath,
+                displayName,
+                sourceType,
+                handoffId,
+                isPreview,
+                0,
+                0,
+                0,
+                null,
+                0,
+                null);
+        }
+
+        public static string WriteSnapshotRequest(
+            int visualStudioProcessId,
+            string metadataPath,
+            string? displayName,
+            string? sourceType,
+            string? handoffId,
+            bool isPreview,
+            int debuggeeProcessId,
+            long debuggeeBufferAddress,
+            long sourcePointerAddress = 0,
+            string? sourcePointerLabel = null,
+            int expressionIdentityHash = 0,
+            string? expressionSourceType = null)
+        {
             if (string.IsNullOrWhiteSpace(metadataPath))
             {
                 throw new ArgumentException("Metadata path is required.", "metadataPath");
+            }
+
+            if (debuggeeBufferAddress != 0 && debuggeeProcessId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    "debuggeeProcessId",
+                    "A source buffer address requires a positive debuggee process ID.");
+            }
+
+            if (sourcePointerAddress != 0 && debuggeeProcessId <= 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    "debuggeeProcessId",
+                    "A source pointer address requires a positive debuggee process ID.");
             }
 
             return WriteRequest(
@@ -59,7 +102,13 @@ namespace RawBufferVisualizer.VisualStudio
                     string.Empty,
                     string.Empty,
                     handoffId ?? string.Empty,
-                    isPreview));
+                    isPreview,
+                    debuggeeProcessId: debuggeeProcessId,
+                    debuggeeBufferAddress: debuggeeBufferAddress,
+                    sourcePointerAddress: sourcePointerAddress,
+                    sourcePointerLabel: sourcePointerLabel,
+                    expressionIdentityHash: expressionIdentityHash,
+                    expressionSourceType: expressionSourceType));
         }
 
         public static string WriteErrorRequest(
@@ -72,7 +121,9 @@ namespace RawBufferVisualizer.VisualStudio
             string? handoffId = null,
             List<VisualizerMemberInventoryItem>? memberInventory = null,
             string? itemAssemblyName = null,
-            int debuggeeProcessId = 0)
+            int debuggeeProcessId = 0,
+            int expressionIdentityHash = 0,
+            string? expressionSourceType = null)
         {
             if (string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -96,7 +147,9 @@ namespace RawBufferVisualizer.VisualStudio
                     null,
                     memberInventory,
                     itemAssemblyName,
-                    debuggeeProcessId));
+                    debuggeeProcessId,
+                    expressionIdentityHash: expressionIdentityHash,
+                    expressionSourceType: expressionSourceType));
         }
 
         public static string WriteLiveMemoryRequest(
@@ -107,7 +160,11 @@ namespace RawBufferVisualizer.VisualStudio
             RawImageDescriptor descriptor,
             string? displayName = null,
             string? sourceType = null,
-            string? handoffId = null)
+            string? handoffId = null,
+            long sourcePointerAddress = 0,
+            string? sourcePointerLabel = null,
+            int expressionIdentityHash = 0,
+            string? expressionSourceType = null)
         {
             if (debuggeeProcessId <= 0)
             {
@@ -138,7 +195,11 @@ namespace RawBufferVisualizer.VisualStudio
                     debuggeeProcessId,
                     bufferAddress,
                     bufferLength,
-                    descriptor));
+                    descriptor,
+                    sourcePointerAddress: sourcePointerAddress,
+                    sourcePointerLabel: sourcePointerLabel,
+                    expressionIdentityHash: expressionIdentityHash,
+                    expressionSourceType: expressionSourceType));
         }
 
         public static string ReadSnapshotRequest(string requestPath)
@@ -216,7 +277,12 @@ namespace RawBufferVisualizer.VisualStudio
                     liveDescriptor,
                     loaded.MemberInventory,
                     loaded.ItemAssemblyName,
-                    loaded.DebuggeeProcessId);
+                    loaded.DebuggeeProcessId,
+                    loaded.DebuggeeBufferAddress,
+                    loaded.SourcePointerAddress,
+                    loaded.SourcePointerLabel,
+                    loaded.ExpressionIdentityHash,
+                    loaded.ExpressionSourceType);
             }
         }
 
@@ -563,7 +629,12 @@ namespace RawBufferVisualizer.VisualStudio
                 LiveByteOrder = request.LiveDescriptor == null ? 0 : (int)request.LiveDescriptor.ByteOrder,
                 MemberInventory = request.MemberInventory,
                 ItemAssemblyName = request.ItemAssemblyName,
-                DebuggeeProcessId = request.DebuggeeProcessId
+                DebuggeeProcessId = request.DebuggeeProcessId,
+                DebuggeeBufferAddress = request.DebuggeeBufferAddress,
+                SourcePointerAddress = request.SourcePointerAddress,
+                SourcePointerLabel = request.SourcePointerLabel,
+                ExpressionIdentityHash = request.ExpressionIdentityHash,
+                ExpressionSourceType = request.ExpressionSourceType
             };
 
             using (var stream = new MemoryStream())
@@ -749,10 +820,33 @@ namespace RawBufferVisualizer.VisualStudio
         public List<VisualizerMemberInventoryItem>? MemberInventory { get; private set; }
         public string ItemAssemblyName { get; private set; }
         public int DebuggeeProcessId { get; private set; }
+        public long DebuggeeBufferAddress { get; private set; }
+        public long SourcePointerAddress { get; private set; }
+        public string SourcePointerLabel { get; private set; }
+        public int ExpressionIdentityHash { get; private set; }
+        public string ExpressionSourceType { get; private set; }
 
         public bool IsError
         {
             get { return !string.IsNullOrWhiteSpace(ErrorMessage); }
+        }
+
+        public bool HasDebuggeeBufferAddress
+        {
+            get
+            {
+                return DebuggeeProcessId > 0
+                    && DebuggeeBufferAddress != 0;
+            }
+        }
+
+        public bool HasSourcePointerAddress
+        {
+            get
+            {
+                return DebuggeeProcessId > 0
+                    && SourcePointerAddress != 0;
+            }
         }
 
         public VisualizerHandoffRequest(string metadataPath, string displayName, string sourceType)
@@ -802,7 +896,12 @@ namespace RawBufferVisualizer.VisualStudio
             RawImageDescriptor? liveDescriptor = null,
             List<VisualizerMemberInventoryItem>? memberInventory = null,
             string? itemAssemblyName = null,
-            int debuggeeProcessId = 0)
+            int debuggeeProcessId = 0,
+            long debuggeeBufferAddress = 0,
+            long sourcePointerAddress = 0,
+            string? sourcePointerLabel = null,
+            int expressionIdentityHash = 0,
+            string? expressionSourceType = null)
         {
             var hasLiveMemory = liveProcessId > 0
                 && liveBufferAddress != 0
@@ -829,7 +928,18 @@ namespace RawBufferVisualizer.VisualStudio
             LiveDescriptor = liveDescriptor == null ? null : liveDescriptor.Clone();
             MemberInventory = memberInventory;
             ItemAssemblyName = itemAssemblyName ?? string.Empty;
-            DebuggeeProcessId = debuggeeProcessId;
+            DebuggeeProcessId = debuggeeProcessId > 0
+                ? debuggeeProcessId
+                : liveProcessId;
+            DebuggeeBufferAddress = debuggeeBufferAddress != 0
+                ? debuggeeBufferAddress
+                : liveBufferAddress;
+            SourcePointerAddress = sourcePointerAddress;
+            SourcePointerLabel = sourcePointerAddress == 0
+                ? string.Empty
+                : string.IsNullOrWhiteSpace(sourcePointerLabel) ? "Ptr" : sourcePointerLabel!.Trim();
+            ExpressionIdentityHash = expressionIdentityHash;
+            ExpressionSourceType = expressionSourceType ?? string.Empty;
         }
     }
 
@@ -895,5 +1005,20 @@ namespace RawBufferVisualizer.VisualStudio
 
         [DataMember(Name = "debuggeeProcessId", EmitDefaultValue = false)]
         public int DebuggeeProcessId { get; set; }
+
+        [DataMember(Name = "debuggeeBufferAddress", EmitDefaultValue = false)]
+        public long DebuggeeBufferAddress { get; set; }
+
+        [DataMember(Name = "sourcePointerAddress", EmitDefaultValue = false)]
+        public long SourcePointerAddress { get; set; }
+
+        [DataMember(Name = "sourcePointerLabel", EmitDefaultValue = false)]
+        public string? SourcePointerLabel { get; set; }
+
+        [DataMember(Name = "expressionIdentityHash", EmitDefaultValue = false)]
+        public int ExpressionIdentityHash { get; set; }
+
+        [DataMember(Name = "expressionSourceType", EmitDefaultValue = false)]
+        public string? ExpressionSourceType { get; set; }
     }
 }

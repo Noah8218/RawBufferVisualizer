@@ -219,12 +219,6 @@
                             <TextBlock x:Name="OpenButtonText" Text="Open"/>
                         </StackPanel>
                     </Button>
-                    <Button x:Name="ClearButton" ToolTip="Clear all images" AutomationProperties.Name="Clear" AutomationProperties.AutomationId="ClearButton" Click="Clear_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="ClearButtonText" Text="Clear"/>
-                        </StackPanel>
-                    </Button>
                     <Button x:Name="SaveVisiblePngButton" ToolTip="Save the active image as a PNG" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
                         <StackPanel Orientation="Horizontal">
                             <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16" Margin="0,0,5,0"/>
@@ -399,8 +393,7 @@
                 </Grid.RowDefinitions>
 
                 <StackPanel Grid.Row="0" Margin="10,10,10,6">
-                    <TextBlock Text="Images" FontSize="16" FontWeight="SemiBold"/>
-                    <WrapPanel Margin="0,5,0,0">
+                    <WrapPanel>
                         <CheckBox x:Name="AutoInspectBox"
                                   Content="Auto Inspect on Break"
                                   IsChecked="True"
@@ -430,41 +423,104 @@
                                FontSize="11"
                                Foreground="{StaticResource MutedTextBrush}"
                                TextWrapping="Wrap"/>
+                    <Grid x:Name="ImageListHeader" Margin="0,8,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock x:Name="ImagesHeadingText"
+                                   Text="Images"
+                                   MinWidth="50"
+                                   FontSize="16"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"/>
+                        <Button x:Name="ClearButton"
+                                Grid.Column="1"
+                                Margin="6,0,0,0"
+                                Padding="5,3"
+                                ToolTip="Remove all loaded images and reset the viewer. Debuggee data is unchanged."
+                                AutomationProperties.Name="Clear all images"
+                                AutomationProperties.AutomationId="ClearButton"
+                                Click="Clear_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/>
+                                <TextBlock x:Name="ClearButtonText" Text="Clear all"/>
+                            </StackPanel>
+                        </Button>
+                    </Grid>
                 </StackPanel>
 
-                    <ListBox Grid.Row="1" Margin="10,0,10,10" x:Name="ImageList" AutomationProperties.AutomationId="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
+                    <ListBox Grid.Row="1" Margin="10,0,10,10" x:Name="ImageList" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
                         <ListBox.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
                                 <MenuItem Header="Save raw snapshot" Click="SaveSnapshot_Click"/>
+                                <MenuItem x:Name="CopyPointerAddressMenuItem"
+                                          Header="Copy pointer address"
+                                          IsEnabled="False"
+                                          AutomationProperties.Name="Copy pointer address"
+                                          AutomationProperties.AutomationId="CopyPointerAddressMenuItem"
+                                          Click="CopyPointerAddress_Click"/>
+                                <MenuItem x:Name="CopyDataAddressMenuItem"
+                                          Header="Copy pixel address"
+                                          IsEnabled="False"
+                                          AutomationProperties.Name="Copy pixel address"
+                                          AutomationProperties.AutomationId="CopyDataAddressMenuItem"
+                                          Click="CopyDataAddress_Click"/>
+                                <Separator/>
                                 <MenuItem x:Name="OpenVariableMenuItem" Header="Open Variable..." AutomationProperties.AutomationId="OpenVariableMenuItem" Click="OpenVariable_Click"/>
                                 <MenuItem x:Name="MapThisTypeMenuItem" Header="Connect Your Buffer" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
                             </ContextMenu>
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <Grid Height="66">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="76"/>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Center">
-                                        <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
-                                    </Border>
-                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                        <TextBlock Text="{Binding Title}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis"/>
-                                        <TextBlock Text="{Binding Summary}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" FontSize="11" Foreground="{StaticResource MutedTextBrush}"/>
-                                    </StackPanel>
-                                    <Button Grid.Column="2"
+                                <StackPanel Margin="4,5"
+                                      ToolTip="{Binding SourceAddressToolTip}"
+                                      AutomationProperties.Name="{Binding AccessibilityText}"
+                                      AutomationProperties.HelpText="{Binding SourceAddressToolTip}">
+                                    <TextBlock Text="{Binding ObjectName}"
+                                               TextWrapping="Wrap"
+                                               FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding SourcePointerText}"
+                                               Visibility="{Binding SourcePointerVisibility}"
+                                               TextWrapping="Wrap"
+                                               FontFamily="Consolas"
+                                               FontSize="10"
+                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBlock Text="{Binding SourceAddressText}"
+                                               Visibility="{Binding SourceAddressVisibility}"
+                                               TextWrapping="Wrap"
+                                               FontFamily="Consolas"
+                                               FontSize="10"
+                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                    <TextBlock Text="{Binding SourceStateText}"
+                                               Visibility="{Binding SourceStateVisibility}"
+                                               TextWrapping="Wrap"
+                                               FontSize="10"
+                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                    <Grid Margin="0,5,0,0">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="76"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Top">
+                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                        </Border>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding Summary}"
+                                                   TextWrapping="Wrap"
+                                                   FontSize="11"
+                                                   Foreground="{StaticResource MutedTextBrush}"/>
+                                    </Grid>
+                                    <Button
                                             Content="Map"
-                                            Margin="6,0,0,0"
-                                            VerticalAlignment="Center"
+                                            Margin="0,5,0,0"
+                                            HorizontalAlignment="Left"
                                             Visibility="{Binding MappingActionVisibility}"
                                             ToolTip="Confirm only the unresolved member or pixel-format mapping"
                                             AutomationProperties.Name="Map this detected image type"
                                             Click="MapCandidate_Click"/>
-                                </Grid>
+                                </StackPanel>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>

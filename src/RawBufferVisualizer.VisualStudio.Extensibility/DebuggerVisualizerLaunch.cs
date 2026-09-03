@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -43,8 +44,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     throw new InvalidOperationException("Visualizer object source returned no data.");
                 }
 
-                displayName = metadata.DisplayName;
                 sourceType = metadata.SourceType;
+                displayName = ResolveDisplayName(visualizerTarget, metadata.DisplayName, sourceType);
+                metadata.DisplayName = displayName;
                 snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
                 if (ShouldForwardPreview(metadata))
                 {
@@ -61,7 +63,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             metadata.DisplayName,
                             FormatPreviewSourceType(metadata),
                             handoffId,
-                            isPreview: true);
+                            true,
+                            metadata.ProcessId,
+                            metadata.BufferAddress,
+                            metadata.SourcePointerAddress,
+                            metadata.SourcePointerLabel,
+                            metadata.ExpressionIdentityHash,
+                            metadata.ExpressionSourceType);
                         publishedRequestPaths.Add(previewRequestPath);
                         var previewCompletion = await TryCompleteHandoffAsync(
                             visualStudioProcessId,
@@ -88,7 +96,14 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         metadataPath,
                         metadata.DisplayName,
                         metadata.SourceType,
-                        handoffId);
+                        handoffId,
+                        false,
+                        metadata.ProcessId,
+                        metadata.BufferAddress,
+                        metadata.SourcePointerAddress,
+                        metadata.SourcePointerLabel,
+                        metadata.ExpressionIdentityHash,
+                        metadata.ExpressionSourceType);
                 }
 
                 publishedRequestPaths.Add(requestPath);
@@ -184,6 +199,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 }
 
                 sourceType = summary.SourceType;
+                var collectionExpression = GetOriginalVisualizedExpression(visualizerTarget);
                 var forwarded = 0;
                 var failed = 0;
                 for (var index = 0; index < summary.ItemCount; index++)
@@ -202,14 +218,18 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         failed++;
                         requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                             visualStudioProcessId,
-                            item == null || string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName,
+                            CombineCollectionDisplayName(
+                                collectionExpression,
+                                item == null || string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName),
                             item == null || string.IsNullOrWhiteSpace(item.ItemTypeName) ? summary.SourceType : item.ItemTypeName,
                             item == null || string.IsNullOrWhiteSpace(item.Error)
                                 ? "Collection item returned no metadata."
                                 : item.Error,
                             memberInventory: item == null ? null : item.MemberInventory,
                             itemAssemblyName: item == null ? summary.SourceType : item.ItemAssemblyName,
-                            debuggeeProcessId: item == null ? 0 : item.DebuggeeProcessId));
+                            debuggeeProcessId: item == null ? 0 : item.DebuggeeProcessId,
+                            expressionIdentityHash: summary.ExpressionIdentityHash,
+                            expressionSourceType: summary.SourceType));
                         continue;
                     }
 
@@ -221,6 +241,9 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     try
                     {
                         var metadata = item.Metadata;
+                        metadata.ExpressionIdentityHash = summary.ExpressionIdentityHash;
+                        metadata.ExpressionSourceType = summary.SourceType;
+                        metadata.DisplayName = CombineCollectionDisplayName(collectionExpression, metadata.DisplayName);
                         snapshotDirectory = VisualStudioTempStore.CreateSnapshotDirectory();
                         if (ShouldForwardPreview(metadata))
                         {
@@ -238,7 +261,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                     metadata.DisplayName,
                                     FormatPreviewSourceType(metadata),
                                     handoffId,
-                                    isPreview: true);
+                                    true,
+                                    metadata.ProcessId,
+                                    metadata.BufferAddress,
+                                    metadata.SourcePointerAddress,
+                                    metadata.SourcePointerLabel,
+                                    metadata.ExpressionIdentityHash,
+                                    metadata.ExpressionSourceType);
                                 itemPublishedRequestPaths.Add(previewRequestPath);
                                 var previewCompletion = await TryCompleteHandoffAsync(
                                     visualStudioProcessId,
@@ -280,7 +309,14 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                 metadataPath,
                                 metadata.DisplayName,
                                 metadata.SourceType,
-                                handoffId);
+                                handoffId,
+                                false,
+                                metadata.ProcessId,
+                                metadata.BufferAddress,
+                                metadata.SourcePointerAddress,
+                                metadata.SourcePointerLabel,
+                                metadata.ExpressionIdentityHash,
+                                metadata.ExpressionSourceType);
                             requestPaths.Add(snapshotRequestPath);
                             itemPublishedRequestPaths.Add(snapshotRequestPath);
                         }
@@ -315,12 +351,16 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         failed++;
                         requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                             visualStudioProcessId,
-                            string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName,
+                            CombineCollectionDisplayName(
+                                collectionExpression,
+                                string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName),
                             summary.SourceType,
                             ex.Message,
                             ex.GetType().FullName,
                             ex.ToString(),
-                            handoffId));
+                            handoffId,
+                            expressionIdentityHash: summary.ExpressionIdentityHash,
+                            expressionSourceType: summary.SourceType));
                     }
                 }
 
@@ -469,7 +509,55 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 metadata.Descriptor,
                 metadata.DisplayName,
                 metadata.SourceType,
-                handoffId);
+                handoffId,
+                metadata.SourcePointerAddress,
+                metadata.SourcePointerLabel,
+                metadata.ExpressionIdentityHash,
+                metadata.ExpressionSourceType);
+        }
+
+        private static string ResolveDisplayName(
+            VisualizerTarget visualizerTarget,
+            string? metadataDisplayName,
+            string? sourceType)
+        {
+            var expression = GetOriginalVisualizedExpression(visualizerTarget);
+            if (!string.IsNullOrWhiteSpace(expression))
+            {
+                return expression;
+            }
+
+            if (!string.IsNullOrWhiteSpace(metadataDisplayName))
+            {
+                return metadataDisplayName!.Trim();
+            }
+
+            if (string.IsNullOrWhiteSpace(sourceType))
+            {
+                return "Raw buffer";
+            }
+
+            var comma = sourceType!.IndexOf(',');
+            var typeName = comma >= 0 ? sourceType.Substring(0, comma) : sourceType;
+            var dot = typeName.LastIndexOf('.');
+            return (dot >= 0 ? typeName.Substring(dot + 1) : typeName).Trim();
+        }
+
+        private static string GetOriginalVisualizedExpression(VisualizerTarget visualizerTarget)
+        {
+            var property = visualizerTarget.GetType().GetProperty(
+                "OriginalVisualizedExpression",
+                BindingFlags.Instance | BindingFlags.Public);
+            var value = property == null ? null : property.GetValue(visualizerTarget) as string;
+            return string.IsNullOrWhiteSpace(value) ? string.Empty : value!.Trim();
+        }
+
+        private static string CombineCollectionDisplayName(string collectionExpression, string itemDisplayName)
+        {
+            var item = string.IsNullOrWhiteSpace(itemDisplayName) ? "Item" : itemDisplayName.Trim();
+            return string.IsNullOrWhiteSpace(collectionExpression)
+                ? item
+                : collectionExpression + item;
         }
 
         private static async Task<VisualizerSnapshotTransfer?> TryRequestPreviewAsync(

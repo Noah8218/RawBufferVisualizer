@@ -41,7 +41,12 @@ if (-not $NoBuild) {
     }
 }
 
-$outputRoot = Join-Path $repoRoot $OutputDir
+$outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+}
+else {
+    Join-Path $repoRoot $OutputDir
+}
 $sampleRoot = Join-Path $outputRoot "samples"
 New-Item -ItemType Directory -Force -Path $sampleRoot | Out-Null
 
@@ -128,6 +133,21 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+$screens = @([System.Windows.Forms.Screen]::AllScreens)
+$testScreen = if ($screens.Count -eq 2) {
+    $screens |
+        Sort-Object @{ Expression = { $_.Bounds.Width * $_.Bounds.Height } }, @{ Expression = { $_.Bounds.Left } } |
+        Select-Object -First 1
+}
+else {
+    [System.Windows.Forms.Screen]::PrimaryScreen
+}
+$testX = $testScreen.WorkingArea.Left + 20
+$testY = $testScreen.WorkingArea.Top + 20
+$testWidth = [Math]::Min(1100, $testScreen.WorkingArea.Width - 40)
+$testHeight = [Math]::Min(720, $testScreen.WorkingArea.Height - 40)
 
 $interopCandidates = @(
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll",
@@ -150,10 +170,47 @@ public static class PreviewFirstHandoffNative {
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
 }
 '@
+}
+
+function Open-ClaimedRequestExpectRejection(
+    $control,
+    [string]$requestPath) {
+    $processingPath = ""
+    $reason = ""
+    try {
+        if (-not [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::TryClaimRequest(
+            $requestPath,
+            [ref]$processingPath)) {
+            throw "Expected-rejection handoff could not be claimed."
+        }
+
+        if ($control.OpenClaimedHandoffRequest($requestPath, $processingPath)) {
+            throw "Unreadable live-memory handoff was incorrectly acknowledged."
+        }
+
+        $state = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::GetRequestState(
+            $requestPath)
+        if ($state -ne [RawBufferVisualizer.VisualStudio.VisualizerHandoffRequestState]::Rejected) {
+            throw "Unreadable live-memory handoff did not publish a NACK: $state"
+        }
+
+        if (-not [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::TryReadRejectionReason(
+            $requestPath,
+            [ref]$reason)) {
+            throw "Unreadable live-memory handoff NACK had no reason."
+        }
+
+        return $reason
+    }
+    finally {
+        [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::CleanupRequestArtifacts(
+            $requestPath)
+    }
 }
 
 function Prepare-WindowCapture([System.Windows.Window]$targetWindow) {
@@ -164,18 +221,29 @@ function Prepare-WindowCapture([System.Windows.Window]$targetWindow) {
     [PreviewFirstHandoffNative]::SetWindowPos(
         $helper.Handle,
         [PreviewFirstHandoffNative]::HWND_TOPMOST,
-        30,
-        30,
-        1100,
-        720,
+        $testX,
+        $testY,
+        $testWidth,
+        $testHeight,
         0x0040) | Out-Null
     [PreviewFirstHandoffNative]::BringWindowToTop($helper.Handle) | Out-Null
     [PreviewFirstHandoffNative]::SetForegroundWindow($helper.Handle) | Out-Null
     Wait-Dispatcher 500
+    $actualWindowRect = New-Object PreviewFirstHandoffNative+RECT
+    [PreviewFirstHandoffNative]::GetWindowRect($helper.Handle, [ref]$actualWindowRect) | Out-Null
+    $intersectionWidth = [Math]::Max(0, [Math]::Min($actualWindowRect.Right, $testScreen.Bounds.Right) - [Math]::Max($actualWindowRect.Left, $testScreen.Bounds.Left))
+    $intersectionHeight = [Math]::Max(0, [Math]::Min($actualWindowRect.Bottom, $testScreen.Bounds.Bottom) - [Math]::Max($actualWindowRect.Top, $testScreen.Bounds.Top))
+    if ($intersectionWidth -le 0 -or $intersectionHeight -le 0) {
+        throw "Test window did not intersect the selected monitor $($testScreen.DeviceName)."
+    }
+
     return $helper
 }
 
 $assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
+foreach ($dependencyName in @("Microsoft.VisualStudio.Imaging.dll", "Microsoft.VisualStudio.ImageCatalog.dll")) {
+    [Reflection.Assembly]::LoadFrom((Join-Path (Split-Path -Parent $assemblyPath) $dependencyName)) | Out-Null
+}
 [Reflection.Assembly]::LoadFrom($assemblyPath) | Out-Null
 
 $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl
@@ -290,11 +358,101 @@ try {
             $failedReplacementRequest)
     }
 
+    $unreadableAddress = [IntPtr]1
+
+    $unreadableDescriptor = New-Object RawBufferVisualizer.Core.RawImageDescriptor
+    $unreadableDescriptor.Width = 1
+    $unreadableDescriptor.Height = 1
+    $unreadableDescriptor.Stride = 1
+    $unreadableDescriptor.PixelFormat = [RawBufferVisualizer.Core.RawPixelFormat]::Mono8
+    $unreadableDescriptor.ValidBits = 8
+    $unreadableDescriptor.ByteOrder = [RawBufferVisualizer.Core.RawByteOrder]::LittleEndian
+
+    $initialUnreadableHandoffId = "initial-unreadable-live-smoke"
+    $initialUnreadableRequest = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteLiveMemoryRequest(
+        $PID,
+        $PID,
+        $unreadableAddress.ToInt64(),
+        1,
+        $unreadableDescriptor,
+        "releasedBuffer",
+        "System.IntPtr",
+        $initialUnreadableHandoffId)
+    $itemCountBeforeInitialUnreadable = $imageList.Items.Count
+    $initialUnreadableReason = Open-ClaimedRequestExpectRejection $control $initialUnreadableRequest
+    Wait-Dispatcher 250
+    $errorPanel = $control.FindName("ErrorPanel")
+    $initialUnreadableLiveRejected =
+        $null -eq @($imageList.Items | Where-Object {
+            $_.HandoffId -eq $initialUnreadableHandoffId
+        })[0] -and
+        $imageList.Items.Count -eq ($itemCountBeforeInitialUnreadable + 1) -and
+        $imageList.Items[$imageList.Items.Count - 1].IsError -and
+        $errorPanel.Visibility -eq [System.Windows.Visibility]::Visible
+    if (-not $initialUnreadableLiveRejected) {
+        throw "An unreadable initial live-memory handoff left a LIVE document behind."
+    }
+    $unreadableLiveCapture = Join-Path $outputRoot "unreadable-live-rejected.png"
+    Capture-Window $helper.Handle $unreadableLiveCapture
+
+    $failedLiveHandoffId = "preview-unreadable-live-smoke"
+    $failedLivePreviewRequest = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteSnapshotRequest(
+        $PID,
+        $previewMetadataPath,
+        "cameraFrame",
+        "System.IntPtr preview",
+        $failedLiveHandoffId,
+        $true,
+        $PID,
+        $unreadableAddress.ToInt64())
+    $control.OpenHandoffRequest($failedLivePreviewRequest)
+    Wait-Dispatcher 500
+    $previewBeforeFailedLive = @($imageList.Items | Where-Object {
+        $_.HandoffId -eq $failedLiveHandoffId
+    })[0]
+    if ($null -eq $previewBeforeFailedLive -or -not $previewBeforeFailedLive.IsPreview) {
+        throw "The preview for the failed live-memory replacement was not created."
+    }
+    $previewPixelBeforeFailedLive = $previewBeforeFailedLive.Source.DescribePixel(0, 0)
+
+    $failedLiveRequest = [RawBufferVisualizer.VisualStudio.VisualizerHandoffInbox]::WriteLiveMemoryRequest(
+        $PID,
+        $PID,
+        $unreadableAddress.ToInt64(),
+        1,
+        $unreadableDescriptor,
+        "cameraFrame",
+        "System.IntPtr",
+        $failedLiveHandoffId)
+    $failedLiveReason = Open-ClaimedRequestExpectRejection $control $failedLiveRequest
+    $previewAfterFailedLive = @($imageList.Items | Where-Object {
+        $_.HandoffId -eq $failedLiveHandoffId
+    })[0]
+    $previewPreservedAfterUnreadableLive =
+        [Object]::ReferenceEquals($previewBeforeFailedLive, $previewAfterFailedLive) -and
+        $previewAfterFailedLive.IsPreview -and
+        $previewAfterFailedLive.SourceAddressState -eq "PREVIEW" -and
+        $previewAfterFailedLive.Source.DescribePixel(0, 0) -eq $previewPixelBeforeFailedLive
+    if (-not $previewPreservedAfterUnreadableLive) {
+        throw "An unreadable live-memory replacement discarded or changed its safe preview."
+    }
+
+    $finalWindowRect = New-Object PreviewFirstHandoffNative+RECT
+    [PreviewFirstHandoffNative]::GetWindowRect($helper.Handle, [ref]$finalWindowRect) | Out-Null
     $result = [ordered]@{
+        monitor = $testScreen.DeviceName
+        monitorBounds = "$($testScreen.Bounds.Left),$($testScreen.Bounds.Top),$($testScreen.Bounds.Width),$($testScreen.Bounds.Height)"
+        windowRect = "$($finalWindowRect.Left),$($finalWindowRect.Top),$($finalWindowRect.Right - $finalWindowRect.Left),$($finalWindowRect.Bottom - $finalWindowRect.Top)"
+        dpi = [PreviewFirstHandoffNative]::GetDpiForWindow($helper.Handle)
         previewItemCount = 1
         fullItemCount = 1
         failedReplacementRejected = $true
         failedReplacementReason = $failedReplacementReason
+        initialUnreadableLiveRejected = $initialUnreadableLiveRejected
+        initialUnreadableLiveReason = $initialUnreadableReason
+        unreadableLiveCapture = $unreadableLiveCapture
+        previewPreservedAfterUnreadableLive = $previewPreservedAfterUnreadableLive
+        failedLiveReason = $failedLiveReason
         previewStatus = "Preview 320x180 BGRA32"
         fullStatus = $fullStatus
         previewCapture = $previewCapture

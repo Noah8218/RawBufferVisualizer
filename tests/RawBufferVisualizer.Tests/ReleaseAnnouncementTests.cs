@@ -17,10 +17,12 @@ namespace RawBufferVisualizer.Tests
         private static void CurrentUnseenReleaseIsShown()
         {
             Assert(
-                ReleaseAnnouncementCatalog.ShouldShow("2.0.2.0", string.Empty),
+                ReleaseAnnouncementCatalog.ShouldShow(ReleaseAnnouncementCatalog.CurrentVersion, string.Empty),
                 "The current unseen release should show its announcement.");
             Assert(
-                !ReleaseAnnouncementCatalog.ShouldShow("2.0.2.0", "2.0.2"),
+                !ReleaseAnnouncementCatalog.ShouldShow(
+                    ReleaseAnnouncementCatalog.CurrentVersion,
+                    ReleaseAnnouncementCatalog.CurrentVersion),
                 "A dismissed current release should remain hidden.");
         }
 
@@ -30,7 +32,7 @@ namespace RawBufferVisualizer.Tests
                 !ReleaseAnnouncementCatalog.ShouldShow("1.0.53.0", string.Empty),
                 "An older installed extension must not show a future announcement.");
             Assert(
-                !ReleaseAnnouncementCatalog.ShouldShow("2.0.3.0", string.Empty),
+                !ReleaseAnnouncementCatalog.ShouldShow("99.0.0.0", string.Empty),
                 "A newer installed extension must not reuse stale announcement content.");
         }
 
@@ -52,7 +54,9 @@ namespace RawBufferVisualizer.Tests
                     restarted.LastSeenVersion == ReleaseAnnouncementCatalog.CurrentVersion,
                     "The dismissed release version did not survive store recreation.");
                 Assert(
-                    !ReleaseAnnouncementCatalog.ShouldShow("2.0.2.0", restarted.LastSeenVersion),
+                    !ReleaseAnnouncementCatalog.ShouldShow(
+                        ReleaseAnnouncementCatalog.CurrentVersion,
+                        restarted.LastSeenVersion),
                     "The persisted dismissal did not suppress the current release announcement.");
             }
             finally

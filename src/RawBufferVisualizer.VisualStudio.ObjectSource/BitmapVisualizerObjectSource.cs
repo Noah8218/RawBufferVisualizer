@@ -1,7 +1,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.Sdk;
@@ -15,7 +14,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(outgoingData, BitmapVisualizerTransfer.CreateMetadata(GetView(target)));
+            SerializeAsJson(
+                outgoingData,
+                VisualizerChunkedTransfer.AttachExpressionIdentity(
+                    BitmapVisualizerTransfer.CreateMetadata(GetView(target)),
+                    target));
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
@@ -54,6 +57,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public RawImageDescriptor Descriptor { get; set; } = new RawImageDescriptor();
         public int BytesPerPixel { get; set; }
         public long BufferLength { get; set; }
+        public IntPtr CapturedScan0 { get; set; }
         public string SourceType { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
     }
@@ -81,9 +85,15 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var height = Get<int>(bitmap, "Height");
             var bitmapData = LockBits(bitmap, width, height, pixelFormat);
             int stride;
+            IntPtr capturedScan0;
             try
             {
                 stride = Math.Abs(Get<int>(bitmapData, "Stride"));
+                capturedScan0 = Get<IntPtr>(bitmapData, "Scan0");
+                if (capturedScan0 == IntPtr.Zero)
+                {
+                    throw new ArgumentException("Bitmap Scan0 pointer is empty.", nameof(bitmap));
+                }
             }
             finally
             {
@@ -107,6 +117,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 Descriptor = descriptor,
                 BytesPerPixel = bytesPerPixel,
                 BufferLength = checked((long)stride * height),
+                CapturedScan0 = capturedScan0,
                 SourceType = BitmapFullName,
                 DisplayName = displayName ?? string.Empty
             };
@@ -119,11 +130,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(view));
             }
 
-            return VisualizerChunkedTransfer.CreateMetadata(
+            return VisualizerChunkedTransfer.CreateCapturedPointerMetadata(
                 view.Descriptor,
                 view.BufferLength,
+                view.CapturedScan0,
                 view.SourceType,
-                view.DisplayName);
+                view.DisplayName,
+                view.CapturedScan0,
+                "Scan0");
         }
 
         public static VisualizerSnapshotTransfer CreateTransfer(object? bitmap, string? displayName = null)
@@ -263,6 +277,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             byte[] target)
         {
             var scan0 = Get<IntPtr>(bitmapData, "Scan0");
+            var reader = CurrentProcessMemoryReader.CreateForRows(
+                scan0,
+                dataStride,
+                view.Descriptor.Height,
+                view.BufferLength);
             var stride = view.Descriptor.Stride;
             var pixelBytes = checked(view.Descriptor.Width * view.BytesPerPixel);
             var copied = 0;
@@ -278,7 +297,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     var rowOffset = dataStride >= 0
                         ? checked((long)row * dataStride)
                         : checked((long)(view.Descriptor.Height - 1 - row) * stride);
-                    Marshal.Copy(Add(scan0, rowOffset + column), target, copied, copyLength);
+                    reader.CopyTo(rowOffset + column, target, copied, copyLength);
                 }
 
                 copied += segmentLength;
@@ -374,9 +393,5 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
         }
 
-        private static IntPtr Add(IntPtr pointer, long offset)
-        {
-            return new IntPtr(checked(pointer.ToInt64() + offset));
-        }
     }
 }

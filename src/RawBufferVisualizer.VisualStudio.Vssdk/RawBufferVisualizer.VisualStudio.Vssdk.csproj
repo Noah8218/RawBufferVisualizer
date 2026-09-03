@@ -11,9 +11,9 @@
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
     <CreatePkgDefAssemblyToProcess>$(BaseOutputPath)$(Configuration)\$(TargetFramework)\$(MSBuildProjectName).dll</CreatePkgDefAssemblyToProcess>
     <TargetVsixContainerName>RawBufferVisualizer.VisualStudio.Extensibility.vsix</TargetVsixContainerName>
-    <AssemblyVersion>2.0.2.0</AssemblyVersion>
-    <FileVersion>2.0.2.0</FileVersion>
-    <Version>2.0.2</Version>
+    <AssemblyVersion>2.0.6.0</AssemblyVersion>
+    <FileVersion>2.0.6.0</FileVersion>
+    <Version>2.0.6</Version>
   </PropertyGroup>
 
   <ItemGroup>

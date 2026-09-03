@@ -406,7 +406,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         private readonly struct RawByteAccessor
         {
             private readonly byte[]? _buffer;
-            private readonly long _pointerAddress;
+            private readonly CurrentProcessMemoryReader? _pointerReader;
             private readonly long _length;
             private readonly int _logicalStride;
             private readonly int _sourceStride;
@@ -414,14 +414,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             private RawByteAccessor(
                 byte[]? buffer,
-                long pointerAddress,
+                CurrentProcessMemoryReader? pointerReader,
                 long length,
                 int logicalStride,
                 int sourceStride,
                 int height)
             {
                 _buffer = buffer;
-                _pointerAddress = pointerAddress;
+                _pointerReader = pointerReader;
                 _length = length;
                 _logicalStride = logicalStride;
                 _sourceStride = sourceStride;
@@ -433,7 +433,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 ValidateLength(buffer.LongLength, descriptor);
                 return new RawByteAccessor(
                     buffer,
-                    0,
+                    null,
                     buffer.LongLength,
                     descriptor.Stride,
                     descriptor.Stride,
@@ -459,7 +459,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
                 return new RawByteAccessor(
                     null,
-                    pointer.ToInt64(),
+                    CurrentProcessMemoryReader.CreateForRows(
+                        pointer,
+                        sourceStride,
+                        descriptor.Height,
+                        bufferLength),
                     bufferLength,
                     descriptor.Stride,
                     sourceStride,
@@ -468,7 +472,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             public bool IsPointer
             {
-                get { return _buffer == null; }
+                get { return _pointerReader != null; }
             }
 
             public long Length
@@ -502,7 +506,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 var rowOffsetBytes = _sourceStride >= 0
                     ? checked((long)y * _sourceStride)
                     : checked((long)(_height - 1 - y) * -(long)_sourceStride);
-                return *((byte*)(_pointerAddress + rowOffsetBytes + rowOffset));
+                return _pointerReader!.ReadByte(checked(rowOffsetBytes + rowOffset));
             }
 
             private static void ValidateLength(long length, RawImageDescriptor descriptor)

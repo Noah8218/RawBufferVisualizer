@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
@@ -13,6 +14,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public bool SupportsDirectMemory { get; set; }
         public int ProcessId { get; set; }
         public long BufferAddress { get; set; }
+        public string SourcePointerLabel { get; set; } = string.Empty;
+        public long SourcePointerAddress { get; set; }
+        public int ExpressionIdentityHash { get; set; }
+        public string ExpressionSourceType { get; set; } = string.Empty;
     }
 
     public sealed class VisualizerSnapshotChunkRequest
@@ -42,6 +47,24 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         public const int DefaultChunkSize = 4 * 1024 * 1024;
 
+        public static VisualizerSnapshotMetadata AttachExpressionIdentity(
+            VisualizerSnapshotMetadata metadata,
+            object target)
+        {
+            if (metadata == null)
+            {
+                throw new ArgumentNullException(nameof(metadata));
+            }
+
+            if (target == null)
+            {
+                throw new ArgumentNullException(nameof(target));
+            }
+
+            metadata.ExpressionIdentityHash = RuntimeHelpers.GetHashCode(target);
+            return metadata;
+        }
+
         public static VisualizerSnapshotMetadata CreateMetadata(VisualizerSnapshotTransfer transfer)
         {
             if (transfer == null)
@@ -69,7 +92,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 displayName,
                 false,
                 0,
-                0);
+                0,
+                0,
+                null);
         }
 
         public static VisualizerSnapshotMetadata CreatePointerMetadata(
@@ -78,6 +103,25 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             IntPtr bufferAddress,
             string sourceType,
             string? displayName = null)
+        {
+            return CreatePointerMetadata(
+                descriptor,
+                bufferLength,
+                bufferAddress,
+                sourceType,
+                displayName,
+                bufferAddress,
+                "Ptr");
+        }
+
+        public static VisualizerSnapshotMetadata CreatePointerMetadata(
+            RawImageDescriptor descriptor,
+            long bufferLength,
+            IntPtr bufferAddress,
+            string sourceType,
+            string? displayName,
+            IntPtr sourcePointerAddress,
+            string? sourcePointerLabel)
         {
             if (bufferAddress == IntPtr.Zero)
             {
@@ -91,7 +135,35 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 displayName,
                 true,
                 System.Diagnostics.Process.GetCurrentProcess().Id,
-                bufferAddress.ToInt64());
+                bufferAddress.ToInt64(),
+                sourcePointerAddress.ToInt64(),
+                sourcePointerLabel);
+        }
+
+        public static VisualizerSnapshotMetadata CreateCapturedPointerMetadata(
+            RawImageDescriptor descriptor,
+            long bufferLength,
+            IntPtr bufferAddress,
+            string sourceType,
+            string? displayName,
+            IntPtr sourcePointerAddress,
+            string? sourcePointerLabel)
+        {
+            if (bufferAddress == IntPtr.Zero)
+            {
+                throw new ArgumentException("Buffer address is required.", nameof(bufferAddress));
+            }
+
+            return CreateMetadataCore(
+                descriptor,
+                bufferLength,
+                sourceType,
+                displayName,
+                false,
+                System.Diagnostics.Process.GetCurrentProcess().Id,
+                bufferAddress.ToInt64(),
+                sourcePointerAddress.ToInt64(),
+                sourcePointerLabel);
         }
 
         private static VisualizerSnapshotMetadata CreateMetadataCore(
@@ -101,7 +173,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             string? displayName,
             bool supportsDirectMemory,
             int processId,
-            long bufferAddress)
+            long bufferAddress,
+            long sourcePointerAddress,
+            string? sourcePointerLabel)
         {
             if (descriptor == null)
             {
@@ -126,7 +200,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 DisplayName = displayName ?? string.Empty,
                 SupportsDirectMemory = supportsDirectMemory,
                 ProcessId = processId,
-                BufferAddress = bufferAddress
+                BufferAddress = bufferAddress,
+                SourcePointerAddress = sourcePointerAddress,
+                SourcePointerLabel = sourcePointerAddress == 0
+                    ? string.Empty
+                    : string.IsNullOrWhiteSpace(sourcePointerLabel) ? "Ptr" : sourcePointerLabel!.Trim()
             };
         }
 

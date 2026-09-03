@@ -5,6 +5,8 @@ param(
     [string]$Configuration = 'Release',
     [string]$ViewerFramework = 'net472',
     [string]$PublishRoot = '',
+    [string]$BuildRoot = '',
+    [string]$DirectoryBuildPropsPath = '',
     [switch]$NoBuild,
     [switch]$NoZip
 )
@@ -13,6 +15,21 @@ $ErrorActionPreference = 'Stop'
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $project = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizer.VisualStudio.Vssdk.csproj'
+if ([string]::IsNullOrWhiteSpace($BuildRoot)) {
+    $buildRoot = Join-Path $repoRoot '.build'
+}
+else {
+    $buildRoot = [IO.Path]::GetFullPath($BuildRoot)
+}
+if (-not [string]::IsNullOrWhiteSpace($DirectoryBuildPropsPath)) {
+    $directoryBuildPropsPath = [IO.Path]::GetFullPath($DirectoryBuildPropsPath)
+    if (-not (Test-Path -LiteralPath $directoryBuildPropsPath)) {
+        throw "Directory build props file was not found: $directoryBuildPropsPath"
+    }
+}
+elseif (-not $NoBuild -and -not [string]::IsNullOrWhiteSpace($BuildRoot)) {
+    throw 'A custom BuildRoot requires -DirectoryBuildPropsPath so MSBuild can keep project output and intermediate paths isolated.'
+}
 if ([string]::IsNullOrWhiteSpace($PublishRoot)) {
     $publishRoot = Join-Path $repoRoot 'artifacts\publish'
 }
@@ -22,8 +39,8 @@ else {
 $packageName = "RawBufferVisualizer-VisualStudioExtensibility-$Framework"
 $publishDir = Join-Path $publishRoot $packageName
 $zipPath = Join-Path $publishRoot "$packageName.zip"
-$buildOutput = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework"
-$providerOutput = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\net8.0-windows8.0"
+$buildOutput = Join-Path $buildRoot "bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework"
+$providerOutput = Join-Path $buildRoot "bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\net8.0-windows8.0"
 $vsixPath = Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.vsix'
 
 function Get-VsixEntryNames {
@@ -145,10 +162,20 @@ function Assert-ModernDebuggerVisualizerProvidersPresent {
         'Emgu.CV.Mat, Emgu.CV, Version=4.13.0.5924',
         'System.Collections.Generic.List`1, mscorlib, Version=4.0.0.0',
         'System.Collections.Generic.Dictionary`2, mscorlib, Version=4.0.0.0',
+        'System.Collections.Concurrent.ConcurrentDictionary`2, mscorlib, Version=4.0.0.0',
         'System.Collections.Generic.List`1, System.Private.CoreLib',
         'System.Collections.Generic.Dictionary`2, System.Private.CoreLib',
-        'OpenCvSharp.Mat[], OpenCvSharp',
-        'Emgu.CV.Mat[], Emgu.CV'
+        'System.Collections.Concurrent.ConcurrentDictionary`2, System.Collections.Concurrent',
+        'System.Drawing.Bitmap[], System.Drawing, Version=4.0.0.0',
+        'System.Drawing.Bitmap[], System.Drawing.Common, Version=8.0.0.0',
+        'System.Drawing.Bitmap[], System.Drawing.Common, Version=10.0.0.0',
+        'OpenCvSharp.Mat[], OpenCvSharp, Version=1.0.0.0',
+        'OpenCvSharp.Mat[], OpenCvSharp, Version=4.0.0.0',
+        'Emgu.CV.Mat[], Emgu.CV.World, Version=3.4.3.3016',
+        'Emgu.CV.Mat[], Emgu.CV.World.NetStandard, Version=1.0.0.0',
+        'Emgu.CV.Mat[], Emgu.CV.Platform.NetStandard, Version=4.5.5.4823',
+        'Emgu.CV.Mat[], Emgu.CV, Version=4.8.1.5350',
+        'Emgu.CV.Mat[], Emgu.CV, Version=4.13.0.5924'
     )) {
         if ($extensionJson -notmatch [regex]::Escape($targetType)) {
             throw "Required debugger visualizer target is missing: $targetType"
@@ -163,13 +190,24 @@ function Assert-ModernCollectionRegistrationsOpen {
     foreach ($requiredRegistration in @(
         'typeof(List<>)',
         'typeof(Dictionary<,>)',
+        'typeof(ConcurrentDictionary<,>)',
         'typeof(object[])',
         'System.Collections.Generic.List`1, mscorlib, Version=4.0.0.0',
         'System.Collections.Generic.Dictionary`2, mscorlib, Version=4.0.0.0',
+        'System.Collections.Concurrent.ConcurrentDictionary`2, mscorlib, Version=4.0.0.0',
         'System.Collections.Generic.List`1, System.Private.CoreLib',
         'System.Collections.Generic.Dictionary`2, System.Private.CoreLib',
-        'OpenCvSharp.Mat[], OpenCvSharp',
-        'Emgu.CV.Mat[], Emgu.CV'
+        'System.Collections.Concurrent.ConcurrentDictionary`2, System.Collections.Concurrent',
+        'System.Drawing.Bitmap[], System.Drawing, Version=4.0.0.0',
+        'System.Drawing.Bitmap[], System.Drawing.Common, Version=8.0.0.0',
+        'System.Drawing.Bitmap[], System.Drawing.Common, Version=10.0.0.0',
+        'OpenCvSharp.Mat[], OpenCvSharp, Version=1.0.0.0',
+        'OpenCvSharp.Mat[], OpenCvSharp, Version=4.0.0.0',
+        'Emgu.CV.Mat[], Emgu.CV.World, Version=3.4.3.3016',
+        'Emgu.CV.Mat[], Emgu.CV.World.NetStandard, Version=1.0.0.0',
+        'Emgu.CV.Mat[], Emgu.CV.Platform.NetStandard, Version=4.5.5.4823',
+        'Emgu.CV.Mat[], Emgu.CV, Version=4.8.1.5350',
+        'Emgu.CV.Mat[], Emgu.CV, Version=4.13.0.5924'
     )) {
         if (-not $source.Contains($requiredRegistration)) {
             throw "Required collection visualizer registration is missing: $requiredRegistration"
@@ -189,6 +227,47 @@ function Assert-VssdkReferenceCompatibility {
 
     if ($threading.Version -ne $qualifiedThreadingVersion) {
         throw "VSSDK package references Microsoft.VisualStudio.Threading $($threading.Version), but the qualified Visual Studio 2022 floor requires $qualifiedThreadingVersion. Requalify every supported Visual Studio generation before changing this dependency."
+    }
+}
+
+function Assert-VssdkPackageLifecycleContract {
+    param([string]$SourcePath)
+
+    $source = Get-Content -Raw -LiteralPath $SourcePath
+    if (-not $source.Contains('[ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]')) {
+        throw 'The VSSDK package must preload asynchronously while debugging so the first debugger visualizer does not trigger a cyclic package load.'
+    }
+
+    $initializeStart = $source.IndexOf('protected override async Task InitializeAsync', [StringComparison]::Ordinal)
+    $initializeEnd = $source.IndexOf('protected override void Dispose', $initializeStart, [StringComparison]::Ordinal)
+    if ($initializeStart -lt 0 -or $initializeEnd -le $initializeStart) {
+        throw "Could not locate the VSSDK package initialization body: $SourcePath"
+    }
+
+    $initializeBody = $source.Substring($initializeStart, $initializeEnd - $initializeStart)
+    foreach ($forbiddenCall in @('StartInboxWatcher();', 'ScanInbox()', 'ShowRawBufferToolWindowAsync')) {
+        if ($initializeBody.Contains($forbiddenCall)) {
+            throw "VSSDK package initialization must not call '$forbiddenCall'; opening a ToolWindow while its package is loading causes VS_E_CYCLICPACKAGELOAD."
+        }
+    }
+
+    $monitoringStart = $initializeBody.IndexOf('EnsureInboxMonitoringStarted();', [StringComparison]::Ordinal)
+    $initializeCompleteLog = $initializeBody.IndexOf('WriteAutomationLog("InitializeAsync end")', [StringComparison]::Ordinal)
+    if ($monitoringStart -lt 0 -or $initializeCompleteLog -le $monitoringStart) {
+        throw 'The VSSDK package must start passive inbox monitoring before initialization completes, without scanning or opening the ToolWindow.'
+    }
+
+    $showStart = $source.IndexOf('private async Task<RawBufferToolWindow> ShowRawBufferToolWindowAsync', [StringComparison]::Ordinal)
+    $showEnd = $source.IndexOf('private async Task OpenHandoffAsync', $showStart, [StringComparison]::Ordinal)
+    if ($showStart -lt 0 -or $showEnd -le $showStart) {
+        throw "Could not locate the ToolWindow open path: $SourcePath"
+    }
+
+    $showBody = $source.Substring($showStart, $showEnd - $showStart)
+    $frameShow = $showBody.IndexOf('frame.Show()', [StringComparison]::Ordinal)
+    $showMonitoringStart = $showBody.IndexOf('EnsureInboxMonitoringStarted();', [StringComparison]::Ordinal)
+    if ($frameShow -lt 0 -or $showMonitoringStart -le $frameShow) {
+        throw 'Inbox monitoring must start only after the docked ToolWindow frame has been shown.'
     }
 }
 
@@ -292,7 +371,17 @@ New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
 if (-not $NoBuild) {
     Push-Location $repoRoot
     try {
-        & dotnet build $project --configuration $Configuration /nodeReuse:false
+        $buildArguments = @(
+            $project,
+            '--configuration',
+            $Configuration,
+            '/nodeReuse:false'
+        )
+        if (-not [string]::IsNullOrWhiteSpace($DirectoryBuildPropsPath)) {
+            $buildArguments += "-p:DirectoryBuildPropsPath=$directoryBuildPropsPath"
+        }
+
+        & dotnet build @buildArguments
         if ($LASTEXITCODE -ne 0) {
             throw "Visual Studio extension build failed with exit code $LASTEXITCODE"
         }
@@ -307,6 +396,7 @@ Assert-FileExists -Path $extensionJsonPath -Message 'Visual Studio extension met
 Assert-DebuggerVisualizerTargetTypes -ExtensionJsonPath $extensionJsonPath
 Assert-ModernDebuggerVisualizerProvidersPresent -ExtensionJsonPath $extensionJsonPath
 Assert-ModernCollectionRegistrationsOpen -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\ImageCollectionDebuggerVisualizerProvider.cs')
+Assert-VssdkPackageLifecycleContract -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizerPackage.cs')
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef') -Message 'Isolated Visual Studio package registration was not created'
 Assert-FileExists -Path (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll') -Message 'Visual Studio docked ToolWindow package DLL was not created'
 Assert-VssdkReferenceCompatibility -AssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.dll')
