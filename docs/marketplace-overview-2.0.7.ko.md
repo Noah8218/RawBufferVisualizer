@@ -4,11 +4,11 @@
 
 중단점에서 이미지 변수와 2D 원시 버퍼를 Visual Studio 안에서 바로 확인합니다. `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, 포인터 기반 프레임, 스냅샷, 지원 컬렉션을 임시 이미지 파일이나 디버그 전용 변환 코드 없이 하나의 도킹 뷰어로 모읍니다.
 
-![코드 DataTip에서 OpenCvSharp Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-datatip-open.gif)
+![코드 DataTip에서 OpenCvSharp Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/raw-buffer-visualizer-datatip-open.gif)
 
-![Visual Studio Locals에서 실제 산업 이미지 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-breakpoint-open.gif)
+![Visual Studio Locals에서 실제 산업 이미지 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/raw-buffer-visualizer-breakpoint-open.gif)
 
-![Raw Buffer Visualizer 디버깅 흐름](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
+![Raw Buffer Visualizer 디버깅 흐름](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/raw-buffer-visualizer-demo.gif)
 
 ## 2.0.7의 새로운 기능
 
@@ -21,11 +21,11 @@
 - 픽셀 검사에는 정확한 signed 정수값과 원본 4바이트가 유지됩니다.
 - 명시적 리틀/빅 엔디언, 포인터 이미지, 매핑된 `int[]`, 스냅샷, 샘플 미리보기, 타일 표시, 패딩 stride를 지원합니다.
 
-![실제 산업용 OpenCvSharp CV_32SC1 Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/int32-industrial-opencv-direct.png)
+![실제 산업용 OpenCvSharp CV_32SC1 Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/int32-industrial-opencv-direct.png)
 
 위 화면은 설치된 2.0.7 확장에서 실제 산업용 PCB 원본을 signed `Int32`로 표시한 결과입니다. 상태 표시줄에는 정확한 signed 픽셀값과 원본 4바이트가 유지됩니다.
 
-![signed Int32 행렬과 패딩 stride 프레임 자동 검사](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/int32-industrial-automatic-matrix.png)
+![signed Int32 행렬과 패딩 stride 프레임 자동 검사](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/int32-industrial-automatic-matrix.png)
 
 Automatic Inspector는 OpenCvSharp, Emgu CV, 매핑된 포인터, 스냅샷, 컬렉션, 패딩 stride 형태를 동일한 이미지 목록으로 엽니다.
 
@@ -82,9 +82,9 @@ OpenCvSharp와 Emgu 행은 네이티브 객체 `Ptr`과 실제 이미지 바이�
 
 원시 이미지가 기울어지거나 어둡거나 깨져 보이면 `Inspector > Interpret > Diagnose Buffer`를 엽니다. Buffer Doctor는 제한된 샘플을 사용해 가능한 크기, stride, 형식, 유효 비트, 바이트 순서를 순위화합니다. 후보를 선택해도 일시 중지된 프로그램의 원본 바이트는 바뀌지 않습니다.
 
-![산업용 PCB 버퍼의 Buffer Doctor 후보](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-before.png)
+![산업용 PCB 버퍼의 Buffer Doctor 후보](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/industrial-pcb-buffer-doctor-before.png)
 
-![올바른 패딩 stride 적용 후 복구된 컬러 PCB](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-recovered.png)
+![올바른 패딩 stride 적용 후 복구된 컬러 PCB](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/33b0a0b4855ce02aeed05f0726bf0071418611fa/docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## Visual Studio 호환성
 

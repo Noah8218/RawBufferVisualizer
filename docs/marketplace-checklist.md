@@ -227,6 +227,8 @@ Raw Buffer Visualizer is licensed under the MIT License. External libraries reta
 
 The approved 2.0.7 draft retains the unchanged debugger-workflow assets and adds two exact installed-2.0.7 signed-Int32 captures. The owner authorized this copy/media set for commit and branch push on 2026-09-03:
 
+The English and Korean Overview image URLs are pinned to feature commit `33b0a0b4855ce02aeed05f0726bf0071418611fa`, so the reviewed bytes remain available before any later main-branch integration.
+
 ```text
 docs\images\marketplace-icon.png
 docs\images\raw-buffer-visualizer-datatip-open.gif
