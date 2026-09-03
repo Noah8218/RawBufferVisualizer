@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.IO;
 using System.Runtime.InteropServices;
 using OpenCvSharp;
@@ -64,6 +65,13 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             if (Array.IndexOf(args, "--automatic-collections-debug") >= 0)
             {
                 return RunAutomaticCollectionsDebug();
+            }
+
+            if (TryGetArgument(args, "--int32-industrial-debug", out var int32IndustrialImagePath))
+            {
+                return RunInt32IndustrialDebug(
+                    int32IndustrialImagePath,
+                    Array.IndexOf(args, "--no-break") < 0);
             }
 
             if (TryGetArgument(args, "--industrial-image-debug", out var industrialImagePath))
@@ -629,6 +637,85 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             }
         }
 
+        private static int RunInt32IndustrialDebug(string path, bool shouldBreak)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                Console.Error.WriteLine("Industrial image was not found: " + path);
+                return 2;
+            }
+
+            var pinnedViews = new List<PinnedRawBufferView>();
+            Bitmap? sourceBitmap = null;
+            Mat? labelMat = null;
+            Emgu.CV.Mat? emguLabelMat = null;
+            try
+            {
+                sourceBitmap = LoadBgr24Bitmap(path);
+                var width = sourceBitmap.Width;
+                var height = sourceBitmap.Height;
+                var bgr24 = ReadBgr24Buffer(sourceBitmap);
+                var int32 = ConvertBgr24ToInt32(bgr24, width, height);
+                const int rowPadding = 64;
+                var paddedInt32 = AddRowPadding(int32, checked(width * 4), height, rowPadding);
+                var paddedOwner = PinView(
+                    pinnedViews,
+                    "industrial-int32-padded",
+                    paddedInt32,
+                    CreateDescriptor(width, height, checked(width * 4 + rowPadding), RawPixelFormat.Int32, 32),
+                    1);
+                var paddedInt32Frame = new IndustrialCameraFrame(paddedOwner);
+                var int32Snapshot = RawBufferSnapshot.FromByteArray(
+                    int32,
+                    CreateDescriptor(width, height, checked(width * 4), RawPixelFormat.Int32, 32));
+                labelMat = CreateMat(width, height, MatType.CV_32SC1, int32);
+                emguLabelMat = CreateEmguMat(
+                    width,
+                    height,
+                    Emgu.CV.CvEnum.DepthType.Cv32S,
+                    1,
+                    int32);
+                var labelMatList = new List<Mat> { labelMat };
+
+                Console.WriteLine(
+                    "CV_32SC1 industrial debugger smoke ready: " +
+                    Path.GetFileName(path) + ", " +
+                    width.ToString(CultureInfo.InvariantCulture) + " x " +
+                    height.ToString(CultureInfo.InvariantCulture) +
+                    ", OpenCvSharp/Emgu/collection plus Int32 RawBufferSnapshot and " +
+                    rowPadding.ToString(CultureInfo.InvariantCulture) + "-byte padded frame.");
+                if (shouldBreak)
+                {
+                    Debugger.Break();
+                }
+
+                GC.KeepAlive(labelMat);
+                GC.KeepAlive(emguLabelMat);
+                GC.KeepAlive(labelMatList);
+                GC.KeepAlive(int32Snapshot);
+                GC.KeepAlive(paddedInt32Frame);
+                GC.KeepAlive(sourceBitmap);
+                return 0;
+            }
+            catch (Exception ex)
+            {
+                Console.Error.WriteLine("CV_32SC1 industrial debugger smoke failed.");
+                Console.Error.WriteLine("Type: " + ex.GetType().FullName);
+                Console.Error.WriteLine("Message: " + ex.Message);
+                return 1;
+            }
+            finally
+            {
+                labelMat?.Dispose();
+                emguLabelMat?.Dispose();
+                sourceBitmap?.Dispose();
+                foreach (var pinnedView in pinnedViews)
+                {
+                    pinnedView.Dispose();
+                }
+            }
+        }
+
         private static Bitmap LoadBgr24Bitmap(string path)
         {
             using (var source = new Bitmap(path))
@@ -684,6 +771,23 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             }
 
             return mono8;
+        }
+
+        private static byte[] ConvertBgr24ToInt32(byte[] bgr24, int width, int height)
+        {
+            var int32 = new byte[checked(width * height * 4)];
+            for (var index = 0; index < width * height; index++)
+            {
+                var sourceOffset = index * 3;
+                var gray = ((bgr24[sourceOffset] * 29) +
+                    (bgr24[sourceOffset + 1] * 150) +
+                    (bgr24[sourceOffset + 2] * 77) + 128) >> 8;
+                var value = checked((gray * 257) - 32768);
+                var bytes = BitConverter.GetBytes(value);
+                Buffer.BlockCopy(bytes, 0, int32, index * 4, 4);
+            }
+
+            return int32;
         }
 
         private static byte[] AddRowPadding(byte[] source, int rowBytes, int height, int rowPadding)

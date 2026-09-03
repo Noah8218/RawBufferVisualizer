@@ -27,8 +27,8 @@ Inspect `view` from Watch, Locals, Autos, or DataTip after the VSIX is installed
 | `RawBufferSnapshot` | Supported | Best when the app already owns a managed snapshot. |
 | `RawBufferView` | Supported | Best for `IntPtr` buffer + descriptor metadata. Chunks are copied from the unmanaged pointer on demand. |
 | `System.Drawing.Bitmap` | Supported | `8bppIndexed`, `24bppRgb`, `32bppArgb`, `32bppPArgb`, `32bppRgb`. |
-| OpenCvSharp `Mat` | Supported | `CV_8UC1`, `CV_8UC3`, `CV_8UC4`, `CV_16UC1`, `CV_32FC1`. |
-| Emgu CV `Mat` | Supported | `Cv8U` C1/C3/C4, `Cv16U` C1, `Cv32F` C1. |
+| OpenCvSharp `Mat` | Supported | `CV_8UC1`, `CV_8UC3`, `CV_8UC4`, `CV_16UC1`, `CV_32FC1`, `CV_32SC1`. |
+| Emgu CV `Mat` | Supported | `Cv8U` C1/C3/C4, `Cv16U` C1, `Cv32F` C1, `Cv32S` C1. |
 
 ## Vendor Adapter Position
 
@@ -56,8 +56,9 @@ Use these mappings before adding a vendor-specific enum:
 | BGRA packed 8-bit | `BGRA32`, channels 4, valid bits 8 |
 | Bayer RG/GR/GB/BG 8-bit | `BayerRGGB8`, `BayerGRBG8`, `BayerGBRG8`, or `BayerBGGR8` |
 | Float 32-bit single channel | `Float32`, valid bits 32 |
+| Signed integer 32-bit single channel | `Int32`, valid bits 32; display uses signed min/max grayscale autoscale |
 
-Vendor-specific adapters should fail clearly when an SDK reports unsupported planar, YUV, compressed, signed, or packed Bayer formats. Silent channel swapping is worse than refusing to render.
+`CV_32SC1` means one signed 32-bit channel, not 32 channels. Exact signed values and their four stored bytes remain available in the inspector. Multi-channel signed integer, unsupported planar, YUV, compressed, and packed Bayer formats must fail clearly. Silent channel or type guessing is worse than refusing to render.
 
 ## Adapter Acceptance Checklist
 

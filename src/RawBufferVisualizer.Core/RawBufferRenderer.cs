@@ -50,6 +50,9 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.Float32:
                     RenderFloat32(buffer, descriptor, pixels, x, y, width, height, options);
                     break;
+                case RawPixelFormat.Int32:
+                    RenderInt32(buffer, descriptor, pixels, x, y, width, height, options);
+                    break;
                 case RawPixelFormat.RGB24:
                     RenderRgb24(buffer, descriptor, pixels, x, y, width, height, true);
                     break;
@@ -97,6 +100,9 @@ namespace RawBufferVisualizer.Core
                     break;
                 case RawPixelFormat.Float32:
                     levels = GetFloat32Levels(buffer, descriptor, options);
+                    break;
+                case RawPixelFormat.Int32:
+                    levels = GetInt32Levels(buffer, descriptor, options);
                     break;
             }
 
@@ -290,6 +296,55 @@ namespace RawBufferVisualizer.Core
             return Tuple.Create(min, max);
         }
 
+        private static void RenderInt32(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, RawRenderOptions options)
+        {
+            var levels = GetInt32Levels(buffer, descriptor, options);
+            var black = levels.Item1;
+            var white = levels.Item2 <= black ? black + 1 : levels.Item2;
+
+            for (var tileY = 0; tileY < height; tileY++)
+            {
+                var sourceRow = (y + tileY) * descriptor.Stride;
+                var targetRow = tileY * width * 4;
+                for (var tileX = 0; tileX < width; tileX++)
+                {
+                    var raw = ReadInt32(buffer, sourceRow + ((x + tileX) * 4), descriptor.ByteOrder);
+                    var value = ToByte(raw, black, white);
+                    WriteBgra(pixels, targetRow + (tileX * 4), value, value, value, 255);
+                }
+            }
+        }
+
+        private static Tuple<double, double> GetInt32Levels(byte[] buffer, RawImageDescriptor descriptor, RawRenderOptions options)
+        {
+            if (!options.AutoScale)
+            {
+                return Tuple.Create(options.BlackLevel, options.WhiteLevel);
+            }
+
+            var min = int.MaxValue;
+            var max = int.MinValue;
+            for (var y = 0; y < descriptor.Height; y++)
+            {
+                var sourceRow = y * descriptor.Stride;
+                for (var x = 0; x < descriptor.Width; x++)
+                {
+                    var raw = ReadInt32(buffer, sourceRow + (x * 4), descriptor.ByteOrder);
+                    if (raw < min)
+                    {
+                        min = raw;
+                    }
+
+                    if (raw > max)
+                    {
+                        max = raw;
+                    }
+                }
+            }
+
+            return Tuple.Create((double)min, (double)max);
+        }
+
         private static void RenderRgb24(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, bool sourceIsRgb)
         {
             for (var tileY = 0; tileY < height; tileY++)
@@ -411,6 +466,27 @@ namespace RawBufferVisualizer.Core
             }
 
             return BitConverter.ToSingle(bytes, 0);
+        }
+
+        internal static int ReadInt32(byte[] buffer, int offset, RawByteOrder byteOrder)
+        {
+            uint bits;
+            if (byteOrder == RawByteOrder.BigEndian)
+            {
+                bits = ((uint)buffer[offset] << 24)
+                    | ((uint)buffer[offset + 1] << 16)
+                    | ((uint)buffer[offset + 2] << 8)
+                    | buffer[offset + 3];
+            }
+            else
+            {
+                bits = buffer[offset]
+                    | ((uint)buffer[offset + 1] << 8)
+                    | ((uint)buffer[offset + 2] << 16)
+                    | ((uint)buffer[offset + 3] << 24);
+            }
+
+            return unchecked((int)bits);
         }
 
         internal static int ReadPackedLsb(byte[] buffer, int rowOffset, int x, int bitsPerPixel)

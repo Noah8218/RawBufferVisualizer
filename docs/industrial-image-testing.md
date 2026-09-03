@@ -157,3 +157,17 @@ Boundary / next dependency: This proves the documented debugger workflows on the
 ## Boundary
 
 This proves real photographic content through the supported in-memory representations. It does not prove a physical camera, vendor SDK, acquisition timing, exposure control, transport stability, or sensor-native Bayer/packed payload.
+
+## Signed Int32 Industrial Validation - 2026-09-03 (2.0.7)
+
+- Host: exact installed local `2.0.7.0` candidate on Visual Studio 2022 Community `17.14.37516.0`; dynamically selected `\\.\DISPLAY2` (`-1920,365`, `1920 x 1080`) with verified Visual Studio rectangle `-1900,385`, `1880 x 1040`.
+- Source: the recorded CC0 1280 x 960 PCB image, SHA-256 `E833DFE885BBB08D85F091D452A0B4FB7182C7B8A08EFF103AC49522597C9D46`.
+- Interpretation: the color photograph is converted into one signed intensity value per pixel to exercise OpenCvSharp `CV_32SC1` and Emgu CV `Cv32S` C1. The viewer intentionally displays this one-channel scalar field in grayscale after signed min/max normalization; it is not a missing-color defect.
+- Direct DataTip: `labelMat` opened without a fallback menu as OpenCvSharp `Int32`, 1280 x 960, stride 5120. Pixel `(815, 386)` reported signed value `-12208` and decimal raw bytes `80 208 255 255`, equivalent to little-endian `50 D0 FF FF`.
+- Automatic Inspector: `5 detected: 5 opened, 0 need mapping, 0 failed`; `labelMatList` contributed one inspected and opened collection item. Rows covered OpenCvSharp, Emgu CV, a pinned `RawBufferView`, an application frame wrapper, and the Mat list.
+- Padded stride: `paddedInt32Frame` remained `Int32`, 1280 x 960, stride 5184 (`1280 * 4 + 64`).
+- Runtime result: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\installed-int32-direct-vs2022\Int32Industrial-installed-vsix.json`.
+- Layout result: `D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\final-layout-widths\layout-widths.json`; 540, 900, and 1160 px passed.
+- Capture SHA-256: DataTip hover `78BEE900316D5B74ABF7443789DF06BB255E10EA61219531AD890CA5797DA212`; visualizer glyph `16C37E630FE052C36157AAE80A98B4CECE077AA93B71B364FEEAFBE67F4B9AEC`; direct result `7FDF4E76841D75F9CA87D6D5D514CC568CBD432F0DB3A91F260C1C4A81031125`; automatic matrix `898DC75F7159A11FCEA62DCBBFF1221F33CA2F4A88C00F57993826CF251E00D2`; padded stride `95CD70A340E7EEB8F773D747DE71D0A0B43FC9DE2A1B90107683DD0CF6902020`.
+
+The reviewed direct and automatic captures are tracked as `docs/images/int32-industrial-opencv-direct.png` and `docs/images/int32-industrial-automatic-matrix.png`. The owner approved them for the 2.0.7 README and Marketplace Overview on 2026-09-03. They retain the complete Visual Studio context deliberately so the breakpoint, object names, addresses, image list, format, stride, and real image can be evaluated together.

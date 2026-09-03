@@ -114,6 +114,7 @@ namespace RawBufferVisualizer.Sdk
                 case RawPixelFormat.Binary:
                     return 1;
                 case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
                     return 32;
                 default:
                     return 8;

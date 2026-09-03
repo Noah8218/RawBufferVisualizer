@@ -4,7 +4,23 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.6` changes are queued.
+No post-`2.0.7` changes are queued.
+
+## [2.0.7] - 2026-09-03
+
+Raw Buffer Visualizer `2.0.7` adds signed 32-bit, one-channel matrix visualization for segmentation labels, integer result maps, and other `CV_32SC1`-style buffers.
+
+### Added
+
+- Maps OpenCvSharp `CV_32SC1` and Emgu CV `Cv32S` C1 to the new `Int32` raw pixel format on direct visualizer, Automatic Inspector, and supported collection paths.
+- Accepts mapped `int[]` data and `RawBufferSnapshot.FromInt32Array`, including explicit byte order.
+- Displays signed values through min/max grayscale autoscaling while preserving the exact signed integer and four raw bytes in pixel inspection.
+- Supports padded stride, tiled/file-backed rendering, sampled pointer previews, and Buffer Doctor candidates for `Int32`.
+
+### Compatibility
+
+- Retains the Visual Studio 2022 `17.9+` x64 installation floor and stable Visual Studio 2026 `18.x` contract.
+- Retains prior enum numeric values by appending `Int32`; `CV_32SC2`, `CV_32SC3`, `CV_32SC4`, and 3D data remain unsupported.
 
 ## [2.0.6] - 2026-09-03
 
@@ -241,7 +257,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.6...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.7...HEAD
+[2.0.7]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.6...v2.0.7
 [2.0.6]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.4...v2.0.5
 [2.0.4]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.3...v2.0.4

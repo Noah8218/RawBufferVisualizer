@@ -236,6 +236,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return RawPixelFormat.Float32;
             }
 
+            if (depth == 4 && channels == 1)
+            {
+                return RawPixelFormat.Int32;
+            }
+
             throw new NotSupportedException("Unsupported Mat type: " + Convert.ToString(matType, CultureInfo.InvariantCulture));
         }
 
@@ -248,6 +253,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case 2:
                     return 16;
                 case 5:
+                case 4:
                     return 32;
                 default:
                     return 0;

@@ -294,6 +294,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     {
                         buffer = RawBufferSnapshot.FromFloatArray(floats, descriptor).Buffer;
                     }
+                    else
+                    {
+                        var integers = dataValue as int[];
+                        if (integers != null)
+                        {
+                            buffer = RawBufferSnapshot.FromInt32Array(integers, descriptor).Buffer;
+                        }
+                    }
                 }
             }
 
@@ -301,7 +309,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             {
                 error = string.Format(
                     CultureInfo.InvariantCulture,
-                    "Mapped data member '{0}' on {1} is {2}; expected IntPtr/UIntPtr or byte[]/ushort[]/float[].",
+                    "Mapped data member '{0}' on {1} is {2}; expected IntPtr/UIntPtr or byte[]/ushort[]/float[]/int[].",
                     dataMemberName,
                     typeName,
                     dataValue.GetType().FullName);

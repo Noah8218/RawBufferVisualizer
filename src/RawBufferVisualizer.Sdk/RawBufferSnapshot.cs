@@ -81,6 +81,28 @@ namespace RawBufferVisualizer.Sdk
             return new RawBufferSnapshot(buffer, descriptor.Clone());
         }
 
+        public static RawBufferSnapshot FromInt32Array(int[] values, RawImageDescriptor descriptor)
+        {
+            if (values == null)
+            {
+                throw new ArgumentNullException(nameof(values));
+            }
+
+            var buffer = new byte[values.Length * 4];
+            for (var i = 0; i < values.Length; i++)
+            {
+                var bytes = BitConverter.GetBytes(values[i]);
+                if ((descriptor.ByteOrder == RawByteOrder.BigEndian) == BitConverter.IsLittleEndian)
+                {
+                    Array.Reverse(bytes);
+                }
+
+                System.Buffer.BlockCopy(bytes, 0, buffer, i * 4, 4);
+            }
+
+            return new RawBufferSnapshot(buffer, descriptor.Clone());
+        }
+
         public static RawBufferSnapshot Save(string metadataPath, byte[] buffer, RawImageDescriptor descriptor)
         {
             var snapshot = FromByteArray(buffer, descriptor);

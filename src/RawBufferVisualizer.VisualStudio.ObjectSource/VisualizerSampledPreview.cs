@@ -95,6 +95,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             {
                 WriteFloatPreview(source, descriptor, sampleStep, previewWidth, previewHeight, pixels);
             }
+            else if (descriptor.PixelFormat == RawPixelFormat.Int32)
+            {
+                WriteInt32Preview(source, descriptor, sampleStep, previewWidth, previewHeight, pixels);
+            }
             else
             {
                 WritePreview(source, descriptor, sampleStep, previewWidth, previewHeight, pixels);
@@ -191,6 +195,45 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     gray = 128;
                 }
 
+                pixels[target++] = gray;
+                pixels[target++] = gray;
+                pixels[target++] = gray;
+                pixels[target++] = 255;
+            }
+        }
+
+        private static void WriteInt32Preview(
+            RawByteAccessor source,
+            RawImageDescriptor descriptor,
+            int sampleStep,
+            int previewWidth,
+            int previewHeight,
+            byte[] pixels)
+        {
+            var values = new int[checked(previewWidth * previewHeight)];
+            var minimum = int.MaxValue;
+            var maximum = int.MinValue;
+            var index = 0;
+            for (var previewY = 0; previewY < previewHeight; previewY++)
+            {
+                var sourceY = Math.Min(descriptor.Height - 1, previewY * sampleStep);
+                for (var previewX = 0; previewX < previewWidth; previewX++)
+                {
+                    var sourceX = Math.Min(descriptor.Width - 1, previewX * sampleStep);
+                    var value = ReadInt32(source, descriptor, sourceX, sourceY);
+                    values[index++] = value;
+                    minimum = Math.Min(minimum, value);
+                    maximum = Math.Max(maximum, value);
+                }
+            }
+
+            var hasRange = maximum > minimum;
+            var target = 0;
+            for (index = 0; index < values.Length; index++)
+            {
+                var gray = hasRange
+                    ? ScaleToByte(((double)values[index] - minimum) / ((double)maximum - minimum))
+                    : (byte)128;
                 pixels[target++] = gray;
                 pixels[target++] = gray;
                 pixels[target++] = gray;
@@ -321,6 +364,28 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             return *(float*)&bits;
+        }
+
+        private static int ReadInt32(RawByteAccessor source, RawImageDescriptor descriptor, int x, int y)
+        {
+            var offset = x * 4;
+            uint bits;
+            if (descriptor.ByteOrder == RawByteOrder.BigEndian)
+            {
+                bits = (uint)(source.Read(y, offset) << 24)
+                    | (uint)(source.Read(y, offset + 1) << 16)
+                    | (uint)(source.Read(y, offset + 2) << 8)
+                    | source.Read(y, offset + 3);
+            }
+            else
+            {
+                bits = source.Read(y, offset)
+                    | (uint)(source.Read(y, offset + 1) << 8)
+                    | (uint)(source.Read(y, offset + 2) << 16)
+                    | (uint)(source.Read(y, offset + 3) << 24);
+            }
+
+            return unchecked((int)bits);
         }
 
         private static byte ScaleUnsigned(uint value, int validBits)

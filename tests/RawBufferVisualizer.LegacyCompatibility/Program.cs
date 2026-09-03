@@ -72,6 +72,14 @@ namespace RawBufferVisualizer.LegacyCompatibility
                     matType.Assembly.FullName,
                     view.Descriptor.Stride);
             }
+
+            using (var mat = new OpenCvSharp.Mat(2, 3, OpenCvSharp.MatType.CV_32SC1))
+            {
+                var view = OpenCvSharpMatVisualizerTransfer.CreateView(mat, "legacy-opencvsharp-int32");
+                Require(view.Descriptor.PixelFormat == RawPixelFormat.Int32, "OpenCvSharp CV_32SC1 pixel format");
+                Require(view.Descriptor.ValidBits == 32, "OpenCvSharp CV_32SC1 valid bits");
+                Require(view.Descriptor.Stride >= 12, "OpenCvSharp CV_32SC1 stride");
+            }
         }
 
         private static void VerifyBitmap()
@@ -123,6 +131,14 @@ namespace RawBufferVisualizer.LegacyCompatibility
                         ?? "unknown",
                     matType.Assembly.FullName,
                     view.Descriptor.Stride);
+            }
+
+            using (var mat = new Mat(2, 3, Emgu.CV.CvEnum.DepthType.Cv32S, 1))
+            {
+                var view = EmguCvMatVisualizerTransfer.CreateView(mat, "legacy-emgu-int32");
+                Require(view.Descriptor.PixelFormat == RawPixelFormat.Int32, "Emgu CV CV_32SC1 pixel format");
+                Require(view.Descriptor.ValidBits == 32, "Emgu CV CV_32SC1 valid bits");
+                Require(view.Descriptor.Stride >= 12, "Emgu CV CV_32SC1 stride");
             }
         }
 

@@ -30,6 +30,7 @@ namespace RawBufferVisualizer.Core
             new FormatFamily { PixelFormat = RawPixelFormat.BGR24, BitsPerPixel = 24, ValidBits = 8 },
             new FormatFamily { PixelFormat = RawPixelFormat.BGRA32, BitsPerPixel = 32, ValidBits = 8 },
             new FormatFamily { PixelFormat = RawPixelFormat.Float32, BitsPerPixel = 32, ValidBits = 32 },
+            new FormatFamily { PixelFormat = RawPixelFormat.Int32, BitsPerPixel = 32, ValidBits = 32 },
             new FormatFamily { PixelFormat = RawPixelFormat.Mono10PackedLsb, BitsPerPixel = 10, ValidBits = 10 },
             new FormatFamily { PixelFormat = RawPixelFormat.Mono12PackedLsb, BitsPerPixel = 12, ValidBits = 12 }
         };

@@ -232,6 +232,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return RawPixelFormat.Float32;
             }
 
+            if (depthValue == 4 && channels == 1)
+            {
+                return RawPixelFormat.Int32;
+            }
+
             throw new NotSupportedException(
                 "Unsupported Emgu Mat depth/channels: " + Convert.ToString(depth, CultureInfo.InvariantCulture) + " C" + channels);
         }
@@ -245,6 +250,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 case 2:
                     return 16;
                 case 5:
+                case 4:
                     return 32;
                 default:
                     return 0;
@@ -272,6 +278,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     return 2;
                 case "Cv32F":
                     return 5;
+                case "Cv32S":
+                    return 4;
                 default:
                     throw new NotSupportedException("Unsupported Emgu depth: " + name);
             }

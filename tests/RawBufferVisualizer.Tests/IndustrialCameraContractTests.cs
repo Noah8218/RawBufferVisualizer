@@ -219,6 +219,11 @@ namespace RawBufferVisualizer.Tests
                     typeof(MappedArrayFrame<float>),
                     ArrayMembers(),
                     RawByteOrder.BigEndian);
+                AddMapping(
+                    file,
+                    typeof(MappedArrayFrame<int>),
+                    ArrayMembers(),
+                    RawByteOrder.BigEndian);
 
                 var writer = new TypeMappingStore(null, mappingPath);
                 writer.Save(file);
@@ -316,6 +321,24 @@ namespace RawBufferVisualizer.Tests
                     32,
                     RawByteOrder.BigEndian,
                     new byte[] { 0x3F, 0x80, 0x00, 0x00, 0xC0, 0x20, 0x00, 0x00 },
+                    false);
+
+                AssertMappedSuccess(
+                    new MappedArrayFrame<int>
+                    {
+                        Data = new[] { -2, 258 },
+                        Width = 2,
+                        Height = 1,
+                        Stride = 8,
+                        PixelFormat = RawPixelFormat.Int32,
+                        ValidBits = 32
+                    },
+                    store,
+                    RawPixelFormat.Int32,
+                    8,
+                    32,
+                    RawByteOrder.BigEndian,
+                    new byte[] { 0xFF, 0xFF, 0xFF, 0xFE, 0x00, 0x00, 0x01, 0x02 },
                     false);
             }
             finally
@@ -459,9 +482,9 @@ namespace RawBufferVisualizer.Tests
                 "MiddleEndian");
 
             AssertMappedFailure(
-                new MappedArrayFrame<int>
+                new MappedArrayFrame<long>
                 {
-                    Data = new[] { 1 },
+                    Data = new[] { 1L },
                     Width = 1,
                     Height = 1,
                     Stride = 4,
@@ -469,7 +492,7 @@ namespace RawBufferVisualizer.Tests
                     ValidBits = 32
                 },
                 ArrayMembers(),
-                "expected IntPtr/UIntPtr or byte[]/ushort[]/float[]");
+                "expected IntPtr/UIntPtr or byte[]/ushort[]/float[]/int[]");
         }
 
         private static void RegisteredRawBufferViewContractsMatchMappedValidation()
@@ -505,6 +528,10 @@ namespace RawBufferVisualizer.Tests
                 RawBufferViewOf(2, 1, 3, 3, RawPixelFormat.Mono12PackedLsb, 12));
             Assert(mono12.Descriptor.ValidBits == 12, "Valid Mono12PackedLsb bit depth changed.");
 
+            var int32 = RawBufferViewVisualizerTransfer.CreateMetadata(
+                RawBufferViewOf(1, 1, 4, 4, RawPixelFormat.Int32, 32));
+            Assert(int32.Descriptor.ValidBits == 32, "Valid Int32 bit depth changed.");
+
             AssertRawBufferViewFailure(
                 RawBufferViewOf(1, 1, 2, 2, RawPixelFormat.Mono16, 17),
                 "Mono16 valid bits must be between 1 and 16");
@@ -514,6 +541,9 @@ namespace RawBufferVisualizer.Tests
             AssertRawBufferViewFailure(
                 RawBufferViewOf(2, 1, 3, 3, RawPixelFormat.Mono12PackedLsb, 10),
                 "Mono12PackedLsb requires 12 valid bits per pixel");
+            AssertRawBufferViewFailure(
+                RawBufferViewOf(1, 1, 4, 4, RawPixelFormat.Int32, 16),
+                "Int32 requires 32 valid bits per pixel");
         }
 
         private static RawBufferView RawBufferViewOf(
