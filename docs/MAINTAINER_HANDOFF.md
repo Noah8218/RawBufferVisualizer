@@ -8,14 +8,14 @@ This is the canonical continuation document for the next conversation. Read it a
 | --- | --- |
 | Last verified | 2026-09-10 KST: the unchanged final local 2.0.8 candidate passed seven installed scenario groups on exact VS2022 Community `17.9.34902.65`, including direct/automatic/padded signed Int32, 50-object Automatic Collections, mixed libraries, ImagePtr, ConcurrentDictionary, Release Announcement, and Environment Check. Installed payload equality was 17/17 and every scenario recorded zero package-protocol errors. The existing serviced VS2022 `17.14.37516.0` and stable VS2026 `18.9.12128.139` results remain valid. Final 320/348/540/900/1160 px layout smoke passed on `DISPLAY2` at 96 DPI; 125%-200% DPI remain external release gates. |
 | Active repository | `C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat` |
-| Branch / remote | `agent/vs2022-17.9-compat`; local working tree contains the pre-existing uncommitted 2.0.8 debugger-payload correction plus the uncommitted Automatic Inspector change. No commit, push, CI dispatch, tag, Marketplace mutation, GitHub Release, or deployment is authorized by this work. Repository: `https://github.com/Noah8218/RawBufferVisualizer.git`. |
+| Branch / remote | `agent/vs2022-17.9-compat`; the complete 2.0.8 source/media batch is committed as `720ceec`, the immutable Marketplace media links are committed as `9ae28f3`, and both commits are pushed to `origin/agent/vs2022-17.9-compat`. No main merge, CI dispatch, tag, Marketplace mutation, GitHub Release, or deployment was performed. Repository: `https://github.com/Noah8218/RawBufferVisualizer.git`. |
 | Implementation baseline | Public 2.0.7 contains the signed `Int32` source feature but a stale VS2022 debugger payload. Current local source keeps the 2.0.8 payload correction and adds bounded 50+-object Automatic Inspector workflow: stable in-place rows, 8-image/2-second initial batch, progress/Stop/load-more UI, newest-Break gating, cache-safe per-session type analysis, and readable narrow image cards. |
 | Source and VSIX version | Local source metadata is `2.0.8` / `2.0.8.0`; the last recorded Gallery readback reports public `2.0.7.0`. Exact final local VSIX: 2,521,139 bytes, SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`; 17 critical archive/installed files matched on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026. Every older 2.0.8 path/hash in historical sections is superseded. |
 | Visual Studio support | Current source retains `[17.9,18.0)` and the 17.9 SDK/package boundary. The exact final candidate passed exact VS2022 `17.9.34902.65`, serviced VS2022 `17.14.37516.0`, and stable VS2026 `18.9.12128.139`; the preceding same-feature VS2022 development build also passed actual Stop/resume. The exact 17.9 runtime gate is complete; 125%-200% DPI remain release gates. |
 | Public Marketplace version | Official Gallery API returned `2.0.7.0` on 2026-09-04 KST. It is immutable but superseded; reinstalling it does not correct its packaged ObjectSource. |
 | Git tags / GitHub Releases | Local annotated tag `v1.0.45` on `a23d8ad` created 2026-07-26; not pushed yet; no GitHub Release yet |
-| Product stage | Last recorded Gallery baseline is public 2.0.7 and affected by the stale payload. Local 2.0.8 is source-tested and exact-final-candidate installed-runtime-tested on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026, with new current-UI Marketplace media. The exact 17.9 gate is complete; the supported DPI sweep remains the recorded publication gate. |
-| Commit scope | Current uncommitted work combines the routed ObjectSource/hash-gate correction, Automatic Inspector incremental refresh, cache-safety correction, responsive image-card layout, tests, release copy, and durable evidence. Marketplace upload, commit, push, tag, and release are separate authorization boundaries. |
+| Product stage | Last recorded Gallery baseline is public 2.0.7 and affected by the stale payload. Feature-branch 2.0.8 is source-tested and exact-final-candidate installed-runtime-tested on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026, with new current-UI Marketplace media. The exact 17.9 gate is complete; the supported DPI sweep remains the recorded publication gate. |
+| Commit scope | Commit `720ceec` contains the routed ObjectSource/hash-gate correction, Automatic Inspector incremental refresh, cache-safety correction, responsive image-card layout, tests, release copy, and current media. Commit `9ae28f3` pins all English/Korean Marketplace media to the immutable `720ceec` blobs. Both are on `origin/agent/vs2022-17.9-compat`; main merge, CI, Marketplace upload, tag, and release remain separate authorization boundaries. |
 
 Public links:
 
@@ -35,7 +35,7 @@ Verification: Final routed package and aggregate tests; exact final VSIX install
 
 Evidence: final VSIX and hash in the Snapshot above; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\vs2022-17.9-final`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\installed-vs2026-final`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final`; exact DataTip expression-name retry under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-object-name`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\restart-verification-20260909-235208`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\layout-widths-final`; prior actual Stop/resume under `D:\OpenVisionLab-TestData\RawBufferVisualizer\automatic-inspector\installed-vs2022-17.14\heavy-stop`; detailed owner/call path and cache invariant in [automatic-vision-inspector.md](automatic-vision-inspector.md).
 
-Boundary / next dependency: Local implementation, exact VS2022 17.9 and stable-VS2026 validation, release copy, and dry run are complete. Publication approval remains blocked on 125%, 150%, 175%, and 200% DPI. The user's original Auto Inspect preference was restored. Commit, push, upload, publication, tag, and deployment remain unauthorized.
+Boundary / next dependency: Local implementation, exact VS2022 17.9 and stable-VS2026 validation, release copy, and dry run are complete. Publication approval remains blocked on 125%, 150%, 175%, and 200% DPI. The user's original Auto Inspect preference was restored. The source/media commit and feature-branch push are complete; main merge, CI, upload, publication, tag, and deployment remain separate actions.
 
 ## 2.0.8 Debugger Payload Correction Candidate (Historical Pre-Change Artifact)
 
@@ -428,7 +428,7 @@ Boundary: the removed direct debugger visualizer passed a technical experiment o
 
 ## Next Priorities
 
-The exact 2.0.8 correction VSIX, English/Korean Marketplace copy, refreshed exact-installed media, package-integrity checks, extracted-payload tests, and exact-candidate runtime regressions on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026 exist locally. They are not committed, pushed, CI-verified, or published. Exact Visual Studio 2022 17.9 runtime proof is complete; the supported DPI sweep remains the current gate.
+The exact 2.0.8 correction VSIX, English/Korean Marketplace copy, refreshed exact-installed media, package-integrity checks, extracted-payload tests, and exact-candidate runtime regressions on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026 are committed and pushed to `origin/agent/vs2022-17.9-compat`. All seven immutable Overview media URLs returned HTTP 200 with the expected content type and exact local byte length. They are not merged to main, CI-verified, or published. Exact Visual Studio 2022 17.9 runtime proof is complete; the supported DPI sweep remains the current gate.
 
 1. Exact VS2022 17.9 direct `CV_32SC1` validation — Complete | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
 
@@ -442,9 +442,9 @@ The exact 2.0.8 correction VSIX, English/Korean Marketplace copy, refreshed exac
 
    Review [English Overview](marketplace-overview-2.0.8.md), [Korean copy](marketplace-overview-2.0.8.ko.md), [release notes](marketplace-release-notes-2.0.8.md), [qualification](release-qualification-2.0.8.md), and the exact media listed in [industrial-image-testing.md](industrial-image-testing.md).
 
-4. Commit and push the reviewed 2.0.8 source, then run or review CI | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
+4. Commit and push the reviewed 2.0.8 source — Complete | Recommended model: `gpt-5.6-luna` | Reasoning effort: `low`
 
-   Commit and push remain explicit user-authorized boundaries. CI must evaluate the exact pushed source before Marketplace upload.
+   Commits `720ceec` and `9ae28f3` are pushed to `origin/agent/vs2022-17.9-compat`. Main integration and CI remain separate approval and verification boundaries.
 
 5. Upload only after CI and separate publication approval | Recommended model: `gpt-5.6-terra` | Reasoning effort: `medium`
 
@@ -467,7 +467,7 @@ Boundary / next dependency: This contract later passed exact installed `2.0.0` q
 
 ## Exact Start For The Next Conversation
 
-Run the repository orientation commands, verify that the public Gallery state has not changed, inspect the uncommitted 2.0.8 worktree, and verify the exact local artifact without rebuilding it:
+Run the repository orientation commands, verify that the public Gallery state has not changed, confirm that the feature branch is clean and synchronized, and verify the exact local artifact without rebuilding it:
 
 ```powershell
 Set-Location C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat
@@ -482,7 +482,7 @@ Get-Item -LiteralPath $candidate208 | Select-Object FullName, Length
 Get-FileHash -LiteralPath $candidate208 -Algorithm SHA256
 ```
 
-Expected before review: baseline HEAD `25122bc98ca33a2939fda78be4504a2c25b65bdf`, an intentionally dirty 2.0.8 worktree, manifest `2.0.8.0`, 2,521,139 bytes, and SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`. The exact candidate is installed on VS2022 profile `17.0_419f0858` and VS2026 profile `18.0_19923728`; each installation matched 17/17 critical candidate files. Read [release-qualification-2.0.8.md](release-qualification-2.0.8.md) before any release action. Do not rebuild, reinstall, commit, push, upload, tag, publish, deploy, or manually dispatch CI without the corresponding explicit authorization.
+Expected before review: a clean `agent/vs2022-17.9-compat` branch synchronized with its remote and containing source/media commit `720ceec` plus immutable-link commit `9ae28f3`; manifest `2.0.8.0`; 2,521,139 bytes; and SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`. The exact candidate is installed on VS2022 profile `17.0_419f0858` and VS2026 profile `18.0_19923728`; each installation matched 17/17 critical candidate files. Read [release-qualification-2.0.8.md](release-qualification-2.0.8.md) before any release action. Do not rebuild, reinstall, merge, manually dispatch CI, upload, tag, publish, or deploy without the corresponding explicit authorization.
 
 ## Historical Exact-Start Record
 
@@ -753,7 +753,7 @@ Verification: final `Publish-VisualStudioExtension.ps1` run; `RawBufferVisualize
 
 Evidence: exact VSIX `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\candidate-final\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 2,521,139 bytes, SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`; exact VS2022 17.9 results `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\vs2022-17.9-final`; VS2026 results `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\installed-vs2026-final`; VS2022 17.14 and media results `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final`; three-host 17/17 equality roots `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\vs2022-17.9-final` and `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\restart-verification-20260909-235208`; layout evidence `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\layout-widths-final`; detailed record [release-qualification-2.0.8.md](release-qualification-2.0.8.md); behavior record [automatic-vision-inspector.md](automatic-vision-inspector.md).
 
-Boundary / next dependency: Local implementation and exact-host evidence are complete, including the corrected direct `CV_32SC1` path on Visual Studio 2022 `17.9.34902.65`. Marketplace approval remains blocked until the UI is checked at 125%, 150%, 175%, and 200% DPI. No commit, push, Marketplace upload, tag, release, or deployment was performed.
+Boundary / next dependency: Local implementation and exact-host evidence are complete, including the corrected direct `CV_32SC1` path on Visual Studio 2022 `17.9.34902.65`. Marketplace approval remains blocked until the UI is checked at 125%, 150%, 175%, and 200% DPI. The source/media commits are pushed to the feature branch; no main merge, CI dispatch, Marketplace upload, tag, release, or deployment was performed.
 
 ## 2.0.8 Marketplace Media Refresh
 
@@ -767,4 +767,4 @@ Verification: installed `IndustrialMarketplace`, `IndustrialDataTip`, and `Int32
 
 Evidence: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final`; `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-object-name`; tracked files under `docs\images` and `docs\video`; exact metadata and hashes in [industrial-image-testing.md](industrial-image-testing.md).
 
-Boundary / next dependency: Media preparation is complete locally. The updated media URLs use the repository `main` branch and therefore require an explicitly authorized commit/push plus remote readback before they can be pasted into Marketplace. No external mutation was performed.
+Boundary / next dependency: Media preparation and feature-branch publication are complete. All seven English/Korean Overview URLs are pinned to immutable commit `720ceec`; each returned HTTP 200 with the expected content type and exact local byte length after `9ae28f3` was pushed. No main merge, CI dispatch, Marketplace upload, tag, release, or deployment was performed.
