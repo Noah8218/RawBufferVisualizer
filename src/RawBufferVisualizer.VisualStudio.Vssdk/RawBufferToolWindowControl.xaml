@@ -404,7 +404,8 @@
                                   AutomationProperties.AutomationId="AutomaticVisionAutoInspectCheckBox"
                                   Checked="AutoInspectBox_Changed"
                                   Unchecked="AutoInspectBox_Changed"/>
-                        <Button Content="Scan Now"
+                        <Button x:Name="ScanNowButton"
+                                Content="Scan Now"
                                 Margin="6,0,0,0"
                                 ToolTip="Scan the current stack frame without waiting for another break"
                                 AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
@@ -423,6 +424,53 @@
                                FontSize="11"
                                Foreground="{StaticResource MutedTextBrush}"
                                TextWrapping="Wrap"/>
+                    <TextBlock x:Name="AutomaticCandidateCountText"
+                               Visibility="Collapsed"
+                               Margin="0,5,0,0"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Foreground="{StaticResource TextBrush}"
+                               TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="AutomaticVisionCandidateCount"/>
+                    <WrapPanel x:Name="AutomaticScanProgressPanel"
+                               Visibility="Collapsed"
+                               Margin="0,5,0,0">
+                        <TextBlock x:Name="AutomaticScanProgressText"
+                                   VerticalAlignment="Center"
+                                   FontSize="11"
+                                   Foreground="{StaticResource TextBrush}"
+                                   TextWrapping="Wrap"
+                                   AutomationProperties.LiveSetting="Polite"
+                                   AutomationProperties.AutomationId="AutomaticVisionProgressText"/>
+                        <Button x:Name="AutomaticStopButton"
+                                Content="Stop"
+                                Margin="6,0,0,0"
+                                ToolTip="Stop after the current image; already refreshed rows remain available"
+                                AutomationProperties.AutomationId="AutomaticVisionStopButton"
+                                Click="StopAutomaticScan_Click"/>
+                    </WrapPanel>
+                    <TextBlock x:Name="AutomaticBatchSummaryText"
+                               Visibility="Collapsed"
+                               Margin="0,4,0,0"
+                               FontSize="11"
+                               Foreground="{StaticResource MutedTextBrush}"
+                               TextWrapping="Wrap"
+                               AutomationProperties.LiveSetting="Polite"
+                               AutomationProperties.AutomationId="AutomaticVisionBatchSummary"/>
+                    <WrapPanel x:Name="AutomaticBatchActionsPanel"
+                               Visibility="Collapsed"
+                               Margin="0,5,0,0">
+                        <Button x:Name="AutomaticLoadNextButton"
+                                Content="Load next 8"
+                                ToolTip="Refresh up to eight more images from this Break"
+                                AutomationProperties.AutomationId="AutomaticVisionLoadNextButton"
+                                Click="LoadNextAutomaticBatch_Click"/>
+                        <Button x:Name="AutomaticLoadAllButton"
+                                Content="Load all this Break"
+                                ToolTip="Refresh every remaining detected image; Stop remains available"
+                                AutomationProperties.AutomationId="AutomaticVisionLoadAllButton"
+                                Click="LoadAllAutomaticBatch_Click"/>
+                    </WrapPanel>
                     <Grid x:Name="ImageListHeader" Margin="0,8,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
@@ -498,20 +546,16 @@
                                                TextWrapping="Wrap"
                                                FontSize="10"
                                                Foreground="{StaticResource MutedTextBrush}"/>
-                                    <Grid Margin="0,5,0,0">
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="76"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
+                                    <StackPanel Margin="0,5,0,0">
                                         <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Top">
                                             <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
                                         </Border>
-                                        <TextBlock Grid.Column="1"
-                                                   Text="{Binding Summary}"
+                                        <TextBlock Text="{Binding Summary}"
+                                                   Margin="0,5,0,0"
                                                    TextWrapping="Wrap"
                                                    FontSize="11"
                                                    Foreground="{StaticResource MutedTextBrush}"/>
-                                    </Grid>
+                                    </StackPanel>
                                     <Button
                                             Content="Map"
                                             Margin="0,5,0,0"

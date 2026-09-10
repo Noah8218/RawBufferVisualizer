@@ -13,6 +13,8 @@ The user workflow is deliberately non-modal:
 - supported exact Mat collections are included automatically in Break Mode refresh and **Scan Now**, with no separate setting;
 - a breakpoint never forces the Tool Window to open or steal focus;
 - **Scan Now** remains available while automatic scanning is paused;
+- the first refresh is limited to eight images or a soft two-second budget, then **Load next 8** and **Load all this Break** expose the remaining work without a modal prompt;
+- progress and **Stop** remain in the docked window, and Stop takes effect after the current image read;
 - one failed candidate never prevents other recognized images from opening.
 
 ## Recognition Pipeline
@@ -27,6 +29,8 @@ The pipeline is intentionally ordered:
 6. Smart Type Mapper when the result cannot be opened safely.
 
 The scanner merges the current `StackFrame.Locals` and `StackFrame.Arguments`, deduplicated by root expression. It examines fields and debugger-visible property getters on the root object and one nested member level. It does not walk an unlimited object graph or other stack frames.
+
+Known positive and negative type analysis is cached for the current debug session. Fifty instances of the same wrapper therefore reuse one member-role analysis, while each Break still rereads that instance's current pointer, dimensions, descriptor, and pixels. Cache reuse is only a discovery optimization: it never grants permission to open. Every cached candidate must still satisfy `Inference.CanAutoOpen`, or have a saved mapping, on every scan; an incomplete or ambiguous type remains `[Map]`. The cache is cleared when the debug session reaches Design Mode. A failed inferred open invalidates its cached analysis so a later Break can recover from a changed runtime value or format.
 
 Supported inferred data members:
 
@@ -60,8 +64,10 @@ Safe GenICam PFNC aliases include `Mono10p`, `Mono12p`, Bayer RG/GR/GB/BG 8-bit,
 The docked window provides:
 
 - **Auto Inspect on Break**: refresh on the next Break Mode event; the choice is stored in `%APPDATA%\RawBufferVisualizer\automatic-inspector-settings.json`;
-- exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays: included automatically, with at most 8 items per collection, 16 items and 8 collection roots per scan;
+- exact OpenCvSharp/Emgu `Mat` lists and one-dimensional arrays: included automatically; discovery is capped at 128 image candidates across at most 8 collection roots and 128 root expressions per scan;
 - **Scan Now**: rescan the current frame without waiting for another breakpoint;
+- an initial batch of at most 8 images with a soft 2-second budget, followed by **Load next 8** or explicit **Load all this Break**;
+- `Scanning images 3 / 8...`, candidate count, refreshed/deferred/failed counts, and **Stop** as non-modal feedback;
 - confidence, inferred-member summary, and validation reason on the selected row;
 - **Edit Mapping** for ambiguous or incorrect inference.
 
@@ -81,7 +87,7 @@ occurs before `bitmap` is initialized. Place the breakpoint on the next executab
 
 The top `Inspector` button is a narrow-layout affordance rather than a permanently visible command. It is visible below 760 px, hidden from 760-1039 px while the compact bottom Inspector is present, and hidden at 1040 px or wider while the full right Inspector is present. The 540/900/1160 px states were rechecked on 2026-07-28. Changing this responsive contract requires the repository's UI mockup-and-approval gate.
 
-Automatic rows use a stable key derived from the root expression. Every scan removes and replaces the prior automatic rows, so repeated Break/Scan Now events do not accumulate duplicates. Manually opened or visualizer-handoff rows are not removed.
+Automatic rows use a stable key derived from the root/index expression. A later Break or **Scan Now** refreshes the matching `ImageDocument` in place, including a new pointer or new pixels at the same pointer, instead of deleting and recreating the row. Existing selection and comparison references therefore remain valid. A complete discovery removes automatic rows whose expressions disappeared; a bounded or temporarily incomplete debugger discovery retains unmatched rows rather than risking false deletion. Manually opened or visualizer-handoff rows are never reconciled by this path.
 
 ### Partial success and failure policy
 
@@ -92,18 +98,23 @@ Automatic rows use a stable key derived from the root expression. Every scan rem
 | `[Failed]` | Recognition passed, but the current pointer, array, lifetime, or debugger read failed. | Inspect the reason, restore a valid paused object, then use **Scan Now**. This row does not incorrectly claim that a mapping will fix a lifetime failure. |
 | Hidden | Confidence is below 40%. | Use **Open Variable** when the expression is intentionally image-like. |
 
-For example, if eight candidates are detected and six open, one needs mapping, and one has an invalid pointer, the status reads `8 detected: 6 opened, 1 need mapping, 1 failed.` A five-element collection with three valid Mats, one null item, and one disposed Mat reports `frames: 5 inspected, 3 opened, 2 failed`. All successful rows stay usable. The viewer selects a successful automatic row in preference to an error row, while failure rows remain in the list for diagnosis.
+For example, if 50 image objects are detected, the initial state can read `8 refreshed · 42 deferred · 0 failed`. The user can inspect those rows immediately, load the next eight, or explicitly load all remaining objects for that Break. A collection containing null or disposed Mats leaves only those elements as `[Failed]`; all successful rows stay usable.
 
 Malformed or unsupported preference JSON is non-fatal: the control falls back to automatic scanning enabled and shows a warning. Preference writes use a same-directory temporary file followed by replacement so a terminated write does not normally leave a partial settings file.
 
 ## Debugger And Memory Boundaries
 
 - Break-event work is deferred to the WPF dispatcher at `ContextIdle`, allowing the debugger transition event to return before expressions and paused-process memory are read.
+- EnvDTE/COM evaluation stays on the Visual Studio UI thread. The dispatcher yields before discovery and between candidate reads so progress, Stop, and newer debugger events can be processed; no `Task.Run` accesses EnvDTE.
+- A single EnvDTE/COM property or getter call already in progress cannot be preempted safely. Fixed debugger evaluations use the existing 500 ms timeout where the API exposes one; root/type filters, at most two new wrapper analyses per scan, member caps, and candidate-level exception isolation bound the remaining risk.
+- Run Mode, Design Mode, Clear, disabling Auto Inspect, disposal, and a newer Break invalidate older work. Rapid Break/F10 events coalesce to one latest-generation scan, and repeated batch-button input is guarded by the single running owner.
 - Locals and arguments are enumerated independently. If one debugger collection is temporarily unavailable, the other can still produce results.
+- A missing frame, failed expression count/item read, root/candidate cap, or deferred new-type analysis marks discovery incomplete. Incomplete discovery never removes unmatched existing automatic rows.
 - Every candidate is isolated by an exception boundary. An unexpected getter/debugger failure becomes one `[Failed]` row instead of aborting the scan.
 - Pointer-backed data reuses the existing paused-process memory path and therefore remains valid only while the debuggee is paused and owns the buffer.
 - Managed arrays are read through the VSSDK `IDebugProperty2` child enumerator in batches. If that path is unavailable, the EnvDTE fallback is capped at 256 elements to avoid unbounded debugger calls.
 - Exact OpenCvSharp/Emgu `Mat` `List<T>` and one-dimensional array roots are expanded by every scan. Element failures are isolated, and collection/scan/root caps are reported instead of silently traversing beyond the limit.
+- A collection count is a current-Break snapshot. If a getter mutates the collection or an element disappears between count discovery and opening, that element fails independently; the next complete Break reconciles the new count and removes only vanished automatic rows.
 - Bitmap collections, dictionaries, mixed `List<object>`, multidimensional or jagged arrays, and arbitrary `IEnumerable` values remain on the registered collection-visualizer path.
 - A simple mapped property expression may be evaluated by the debugger to obtain an array object. The scanner never constructs or invokes arbitrary SDK methods.
 - Exact OpenCvSharp/Emgu automatic capture evaluates only the extension-owned fixed metadata expressions listed above. Unsupported depth/channel combinations fail as one isolated automatic row.
@@ -117,12 +128,12 @@ Malformed or unsupported preference JSON is non-fatal: the control falls back to
 | `src/RawBufferVisualizer.VisualStudio.ObjectSource/VisionMemberInference.cs` | Pure member-role inference, pixel-format recognition, confidence scoring, and gates. |
 | `src/RawBufferVisualizer.VisualStudio.ObjectSource/MappedTypeVisualizerTransfer.cs` | Reads saved/transient mappings, including one-level nested member paths. |
 | `src/RawBufferVisualizer.VisualStudio/AutomaticInspectionPreferences.cs` | Versioned per-user Auto Inspect preference with non-fatal load and atomic save behavior. |
-| `src/RawBufferVisualizer.VisualStudio/AutomaticImageCollectionPolicy.cs` | Pure exact-type recognition, expression construction, and 8-per-collection/16-per-scan/8-root limits. |
+| `src/RawBufferVisualizer.VisualStudio/AutomaticImageCollectionPolicy.cs` | Pure exact-type recognition, expression construction, 128-candidate discovery cap, and 8-image batch policy. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/KnownImageType.cs` | Exact runtime-type ownership: automatic OpenCvSharp/Emgu capture versus registered-only Bitmap/raw types. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/KnownRegisteredImageCapture.cs` | Reads fixed OpenCvSharp/Emgu metadata, validates the descriptor, and prepares paused-process live memory. |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/AutomaticVisionInspector.cs` | Merges current-frame locals and arguments and builds bounded member inventories. |
+| `src/RawBufferVisualizer.VisualStudio.Vssdk/AutomaticVisionInspector.cs` | Merges current-frame locals/arguments, applies discovery caps, and owns per-debug-session positive/negative type analysis. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/VisualStudioDebugFrameContext.cs` | Resolves the selected VSSDK frame and reads managed-array elements. |
-| `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml(.cs)` | Auto Inspect/Scan Now UX, confidence rows, mapping fallback, validation, and deduplication. |
+| `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml(.cs)` | Auto Inspect/Scan Now UX, progress/Stop and batch actions, in-place row refresh, reconciliation, validation, and mapping fallback. |
 | `src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferVisualizerPackage.cs` | Schedules automatic scanning on Break Mode. |
 | `samples/RawBufferVisualizer.VisualizerDebuggee/Program.cs` | Pointer, array-backed, one-level nested, and intentionally ambiguous mapping-fallback installed-VSIX scenarios. |
 | `scripts/SmokeInstalledVsixNewFeatures.ps1` | Installed-VSIX automation and session-state assertions. |
@@ -132,7 +143,54 @@ Malformed or unsupported preference JSON is non-fatal: the control falls back to
 | `tests/RawBufferVisualizer.Tests/AutomaticImageCollectionPolicyTests.cs` | Exact collection type acceptance/rejection, expression, and scheduling-cap regressions. |
 | `docs/industrial-camera-compatibility-validation.md` | Official-source matrix, evidence levels, remaining release gates, and durable result. |
 
-## Verification Record
+## Incremental Refresh And Batching Development Record
+
+### Refactor proof
+
+- Before: `ScanLocals` discovered candidates, opened the entire result synchronously, and replaced all automatic rows on each scan.
+- After: `AutomaticVisionInspector` owns bounded discovery and per-session type analysis; `RawBufferToolWindowControl` owns one UI-thread batch cursor, progress/counters, cancellation generation, and stable-key upsert; `RawBufferDocumentWorkspace` remains the document activation/removal/disposal owner.
+- Actual call path: `RawBufferVisualizerPackage.OnEnterBreakMode` -> `RawBufferToolWindow.ScheduleAutomaticScan` -> `RawBufferToolWindowControl.QueueAutomaticScan` -> `RunAutomaticScanAsync` -> `AutomaticVisionInspector.Scan` -> `ProcessAutomaticBatchCoreAsync` -> existing mapped/known-image open path -> `FindHandoffDocument(StableKey)` -> `ImageDocument.ReplaceSource` or one new workspace row.
+- Mutable-state write owner: the ToolWindow UI thread writes scan generation/cursor/counters and document presentation; `DebuggerHandoffSessionGate` owns generation validity; `AutomaticVisionInspector` owns only the debug-session type cache. Run/Design/Clear/disable/dispose invalidate through `CancelAutomaticInspectionWork`; Design additionally clears the type cache.
+- Dependency direction: VSSDK UI -> `RawBufferVisualizer.VisualStudio` policy/session gate -> existing ObjectSource mapping and Core source/descriptor contracts. No new framework, background EnvDTE owner, or reverse UI dependency was introduced.
+- Existing contract retained: `Auto Inspect on Break`, `Scan Now`, Images selection, comparison references, mapping workflow, and manual/provider handoffs. New bindings are `AutomaticVisionCandidateCount`, `AutomaticVisionProgressText`, `AutomaticVisionStopButton`, `AutomaticVisionLoadNextButton`, and `AutomaticVisionLoadAllButton`.
+- Shortest code-reading order: search `ScheduleAutomaticScan`; read `QueueAutomaticScan` and `RunAutomaticScanAsync`; read `AutomaticVisionInspector.Scan`; return to `ProcessAutomaticBatchCoreAsync`, `ProcessAutomaticInspection`, and `ReconcileAutomaticInspectionDocuments`; finish with `DebuggerHandoffSessionGate` and `AutomaticImageCollectionPolicy`.
+- Removed coupling proof: the former whole-scan automatic-row removal path is absent; stable-key `FindHandoffDocument` is used for success and error refresh, and only complete discovery can reconcile disappeared automatic rows.
+
+Status: Blocked
+
+Scope: Current-source incremental automatic inspection, 128-candidate discovery, 8-image/2-second initial batching, in-place automatic-row refresh, non-modal progress/Stop/load-more controls, latest-Break generation gating, cache-safe type analysis, responsive image cards, and exact installed-candidate regression on the available stable VS2026 host.
+
+Acceptance criteria:
+
+- final routed Release package -> passed with zero errors and 18 pre-existing `VSTHRD010` warnings in `ImageTypeRecognizer.cs`;
+- aggregate pointer/lifetime/collection/cache self-tests -> passed;
+- exact final VSIX-to-installed critical payload equality -> passed 17/17;
+- 320/348/540/900/1160 px layouts on the dynamically selected test monitor -> passed by standalone WPF smoke and visual review at 96 DPI; image-card metadata remains readable below the thumbnail at narrow widths;
+- exact installed development-VSIX 50-object discovery -> passed on VS2022 Community `17.14.37516.0`: the soft two-second initial batch opened 6, **Load next 8** advanced the total to 13, and **Load all this Break** completed 46 valid OpenCvSharp Mats, 2 valid Emgu Mats, and 2 isolated invalid OpenCvSharp elements;
+- three same-Break **Scan Now** operations -> passed with all 50 stable-key `ImageDocument` instance identities retained and no duplicate rows;
+- next-Break 50 -> 42 reconciliation -> passed: 8 vanished rows were removed, all 42 surviving instance identities stayed stable, and item 0 changed from `640 x 480 Mono8` to `96 x 72 BGR24` with both `Ptr` and pixel address refreshed;
+- real **Stop** and resume -> passed with a test-only `2048 x 1536` fixture: loading stopped at 17/50 with 33 deferred and usable rows, then **Load next 8** resumed to 24/50 while the first 17 identities stayed stable;
+- cache safety -> passed on the exact final installed candidate: repeated scans retained `[Map] incompleteAutomaticFrame`; cached analysis did not promote it to `[Auto]`;
+- exact final 50-object installed run -> passed with 48 successful rows, 2 isolated intentional failures, no duplicates, one blocked overlapping command, clear/reopen, 50-to-42 next-Break reconciliation, pointer replacement in place, and a 44.17 ms recorded scan;
+- exact final representative installed matrix on VS2026 `18.9.12128.139` -> passed Automatic Inspector, Automatic Collections, Multi-Library Hybrid (9 documents/0 errors), ImagePtr cold start, ConcurrentDictionary, direct/automatic/padded `CV_32SC1`, Release Announcement, and Environment Check with zero package-protocol errors;
+- installed dark-theme normal, progress, complete, Run, next-Break, and unavailable-after-session states -> visually exercised on `\\.\DISPLAY2` at 96 DPI; the unchanged candidate additionally passed the seven-scenario exact VS2022 `17.9.34902.65` matrix with 17/17 installed-file equality and zero package-protocol errors; 125%-200% DPI remain external release prerequisites.
+
+Verification:
+
+```powershell
+.\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -BuildRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\build-final -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\candidate-final -NoZip
+dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows -p:RawBufferVisualizerBuildRoot=D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\focused-tests
+.\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -BuildRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\build-final -OutputDir D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\layout-widths-final -Widths @(320,348,540,900,1160) -NoBuild
+.\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario <scenario> -VisualStudioInstanceId 19923728 -ExpectedReleaseVersion 2.0.8 -NoBuild -NoInstall
+```
+
+Evidence: Final VSIX `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\candidate-final\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix`, 2,521,139 bytes, SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`. Final installed results and fresh captures are under `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\installed-vs2026-final`; final layout evidence is `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\layout-widths-final\layout-widths.json`. The tested source is based on repository HEAD `25122bc` with the current uncommitted 2.0.8 work preserved.
+
+The earlier VS2022 17.14 evidence remains under `D:\OpenVisionLab-TestData\RawBufferVisualizer\automatic-inspector\installed-vs2022-17.14`: `01-initial-break.json` through `06-second-break-full-42.json`, plus `heavy-stop\07-stop-paused.json` and `heavy-stop\08-resume-next.json`. Those records prove the actual Stop/resume path that VS2026 UI Automation could not invoke reliably; the final VS2026 run still verified the Stop control is rendered and that Load all completes without deadlock.
+
+Boundary / next dependency: Local implementation and exact-host validation are complete, including Visual Studio 2022 `17.9.34902.65`; Marketplace approval remains blocked on the supported 125%-200% DPI sweep. The user's original Auto Inspect preference was restored exactly after testing. No commit, push, upload, publication, tag, or deployment is implied.
+
+## Historical Verification Record
 
 Status: Complete
 

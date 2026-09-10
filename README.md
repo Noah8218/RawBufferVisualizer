@@ -12,7 +12,7 @@ Inspect `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, `IntPtr`-back
 
 ![Open an OpenCvSharp Mat from its code DataTip](docs/images/raw-buffer-visualizer-datatip-open.gif)
 
-Hover an initialized `Mat` or `Bitmap` in the code editor and select its visualizer magnifying-glass icon. The example opens a real 1280 x 720 `BGR24` industrial-machine photograph from an OpenCvSharp `Mat` directly into the docked viewer.
+Hover an initialized `Mat` or `Bitmap` in the code editor and select its visualizer magnifying-glass icon. The example opens a real 1280 x 720 `BGR24` industrial-machine photograph from `dataTipIndustrialMat` directly into the docked viewer and retains that expression name on the image card.
 
 ![Open a real industrial Bitmap from a Visual Studio breakpoint](docs/images/raw-buffer-visualizer-breakpoint-open.gif)
 
@@ -28,11 +28,11 @@ The six-second overview continues through live color pixels, automatic inspectio
 
 [Install from Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer)
 
-## Raw Buffer Visualizer 2.0.7
+## Raw Buffer Visualizer 2.0.8
 
-Version `2.0.7` adds signed 32-bit, single-channel image support for OpenCvSharp `CV_32SC1`, Emgu CV `Cv32S` C1, mapped `int[]`, and vendor-neutral `RawBufferView`/`RawBufferSnapshot` buffers. It renders these matrices with signed min/max grayscale autoscaling while preserving exact signed pixel values and four source bytes in the inspector. Existing 2.0 features remain included:
+Version `2.0.8` reliably carries signed 32-bit, single-channel image support through the Visual Studio 2022 debugger path for OpenCvSharp `CV_32SC1`, Emgu CV `Cv32S` C1, mapped `int[]`, and vendor-neutral `RawBufferView`/`RawBufferSnapshot` buffers. Packaging now fails when the VSIX debugger-side DLLs do not match the tested Release build. Automatic Inspector also bounds large current-frame scans, loads images incrementally, refreshes stable rows in place, and keeps cached type analysis behind the same mapping safety gate. Existing 2.0 features remain included:
 
-![Raw Buffer Visualizer 2.0.7 inspecting signed Int32 industrial images](docs/images/int32-industrial-automatic-matrix.png)
+![Raw Buffer Visualizer inspecting signed Int32 industrial images](docs/images/int32-industrial-automatic-matrix.png)
 
 - the exact debugger object/expression name above each thumbnail, including names such as `imageList[0]`, `imageDictionary[key]`, and `bitmapArray[1]`;
 - the source object's `Ptr`, `Buffer`, or captured `Scan0` separately from the `Pixels` address used to read image bytes;
@@ -68,7 +68,7 @@ Address labels deliberately follow each library's public contract:
 
 `Ptr` identifies the native wrapper/source object when that library exposes one. `Pixels` is the address from which image bytes are actually read. The two values are not interchangeable for OpenCvSharp or Emgu CV.
 
-When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.7`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
+When the Raw Buffer Visualizer Tool Window is first opened after installing `2.0.8`, it shows a non-modal release summary. **What's New** opens or closes it from the same button without starting a scan or opening an image. **Dismiss** also closes it and saves the version as seen across Visual Studio restarts. See the complete [changelog](CHANGELOG.md).
 
 ### Environment Check
 
@@ -91,7 +91,9 @@ Open the docked Tool Window once, leave `Auto Inspect on Break` enabled, and sto
 - One failed candidate does not prevent the remaining images from opening.
 - `Auto Inspect on Break` is a per-user preference that persists across Visual Studio restarts. `Scan Now` still works while automatic scanning is off.
 
-Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values can use Automatic Inspector's validated live-memory path and still retain their debugger-visualizer icons. Exact Mat `List<T>` and one-dimensional arrays are included automatically with bounded per-element success/failure rows; no separate collection option is required. `System.Drawing.Bitmap`, `RawBufferSnapshot`, `RawBufferView`, and other registered collections remain on their registered visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which Automatic Inspector deliberately does not inject or invoke.
+Initialized exact OpenCvSharp `Mat` and Emgu CV `Mat` values can use Automatic Inspector's validated live-memory path and still retain their debugger-visualizer icons. Exact Mat `List<T>` and one-dimensional arrays are included automatically with bounded per-element success/failure rows; no separate collection option is required. Discovery can retain up to 128 image candidates, but the first refresh loads at most eight or stops at a soft two-second budget. The docked status then offers **Load next 8**, **Load all this Break**, and **Stop** without interrupting debugging with a modal prompt. A later Break rereads current pixels and pointers while refreshing matching rows in place, so repeated F10/Scan Now use does not recreate or duplicate unchanged rows.
+
+`System.Drawing.Bitmap`, `RawBufferSnapshot`, `RawBufferView`, and other registered collections remain on their registered visualizer paths. Bitmap automatic extraction would require a `LockBits`/`UnlockBits` lifecycle inside the debuggee, which Automatic Inspector deliberately does not inject or invoke.
 
 ### Connect Your Buffer
 
@@ -176,8 +178,8 @@ Other debugger visualizers have different feature sets. This comparison describe
 
 | Product | Supported versions | Current qualification |
 | --- | --- | --- |
-| Visual Studio 2022 | `17.9` or newer, x64 | Exact 2.0.6 installed runtime checks passed on `17.14.37516.0`; local 2.0.7 qualification is recorded separately. Exact 17.9 runtime remains unverified because that host is not installed. |
-| Visual Studio 2026 | Stable `18.x`, x64 | Exact 2.0.6 installed runtime checks passed on `18.8.12105.206`; 2.0.7 retains the same host/API contract. |
+| Visual Studio 2022 | `17.9` or newer, x64 | The unchanged exact 2.0.8 package passed on Community 17.9.34902.65 and serviced Community 17.14.37516.0. |
+| Visual Studio 2026 | Stable `18.x`, x64 | The exact final local 2.0.8 candidate passed the representative installed scenario matrix on stable 18.9. |
 
 Community, Professional, and Enterprise editions are installation targets. Visual Studio 2019, 32-bit Visual Studio, and Preview/Insiders builds are not supported release targets.
 
@@ -217,7 +219,7 @@ The Marketplace package is one VSIX that contains both parts required for normal
 - debugger visualizers for supported image variables
 - the docked Visual Studio image inspector
 
-The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` added the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating. Version `2.0.2.0` restored Visual Studio 2022 `17.9+` support and repaired long temporary-path handoff claims. Version `2.0.3.0` added direct concurrent dictionary visualization and fixed the first cold `ImagePtr` handoff. Version `2.0.4.0` moved the full viewer reset directly above the image list as **Clear all**. Version `2.0.5.0` distinguishes source pointers from pixel addresses, preserves debugger expression names, fixes direct image-array registration, enforces complete pointer reads, and corrects negative-stride Bitmap transfer. Version `2.0.6.0` advanced the immutable public package version. Version `2.0.7.0` adds signed 32-bit single-channel matrices without changing the Visual Studio support floor.
+The `1.0.47.0` feature line added Automatic Vision Inspector and Vision Buffer Doctor. Version `1.0.50.0` introduced the current VSPackage identity and the direct-Mat, handoff, menu, and Fit reliability baseline. Version `1.0.52.0` added automatic Mat collection inspection, release highlights, VS2026 activation compatibility, and leased snapshot ownership. Version `1.0.53.0` added Environment Check, bounded cold-page preview sampling, and the mapping foundation. Version `2.0.0.0` added the shared 2D buffer contract, checked fail-closed transfer validation, Continue-time live-source invalidation, and debugger-session handoff gating. Version `2.0.2.0` restored Visual Studio 2022 `17.9+` support and repaired long temporary-path handoff claims. Version `2.0.3.0` added direct concurrent dictionary visualization and fixed the first cold `ImagePtr` handoff. Version `2.0.4.0` moved the full viewer reset directly above the image list as **Clear all**. Version `2.0.5.0` distinguishes source pointers from pixel addresses, preserves debugger expression names, fixes direct image-array registration, enforces complete pointer reads, and corrects negative-stride Bitmap transfer. Version `2.0.6.0` advanced the immutable public package version. Version `2.0.7.0` introduced signed 32-bit single-channel matrices but shipped a stale Visual Studio 2022 debugger payload. Version `2.0.8.0` corrects that payload, adds a package-to-build hash gate, and adds bounded incremental Automatic Inspector loading with stable-row refresh and cache-safe mapping decisions.
 
 For local development builds, close every Visual Studio window and run this from the repository root:
 
@@ -517,6 +519,7 @@ Recorded evidence covers `2.0.0`, previous releases, and historical stress/compa
 
 | Check | Result |
 | --- | --- |
+| Final local `2.0.8` candidate | 2,521,139 bytes; SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`. Routed build, aggregate tests, 17/17 package/install equality, Automatic Inspector cache safety, 50-object incremental loading, mixed libraries, direct/automatic/padded Int32, ImagePtr, ConcurrentDictionary, release/environment toggles, and 320/348/540/900/1160 px layouts passed on the tested hosts. The exact unchanged candidate passed 7/7 installed scenarios with zero package-protocol errors on VS2022 Community 17.9.34902.65; 125%-200% DPI remain release gates. See [release-qualification-2.0.8.md](docs/release-qualification-2.0.8.md). |
 | Raw Buffer Visualizer `2.0.0` | 1,923,731 bytes; SHA-256 `D65C8B559A0E5C4A62FCDDEAE345A625DC76F71C4C9FE19BDB0DDE180EDEFC4C`. The complete matrix passed on the same bytes: Release build/self-tests, five Emgu plus five OpenCvSharp versions, build/package/install equality, Break-to-Continue safety, Connect Doctor, installed regressions on VS2022 and VS2026, clean installation, and the `1.0.53.0 -> 2.0.0.0` in-place update. |
 | Preserved P0 `2.0.0` safety baseline | 1,917,791 bytes; SHA-256 `3C2DCC1E9E38990D1C17547331E15C5EE344ABEA07D3936B722747B0670AE7EE`. Aggregate tests, the ten-version legacy matrix, and installed Continue invalidation passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12023.21`; see [release-qualification-2.0.0.md](docs/release-qualification-2.0.0.md). Source has advanced, so these bytes are a baseline rather than the current upload asset. |
 | Superseded pre-P0 `2.0.0` baseline | 1,914,538 bytes; SHA-256 `2A6D94016B03430BDF2EF5ECCF6282D32896C02AEFB3A9EB8F5519AFE4B13512`. Preserved only as a defect baseline because live rows remained marked `live` after Continue/process exit. |
@@ -525,7 +528,7 @@ Recorded evidence covers `2.0.0`, previous releases, and historical stress/compa
 | Previous public `1.0.52` package | 1,902,513 bytes; SHA-256 `3DD78167E60BB7DCC4C3AC1EE83622DEBFF75CEFC2D040977F1D854E33EB9E1F`. Its installed-runtime evidence remains in [release-qualification-1.0.52.md](docs/release-qualification-1.0.52.md). |
 | Preserved failed `1.0.51` package | 2,011,587 bytes; SHA-256 `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`. VS2022 passed, but stable VS2026 `18.8.2` could not activate the registered provider because the older Extensibility framework requested the unavailable host-contract assembly version `17.0.0.0`. |
 | Previous public Marketplace `1.0.50` baseline | Exact downloaded package: 2,001,513 bytes; SHA-256 `2014AA8D679AF3D01F0B16CC304E77064ABCF0B0725BDC6BD543B7C08CDA397E`. It predates automatic Mat collection expansion and the in-product release-highlights banner. |
-| Current-source Fit/Manual matrix | 540/900/1160 px passed with aspect errors 0, Fit margin 1.05, and Manual zoom/center delta 0. This is current-source view evidence, not an installed-VSIX Fit behavioral run. |
+| Current-source Fit/Manual matrix | Final 2.0.8 build passed 320/348/540/900/1160 px layout checks at 96 DPI, including the narrow image-card metadata layout. This is direct WPF view evidence; the representative installed-VSIX scenarios are recorded separately above. |
 | Full solution and unit-style self-tests (historical runtime line) | Passed for the declared `net472`, `netstandard2.0`, and .NET 8 targets. |
 | Legacy image libraries | Passed with five OpenCvSharp and five Emgu CV package versions plus .NET Framework Bitmap. |
 | Standalone viewer interactions | Passed open, pixel/GV read, Fit, 1:1, slider and wheel zoom, PNG/snapshot export, tabs, and linked views. |
@@ -631,9 +634,9 @@ The Marketplace extension is distributed through Visual Studio Marketplace. Rele
 
 See [docs/marketplace-checklist.md](docs/marketplace-checklist.md) for the release checklist.
 For repeatable Marketplace updates, use [docs/release-runbook.md](docs/release-runbook.md). The `Marketplace CD` GitHub Actions workflow builds and validates by default, and publishes only when `publish=true` is selected with the Marketplace environment approval.
-Marketplace feature Overview: [2.0.7 Overview](docs/marketplace-overview-2.0.7.md).
-Korean review copy: [2.0.7 Overview (Korean)](docs/marketplace-overview-2.0.7.ko.md).
-Marketplace release text: [2.0.7 release notes](docs/marketplace-release-notes-2.0.7.md).
+Marketplace feature Overview: [2.0.8 Overview](docs/marketplace-overview-2.0.8.md).
+Korean review copy: [2.0.8 Overview (Korean)](docs/marketplace-overview-2.0.8.ko.md).
+Marketplace release text: [2.0.8 release notes](docs/marketplace-release-notes-2.0.8.md).
 Complete user-visible history: [CHANGELOG](CHANGELOG.md).
 For the short product video, follow the [fast demo recording guide](docs/demo-recording-guide.md).
 

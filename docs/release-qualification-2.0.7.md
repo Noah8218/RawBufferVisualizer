@@ -2,9 +2,22 @@
 
 Date: 2026-09-03 KST
 
+## Post-Publication Invalidation - 2026-09-04
+
+The official Gallery API now reports public `2.0.7.0`. This qualification is no longer valid for release use. A real Visual Studio 2022 `17.9.34902.65` report (`RBV-ERROR-20260904005014-8DA38D99`) failed the direct OpenCvSharp path in `ClrCustomVisualizerVSHost` with `Unsupported Mat type: CV_32SC1`.
+
+Forensic inspection of the exact recorded VSIX below found that `netstandard2.0/RawBufferVisualizer.VisualStudio.ObjectSource.dll` has SHA-256 `E23CC8782B6C87B2A81DBAB9CD830ACF355DB764E5CE2685FDFF96C8E0148954`, byte-identical to the ObjectSource packaged in 2.0.6. The current 2.0.7 source contained the `CV_32SC1 -> Int32` mapping, but the Extensibility package read this target from a stale repository-local `.build` directory while the qualified release build had been routed to `D:`. Existing package checks proved only that the entry existed, not that it matched the fresh build.
+
+Consequences:
+
+- Reinstalling the same 2.0.7 VSIX cannot fix this defect.
+- The 17.14 installed result below remains evidence for the path exercised on that host, but it does not prove the `netstandard2.0` payload loaded by Visual Studio 17.9.
+- 2.0.7 must not be reused, rebuilt under the same public version, or presented as a complete `CV_32SC1` release.
+- The corrected package is 2.0.8 and must pass fresh-output/VSIX hash equality plus exact Visual Studio 17.9 direct `CV_32SC1` runtime validation before publication.
+
 ## State
 
-`2.0.7.0` is a local stable-channel review candidate. The official Visual Studio Marketplace Gallery API was read back on 2026-09-03 and returned public `2.0.6.0`. Version 2.0.7 therefore uses a new immutable package identity for the signed 32-bit single-channel feature instead of changing the already-public package.
+`2.0.7.0` was prepared as a local stable-channel review candidate and was subsequently published. The historical text below records the pre-publication evidence; the post-publication invalidation above supersedes its release verdict.
 
 This candidate adds `Int32` 2D image support for OpenCvSharp `CV_32SC1`, Emgu CV `Cv32S` C1, mapped `int[]`, `RawBufferView`, and `RawBufferSnapshot`. It preserves signed pixel values and four source bytes, renders a visible grayscale preview by signed min/max normalization, and supports direct visualizers, Automatic Inspector, supported Mat collections, byte order, sampled/tiled reads, and padded stride.
 
@@ -77,19 +90,20 @@ The earlier address-provenance smoke failure was a Windows PowerShell 5 test-lit
 - Korean review copy: [marketplace-overview-2.0.7.ko.md](marketplace-overview-2.0.7.ko.md)
 - Marketplace release notes: [marketplace-release-notes-2.0.7.md](marketplace-release-notes-2.0.7.md)
 
-## Remaining Release Gates
+## Superseding Release Gates
 
-1. Confirm `origin/agent/vs2022-17.9-compat` equals local HEAD, then run or review CI for that exact source state if required for publication.
-2. Run the changed installed path on stable Visual Studio 2026 before treating 2.0.7 as fully matrix-qualified. Exact VS2022 17.9 runtime remains unavailable; retain the manifest compatibility contract but do not describe the 17.14 run as exact 17.9 proof.
-3. Marketplace upload, public readback, tag, GitHub Release, and deployment remain separate approvals. Do not rebuild or substitute the recorded VSIX after owner approval without producing a new hash and repeating proportionate qualification.
+1. Do not reinstall, republish, or otherwise reuse 2.0.7 as remediation.
+2. Build 2.0.8 from the active routed Release output and require SHA-256 equality for every debugger-side VSIX payload.
+3. Exercise the extracted packaged ObjectSource and then the same unchanged VSIX through direct `CV_32SC1` visualization on exact Visual Studio 2022 17.9.
+4. Treat source commit/push, CI, Marketplace upload/readback, tag, GitHub Release, and deployment as separate approvals.
 
 ## Feature Qualification Closure
 
 ```text
-Status: Complete
-Scope: Signed 32-bit single-channel 2D visualization on direct, automatic, collection, pointer, snapshot, mapped-array, sampled/tiled, byte-order, and padded-stride paths, with an exact local 2.0.7 candidate and available-host industrial runtime evidence.
-Acceptance criteria: CV_32SC1/Cv32S C1 map to Int32 -> pass; real industrial scalar image renders -> pass; exact signed value and four bytes remain inspectable -> pass; automatic OpenCvSharp/Emgu/application-wrapper/collection paths open -> pass; padded stride 5184 remains intact -> pass; 540/900/1160 layout and address lifetime checks pass -> pass.
-Verification: Release build/self-tests, ten-version library matrix, no-break fixture, release communication, package guard, exact VSIX install, installed Int32Industrial and Int32IndustrialAutomatic scenarios, and full three-width UI smoke passed.
-Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903 and the exact files listed above.
-Boundary / next dependency: This is feature qualification on VS2022 17.14 plus an owner-authorized source/copy/media branch-push batch, not Marketplace publication. Stable VS2026 2.0.7 runtime, exact VS2022 17.9 runtime, CI, Marketplace publication/readback, tag, GitHub Release, physical camera, multi-channel signed matrices, and 3D remain unproven or out of scope.
+Status: Incomplete
+Scope: Historical 2.0.7 signed Int32 feature and available-host evidence; release qualification is invalidated for the Visual Studio 2022 registered debugger-host payload.
+Acceptance criteria: source CV_32SC1/Cv32S C1 mapping -> pass; recorded VS17.14 paths -> pass; fresh ObjectSource/VSIX byte equality -> fail; exact VS17.9 direct CV_32SC1 runtime -> fail with RBV-ERROR-20260904005014-8DA38D99.
+Verification: Exact 2.0.7 VSIX inspection found the netstandard2.0 ObjectSource SHA-256 equal to 2.0.6; the user-provided VS17.9 support report records the corresponding unsupported-type failure.
+Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903; D:\OpenVisionLab-TestData\RawBufferVisualizer\RawBufferVisualizer-2.0.7-Marketplace-Upload\RawBufferVisualizer-2.0.7.vsix; error RBV-ERROR-20260904005014-8DA38D99.
+Boundary / next dependency: Supersede with a newly versioned 2.0.8 package whose fresh debugger payload matches the VSIX and passes exact Visual Studio 2022 17.9 direct CV_32SC1 runtime validation.
 ```

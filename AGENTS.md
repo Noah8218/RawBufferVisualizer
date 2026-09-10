@@ -4,11 +4,11 @@ This repository is maintained with Codex assistance. Keep changes practical, ver
 
 ## New Session Orientation
 
-The canonical working repository is `C:\Git\RawBufferVisualizer`. Do not treat `C:\Documents\RawBufferVisualizer` or an attachment directory as the source of truth.
+The canonical working repository is the active Git worktree that contains this file. On this machine the current 2.x worktree is `C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat`. Do not treat `C:\Documents\RawBufferVisualizer`, an attachment directory, or a missing historical path as the source of truth.
 
 Before implementation, release work, or documentation changes in a new conversation:
 
-1. Run `git status --short` and `git log --oneline -5` in `C:\Git\RawBufferVisualizer`.
+1. Resolve the worktree with `git rev-parse --show-toplevel`, then run `git status --short` and `git log --oneline -5` there.
 2. Read [docs/README.md](docs/README.md) for the document map.
 3. Read [docs/MAINTAINER_HANDOFF.md](docs/MAINTAINER_HANDOFF.md) for the current version, release state, completed work, known gaps, and next priority.
 4. Read [docs/PRODUCT_DIRECTION_AND_ROADMAP.md](docs/PRODUCT_DIRECTION_AND_ROADMAP.md) before changing product scope or UX.
@@ -20,9 +20,10 @@ The product is an Image Watch-style C# machine-vision debugger visualizer center
 
 ## Visual Studio Compatibility Contract
 
-- Keep shipped and development claims explicit. Exact Marketplace readback on 2026-09-03 confirms public `2.0.6.0`; local `2.0.7.0` is a review candidate until the owner authorizes its external steps. Both retain Visual Studio 2022 `17.9+` plus stable Visual Studio 2026 `18.x` support targets.
-- Exact public `2.0.6.0` installed runtime checks passed on VS2022 `17.14.37516.0` and VS2026 `18.8.12105.206`; clean reinstall also passed on VS2022. Record local `2.0.7.0` source, package, host, scenario, and evidence in [docs/release-qualification-2.0.7.md](docs/release-qualification-2.0.7.md). Do not describe local `2.0.7` bytes as public until publication is explicitly authorized and public readback confirms the Marketplace payload.
-- The VSIX manifest range `[17.9,18.0)` is the public 2.0.6 and local 2.0.7 compatibility contract. Visual Studio 2026 uses the lower API-version bound for VSIX compatibility, supports Visual Studio API version 17.x, and ignores the upper bound. Any manifest, embedded release communication, or package-content change requires a new exact-package qualification.
+- Keep shipped and development claims explicit. Exact Marketplace readback on 2026-09-04 confirms public `2.0.7.0`; that package is superseded because its `netstandard2.0` debugger ObjectSource is stale. Local `2.0.8.0` corrects the package path, passed exact-artifact qualification including Visual Studio 2022 `17.9.34902.65`, and remains a candidate until the owner authorizes each external step. Both retain Visual Studio 2022 `17.9+` plus stable Visual Studio 2026 `18.x` support targets.
+- The former 2.0.7 feature qualification is invalidated for the Visual Studio 2022 direct debugger-host path by error `RBV-ERROR-20260904005014-8DA38D99`. Record the incident in [docs/release-qualification-2.0.7.md](docs/release-qualification-2.0.7.md) and the correction in [docs/release-qualification-2.0.8.md](docs/release-qualification-2.0.8.md). Reinstalling the same 2.0.7 VSIX is not remediation.
+- The VSIX manifest range `[17.9,18.0)` remains the compatibility contract. Visual Studio 2026 uses the lower API-version bound for VSIX compatibility, supports Visual Studio API version 17.x, and ignores the upper bound. Any manifest, embedded release communication, or package-content change requires a new exact-package qualification.
+- For every VSIX build, compare SHA-256 for `netstandard2.0/RawBufferVisualizer.Core.dll`, `RawBufferVisualizer.Sdk.dll`, `RawBufferVisualizer.VisualStudio.ObjectSource.dll`, and `RawBufferVisualizer.VisualStudio.ObjectSource.deps.json` against the same fresh routed Release output. Any mismatch is a release blocker; file presence and source-level tests are not substitutes for byte equality.
 - Do not claim Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, or an untested exact VS2026 minor version as verified. Stable VS2026 `18.x` is a supported compatibility target; record the exact installed build only after the installed Tool Window, menu, debugger handoff, Automatic Inspector, and registered visualizer paths pass.
 - Before publishing a new release, run the installed-VSIX matrix on current serviced VS2022 and stable VS2026 when both environments are available. If one environment is unavailable, retain the support target but state the missing runtime qualification in the release record and Marketplace copy.
 - Before installing into VS2026, inspect both the per-user `18.0_<instance>\Extensions` root and the per-machine `Common7\IDE\VSExtensions` root for the Raw Buffer Visualizer extension ID. A migrated per-machine historical build must be removed or updated through Visual Studio Manage Extensions/Installer with administrator rights; never delete its `Program Files` directory manually or hide the conflict with a second extension ID.

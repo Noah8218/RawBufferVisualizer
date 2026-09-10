@@ -27,9 +27,6 @@ if (-not [string]::IsNullOrWhiteSpace($DirectoryBuildPropsPath)) {
         throw "Directory build props file was not found: $directoryBuildPropsPath"
     }
 }
-elseif (-not $NoBuild -and -not [string]::IsNullOrWhiteSpace($BuildRoot)) {
-    throw 'A custom BuildRoot requires -DirectoryBuildPropsPath so MSBuild can keep project output and intermediate paths isolated.'
-}
 if ([string]::IsNullOrWhiteSpace($PublishRoot)) {
     $publishRoot = Join-Path $repoRoot 'artifacts\publish'
 }
@@ -123,6 +120,37 @@ function Get-VsixEntryText {
         }
         finally {
             $reader.Dispose()
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+
+function Get-VsixEntrySha256 {
+    param(
+        [string]$Path,
+        [string]$EntryName
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($Path)
+    try {
+        $entry = $zip.Entries |
+            Where-Object { $_.FullName -eq $EntryName } |
+            Select-Object -First 1
+        if ($null -eq $entry) {
+            throw "VSIX entry was not found: $EntryName"
+        }
+
+        $stream = $entry.Open()
+        $sha256 = [Security.Cryptography.SHA256]::Create()
+        try {
+            return ([BitConverter]::ToString($sha256.ComputeHash($stream))).Replace('-', '')
+        }
+        finally {
+            $sha256.Dispose()
+            $stream.Dispose()
         }
     }
     finally {
@@ -375,7 +403,8 @@ if (-not $NoBuild) {
             $project,
             '--configuration',
             $Configuration,
-            '/nodeReuse:false'
+            '/nodeReuse:false',
+            "-p:RawBufferVisualizerBuildRoot=$buildRoot"
         )
         if (-not [string]::IsNullOrWhiteSpace($DirectoryBuildPropsPath)) {
             $buildArguments += "-p:DirectoryBuildPropsPath=$directoryBuildPropsPath"
@@ -434,7 +463,10 @@ $requiredEntries = @(
     'OutOfProc/RawBufferVisualizer.VisualStudio.Extensibility.dll',
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
     'RawBufferVisualizer.OpenGlCanvas.dll',
+    'netstandard2.0/RawBufferVisualizer.Core.dll',
+    'netstandard2.0/RawBufferVisualizer.Sdk.dll',
     'netstandard2.0/RawBufferVisualizer.VisualStudio.ObjectSource.dll',
+    'netstandard2.0/RawBufferVisualizer.VisualStudio.ObjectSource.deps.json',
     'SharpGL.dll',
     'SharpGL.WinForms.dll'
 )
@@ -442,6 +474,24 @@ $requiredEntries = @(
 foreach ($entryName in $requiredEntries) {
     if ($entryNames -notcontains $entryName) {
         throw "VSIX is missing required entry: $entryName"
+    }
+}
+
+$objectSourceOutput = Join-Path $buildRoot "bin\RawBufferVisualizer.VisualStudio.ObjectSource\$Configuration\netstandard2.0"
+foreach ($payloadName in @(
+    'RawBufferVisualizer.Core.dll',
+    'RawBufferVisualizer.Sdk.dll',
+    'RawBufferVisualizer.VisualStudio.ObjectSource.dll',
+    'RawBufferVisualizer.VisualStudio.ObjectSource.deps.json'
+)) {
+    $builtPayloadPath = Join-Path $objectSourceOutput $payloadName
+    Assert-FileExists -Path $builtPayloadPath -Message 'Fresh netstandard2.0 debugger payload was not found'
+    $builtPayloadHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $builtPayloadPath).Hash
+    $packagedPayloadHash = Get-VsixEntrySha256 `
+        -Path $vsixPath `
+        -EntryName "netstandard2.0/$payloadName"
+    if (-not [string]::Equals($builtPayloadHash, $packagedPayloadHash, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "VSIX contains a stale netstandard2.0 debugger payload: $payloadName. Built SHA-256 $builtPayloadHash; packaged SHA-256 $packagedPayloadHash."
     }
 }
 

@@ -90,12 +90,17 @@ foreach ($instance in $instances) {
                     ''
                 }
                 $expectedCodeBase = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Vssdk.dll'
-                $codeBaseMatchesInstall = -not [string]::IsNullOrWhiteSpace($codeBase) `
-                    -and (Test-Path -LiteralPath $codeBase -PathType Leaf) `
-                    -and [string]::Equals(
-                        [IO.Path]::GetFullPath($codeBase),
-                        [IO.Path]::GetFullPath($expectedCodeBase),
-                        [StringComparison]::OrdinalIgnoreCase)
+                $codeBaseMatchesInstall = if ($packageRegistered) {
+                    -not [string]::IsNullOrWhiteSpace($codeBase) `
+                        -and (Test-Path -LiteralPath $codeBase -PathType Leaf) `
+                        -and [string]::Equals(
+                            [IO.Path]::GetFullPath($codeBase),
+                            [IO.Path]::GetFullPath($expectedCodeBase),
+                            [StringComparison]::OrdinalIgnoreCase)
+                }
+                else {
+                    $null
+                }
                 $pkgdefPath = Join-Path $manifestPath.DirectoryName 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef'
                 $pkgdefText = if (Test-Path -LiteralPath $pkgdefPath -PathType Leaf) {
                     Get-Content -Raw -LiteralPath $pkgdefPath

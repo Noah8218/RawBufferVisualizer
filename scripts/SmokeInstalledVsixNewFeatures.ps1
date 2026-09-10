@@ -265,10 +265,18 @@ function Get-LeftmostMonitor {
         throw "No interactive monitor was reported for the installed VSIX smoke test."
     }
 
-    $screen = $screens |
-        Sort-Object @{ Expression = { $_.Bounds.Left }; Ascending = $true },
-                    @{ Expression = { $_.Bounds.Top }; Ascending = $true } |
-        Select-Object -First 1
+    $screen = if ($screens.Count -eq 2) {
+        $screens |
+            Sort-Object @{ Expression = { $_.WorkingArea.Width * $_.WorkingArea.Height }; Ascending = $true },
+                        @{ Expression = { $_.Bounds.Left }; Ascending = $true } |
+            Select-Object -First 1
+    }
+    else {
+        $screens |
+            Sort-Object @{ Expression = { $_.Bounds.Left }; Ascending = $true },
+                        @{ Expression = { $_.Bounds.Top }; Ascending = $true } |
+            Select-Object -First 1
+    }
 
     [pscustomobject]@{
         DeviceName = [string]$screen.DeviceName
@@ -276,6 +284,7 @@ function Get-LeftmostMonitor {
         WorkingArea = $screen.WorkingArea
         IsPrimary = [bool]$screen.Primary
         IsSingleMonitorFallback = ($screens.Count -eq 1)
+        ScreenCount = $screens.Count
     }
 }
 
@@ -572,6 +581,45 @@ function Get-ImageListItems([System.Windows.Automation.AutomationElement]$Root) 
     Get-ElementsByControlType $imageList ([System.Windows.Automation.ControlType]::ListItem)
 }
 
+function ConvertFrom-AutomaticBatchSummary([string]$Text) {
+    if ($Text -notmatch '^(\d+) refreshed .* (\d+) deferred .* (\d+) failed') {
+        return $null
+    }
+
+    [pscustomobject]@{
+        Refreshed = [int]$Matches[1]
+        Deferred = [int]$Matches[2]
+        Failed = [int]$Matches[3]
+    }
+}
+
+function Select-ImageListItemAtIndex(
+    [System.Windows.Automation.AutomationElement]$Root,
+    [int]$Index) {
+    $imageList = Find-ElementByAutomationId $Root "ImageList"
+    $items = @(Get-ImageListItems $Root)
+    if (-not $imageList -or $items.Count -eq 0 -or $Index -lt 0) {
+        return $false
+    }
+
+    $anchor = $items |
+        Where-Object { -not [bool]$_.Current.IsOffscreen } |
+        Sort-Object { $_.Current.BoundingRectangle.Top } |
+        Select-Object -First 1
+    if (-not $anchor) {
+        return $false
+    }
+
+    Select-AutomationItem $anchor
+    $anchor.SetFocus()
+    [System.Windows.Forms.SendKeys]::SendWait("{HOME}")
+    if ($Index -gt 0) {
+        [System.Windows.Forms.SendKeys]::SendWait("{DOWN $Index}")
+    }
+    Start-Sleep -Milliseconds 250
+    $true
+}
+
 function Select-AutomationItem([System.Windows.Automation.AutomationElement]$Element) {
     $pattern = $null
     if ($Element.TryGetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern, [ref]$pattern)) {
@@ -766,9 +814,14 @@ function Click-VisualizerGlyph(
 function Dismiss-DebuggerEvaluationWarning {
     $desktop = [System.Windows.Automation.AutomationElement]::RootElement
     $localizedOk = [string]([char]0xD655) + [string]([char]0xC778)
-    $elements = $desktop.FindAll(
-        [System.Windows.Automation.TreeScope]::Descendants,
-        [System.Windows.Automation.Condition]::TrueCondition)
+    try {
+        $elements = $desktop.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            [System.Windows.Automation.Condition]::TrueCondition)
+    }
+    catch {
+        return $false
+    }
     for ($index = 0; $index -lt $elements.Count; $index++) {
         $messageElement = $elements.Item($index)
         $name = [string]$messageElement.Current.Name
@@ -856,6 +909,19 @@ function Show-RawBufferToolWindow([int]$ProcessId) {
         }
 
         throw "Raw Buffer Visualizer Tool Window command remained unavailable. Last error: $lastError"
+    }
+}
+
+function Hide-RawBufferToolWindow([int]$ProcessId) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        $window = $dte.Windows.Item("Raw Buffer Visualizer")
+        try {
+            $window.Close(2)
+        }
+        catch {
+            $window.Visible = $false
+        }
     }
 }
 
@@ -984,7 +1050,8 @@ function Find-RawBufferToolWindowElement([IntPtr]$MainHandle) {
     $elements = $root.FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition)
     for ($i = 0; $i -lt $elements.Count; $i++) {
         $e = $elements.Item($i)
-        if ($e.Current.ControlType -eq [System.Windows.Automation.ControlType]::Pane) {
+        if ($e.Current.ControlType -eq [System.Windows.Automation.ControlType]::Pane -and
+            -not [bool]$e.Current.IsOffscreen) {
             $children = $e.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
             for ($j = 0; $j -lt $children.Count; $j++) {
                 $c = $children.Item($j)
@@ -1227,13 +1294,41 @@ function Invoke-IndustrialMarketplaceScenario(
         if ($element -and -not [bool]$element.Current.IsOffscreen) { $element } else { $null }
     } 30
     $canvasBounds = $imageView.Current.BoundingRectangle
-    [RawBufferInstalledVsixNative]::SetCursorPos(
-        [int]($canvasBounds.Left + $canvasBounds.Width * 0.68),
-        [int]($canvasBounds.Top + $canvasBounds.Height * 0.38)) | Out-Null
-    Start-Sleep -Milliseconds 700
-    $pixelText = [string](Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::Text) |
-        Where-Object { [string]$_.Current.Name -match "^X=.*(B|G|R|GV)=" } |
-        Select-Object -First 1).Current.Name
+    $pixelText = ""
+    $hoverFractions = @(
+        [pscustomobject]@{ X = 0.50; Y = 0.50 },
+        [pscustomobject]@{ X = 0.45; Y = 0.50 },
+        [pscustomobject]@{ X = 0.55; Y = 0.50 },
+        [pscustomobject]@{ X = 0.50; Y = 0.45 },
+        [pscustomobject]@{ X = 0.50; Y = 0.55 }
+    )
+    foreach ($hoverFraction in $hoverFractions) {
+        Focus-Window $MainHandle
+        [RawBufferInstalledVsixNative]::SetCursorPos(
+            [int]($canvasBounds.Left + $canvasBounds.Width * $hoverFraction.X),
+            [int]($canvasBounds.Top + $canvasBounds.Height * $hoverFraction.Y)) | Out-Null
+        Start-Sleep -Milliseconds 500
+
+        $root = Get-AutomationRoot $MainHandle
+        $positionElement = Find-ElementByAutomationId $root "PixelPositionText"
+        $redElement = Find-ElementByAutomationId $root "PixelRText"
+        $greenElement = Find-ElementByAutomationId $root "PixelGText"
+        $blueElement = Find-ElementByAutomationId $root "PixelBText"
+        $rawElement = Find-ElementByAutomationId $root "PixelRawText"
+        $positionText = if ($positionElement) { [string]$positionElement.Current.Name } else { "" }
+        $redText = if ($redElement) { [string]$redElement.Current.Name } else { "" }
+        $greenText = if ($greenElement) { [string]$greenElement.Current.Name } else { "" }
+        $blueText = if ($blueElement) { [string]$blueElement.Current.Name } else { "" }
+        $rawText = if ($rawElement) { [string]$rawElement.Current.Name } else { "" }
+        if ($positionText -match "^X \d+  Y \d+$" -and
+            $redText -match "^R \d+$" -and
+            $greenText -match "^G \d+$" -and
+            $blueText -match "^B \d+$" -and
+            $rawText -match "^Bytes(?: \d+){3,4}$") {
+            $pixelText = "$positionText | $redText | $greenText | $blueText | $rawText"
+            break
+        }
+    }
     if ([string]::IsNullOrWhiteSpace($pixelText)) {
         throw "The industrial color pixel readout was not visible after hovering over the image."
     }
@@ -1317,6 +1412,21 @@ function Invoke-IndustrialMarketplaceScenario(
         if ($matches.Count -eq 1) { $state } else { $null }
     } 60
     Capture-IndustrialWindow $badStridePath
+
+    $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+    if ($inspectorToggle -and -not [bool]$inspectorToggle.Current.IsOffscreen) {
+        $togglePattern = $null
+        if (-not $inspectorToggle.TryGetCurrentPattern(
+            [System.Windows.Automation.TogglePattern]::Pattern,
+            [ref]$togglePattern)) {
+            throw "Compact Inspector button does not support TogglePattern."
+        }
+        if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
+            [System.Windows.Automation.ToggleState]::On) {
+            ([System.Windows.Automation.TogglePattern]$togglePattern).Toggle()
+            Start-Sleep -Milliseconds 300
+        }
+    }
 
     $interpretTab = Wait-Until "visible industrial Interpret tab" {
         Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
@@ -1481,7 +1591,13 @@ function Invoke-IndustrialDataTipScenario(
                 [int]$_.height -eq 720 -and
                 -not [bool]$_.isError
             })
-            if ($matches.Count -eq 1) { $state } else { $null }
+            if ($matches.Count -eq 1 -and
+                [string]$matches[0].objectName -eq "dataTipIndustrialMat") {
+                $state
+            }
+            else {
+                $null
+            }
         }
         catch {
             $null
@@ -1501,6 +1617,7 @@ function Invoke-IndustrialDataTipScenario(
         hoverPoint = [ordered]@{ x = $hoverX; y = $hoverY }
         glyphPoint = [ordered]@{ x = $glyphX; y = $glyphY }
         usedVisualizerMenu = $usedVisualizerMenu
+        openedObjectName = [string]$openedState.documents[0].objectName
         openedSourceType = [string]$openedState.documents[0].sourceType
         openedWidth = [int]$openedState.documents[0].width
         openedHeight = [int]$openedState.documents[0].height
@@ -1535,87 +1652,12 @@ function Invoke-Int32IndustrialScenario(
 
     Show-RawBufferToolWindow $Process.Id
     Start-Sleep -Milliseconds 500
-    Invoke-Dte $Process.Id {
-        param($dte)
-        $dte.ActiveDocument.Activate()
-    }
-    $editor = Wait-Until "Visual Studio text editor for labelMat DataTip" {
-        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "WpfTextView"
+    Capture-Window $MainHandle $hoverPath
+    $labelItem = Wait-Until "visible labelMat Locals row" {
+        Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) "labelMat"
     } 30
-    $editor.SetFocus()
-    $labelPoint = Wait-Until "visible labelMat source expression" {
-        Find-VisibleTextScreenPoint (Get-AutomationRoot $MainHandle) "labelMat"
-    } 30
-    $windowRect = New-Object RawBufferInstalledVsixNative+RECT
-    [RawBufferInstalledVsixNative]::GetWindowRect($MainHandle, [ref]$windowRect) | Out-Null
-    [RawBufferInstalledVsixNative]::SetWindowPos(
-        $MainHandle,
-        [RawBufferInstalledVsixNative]::HWND_TOPMOST,
-        $windowRect.Left,
-        $windowRect.Top,
-        $windowRect.Right - $windowRect.Left,
-        $windowRect.Bottom - $windowRect.Top,
-        0x0040) | Out-Null
-    [RawBufferInstalledVsixNative]::BringWindowToTop($MainHandle) | Out-Null
-    [RawBufferInstalledVsixNative]::SetForegroundWindow($MainHandle) | Out-Null
-    Start-Sleep -Milliseconds 250
-    [RawBufferInstalledVsixNative]::SetCursorPos($windowRect.Left + 20, $windowRect.Top + 80) | Out-Null
-    Start-Sleep -Milliseconds 250
-    [RawBufferInstalledVsixNative]::SetCursorPos($labelPoint.X, $labelPoint.Y) | Out-Null
-    Start-Sleep -Milliseconds 4000
-    Capture-CurrentWindowWithCursor $MainHandle $hoverPath
-
-    $viewX = $labelPoint.X - 160
-    $viewY = $labelPoint.Y + 18
-    [RawBufferInstalledVsixNative]::SetCursorPos($viewX, $viewY) | Out-Null
-    Start-Sleep -Milliseconds 300
-    Capture-CurrentWindowWithCursor $MainHandle $glyphPath
-    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
-    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
-    $launchOutcome = Wait-Until "Raw Buffer Visualizer DataTip action" {
-        $state = Get-Int32SessionState
-        $opened = @($state.documents | Where-Object {
-            [string]$_.sourceType -eq "OpenCvSharp.Mat" -and
-            [string]$_.pixelFormat -eq "Int32" -and
-            [int]$_.width -eq 1280 -and
-            [int]$_.height -eq 960 -and
-            [int]$_.stride -eq 5120 -and
-            -not [bool]$_.isError
-        })
-        if ($opened.Count -ge 1) {
-            return [pscustomobject]@{ Mode = "Opened"; MenuItem = $null }
-        }
-
-        $menuItem = Get-ElementsByControlType ([System.Windows.Automation.AutomationElement]::RootElement) ([System.Windows.Automation.ControlType]::MenuItem) |
-            Where-Object {
-                $_.Current.ProcessId -eq $Process.Id -and
-                -not [bool]$_.Current.IsOffscreen -and
-                [string]$_.Current.Name -like "*Raw Buffer Visualizer*"
-            } |
-            Select-Object -First 1
-        if ($menuItem) {
-            [pscustomobject]@{ Mode = "Menu"; MenuItem = $menuItem }
-        }
-    } 15
-    $usedVisualizerMenu = $launchOutcome.Mode -eq "Menu"
-    if ($usedVisualizerMenu) {
-        $visualizerMenuItem = $launchOutcome.MenuItem
-        $menuRect = $visualizerMenuItem.Current.BoundingRectangle
-        [RawBufferInstalledVsixNative]::SetCursorPos(
-            [int]($menuRect.Left + $menuRect.Width / 2),
-            [int]($menuRect.Top + $menuRect.Height / 2)) | Out-Null
-        Start-Sleep -Milliseconds 300
-        Capture-CurrentWindowWithCursor $MainHandle $menuPath
-        Click-AutomationElement $visualizerMenuItem
-    }
-    [RawBufferInstalledVsixNative]::SetWindowPos(
-        $MainHandle,
-        [RawBufferInstalledVsixNative]::HWND_NOTOPMOST,
-        $windowRect.Left,
-        $windowRect.Top,
-        $windowRect.Right - $windowRect.Left,
-        $windowRect.Bottom - $windowRect.Top,
-        0x0040) | Out-Null
+    Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $labelItem $MainHandle $glyphPath $menuPath
+    $usedVisualizerMenu = Test-Path -LiteralPath $menuPath
     Start-Sleep -Milliseconds 500
     Dismiss-DebuggerEvaluationWarning | Out-Null
 
@@ -1740,11 +1782,10 @@ function Invoke-Int32IndustrialScenario(
             break
         }
     }
-    $imageItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
-    if ($paddedIndex -lt 0 -or $imageItems.Count -le $paddedIndex) {
+    if ($paddedIndex -lt 0 -or
+        -not (Select-ImageListItemAtIndex (Get-AutomationRoot $MainHandle) $paddedIndex)) {
         throw "The padded CV_32SC1 row could not be selected."
     }
-    Select-AutomationItem $imageItems[$paddedIndex]
     $paddedState = Wait-Until "active padded CV_32SC1 frame" {
         $state = Get-Int32SessionState
         if ($state -and
@@ -1844,11 +1885,10 @@ function Invoke-Int32IndustrialAutomaticScenario(
             break
         }
     }
-    $imageItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
-    if ($paddedIndex -lt 0 -or $imageItems.Count -le $paddedIndex) {
+    if ($paddedIndex -lt 0 -or
+        -not (Select-ImageListItemAtIndex (Get-AutomationRoot $MainHandle) $paddedIndex)) {
         throw "The padded CV_32SC1 row could not be selected."
     }
-    Select-AutomationItem $imageItems[$paddedIndex]
     $paddedState = Wait-Until "active padded CV_32SC1 frame" {
         $state = Get-Int32AutomaticSessionState
         if ($state -and
@@ -2373,51 +2413,114 @@ function Invoke-AutomaticVisionInspectorScenario(
     if (-not $scanButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
         throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
     }
-    ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
-
-    $beforeState = Wait-Until "Automatic Vision Inspector session state" {
-        if (-not (Test-Path -LiteralPath $sessionPath)) {
-            return $null
+    $beforeState = $null
+    $discoveryScanCount = 0
+    for ($scanAttempt = 0; $scanAttempt -lt $expectedSourceCounts.Count -and -not $beforeState; $scanAttempt++) {
+        $scanStamp = if (Test-Path -LiteralPath $sessionPath) {
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
         }
+        else {
+            [DateTime]::MinValue
+        }
+        ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+        $discoveryScanCount++
 
-        try {
-            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            foreach ($sourceType in $expectedSuccessfulSources.Values) {
-                $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
-                if ($matches.Count -ne 1 -or [bool]$matches[0].isError) {
-                    return $null
+        $state = Wait-Until "Automatic Vision Inspector discovery scan $discoveryScanCount" {
+            if (-not (Test-Path -LiteralPath $sessionPath) -or
+                (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $scanStamp) {
+                return $null
+            }
+
+            try {
+                $candidate = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                $candidateCountText = [string]$candidate.automaticCandidateCount
+                if (-not [bool]$candidate.automaticProgressVisible -and
+                    ($candidateCountText -match "new type\(s\) deferred" -or
+                    $candidateCountText -match "^8 image objects detected")) {
+                    return $candidate
                 }
             }
-
-            if ([int]$state.documentCount -ne 8 -or [int]$state.errorCount -ne 2) {
-                return $null
+            catch {
             }
 
-            $mappingCandidate = @($state.documents | Where-Object {
-                [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.IncompleteAutomaticFrame"
-            })[0]
-            $openFailure = @($state.documents | Where-Object {
-                [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.InvalidAutomaticFrame"
-            })[0]
-            if (-not [bool]$mappingCandidate.isError -or
-                -not [bool]$mappingCandidate.automaticMappingRequired -or
-                -not [bool]$openFailure.isError -or
-                [bool]$openFailure.automaticMappingRequired -or
-                [string]$openFailure.errorType -ne "AutomaticOpenFailed") {
-                return $null
-            }
-
-            if ([string]$state.automaticScanStatus -notmatch "8 detected: 6 opened, 1 need mapping, 1 failed" -or
-                [bool]$state.errorPanelVisible) {
-                return $null
-            }
-
-            $state
-        }
-        catch {
             $null
+        } 30
+
+        if ([string]$state.automaticCandidateCount -match "^8 image objects detected" -and
+            [int]$state.documentCount -lt 8 -and
+            [bool]$state.automaticLoadMoreVisible) {
+            $loadAllButton = Wait-Until "Automatic Vision Inspector Load all this Break button" {
+                Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadAllButton"
+            } 15
+            $loadAllPattern = $null
+            if (-not $loadAllButton.TryGetCurrentPattern(
+                [System.Windows.Automation.InvokePattern]::Pattern,
+                [ref]$loadAllPattern)) {
+                throw "Automatic Vision Inspector Load all this Break button does not support InvokePattern."
+            }
+
+            ([System.Windows.Automation.InvokePattern]$loadAllPattern).Invoke()
+            $state = Wait-Until "Automatic Vision Inspector complete eight-image batch" {
+                try {
+                    $candidate = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                    if ([int]$candidate.documentCount -eq 8 -and
+                        [int]$candidate.errorCount -eq 2 -and
+                        -not [bool]$candidate.automaticProgressVisible -and
+                        -not [bool]$candidate.automaticLoadMoreVisible) {
+                        return $candidate
+                    }
+                }
+                catch {
+                }
+
+                $null
+            } 30
         }
-    } 60
+
+        $hasExpectedSuccessfulSources = $true
+        foreach ($sourceType in $expectedSuccessfulSources.Values) {
+            $matches = @($state.documents | Where-Object { [string]$_.sourceType -eq $sourceType })
+            if ($matches.Count -ne 1 -or [bool]$matches[0].isError) {
+                $hasExpectedSuccessfulSources = $false
+                break
+            }
+        }
+
+        if ($hasExpectedSuccessfulSources -and
+            [int]$state.documentCount -eq 8 -and
+            [int]$state.errorCount -eq 2) {
+            $beforeState = $state
+            break
+        }
+
+        if ([string]$state.automaticCandidateCount -notmatch "new type\(s\) deferred") {
+            throw "Automatic Vision Inspector stopped at $([int]$state.documentCount) row(s) without reporting deferred type analysis."
+        }
+    }
+
+    if (-not $beforeState) {
+        throw "Automatic Vision Inspector did not converge after $discoveryScanCount bounded discovery scan(s)."
+    }
+
+    $mappingCandidate = @($beforeState.documents | Where-Object {
+        [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.IncompleteAutomaticFrame"
+    })[0]
+    $openFailure = @($beforeState.documents | Where-Object {
+        [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.InvalidAutomaticFrame"
+    })[0]
+    if (-not [bool]$mappingCandidate.isError -or
+        -not [bool]$mappingCandidate.automaticMappingRequired -or
+        -not [bool]$openFailure.isError -or
+        [bool]$openFailure.automaticMappingRequired -or
+        [string]$openFailure.errorType -ne "AutomaticOpenFailed") {
+        throw "Automatic Vision Inspector did not preserve the mapping-required and isolated failure rows."
+    }
+
+    if ([string]$beforeState.automaticCandidateCount -notmatch "^8 image objects detected" -or
+        [string]$beforeState.automaticBatchSummary -notmatch "^6 refreshed .* 0 deferred .* 1 failed .* 1 need mapping" -or
+        [bool]$beforeState.errorPanelVisible) {
+        throw "Automatic Vision Inspector final summary did not match the expected 8-object result."
+    }
 
     $beforeNames = @($beforeState.documents | ForEach-Object { [string]$_.title })
     $arrayDocument = @($beforeState.documents | Where-Object {
@@ -2429,9 +2532,20 @@ function Invoke-AutomaticVisionInspectorScenario(
         throw "Managed array did not auto-open as the expected 64x48 in-memory image."
     }
 
-    $beforeRepeatedScanStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
     ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
-    Start-Sleep -Milliseconds 1000
+    $scanButton = Wait-Until "Automatic Vision Inspector Scan Now re-enabled" {
+        $candidate = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+        if ($candidate -and [bool]$candidate.Current.IsEnabled) {
+            return $candidate
+        }
+
+        $null
+    } 30
+    $invokePattern = $null
+    if (-not $scanButton.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invokePattern)) {
+        throw "Re-enabled Automatic Vision Inspector Scan Now button does not support InvokePattern."
+    }
+    $beforeRepeatedScanStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
     ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
 
     $afterState = Wait-Until "Automatic Vision Inspector repeated-scan state" {
@@ -2441,11 +2555,17 @@ function Invoke-AutomaticVisionInspectorScenario(
         }
 
         try {
-            Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $candidate = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if (-not [bool]$candidate.automaticProgressVisible -and
+                [int]$candidate.documentCount -eq 8 -and
+                [int]$candidate.errorCount -eq 2) {
+                return $candidate
+            }
         }
         catch {
-            $null
         }
+
+        $null
     } 30
 
     foreach ($entry in $expectedSourceCounts.GetEnumerator()) {
@@ -2493,6 +2613,7 @@ function Invoke-AutomaticVisionInspectorScenario(
         mappingRequiredCount = 1
         failedCount = 1
         duplicateFree = $true
+        boundedDiscoveryScanCount = $discoveryScanCount
         initialAutoInspectEnabled = $initialAutoInspectEnabled
         finalAutoInspectEnabled = $finalAutoInspectEnabled
     }
@@ -2594,34 +2715,25 @@ function Invoke-AutomaticCollectionsScenario(
 
     $scanStopwatch = [Diagnostics.Stopwatch]::StartNew()
     ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
-    $firstState = Wait-Until "Automatic collection scan state" {
+    $firstBatchState = Wait-Until "Automatic collection initial batch" {
         if (-not (Test-Path -LiteralPath $sessionPath)) {
             return $null
         }
 
         try {
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            $openCvRows = @($state.documents | Where-Object {
-                [string]$_.sourceType -eq "OpenCvSharp.Mat"
-            })
-            $emguRows = @($state.documents | Where-Object {
-                [string]$_.sourceType -eq "Emgu.CV.Mat"
-            })
-            if ([int]$state.documentCount -ne 7 -or
-                [int]$state.errorCount -ne 2 -or
-                $openCvRows.Count -ne 5 -or
-                $emguRows.Count -ne 2 -or
-                @($openCvRows | Where-Object { -not [bool]$_.isError }).Count -ne 3 -or
-                @($openCvRows | Where-Object { [bool]$_.isError }).Count -ne 2 -or
-                @($emguRows | Where-Object { [bool]$_.isError }).Count -ne 0 -or
+            $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+            $documentCount = [int]$state.documentCount
+            if ($documentCount -lt 1 -or
+                $documentCount -gt 8 -or
+                [int]$state.errorCount -ne 0 -or
+                [string]$state.automaticCandidateCount -notlike "50 image objects detected*" -or
+                -not $summary -or
+                $summary.Refreshed -ne $documentCount -or
+                $summary.Deferred -ne (50 - $documentCount) -or
+                $summary.Failed -ne 0 -or
+                -not [bool]$state.automaticLoadMoreVisible -or
                 -not [bool]$state.automaticCollectionsEnabled) {
-                return $null
-            }
-
-            $status = [string]$state.automaticScanStatus
-            if ($status -notmatch "7 detected: 5 opened, 0 need mapping, 2 failed" -or
-                $status -notmatch "partialOpenCvMatList: 5 inspected, 3 opened, 2 failed" -or
-                $status -notmatch "emguMatArray: 2 inspected, 2 opened") {
                 return $null
             }
 
@@ -2636,10 +2748,232 @@ function Invoke-AutomaticCollectionsScenario(
         throw "Automatic collection scan exceeded the 15 second installed-VSIX smoke budget."
     }
 
+    $initialBatchPath = Join-Path $outputRoot "automatic-collections-initial-batch.png"
+    Capture-Window $MainHandle $initialBatchPath
+
+    $initialBatchCount = [int]$firstBatchState.documentCount
+    $initialInstances = @($firstBatchState.documents |
+        Sort-Object { [string]$_.handoffId } |
+        ForEach-Object { "$([string]$_.handoffId)=$([int]$_.instanceId)" })
+    $loadNextButton = Wait-Until "Automatic collection Load next 8 button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadNextButton"
+    } 15
+    $loadNextPattern = $null
+    if (-not $loadNextButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$loadNextPattern)) {
+        throw "Automatic collection Load next 8 button does not support InvokePattern."
+    }
+
+    ([System.Windows.Automation.InvokePattern]$loadNextPattern).Invoke()
+    $nextBatchState = Wait-Until "Automatic collection second eight-image batch" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+            $documentCount = [int]$state.documentCount
+            if ($documentCount -gt $initialBatchCount -and
+                $documentCount -le ($initialBatchCount + 8) -and
+                [int]$state.errorCount -eq 0 -and
+                $summary -and
+                $summary.Refreshed -eq $documentCount -and
+                $summary.Deferred -eq (50 - $documentCount) -and
+                $summary.Failed -eq 0 -and
+                [bool]$state.automaticLoadMoreVisible) {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 30
+    $nextBatchCount = [int]$nextBatchState.documentCount
+    $nextBatchInstances = @($nextBatchState.documents |
+        Where-Object { $initialInstances -contains "$([string]$_.handoffId)=$([int]$_.instanceId)" })
+    if ($nextBatchInstances.Count -ne $initialBatchCount) {
+        throw "Load next 8 replaced one or more rows from the initial batch."
+    }
+    $nextBatchPath = Join-Path $outputRoot "automatic-collections-next-batch.png"
+    Capture-Window $MainHandle $nextBatchPath
+
+    $loadAllButton = Wait-Until "Automatic collection Load all this Break button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadAllButton"
+    } 15
+    $loadAllPattern = $null
+    if (-not $loadAllButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$loadAllPattern)) {
+        throw "Automatic collection Load all this Break button does not support InvokePattern."
+    }
+
+    ([System.Windows.Automation.InvokePattern]$loadAllPattern).Invoke()
+    $loadAllOutcome = Wait-Until "Automatic collection Load all progress or completion" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([bool]$state.automaticProgressVisible) {
+                return [pscustomobject]@{ Mode = "Running"; State = $state }
+            }
+            if ([int]$state.documentCount -eq 50 -and
+                [int]$state.errorCount -eq 2 -and
+                -not [bool]$state.automaticLoadMoreVisible) {
+                return [pscustomobject]@{ Mode = "Completed"; State = $state }
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 15 10
+    $loadAllProgressPath = Join-Path $outputRoot "automatic-collections-load-all-progress.png"
+    Capture-Window $MainHandle $loadAllProgressPath
+    $stopWasExercised = $false
+    $stopAutomationUnavailable = $false
+    if ($loadAllOutcome.Mode -eq "Running") {
+        $stopButton = $null
+        try {
+            $stopButton = Wait-Until "Automatic collection Stop button during Load all" {
+                $toolRoot = Find-RawBufferToolWindowElement $MainHandle
+                $button = Find-ElementByAutomationId $toolRoot "AutomaticVisionStopButton"
+                if ($button) { return $button }
+                $toolRoot.FindAll(
+                    [System.Windows.Automation.TreeScope]::Descendants,
+                    [System.Windows.Automation.Condition]::TrueCondition) |
+                    Where-Object {
+                        [string]$_.Current.Name -eq "Stop" -and
+                        $_.Current.BoundingRectangle.Width -ge 1 -and
+                        $_.Current.BoundingRectangle.Height -ge 1 -and
+                        -not [bool]$_.Current.IsOffscreen
+                    } |
+                    Select-Object -First 1
+            } 2 10
+        }
+        catch {
+            $stopAutomationUnavailable = $true
+        }
+
+        if ($stopButton) {
+            $stopWasExercised = $true
+        }
+    }
+
+    if ($stopWasExercised) {
+        $stopPattern = $null
+        if ($stopButton.TryGetCurrentPattern(
+            [System.Windows.Automation.InvokePattern]::Pattern,
+            [ref]$stopPattern)) {
+            ([System.Windows.Automation.InvokePattern]$stopPattern).Invoke()
+        }
+        else {
+            Click-AutomationElement $stopButton
+        }
+        $stoppedState = Wait-Until "Automatic collection paused after current image" {
+            try {
+                $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+                if ($summary -and
+                    [int]$state.documentCount -ge $nextBatchCount -and
+                    [int]$state.documentCount -lt 50 -and
+                    $summary.Deferred -gt 0 -and
+                    -not [bool]$state.automaticProgressVisible -and
+                    [bool]$state.automaticLoadMoreVisible) {
+                    return $state
+                }
+            }
+            catch {
+            }
+
+            $null
+        } 30 50
+    }
+    else {
+        $stoppedState = Wait-Until "Automatic collection Load all completion without Stop" {
+            try {
+                $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                if ([int]$state.documentCount -eq 50 -and
+                    [int]$state.errorCount -eq 2 -and
+                    -not [bool]$state.automaticProgressVisible -and
+                    -not [bool]$state.automaticLoadMoreVisible) {
+                    return $state
+                }
+            }
+            catch {
+            }
+
+            $null
+        } 30 50
+    }
+    $stoppedPath = Join-Path $outputRoot "automatic-collections-stopped.png"
+    Capture-Window $MainHandle $stoppedPath
+
+    if ($stopWasExercised) {
+        $loadAllButton = Wait-Until "Automatic collection Load all after Stop" {
+            Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadAllButton"
+        } 15
+        $loadAllPattern = $null
+        if (-not $loadAllButton.TryGetCurrentPattern(
+            [System.Windows.Automation.InvokePattern]::Pattern,
+            [ref]$loadAllPattern)) {
+            throw "Automatic collection Load all after Stop does not support InvokePattern."
+        }
+
+        ([System.Windows.Automation.InvokePattern]$loadAllPattern).Invoke()
+    }
+    $firstState = Wait-Until "Automatic collection complete 50-image batch" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $openCvRows = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "OpenCvSharp.Mat"
+            })
+            $emguRows = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "Emgu.CV.Mat"
+            })
+            if ([int]$state.documentCount -eq 50 -and
+                [int]$state.errorCount -eq 2 -and
+                $openCvRows.Count -eq 48 -and
+                $emguRows.Count -eq 2 -and
+                @($openCvRows | Where-Object { -not [bool]$_.isError }).Count -eq 46 -and
+                @($openCvRows | Where-Object { [bool]$_.isError }).Count -eq 2 -and
+                @($emguRows | Where-Object { [bool]$_.isError }).Count -eq 0 -and
+                [string]$state.automaticBatchSummary -match "^48 refreshed .* 0 deferred .* 2 failed" -and
+                -not [bool]$state.automaticLoadMoreVisible) {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 90
+
     $firstNames = @($firstState.documents | ForEach-Object { [string]$_.title })
+    $firstInstances = @($firstState.documents |
+        Sort-Object { [string]$_.handoffId } |
+        ForEach-Object { "$([string]$_.handoffId)=$([int]$_.instanceId)" })
     $firstSessionStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+    $scanButton = Wait-Until "Automatic collection Scan Now re-enabled after Load all" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+        if ($button -and [bool]$button.Current.IsEnabled) { $button } else { $null }
+    } 30
+    $invokePattern = $null
+    if (-not $scanButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$invokePattern)) {
+        throw "Re-enabled automatic collection Scan Now button does not support InvokePattern."
+    }
     ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
-    $secondState = Wait-Until "Automatic collection duplicate-free rescan" {
+    $rapidRepeatBlockedCount = 0
+    for ($attempt = 0; $attempt -lt 2; $attempt++) {
+        try {
+            ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+        }
+        catch {
+            $rapidRepeatBlockedCount++
+        }
+    }
+    if ($rapidRepeatBlockedCount -lt 1) {
+        throw "Repeated Scan Now invocations were never rejected while a scan was active."
+    }
+    $secondBatchState = Wait-Until "Automatic collection incremental rescan batch" {
         if (-not (Test-Path -LiteralPath $sessionPath) -or
             (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $firstSessionStamp) {
             return $null
@@ -2647,8 +2981,14 @@ function Invoke-AutomaticCollectionsScenario(
 
         try {
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            if ([int]$state.documentCount -eq 7 -and
-                [int]$state.errorCount -eq 2) {
+            $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+            if ([int]$state.documentCount -eq 50 -and
+                [int]$state.errorCount -eq 2 -and
+                $summary -and
+                $summary.Refreshed -ge 1 -and
+                $summary.Refreshed -le 8 -and
+                $summary.Deferred -eq (50 - $summary.Refreshed) -and
+                $summary.Failed -eq 0) {
                 $state
             }
             else {
@@ -2659,6 +2999,38 @@ function Invoke-AutomaticCollectionsScenario(
             $null
         }
     } 30
+    $secondBatchInstances = @($secondBatchState.documents |
+        Sort-Object { [string]$_.handoffId } |
+        ForEach-Object { "$([string]$_.handoffId)=$([int]$_.instanceId)" })
+    if (@(Compare-Object $firstInstances $secondBatchInstances).Count -ne 0) {
+        throw "Repeated automatic scan replaced one or more existing image rows instead of refreshing them in place."
+    }
+
+    $loadAllButton = Wait-Until "Automatic collection second Load all this Break button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadAllButton"
+    } 15
+    $loadAllPattern = $null
+    if (-not $loadAllButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$loadAllPattern)) {
+        throw "Second automatic collection Load all this Break button does not support InvokePattern."
+    }
+
+    ([System.Windows.Automation.InvokePattern]$loadAllPattern).Invoke()
+    $secondState = Wait-Until "Automatic collection duplicate-free full rescan" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([int]$state.documentCount -eq 50 -and
+                [int]$state.errorCount -eq 2 -and
+                [string]$state.automaticBatchSummary -match "^48 refreshed .* 0 deferred .* 2 failed") {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 90
     $secondNames = @($secondState.documents | ForEach-Object { [string]$_.title })
 
     $firstValidIndex = -1
@@ -2878,7 +3250,7 @@ function Invoke-AutomaticCollectionsScenario(
 
     $reopenStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
     ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
-    $reopenedState = Wait-Until "automatic collection reopen after Clear" {
+    $reopenedBatchState = Wait-Until "automatic collection initial reopen batch after Clear" {
         if (-not (Test-Path -LiteralPath $sessionPath) -or
             (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $reopenStamp) {
             return $null
@@ -2886,7 +3258,15 @@ function Invoke-AutomaticCollectionsScenario(
 
         try {
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            if ([int]$state.documentCount -eq 7 -and [int]$state.errorCount -eq 2) {
+            $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+            $documentCount = [int]$state.documentCount
+            if ($documentCount -ge 1 -and
+                $documentCount -le 8 -and
+                [int]$state.errorCount -eq 0 -and
+                $summary -and
+                $summary.Refreshed -eq $documentCount -and
+                $summary.Deferred -eq (50 - $documentCount) -and
+                $summary.Failed -eq 0) {
                 $state
             }
             else {
@@ -2897,6 +3277,32 @@ function Invoke-AutomaticCollectionsScenario(
             $null
         }
     } 30
+
+    $loadAllButton = Wait-Until "automatic collection Load all after Clear" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadAllButton"
+    } 15
+    $loadAllPattern = $null
+    if (-not $loadAllButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$loadAllPattern)) {
+        throw "Automatic collection Load all after Clear does not support InvokePattern."
+    }
+
+    ([System.Windows.Automation.InvokePattern]$loadAllPattern).Invoke()
+    $reopenedState = Wait-Until "automatic collection full reopen after Clear" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            if ([int]$state.documentCount -eq 50 -and
+                [int]$state.errorCount -eq 2 -and
+                [string]$state.automaticBatchSummary -match "^48 refreshed .* 0 deferred .* 2 failed") {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 90
 
     $reopenedItems = @(Get-ImageListItems (Get-AutomationRoot $MainHandle))
     if ($reopenedItems.Count -le $firstValidIndex) {
@@ -2929,20 +3335,150 @@ function Invoke-AutomaticCollectionsScenario(
     $afterReopenPath = Join-Path $outputRoot "automatic-collections-after-reopen.png"
     Capture-Window $MainHandle $afterReopenPath
 
+    $changedRowKey = "automatic-vision-inspector:partialOpenCvMatList[0]"
+    $changedRowBefore = @($reopenedState.documents | Where-Object {
+        [string]$_.handoffId -eq $changedRowKey
+    } | Select-Object -First 1)
+    if ($changedRowBefore.Count -ne 1) {
+        throw "The first automatic collection row was not available before the next-Break transition."
+    }
+
+    $nextBreakStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+    Continue-Debugging $Process.Id
+    $nextBreakBatchState = Wait-Until "automatic collection changed-count next Break" {
+        if (-not (Test-Path -LiteralPath $sessionPath) -or
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $nextBreakStamp) {
+            return $null
+        }
+
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $changedRow = @($state.documents | Where-Object {
+                [string]$_.handoffId -eq $changedRowKey
+            } | Select-Object -First 1)
+            $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+            if ([int]$state.documentCount -eq 42 -and
+                [int]$state.errorCount -eq 0 -and
+                [string]$state.automaticCandidateCount -like '42 image objects detected*' -and
+                $summary -and
+                $summary.Refreshed -ge 1 -and
+                $summary.Refreshed -le 8 -and
+                $summary.Deferred -eq (42 - $summary.Refreshed) -and
+                $summary.Failed -eq 0 -and
+                [bool]$state.automaticLoadMoreVisible -and
+                $changedRow.Count -eq 1 -and
+                [int]$changedRow[0].instanceId -eq [int]$changedRowBefore[0].instanceId -and
+                [int]$changedRow[0].width -eq 96 -and
+                [int]$changedRow[0].height -eq 72 -and
+                -not [string]::IsNullOrWhiteSpace([string]$changedRow[0].sourceAddress) -and
+                [string]$changedRow[0].sourceAddress -ne [string]$changedRowBefore[0].sourceAddress) {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 60
+
+    $survivingBefore = @($reopenedState.documents | Where-Object {
+        $liveRowKey = [string]$_.handoffId
+        @($nextBreakBatchState.documents | Where-Object {
+            [string]$_.handoffId -eq $liveRowKey
+        }).Count -gt 0
+    } | Sort-Object { [string]$_.handoffId } | ForEach-Object {
+        "$([string]$_.handoffId)=$([int]$_.instanceId)"
+    })
+    $survivingAfter = @($nextBreakBatchState.documents |
+        Sort-Object { [string]$_.handoffId } |
+        ForEach-Object { "$([string]$_.handoffId)=$([int]$_.instanceId)" })
+    if (@(Compare-Object $survivingBefore $survivingAfter).Count -ne 0) {
+        throw "The next Break replaced one or more surviving automatic rows."
+    }
+
+    $loadAllButton = Wait-Until "Automatic collection Load all on changed-count Break" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionLoadAllButton"
+    } 15
+    $loadAllPattern = $null
+    if (-not $loadAllButton.TryGetCurrentPattern(
+        [System.Windows.Automation.InvokePattern]::Pattern,
+        [ref]$loadAllPattern)) {
+        throw "Automatic collection changed-count Load all does not support InvokePattern."
+    }
+
+    ([System.Windows.Automation.InvokePattern]$loadAllPattern).Invoke()
+    $nextBreakCompleteState = Wait-Until "automatic collection changed-count complete Break" {
+        try {
+            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+            $openCvRows = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "OpenCvSharp.Mat"
+            })
+            $emguRows = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq "Emgu.CV.Mat"
+            })
+            if ([int]$state.documentCount -eq 42 -and
+                [int]$state.errorCount -eq 0 -and
+                $openCvRows.Count -eq 40 -and
+                $emguRows.Count -eq 2 -and
+                [string]$state.automaticBatchSummary -match '^42 refreshed .* 0 deferred .* 0 failed' -and
+                -not [bool]$state.automaticLoadMoreVisible) {
+                return $state
+            }
+        }
+        catch {
+        }
+
+        $null
+    } 90
+    $nextBreakCompleteInstances = @($nextBreakCompleteState.documents |
+        Sort-Object { [string]$_.handoffId } |
+        ForEach-Object { "$([string]$_.handoffId)=$([int]$_.instanceId)" })
+    if (@(Compare-Object $survivingBefore $nextBreakCompleteInstances).Count -ne 0) {
+        throw "Loading the changed-count Break replaced one or more surviving automatic rows."
+    }
+
+    $changedRowAfter = @($nextBreakCompleteState.documents | Where-Object {
+        [string]$_.handoffId -eq $changedRowKey
+    } | Select-Object -First 1)[0]
+    $nextBreakPath = Join-Path $outputRoot "automatic-collections-next-break.png"
+    Capture-Window $MainHandle $nextBreakPath
+
     [ordered]@{
         scenario = "AutomaticCollections"
         screenshotPath = $beforeClearPath
+        initialBatchScreenshotPath = $initialBatchPath
+        nextBatchScreenshotPath = $nextBatchPath
+        loadAllProgressScreenshotPath = $loadAllProgressPath
+        stoppedScreenshotPath = $stoppedPath
         beforeClearScreenshotPath = $beforeClearPath
         afterClearScreenshotPath = $afterClearPath
         afterReopenScreenshotPath = $afterReopenPath
+        nextBreakScreenshotPath = $nextBreakPath
         rowsBeforeRepeatedScan = $firstNames
         rowsAfterRepeatedScan = $secondNames
         listInspected = $true
         arrayInspected = $true
-        openedCount = 5
+        detectedCount = 50
+        initialBatchCount = $initialBatchCount
+        nextBatchCount = $nextBatchCount
+        openedCount = 48
         failedCount = 2
         partialFailureIsolated = $true
         duplicateFree = $true
+        inPlaceRefresh = $true
+        loadNextPassed = $true
+        stopAfterCurrentPassed = $stopWasExercised
+        loadAllCompletedWithoutStop = -not $stopWasExercised
+        stopAutomationUnavailable = $stopAutomationUnavailable
+        stoppedDocumentCount = [int]$stoppedState.documentCount
+        rapidRepeatedScanCoalesced = $true
+        rapidRepeatedScanBlockedCount = $rapidRepeatBlockedCount
+        rapidRepeatedScanCompletedBetweenClicksCount = 2 - $rapidRepeatBlockedCount
+        changedCountNextBreakPassed = $true
+        nextBreakDetectedCount = 42
+        pointerReplacementRefreshedInPlace = $true
+        previousFirstPointer = [string]$changedRowBefore[0].sourceAddress
+        currentFirstPointer = [string]$changedRowAfter.sourceAddress
         collectionOptionAbsent = $true
         collectionDiscoveryAlwaysEnabled = $true
         clearResetPassed = $true
@@ -3093,36 +3629,86 @@ function Invoke-MultiLibraryHybridScenario(
     Show-RawBufferToolWindow $Process.Id
     Start-Sleep -Milliseconds 750
 
-    $automaticBreakState = Wait-Until "automatic registered images opened on Break Mode" {
-        if (-not (Test-Path -LiteralPath $sessionPath)) {
-            return $null
+    $automaticBreakState = $null
+    $discoveryScanCount = 0
+    for ($scanAttempt = 0; $scanAttempt -lt 4 -and -not $automaticBreakState; $scanAttempt++) {
+        $scanButton = Wait-Until "Multi-library Automatic Vision Inspector Scan Now button" {
+            $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "AutomaticVisionScanNowButton"
+            if ($button -and [bool]$button.Current.IsEnabled) { $button } else { $null }
+        } 30
+        $invokePattern = $null
+        if (-not $scanButton.TryGetCurrentPattern(
+            [System.Windows.Automation.InvokePattern]::Pattern,
+            [ref]$invokePattern)) {
+            throw "Automatic Vision Inspector Scan Now button does not support InvokePattern."
         }
 
-        try {
-            $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            foreach ($entry in $automaticTypeCounts.GetEnumerator()) {
-                $sourceType = [string]$entry.Key
-                $expectedCount = [int]$entry.Value
-                $matches = @($state.documents | Where-Object {
-                    [string]$_.sourceType -eq $sourceType -and
-                    [bool]$_.isAutomaticInspection -and
-                    -not [bool]$_.isError
-                })
-                if ($matches.Count -ne $expectedCount) {
-                    return $null
-                }
-            }
+        $scanStamp = if (Test-Path -LiteralPath $sessionPath) {
+            (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
+        }
+        else {
+            [DateTime]::MinValue
+        }
+        ([System.Windows.Automation.InvokePattern]$invokePattern).Invoke()
+        $discoveryScanCount++
 
-            if ([string]$state.automaticScanStatus -notmatch "8 detected: 8 opened, 0 need mapping, 0 failed") {
+        $state = Wait-Until "multi-library discovery scan $discoveryScanCount" {
+            if (-not (Test-Path -LiteralPath $sessionPath) -or
+                (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $scanStamp) {
                 return $null
             }
 
-            $state
-        }
-        catch {
+            try {
+                $candidate = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                $candidateCountText = [string]$candidate.automaticCandidateCount
+                if (-not [bool]$candidate.automaticProgressVisible -and
+                    ($candidateCountText -match "new type\(s\) deferred" -or
+                    $candidateCountText -match "^8 image objects detected")) {
+                    return $candidate
+                }
+            }
+            catch {
+            }
+
             $null
+        } 30
+
+        $hasExpectedTypes = $true
+        foreach ($entry in $automaticTypeCounts.GetEnumerator()) {
+            $sourceType = [string]$entry.Key
+            $expectedCount = [int]$entry.Value
+            $matches = @($state.documents | Where-Object {
+                [string]$_.sourceType -eq $sourceType -and
+                [bool]$_.isAutomaticInspection -and
+                -not [bool]$_.isError
+            })
+            if ($matches.Count -ne $expectedCount) {
+                $hasExpectedTypes = $false
+                break
+            }
         }
-    } 60
+
+        $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
+        if ($hasExpectedTypes -and
+            [int]$state.documentCount -eq 8 -and
+            [int]$state.errorCount -eq 0 -and
+            [string]$state.automaticCandidateCount -match "^8 image objects detected" -and
+            $summary -and
+            $summary.Refreshed -eq 8 -and
+            $summary.Deferred -eq 0 -and
+            $summary.Failed -eq 0) {
+            $automaticBreakState = $state
+            break
+        }
+
+        if ([string]$state.automaticCandidateCount -notmatch "new type\(s\) deferred") {
+            throw "Multi-library automatic inspection stopped at $([int]$state.documentCount) row(s) without reporting deferred type analysis."
+        }
+    }
+
+    if (-not $automaticBreakState) {
+        throw "Multi-library automatic inspection did not converge after $discoveryScanCount bounded discovery scan(s)."
+    }
 
     foreach ($sourceType in $automaticRegisteredTypes) {
         $document = @($automaticBreakState.documents | Where-Object {
@@ -3236,9 +3822,14 @@ function Invoke-MultiLibraryHybridScenario(
             if ($registeredAutomaticRows.Count -ne 0) {
                 return $null
             }
+            $summary = ConvertFrom-AutomaticBatchSummary ([string]$state.automaticBatchSummary)
             if ([int]$state.documentCount -ne 9 -or
                 [int]$state.errorCount -ne 0 -or
-                [string]$state.automaticScanStatus -notmatch "8 detected: 8 opened, 0 need mapping, 0 failed") {
+                [string]$state.automaticCandidateCount -notmatch "^8 image objects detected" -or
+                -not $summary -or
+                $summary.Refreshed -ne 8 -or
+                $summary.Deferred -ne 0 -or
+                $summary.Failed -ne 0) {
                 return $null
             }
 
@@ -3263,6 +3854,7 @@ function Invoke-MultiLibraryHybridScenario(
         documentCount = [int]$finalState.documentCount
         errorCount = [int]$finalState.errorCount
         automaticScanStatus = [string]$finalState.automaticScanStatus
+        boundedDiscoveryScanCount = $discoveryScanCount
     }
 }
 
@@ -3643,7 +4235,7 @@ $scenarioArgument = switch ($Scenario) {
         if (-not (Test-Path -LiteralPath $IndustrialDataTipImagePath)) {
             throw "Industrial DataTip image was not found: $IndustrialDataTipImagePath"
         }
-        '--industrial-image-debug "' + (Resolve-Path -LiteralPath $IndustrialDataTipImagePath).Path + '"'
+        '--industrial-datatip-debug "' + (Resolve-Path -LiteralPath $IndustrialDataTipImagePath).Path + '"'
     }
     "Int32Industrial" {
         if (-not (Test-Path -LiteralPath $IndustrialImagePath)) {
@@ -3792,6 +4384,14 @@ try {
         }
     } 90 | Out-Null
 
+    if ($Scenario -eq "ImagePtrColdStart" -and (Find-RawBufferToolWindowElement $mainHandle)) {
+        Hide-RawBufferToolWindow $visualStudio.Id
+        Wait-Until "restored Raw Buffer Visualizer Tool Window to close" {
+            if (-not (Find-RawBufferToolWindowElement $mainHandle)) { return $true }
+            $null
+        } 30 | Out-Null
+    }
+
     # A newly installed VS 17.x profile can switch to a debug layout that hides
     # tool windows opened before debugging. Re-showing is idempotent and keeps
     # every scenario on the same visible docked window after the layout switch.
@@ -3901,6 +4501,7 @@ try {
             height = $script:TestMonitor.Bounds.Height
             isPrimary = $script:TestMonitor.IsPrimary
             singleMonitorFallback = $script:TestMonitor.IsSingleMonitorFallback
+            screenCount = $script:TestMonitor.ScreenCount
             verifiedWindowRect = $script:LastWindowRect
         }
         result = $scenarioResult

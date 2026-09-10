@@ -1,18 +1,18 @@
 # Architecture And Validation
 
-This document describes the architecture implemented by public `2.0.6.0` and extended by the local `2.0.7.0` candidate while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The current hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.6 advanced only the immutable package identity. Version 2.0.7 adds signed 32-bit, one-channel matrix mapping and rendering without widening the multi-channel or 3D scope. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the current local `2.0.8.0` architecture while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.7 added signed 32-bit, one-channel matrix mapping and rendering. Version 2.0.8 corrects routed debugger-payload packaging and adds bounded, incremental Automatic Inspector processing without widening the multi-channel or 3D scope. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
 | Surface | Current target |
 | --- | --- |
-| Visual Studio extension | Public `2.0.3.0` and local `2.0.4.0`: VS2022 `17.9+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
+| Visual Studio extension | Public `2.0.7.0` and local `2.0.8.0`: VS2022 `17.9+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
 | Extension/VSSDK projects | VSSDK package `net472`; out-of-process provider `net8.0-windows8.0` |
 | Core/SDK/object source | `net472`, `netstandard2.0`, and/or `net8.0` depending on project |
 | Standalone WPF viewer | `net472` and `net8.0-windows` |
 | Build machine | Visual Studio 2022 with .NET desktop development and .NET 8 SDK or newer |
 
-The public `2.0.3.0` package and local `2.0.4.0` candidate use VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. The 2.0.4 change does not alter the debugger-provider or VSSDK dependency graph. Exact 2.0.4 installed-host evidence belongs in [release-qualification-2.0.4.md](release-qualification-2.0.4.md); historical 2.0.3 evidence remains in [release-qualification-2.0.3.md](release-qualification-2.0.3.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
+The current 2.0.8 source uses VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. The exact final candidate passed installed checks on exact VS2022 Community `17.9.34902.65`, serviced VS2022 Community `17.14.37516.0`, and stable VS2026 Community `18.9.12128.139`, including 17/17 critical-file equality on each host. The exact 17.9 host passed seven installed scenario groups with zero package-protocol errors; 125%-200% DPI checks remain publication prerequisites. See [release-qualification-2.0.8.md](release-qualification-2.0.8.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
 
 ## System Shape
 
@@ -164,18 +164,20 @@ Automatic Vision Inspector complements provider registration; it does not change
 
 1. The package receives a Break Mode event and schedules the scan at WPF `DispatcherPriority.ContextIdle`.
 2. The scanner merges `Debugger.CurrentStackFrame.Locals` and `.Arguments`, deduplicated by root expression, while skipping primitives and unsupported root arrays/collections.
-3. Every scan expands exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, and corresponding one-dimensional arrays into indexed expressions. The policy caps work at 8 items per collection, 16 items and 8 collection roots per scan.
+3. Every scan expands exact `List<OpenCvSharp.Mat>`, `List<Emgu.CV.Mat>`, and corresponding one-dimensional arrays into indexed expressions. Discovery is capped at 128 image candidates, 8 collection roots, and 128 current-frame root expressions.
 4. Exact initialized OpenCvSharp `Mat` and Emgu CV `Mat` roots or indexed elements take a fixed known-type branch. OpenCvSharp reads `Data`, `Cols`, `Rows`, `Step()`, `Depth()`, and `Channels()`; Emgu reads `DataPointer`, `Cols`, `Rows`, `Step`, `Depth`, and `NumberOfChannels`.
 5. Known Mat metadata is converted to a validated descriptor and opened through paused-process live memory. Null/disposed collection elements become isolated `[Failed]` rows. Bitmap, `RawBufferSnapshot`, `RawBufferView`, the exact ImagePtr target, and unsupported collections remain registered-path owned.
-6. Each remaining unregistered root contributes at most 128 direct members and 64 one-level nested members. Unlimited recursion is prohibited.
-7. `VisionMemberInference` assigns data/width/height/stride/format roles and a structural confidence score.
-8. A saved type mapping takes precedence. Otherwise only complete, unambiguous inference at 90% or higher is eligible to open automatically.
+6. A saved type mapping takes precedence without an automatic full member walk. For an unmapped image-like runtime type, the scanner analyzes at most 128 direct members and 64 one-level nested members; no more than two previously unseen types are analyzed in one scan. Unlimited recursion is prohibited.
+7. `VisionMemberInference` assigns data/width/height/stride/format roles and a structural confidence score. Positive and negative type analysis is cached until Design Mode, while instance values and pixels are still reread on every Break. `UsesCachedInference` is performance metadata only and must never be used as automatic-open authorization.
+8. Only a saved mapping or complete, unambiguous `Inference.CanAutoOpen` result at 90% or higher is eligible to open automatically. This gate is reapplied to cached results on every scan, so an incomplete or ambiguous type remains `[Map]`. A failed inferred open evicts that cached analysis so the next Break can re-evaluate the type.
 9. Pointer-backed shapes reuse paused-process memory. Managed-array shapes use the current VSSDK frame/property child enumerator; the EnvDTE element fallback is bounded to 256 items.
 10. The constructed descriptor and current buffer are validated before an image row is accepted.
 11. Ambiguous/incomplete results at 40% or higher become visible `[Map]` candidates; lower-scoring objects are hidden. A recognized shape whose current pointer/array read fails becomes `[Failed]`, not a misleading mapping request.
-12. Every root/collection element is processed behind an exception boundary, so a failed candidate cannot block successful images. A successful row is selected in preference to an error row.
-13. Automatic rows are replaced by stable root/index-expression key on refresh, while manual/provider-handoff rows are preserved.
-14. **Auto Inspect on Break** is the only versioned per-user Automatic Inspector preference. It defaults on and persists across Visual Studio restarts. Restoring it does not itself scan or force the Tool Window open. **Scan Now** is independent of Auto Inspect on Break, and both scan paths always apply the bounded exact-Mat collection policy.
+12. The ToolWindow refreshes an initial batch of at most eight candidates and stops early after a soft two-second budget. It renders progress, yields between candidates, and exposes **Stop**, **Load next 8**, and explicit **Load all this Break** without opening a modal dialog.
+13. Every root/collection element is processed behind an exception boundary, so a failed candidate cannot block successful images. A successful row is selected in preference to an error row.
+14. Automatic rows are updated in place by stable root/index-expression key. Complete discovery removes disappeared automatic rows; incomplete/bounded discovery retains unmatched automatic rows. Manual/provider-handoff rows are preserved in both cases.
+15. Run/Design transitions and newer Break generations invalidate older work. One executor owns the cursor and counters; rapid Break/F10 notifications coalesce to the newest pending generation, and repeated batch commands cannot run concurrently.
+16. **Auto Inspect on Break** is the only versioned per-user Automatic Inspector preference. It defaults on and persists across Visual Studio restarts. Restoring it does not itself scan or force the Tool Window open. **Scan Now** is independent of Auto Inspect on Break, and both scan paths always apply the bounded exact-Mat collection policy.
 
 The scanner reads debugger-visible fields and property getters. Exact OpenCvSharp/Emgu capture evaluates only the fixed extension-owned metadata expressions above; exact `List<T>.Count` or array `Length` is the only additional collection metadata evaluation. It does not execute arbitrary `IEnumerable`, inject Bitmap `LockBits`/`UnlockBits`, load SDK assemblies dynamically, decode private native layouts, or control an acquisition device. A breakpoint on an assignment statement stops before that statement executes, so the object must be constructed on an earlier line. See [automatic-vision-inspector.md](automatic-vision-inspector.md) for the detailed confidence/UX contract and current evidence.
 
@@ -334,7 +336,7 @@ Common logs:
 
 ## Build And Test Commands
 
-Run from `C:\Git\RawBufferVisualizer`.
+Run from `C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat`.
 
 ### Restore and Release build
 
@@ -434,6 +436,10 @@ Build/package:
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoZip
 ```
+
+The Visual Studio 2022 registered visualizer executes the `netstandard2.0` ObjectSource inside `ClrCustomVisualizerVSHost`; that payload is a runtime boundary, not a passive duplicate of the out-of-process provider. The Extensibility project must take it from the sibling output under the active `BaseOutputPath`, including routed `D:` release builds. `Publish-VisualStudioExtension.ps1` compares SHA-256 for Core, SDK, ObjectSource, and the ObjectSource dependency manifest between that fresh build output and the corresponding VSIX entries. A mismatch aborts packaging even when all entry names exist.
+
+This byte-equality gate is required because 2.0.7 packaged an older repository-local `netstandard2.0` ObjectSource while source tests and a newer installed host passed. For debugger-payload changes, source behavior plus package-entry presence is insufficient: prove fresh-output/VSIX equality, exercise the extracted packaged payload, and run the affected path on the oldest supported Visual Studio host before publication.
 
 Release VSIX:
 

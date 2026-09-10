@@ -20,7 +20,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     // The in-process package stays isolated from the newer out-of-process Extensibility SDK.
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.7")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.8")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(
@@ -272,16 +272,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void OnEnterRunMode(EnvDTE.dbgEventReason reason)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            LeaveBreakMode("Run mode entered");
+            LeaveBreakMode("Run mode entered", false);
         }
 
         private void OnEnterDesignMode(EnvDTE.dbgEventReason reason)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            LeaveBreakMode("Debug session ended");
+            LeaveBreakMode("Debug session ended", true);
         }
 
-        private void LeaveBreakMode(string eventDescription)
+        private void LeaveBreakMode(string eventDescription, bool endSession)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             _handoffSessionGate.EnterRunMode();
@@ -290,6 +290,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
                 var invalidatedCount = window == null ? 0 : window.InvalidateLiveSources();
+                if (endSession && window != null)
+                {
+                    window.EndAutomaticInspectionSession();
+                }
+
                 WriteAutomationLog(
                     eventDescription + "; invalidated "
                     + invalidatedCount.ToString(CultureInfo.InvariantCulture)

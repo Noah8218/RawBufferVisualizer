@@ -4,20 +4,23 @@ Use this before publishing each Marketplace update.
 
 ## Package
 
-Build a Release VSIX:
+For the frozen 2.0.8 candidate, verify the exact qualified bytes without rebuilding:
 
 ```powershell
-dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.7
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\candidate -NoZip
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.8
+$candidate208 = 'D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\candidate-final\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+Get-Item -LiteralPath $candidate208 | Select-Object FullName, Length
+Get-FileHash -LiteralPath $candidate208 -Algorithm SHA256
 ```
 
-Expected output:
+Expected identity:
 
 ```text
-D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\
-D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\candidate\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix
+Length: 2,521,139 bytes
+SHA-256: 612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2
 ```
+
+Any rebuild creates a new candidate and invalidates this package identity; use a new D-drive build/publish root and repeat the full release qualification before substituting it.
 
 ## Listing Metadata
 
@@ -44,7 +47,7 @@ Every Overview must distinguish the technical support range from exact runtime e
 - exact installed IDE builds: list only versions that passed the current installed-VSIX matrix;
 - excluded release targets: Visual Studio 2019, Visual Studio 2022 `17.8` or earlier, 32-bit Visual Studio, and Preview/Insiders builds.
 
-The `2.0.7` manifest range `[17.9,18.0)` is valid for VS2026 because VS2026 supports API version 17.x and ignores the upper bound. The `17.9` lower bound matches the isolated `net472` VSSDK package and `net8.0-windows8.0` out-of-process provider; any later manifest or package-content edit produces a new exact package and requires full requalification.
+The `2.0.8` manifest range `[17.9,18.0)` is valid for VS2026 because VS2026 supports API version 17.x and ignores the upper bound. The `17.9` lower bound matches the isolated `net472` VSSDK package and `net8.0-windows8.0` out-of-process provider; any later manifest or package-content edit produces a new exact package and requires full requalification.
 
 For every update, the binary version, `CHANGELOG.md`, dedicated Marketplace Overview, Marketplace/GitHub release notes, embedded VSIX `ReleaseNotes.txt`, and in-product `ReleaseAnnouncement.cs` version must agree. The communication test above enforces that contract. Confirm the first Tool Window open shows the current non-modal highlights, **Dismiss** survives a Visual Studio restart, and **What's New** can open and close them without triggering a scan.
 
@@ -70,7 +73,7 @@ machine-vision, computer-vision, image-debugger, debugger-visualizer,
 raw-buffer, intptr, industrial-camera, bitmap
 ```
 
-For the `2.0.7` candidate, use [marketplace-release-notes-2.0.7.md](marketplace-release-notes-2.0.7.md) only after installed qualification and explicit publish approval. Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
+For the `2.0.8` candidate, use [marketplace-release-notes-2.0.8.md](marketplace-release-notes-2.0.8.md) only after installed qualification and explicit publish approval. Point installation to Marketplace rather than attaching a second user-facing VSIX distribution path.
 
 The GitHub tag workflow uses that same file as its curated Release body. It attaches only the standalone viewer; do not attach the Visual Studio VSIX to GitHub Releases.
 
@@ -104,13 +107,13 @@ Lead with the debugger workflow, not the large-image benchmark. Publish only in 
 
 Current Overview copy:
 
-[Raw Buffer Visualizer Marketplace Overview for 2.0.7](marketplace-overview-2.0.7.md)
+[Raw Buffer Visualizer Marketplace Overview for 2.0.8](marketplace-overview-2.0.8.md)
 
 Owner review translation (do not upload as the English Marketplace Overview):
 
-[Raw Buffer Visualizer Marketplace Overview for 2.0.7 - Korean review copy](marketplace-overview-2.0.7.ko.md)
+[Raw Buffer Visualizer Marketplace Overview for 2.0.8 - Korean review copy](marketplace-overview-2.0.8.ko.md)
 
-The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `2.0.7`.
+The block below is the published 1.0.45 baseline and is retained only for historical comparison. Do not paste it for `2.0.8`.
 
 Historical 1.0.45 Overview copy:
 
@@ -225,9 +228,9 @@ Raw Buffer Visualizer is licensed under the MIT License. External libraries reta
 
 ## Active Listing Media
 
-The approved 2.0.7 draft retains the unchanged debugger-workflow assets and adds two exact installed-2.0.7 signed-Int32 captures. The owner authorized this copy/media set for commit and branch push on 2026-09-03:
+The local 2.0.8 review set was recaptured from the exact installed candidate on Visual Studio 2022 `17.14.37516.0` on 2026-09-09. It includes the current DataTip, Locals, complete workflow, Automatic Inspector, color Buffer Doctor, and signed-Int32 views:
 
-The English and Korean Overview image URLs are pinned to feature commit `33b0a0b4855ce02aeed05f0726bf0071418611fa`, so the reviewed bytes remain available before any later main-branch integration.
+The English and Korean Overview intentionally use GitHub `main` media URLs. Before pasting the Overview into Marketplace, the authorized media commit must be pushed and every URL must be read back, hash-checked, and visually reviewed. No commit, push, or Marketplace upload is authorized by this checklist entry.
 
 ```text
 docs\images\marketplace-icon.png
@@ -290,13 +293,14 @@ The docked smoke must validate:
 - Non-blank framebuffer capture.
 - Explicit Fit/Manual behavior: new image/Fit/double-click enter Fit; wheel/pan/1:1 enter Manual; resize keeps Fit aspect/margin or Manual center/scale.
 - `Publish-VisualStudioExtension.ps1` must prove that `RawBufferVisualizer.VisualStudio.Vssdk.pkgdef` was generated from the isolated `net472` VSSDK project and points its `CodeBase` to `RawBufferVisualizer.VisualStudio.Vssdk.dll`.
+- The same script must compare the fresh routed Release and VSIX SHA-256 for `netstandard2.0` Core, SDK, ObjectSource, and ObjectSource deps. Entry presence without byte equality is a release failure.
 - The VSIX must not contain the obsolete `RawBufferVisualizer.VisualStudio.Extensibility.pkgdef`; the provider DLL must be packaged under `OutOfProc`.
 - The current registration must use Package GUID `{1977574b-f107-465f-bfd1-5fc022907039}`, contain exactly one `Menus.ctmenu, 2` registration, and reject retired `{c15cc508-0fef-49bb-9478-4d2fdf9f87d2}`.
 - The generated debugger-provider metadata must contain the required `ConcurrentDictionary<,>` registrations for .NET Framework and current .NET.
 - Package initialization must preload asynchronously in the Debugging context, arm passive handoff monitoring without opening or scanning the Tool Window, and keep explicit Tool Window opens idempotent.
 - Package, menu, and ToolWindow registrations must each occur exactly once; each VS instance must have one main extension manifest and no legacy split VSSDK extension.
 - `RawBufferVisualizer.VisualStudio.Vssdk.dll` must reference the qualified `Microsoft.VisualStudio.Threading 17.9.0.0` contract unless every supported host is requalified.
-- The current release record must include installed-VSIX results for VS2022 `17.9`, a current serviced VS2022 instance, and stable VS2026 `18.x` when those environments are available. If one is unavailable, Marketplace copy must say which exact runtime qualification remains pending.
+- The current release record must include installed-VSIX results for VS2022 `17.9`, a current serviced VS2022 instance, and stable VS2026 `18.x` when those environments are available. For 2.0.8, exact VS2022 17.9 direct `CV_32SC1` is mandatory because that is the affected runtime path; a newer-host result cannot substitute for it.
 - `Test-VisualStudioMarketplaceUpdate.ps1` must report no per-machine historical Raw Buffer Visualizer under the selected VS2026 `Common7\IDE\VSExtensions` root. If it finds one, remove/update it through Visual Studio tooling with administrator rights and rerun; never qualify by manually deleting `Program Files` content.
 
 ## Install, Update, Uninstall, Reinstall
@@ -327,7 +331,7 @@ Manual smoke checklist:
 - Reinstall and repeat one debugger inspection.
 - For scripted developer smoke, verify uninstall removes the extension manifest from `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<instance>\Extensions`, then reinstall with `Install-VisualStudioExtension.ps1 -Reinstall`.
 - After update, restart Visual Studio once with no solution open and confirm no `RawBufferVisualizerPackage did not load correctly` popup appears.
-- Mandatory update gate: on a separate eligible PC, begin with exact public `2.0.6`, update to the exact `2.0.7` candidate without uninstall, repair, or `/ResetSkipPkgs`, and prove signed Int32 direct/automatic/collection/padded-stride paths plus the View/menu, first-use ImagePtr handoff, concurrent dictionary handoff, pointer provenance/safety, and Fit/Manual workflows.
+- Mandatory update gate: on a separate eligible PC, begin with exact public `2.0.7`, update to the exact `2.0.8` candidate without uninstall, repair, or `/ResetSkipPkgs`, and prove direct `CV_32SC1` on exact VS2022 17.9 plus signed Int32 automatic/collection/padded-stride paths, View/menu, first-use ImagePtr handoff, concurrent dictionary handoff, pointer provenance/safety, and Fit/Manual workflows.
 - Run `Test-VisualStudioMarketplaceUpdate.ps1`, then run the installed-VSIX `ImagePtrColdStart`, `ConcurrentDictionary`, `AutomaticVisionInspector`, `AutomaticCollections`, and `MultiLibraryHybrid` scenarios. A successful real handoff is the registration acceptance test.
 - Confirm the normal install output contains no manual package-registration step.
 - If a developer PC already has stale VSSDK registration, close Visual Studio and run:
@@ -345,7 +349,7 @@ Use [release-runbook.md](release-runbook.md) for repeatable updates.
 Version bump:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 2.0.7
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 2.0.8
 ```
 
 GitHub setup:
@@ -367,12 +371,12 @@ Workflow:
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.7.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.8.0
 ```
 
 ## Release Notes Template
 
-For the current candidate, paste [marketplace-release-notes-2.0.7.md](marketplace-release-notes-2.0.7.md) into the Marketplace release notes field only after installed qualification and explicit publish approval.
+For the current candidate, paste [marketplace-release-notes-2.0.8.md](marketplace-release-notes-2.0.8.md) into the Marketplace release notes field only after installed qualification and explicit publish approval.
 
 ## Evidence Artifacts
 
@@ -383,7 +387,12 @@ artifacts\perf\vs-docked\visual-studio-docked-performance.json
 artifacts\perf\vs-docked\visual-studio-docked-session.json
 artifacts\perf\vs-docked\visual-studio-docked-session.png
 artifacts\perf\vs-docked\visual-studio-docked-framebuffer.png
-D:\OpenVisionLab-TestData\RawBufferVisualizer\cv32sc1-2.0.7-20260903\final-layout-widths\layout-widths.json
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\candidate-final\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\installed-vs2026-final\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-object-name\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\layout-widths-final\
+D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\restart-verification-20260909-235208\
 artifacts\ui\installed-vsix-new-features\ImagePtrColdStart-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\ConcurrentDictionary-installed-vsix.json
 artifacts\ui\installed-vsix-new-features\AutomaticVisionInspector-installed-vsix.json
@@ -404,15 +413,17 @@ artifacts\ui\installed-vsix-new-features\MultiLibraryHybrid-installed-vsix.json
 - Install/update/uninstall/reinstall has not been checked.
 - The README or listing does not include the MIT license and third-party notice requirement.
 - Visual Studio shows `RawBufferVisualizerPackage did not load correctly` after updating and restarting.
-- The listing or manifest offers `2.0.7` to Visual Studio 2019, VS2022 `17.8` or earlier, a 32-bit host, or a Preview/Insiders host.
+- The listing or manifest offers `2.0.8` to Visual Studio 2019, VS2022 `17.8` or earlier, a 32-bit host, or a Preview/Insiders host.
 - The installed debugger host reports `did not acknowledge the image handoff`.
 - Handoff success can be reported without an explicit ACK, or a NACK reason is unavailable.
 - The generated `.pkgdef` is not owned by the isolated VSSDK project, does not point to `RawBufferVisualizer.VisualStudio.Vssdk.dll`, or is absent from the VSIX.
 - Package, `Menus.ctmenu, 2`, or ToolWindow registration is missing or duplicated.
 - The View menu contains anything other than one open command and one current-frame scan command.
 - A local install passes only after `Repair-VisualStudioExtensionRegistration.ps1` or another manual registry write.
-- README and the 2.0.7 Marketplace Overview disagree about Automatic Inspector's automatic Mat/registered Bitmap boundary or signed Int32 scope.
+- Any required `netstandard2.0` debugger payload differs between the fresh routed Release output and the VSIX, or only entry presence was checked.
+- README and the 2.0.8 Marketplace Overview disagree about Automatic Inspector's automatic Mat/registered Bitmap boundary or signed Int32 scope.
 - Initialized OpenCvSharp/Emgu Mats do not each create one live automatic row, Bitmap/RawBufferSnapshot/RawBufferView creates an automatic row, or **Scan Now** duplicates rows.
 - Fit changes image aspect after resize or Manual resize resets zoom/center.
-- The update from public `2.0.6` to candidate `2.0.7` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
+- The update from public `2.0.7` to candidate `2.0.8` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
+- Exact VS2022 17.9 direct `CV_32SC1` visualization has not passed on the unchanged 2.0.8 candidate.
 - The unchanged candidate has not passed the stable VS2026 installed-runtime core matrix.
