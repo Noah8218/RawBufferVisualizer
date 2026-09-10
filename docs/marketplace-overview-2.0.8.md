@@ -4,13 +4,13 @@
 
 Inspect image variables and raw 2D buffers directly inside Visual Studio at a breakpoint. Raw Buffer Visualizer brings `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed frames, snapshots, and supported collections into one docked viewer without temporary image files or debug-only conversion code.
 
-![Open an OpenCvSharp Mat from its code DataTip](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-datatip-open.gif)
+![Open an OpenCvSharp Mat from its code DataTip](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/raw-buffer-visualizer-datatip-open.gif)
 
 The DataTip example opens a real 1280 x 720 industrial-machine image and retains the exact `dataTipIndustrialMat` expression name on its image card.
 
-![Open a real industrial image from Visual Studio Locals](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-breakpoint-open.gif)
+![Open a real industrial image from Visual Studio Locals](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/raw-buffer-visualizer-breakpoint-open.gif)
 
-![Raw Buffer Visualizer debugger workflow](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
+![Raw Buffer Visualizer debugger workflow](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/raw-buffer-visualizer-demo.gif)
 
 ## What's New In 2.0.8
 
@@ -25,9 +25,9 @@ Version `2.0.8` makes signed 32-bit, single-channel matrix visualization reliabl
 - Automatic Inspector limits discovery to 128 candidates and opens the first eight images or a soft two-second batch before offering **Load next 8**, **Load all this Break**, and **Stop**.
 - Repeated Break, F10, and **Scan Now** operations refresh matching rows in place instead of duplicating them. Cached type analysis improves repeated scans but never turns a mapping-required object into an automatic open.
 
-![Open a signed Int32 industrial OpenCvSharp Mat](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/int32-industrial-opencv-direct.png)
+![Open a signed Int32 industrial OpenCvSharp Mat](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/int32-industrial-opencv-direct.png)
 
-![Automatic inspection of signed Int32 matrices and a padded-stride frame](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/int32-industrial-automatic-matrix.png)
+![Automatic inspection of signed Int32 matrices and a padded-stride frame](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/int32-industrial-automatic-matrix.png)
 
 `CV_32SC1` means one channel containing signed 32-bit integers. It does not mean 32 channels. Multi-channel signed formats such as `CV_32SC2`, `CV_32SC3`, and `CV_32SC4` are not interpreted as images by this release.
 
@@ -72,9 +72,9 @@ OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` 
 
 If a raw image appears sheared, too dark, scrambled, or incorrectly packed, open `Inspector > Interpret > Diagnose Buffer`. Buffer Doctor ranks plausible dimensions, stride, format, valid bits, and byte order from bounded samples without changing the paused program's bytes.
 
-![Buffer Doctor candidates for an industrial PCB buffer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-before.png)
+![Buffer Doctor candidates for an industrial PCB buffer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/industrial-pcb-buffer-doctor-before.png)
 
-![Recovered color PCB image after applying the correct padded stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-recovered.png)
+![Recovered color PCB image after applying the correct padded stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## Visual Studio Compatibility
 

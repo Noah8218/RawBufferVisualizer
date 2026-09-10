@@ -4,13 +4,13 @@
 
 중단점에서 이미지 변수와 2D 원시 버퍼를 Visual Studio 안에서 바로 확인합니다. `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, 포인터 기반 프레임, 스냅샷, 지원 컬렉션을 임시 이미지 파일이나 디버그 전용 변환 코드 없이 하나의 도킹 뷰어로 모읍니다.
 
-![코드 DataTip에서 OpenCvSharp Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-datatip-open.gif)
+![코드 DataTip에서 OpenCvSharp Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/raw-buffer-visualizer-datatip-open.gif)
 
 DataTip 예시는 실제 1280 x 720 산업용 장비 이미지를 열고 이미지 카드에 정확한 `dataTipIndustrialMat` 식 이름을 유지합니다.
 
-![Visual Studio Locals에서 실제 산업 이미지 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-breakpoint-open.gif)
+![Visual Studio Locals에서 실제 산업 이미지 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/raw-buffer-visualizer-breakpoint-open.gif)
 
-![Raw Buffer Visualizer 디버깅 흐름](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/raw-buffer-visualizer-demo.gif)
+![Raw Buffer Visualizer 디버깅 흐름](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/raw-buffer-visualizer-demo.gif)
 
 ## 2.0.8의 새로운 기능
 
@@ -25,9 +25,9 @@ DataTip 예시는 실제 1280 x 720 산업용 장비 이미지를 열고 이미�
 - Automatic Inspector는 최대 128개 후보를 탐색하고 처음 8개 또는 최대 2초 분량을 먼저 연 뒤 **Load next 8**, **Load all this Break**, **Stop**을 제공합니다.
 - Break, F10, **Scan Now**를 반복하면 같은 행을 중복 생성하지 않고 제자리에서 갱신합니다. 형식 분석 캐시는 반복 탐색을 줄일 뿐, 매핑이 필요한 객체를 자동으로 여는 근거로 사용하지 않습니다.
 
-![signed Int32 산업용 OpenCvSharp Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/int32-industrial-opencv-direct.png)
+![signed Int32 산업용 OpenCvSharp Mat 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/int32-industrial-opencv-direct.png)
 
-![signed Int32 행렬과 패딩 stride 프레임 자동 검사](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/int32-industrial-automatic-matrix.png)
+![signed Int32 행렬과 패딩 stride 프레임 자동 검사](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/int32-industrial-automatic-matrix.png)
 
 `CV_32SC1`은 signed 32비트 정수 하나를 갖는 1채널이라는 뜻입니다. 32채널이라는 뜻이 아닙니다. `CV_32SC2`, `CV_32SC3`, `CV_32SC4` 같은 signed 다중 채널 형식은 이 릴리스에서 이미지로 해석하지 않습니다.
 
@@ -72,9 +72,9 @@ OpenCvSharp와 Emgu 행은 네이티브 객체 `Ptr`과 실제 이미지 바이�
 
 원시 이미지가 기울어지거나 어둡거나 깨져 보이면 `Inspector > Interpret > Diagnose Buffer`를 엽니다. Buffer Doctor는 제한된 샘플로 가능한 크기, stride, 형식, 유효 비트, 바이트 순서를 순위화하며 일시 중지된 프로그램의 원본 바이트는 바꾸지 않습니다.
 
-![산업용 PCB 버퍼의 Buffer Doctor 후보](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-before.png)
+![산업용 PCB 버퍼의 Buffer Doctor 후보](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/industrial-pcb-buffer-doctor-before.png)
 
-![올바른 패딩 stride 적용 후 복구된 컬러 PCB](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/industrial-pcb-buffer-doctor-recovered.png)
+![올바른 패딩 stride 적용 후 복구된 컬러 PCB](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/720ceec0ec72b603a08987f0e0436b5fa0adbbb9/docs/images/industrial-pcb-buffer-doctor-recovered.png)
 
 ## Visual Studio 호환성
 

@@ -1,6 +1,6 @@
 # Raw Buffer Visualizer 2.0.8 Release Qualification
 
-Opened: 2026-09-04 KST  
+Opened: 2026-09-04 KST
 Last updated: 2026-09-10 KST
 
 ## 2026-09-09 Final Local Candidate
