@@ -83,7 +83,7 @@ Scope: Final local 2.0.8 VSIX with corrected CV_32SC1 payload, bounded increment
 Acceptance criteria: routed Release package -> pass; fresh payload/hash gates -> pass; exact VSIX/install equality -> 17/17 on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026; aggregate self-tests -> pass; final installed Automatic Inspector/50-item collections/mixed libraries/Int32/ImagePtr/ConcurrentDictionary/release/environment scenarios -> pass on exact VS2022 17.9 and stable VS2026; final installed industrial Bitmap/Automatic Inspector/Doctor, code DataTip, and direct/automatic/padded Int32 -> pass on serviced VS2022; current 2.0.8 media refresh -> pass; 320/348/540/900/1160 layout -> pass at 96 DPI; exact VS2022 17.9 -> pass; 125%-200% DPI -> blocked by unavailable local scales.
 Verification: Publish-VisualStudioExtension.ps1; RawBufferVisualizer.Tests net8.0-windows; SmokeInstalledVsixNewFeatures.ps1 final scenario matrices on exact VS2022 17.9, serviced VS2022 17.14, and stable VS2026; SmokeDockedLayoutWidths.ps1; Test-VisualStudioMarketplaceUpdate.ps1; Test-ReleaseCommunication.ps1; exact-package Marketplace dry run; SHA-256 archive/install comparisons; ActivityLog review; media hash/dimension/frame/duration checks; decoded-GIF and fresh-screenshot visual review.
 Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\candidate-final, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\vs2022-17.9-final, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\installed-vs2026-final, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-object-name, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\layout-widths-final, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\restart-verification-20260909-235208, and D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-dry-run-20260910-final.
-Boundary / next dependency: The exact Visual Studio 2022 17.9 runtime gate is complete. Marketplace publication approval still requires the recorded 125%, 150%, 175%, and 200% DPI checks. The completed source/media batch and immutable-link correction are pushed to `origin/agent/vs2022-17.9-compat` and integrated into local `main`; no main push, CI dispatch, Marketplace upload, tag, release, or deployment was performed.
+Boundary / next dependency: The exact Visual Studio 2022 17.9 runtime gate is complete. Marketplace publication approval still requires the recorded 125%, 150%, 175%, and 200% DPI checks. The completed source/media batch and immutable-link correction are on `origin/main`; integration-commit CI passed, and no Marketplace upload, tag, release, or deployment was performed.
 ```
 
 ## 2026-09-10 Feature-Branch And Marketplace Media Handoff
@@ -106,6 +106,17 @@ Acceptance criteria: origin/main is an ancestor of the reviewed feature head -> 
 Verification: git fetch; git merge --ff-only origin/main; git merge --ff-only agent/vs2022-17.9-compat; README diff and local media-target inspection; release communication check and final clean-worktree/head review.
 Evidence: local main contains feature head fec2c87227d24e9bdd4f3904bb6231f36b501b91; README.md; docs/images; docs/video; this release qualification record.
 Boundary / next dependency: The approved local main integration is complete. origin/main remains e236278f642ea061e7a49e32256ad0e953544084 until a separate main-push authorization; CI, Marketplace upload/publication, tag creation/push, GitHub Release, and deployment were not performed.
+```
+
+## 2026-09-10 Main Push Handoff
+
+```text
+Status: Complete
+Scope: Push the reviewed Raw Buffer Visualizer 2.0.8 main integration to origin/main without creating a tag, release, Marketplace publication, or deployment.
+Acceptance criteria: pre-push worktree -> clean; origin/main baseline -> e236278; push -> fast-forward to b11448b; remote readback -> exact b11448b; downstream behavior -> CI only, with Marketplace and release workflows not triggered; integration-commit CI -> pass.
+Verification: git fetch origin main; local/remote divergence 0/8; hook and workflow trigger inspection; git push origin refs/heads/main:refs/heads/main; git ls-remote origin refs/heads/main; GitHub Actions run 34481599292 watched to successful completion.
+Evidence: integration commit b11448bab7ba5416e45b3b7d971a816acb3c3dbc on origin/main; CI run https://github.com/Noah8218/RawBufferVisualizer/actions/runs/34481599292.
+Boundary / next dependency: Main push and integration-commit CI are complete. Marketplace upload/publication, tag creation/push, GitHub Release, and deployment were not performed.
 ```
 
 > The sections below are preserved historical 2.0.8 evidence. Their package paths and hashes are superseded by the final local candidate above and must not be uploaded as the current candidate.
