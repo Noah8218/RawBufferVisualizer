@@ -53,6 +53,7 @@ New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 $rawPath = Join-Path $outputRoot "automatic-inspector-mono8.raw"
 $metadataPath = Join-Path $outputRoot "automatic-inspector-mono8.rbuf.json"
 $capturePath = Join-Path $outputRoot "automatic-inspector-$WindowWidth.png"
+$progressCapturePath = Join-Path $outputRoot "automatic-inspector-$WindowWidth-progress.png"
 $resultPath = Join-Path $outputRoot "automatic-inspector-layout.json"
 
 $width = 320
@@ -79,6 +80,23 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Drawing
+Add-Type -AssemblyName System.Windows.Forms
+
+$screens = @([System.Windows.Forms.Screen]::AllScreens)
+$targetScreen = if ($screens.Count -eq 2) {
+    $screens |
+        Sort-Object @{ Expression = { $_.WorkingArea.Width * $_.WorkingArea.Height } },
+                    @{ Expression = { $_.WorkingArea.Left } } |
+        Select-Object -First 1
+}
+else {
+    $screens | Select-Object -First 1
+}
+if ($null -eq $targetScreen) {
+    throw "No Windows monitor was reported for the layout smoke test."
+}
+$targetX = $targetScreen.WorkingArea.Left + 20
+$targetY = $targetScreen.WorkingArea.Top + 20
 
 $interopCandidates = @(
     "${env:ProgramFiles}\Microsoft Visual Studio\2022\Enterprise\Common7\IDE\PublicAssemblies\Microsoft.VisualStudio.Interop.dll",
@@ -99,6 +117,7 @@ public static class AutomaticVisionInspectorLayoutNative {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+    [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr hWnd, IntPtr hdcBlt, uint nFlags);
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
     public static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
@@ -156,10 +175,13 @@ $window = New-Object System.Windows.Window
 $window.Title = "Automatic Vision Inspector Layout"
 $window.Width = $WindowWidth
 $window.Height = 600
-$window.Left = 20
-$window.Top = 20
+$window.Left = $targetX
+$window.Top = $targetY
 $window.Topmost = $true
 $window.Content = $control
+if ($WindowWidth -lt 540) {
+    $control.FindName("ReleaseAnnouncementBanner").Visibility = [System.Windows.Visibility]::Collapsed
+}
 $window.Show()
 Wait-Dispatcher 400
 $control.OpenPath($metadataPath)
@@ -216,20 +238,49 @@ $setInspection.Invoke($document, $arguments) | Out-Null
 $control.FindName("ImageList").Items.Refresh()
 $updatePanel = $control.GetType().GetMethod("UpdateAutomaticInspectionPanel", $bindingFlags)
 $updatePanel.Invoke($control, @($document)) | Out-Null
+
+$candidateCountText = $control.FindName("AutomaticCandidateCountText")
+$batchSummaryText = $control.FindName("AutomaticBatchSummaryText")
+$batchActionsPanel = $control.FindName("AutomaticBatchActionsPanel")
+$loadNextButton = $control.FindName("AutomaticLoadNextButton")
+$loadAllButton = $control.FindName("AutomaticLoadAllButton")
+if ($null -eq $candidateCountText -or
+    $null -eq $batchSummaryText -or
+    $null -eq $batchActionsPanel -or
+    $null -eq $loadNextButton -or
+    $null -eq $loadAllButton) {
+    throw "Automatic Vision Inspector batch controls were not found."
+}
+$candidateCountText.Text = "50 image objects detected"
+$candidateCountText.Visibility = [System.Windows.Visibility]::Visible
+$batchSummaryText.Text = "8 refreshed · 42 deferred · 0 failed"
+$batchSummaryText.Visibility = [System.Windows.Visibility]::Visible
+$batchActionsPanel.Visibility = [System.Windows.Visibility]::Visible
 Wait-Dispatcher 300
 
 $helper = New-Object System.Windows.Interop.WindowInteropHelper($window)
 [AutomaticVisionInspectorLayoutNative]::SetWindowPos(
     $helper.Handle,
     [AutomaticVisionInspectorLayoutNative]::HWND_TOPMOST,
-    20,
-    20,
+    $targetX,
+    $targetY,
     $WindowWidth,
     600,
     0x0040) | Out-Null
 [AutomaticVisionInspectorLayoutNative]::SetForegroundWindow($helper.Handle) | Out-Null
 Wait-Dispatcher 300
 Capture-Window $helper.Handle $capturePath
+
+$windowRect = New-Object AutomaticVisionInspectorLayoutNative+RECT
+[AutomaticVisionInspectorLayoutNative]::GetWindowRect($helper.Handle, [ref]$windowRect) | Out-Null
+$intersectsTargetMonitor =
+    $windowRect.Right -gt $targetScreen.Bounds.Left -and
+    $windowRect.Left -lt $targetScreen.Bounds.Right -and
+    $windowRect.Bottom -gt $targetScreen.Bounds.Top -and
+    $windowRect.Top -lt $targetScreen.Bounds.Bottom
+if (-not $intersectsTargetMonitor) {
+    throw "The layout smoke window did not intersect the selected monitor $($targetScreen.DeviceName)."
+}
 
 $panel = $control.FindName("AutomaticInspectionPanel")
 $collectionBox = $control.FindName("IncludeImageCollectionsBox")
@@ -241,18 +292,54 @@ if (($expectFullInspector -and $panel.Visibility -ne [System.Windows.Visibility]
     ($null -ne $collectionBox) -or
     ($expectFullInspector -and $confidence -ne "Confidence 96%") -or
     ($expectFullInspector -and -not $membersText.Contains("Info.Width")) -or
-    ($expectFullInspector -and -not $validation.Contains("validation passed"))) {
+    ($expectFullInspector -and -not $validation.Contains("validation passed")) -or
+    ($candidateCountText.Text -ne "50 image objects detected") -or
+    ($batchSummaryText.Text -ne "8 refreshed · 42 deferred · 0 failed") -or
+    ($batchActionsPanel.Visibility -ne [System.Windows.Visibility]::Visible) -or
+    ($loadNextButton.ActualWidth -le 0) -or
+    ($loadAllButton.ActualWidth -le 0)) {
     throw "Automatic Vision Inspector panel did not render the expected evidence."
+}
+$batchActionsVisibleBeforeProgress = $batchActionsPanel.Visibility -eq [System.Windows.Visibility]::Visible
+
+$progressPanel = $control.FindName("AutomaticScanProgressPanel")
+$progressText = $control.FindName("AutomaticScanProgressText")
+$stopButton = $control.FindName("AutomaticStopButton")
+$progressText.Text = "Scanning images 3 / 8..."
+$progressPanel.Visibility = [System.Windows.Visibility]::Visible
+$stopButton.IsEnabled = $true
+$batchActionsPanel.Visibility = [System.Windows.Visibility]::Collapsed
+Wait-Dispatcher 300
+Capture-Window $helper.Handle $progressCapturePath
+if ($progressPanel.Visibility -ne [System.Windows.Visibility]::Visible -or
+    $progressText.Text -ne "Scanning images 3 / 8..." -or
+    $stopButton.ActualWidth -le 0 -or
+    $batchActionsPanel.Visibility -ne [System.Windows.Visibility]::Collapsed) {
+    throw "Automatic Vision Inspector progress state did not render the expected evidence."
 }
 
 @{
     Capture = $capturePath
+    ProgressCapture = $progressCapturePath
     WindowWidth = $WindowWidth
     PanelVisible = ($panel.Visibility -eq [System.Windows.Visibility]::Visible)
     CollectionOptionAbsent = ($null -eq $collectionBox)
     Confidence = $confidence
     Members = $membersText
     Validation = $validation
+    CandidateCount = $candidateCountText.Text
+    BatchSummary = $batchSummaryText.Text
+    BatchActionsVisible = $batchActionsVisibleBeforeProgress
+    LoadNextButtonWidth = $loadNextButton.ActualWidth
+    LoadAllButtonWidth = $loadAllButton.ActualWidth
+    Progress = $progressText.Text
+    ProgressVisible = ($progressPanel.Visibility -eq [System.Windows.Visibility]::Visible)
+    StopButtonWidth = $stopButton.ActualWidth
+    Monitor = $targetScreen.DeviceName
+    WindowDpi = [AutomaticVisionInspectorLayoutNative]::GetDpiForWindow($helper.Handle)
+    MonitorBounds = $targetScreen.Bounds.ToString()
+    MonitorWorkingArea = $targetScreen.WorkingArea.ToString()
+    WindowBounds = "{X=$($windowRect.Left),Y=$($windowRect.Top),Width=$($windowRect.Right-$windowRect.Left),Height=$($windowRect.Bottom-$windowRect.Top)}"
 } | ConvertTo-Json | Set-Content -LiteralPath $resultPath -Encoding UTF8
 
 $window.Close()

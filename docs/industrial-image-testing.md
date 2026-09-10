@@ -171,3 +171,26 @@ This proves real photographic content through the supported in-memory representa
 - Capture SHA-256: DataTip hover `78BEE900316D5B74ABF7443789DF06BB255E10EA61219531AD890CA5797DA212`; visualizer glyph `16C37E630FE052C36157AAE80A98B4CECE077AA93B71B364FEEAFBE67F4B9AEC`; direct result `7FDF4E76841D75F9CA87D6D5D514CC568CBD432F0DB3A91F260C1C4A81031125`; automatic matrix `898DC75F7159A11FCEA62DCBBFF1221F33CA2F4A88C00F57993826CF251E00D2`; padded stride `95CD70A340E7EEB8F773D747DE71D0A0B43FC9DE2A1B90107683DD0CF6902020`.
 
 The reviewed direct and automatic captures are tracked as `docs/images/int32-industrial-opencv-direct.png` and `docs/images/int32-industrial-automatic-matrix.png`. The owner approved them for the 2.0.7 README and Marketplace Overview on 2026-09-03. They retain the complete Visual Studio context deliberately so the breakpoint, object names, addresses, image list, format, stride, and real image can be evaluated together.
+
+## Documentation Refresh - 2026-09-10 (2.0.8)
+
+- Candidate: exact final `2.0.8.0` VSIX, 2,521,139 bytes, SHA-256 `612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2`.
+- Host: VS2022 Community `17.14.37516.0`; dynamically selected `\\.\DISPLAY2` with bounds `-1920,365`, `1920 x 1080`, and verified Visual Studio rectangle `-1900,385`, `1880 x 1040`.
+- Installed scenarios: Industrial Marketplace passed registered Bitmap, five Automatic Inspector results, RGB pixel inspection, bad-stride diagnosis, and color recovery; the final Industrial DataTip retry passed the actual code-token hover, magnifying-glass click, and exact `dataTipIndustrialMat` card name; `Int32Industrial-retry2` passed direct/automatic/padded `CV_32SC1`. All three final records reported zero package-protocol errors.
+- GIFs: DataTip 960 x 532, 12 frames at 4 fps, 3.0 seconds, 195,057 bytes; Locals 960 x 532, 13 frames at 4 fps, 3.25 seconds, 456,412 bytes; complete workflow 960 x 532, 24 frames at 4 fps, 6.0 seconds, 486,571 bytes. The MP4 is H.264/yuv420p, 960 x 532 at 4 fps, 6.0 seconds, 208,144 bytes.
+- Tracked GIF/video SHA-256: DataTip `1C0A2F1EDA707F979E0E536ED93EF73DECD848A39E4F51837CF599BB1800A0F9`; Locals `7C24C08D3FFE1A9867900071E7E2EC2FCCE7605B41FEA8322816407DC35A6DD2`; complete workflow `2FC407646CE21CB55B411816102063ED2D3552818B1B79D5F0B72A52A53665E3`; MP4 `4D239318B7CEAE6C9E4648C4F292321D88E020B7C853A3D10DD7658415F2BA5A`.
+- Static screenshots: all are 1880 x 1040. SHA-256: Automatic Inspector/pixel `516A736D29D29CA358438ED49A37963BF13B142FB4022FC55BCA3C7BB2B10DF3`; Doctor before `10652A051B6685DF707FDD1D1CDC6246E29F80A17E996F106D9C2CB12C389090`; Doctor recovered `0676F10D1BAC8B96D5AA19A54227E90C7471723F091A04641FFC25CE1463AE80`; Int32 direct `60E78077461C87381036B3D48BCB851AE05789D6FA2DC0CA25E77EEAE97FB831`; Int32 automatic `8D3991907A677A139AAE1619B6C983AC570DB8E684DDC8D021E869B963A37F82`.
+- Visual review: the first palette-optimized encode produced mostly white later scenes and was rejected. Every decoded frame of the final opaque-palette GIFs was reviewed before the tracked files were replaced.
+- DataTip fixture audit: the earlier media fixture aliased one Mat under two debugger names and therefore showed the resolver's safe `Mat` fallback. A first distinct-object retry placed the hover target on a multiline initializer and did not open; the one-line final retry passed with `openedObjectName = dataTipIndustrialMat`. The unchanged generic industrial branch was rerun afterward and retained five automatic objects, color pixels, stride recovery, and zero protocol errors.
+- Evidence roots: `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final` and the expression-name retry at `D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-object-name`.
+
+## 2.0.8 Documentation Refresh Closure
+
+```text
+Status: Complete
+Scope: Replace the English/Korean 2.0.8 Overview media with exact installed-2.0.8 VS2022 captures, retain distinct DataTip and Locals entry flows, and show the color Buffer Doctor and signed-Int32 workflows.
+Acceptance criteria: actual DataTip token/tooltip/glyph/click/result visible -> pass; Locals workflow retained -> pass; current Automatic Inspector and responsive image-card UI visible -> pass; Doctor diagnosis and color recovery visible -> pass; signed Int32 direct/automatic results visible -> pass; final GIF frames free of palette corruption -> pass; English/Korean Overview paths aligned -> pass.
+Verification: installed IndustrialMarketplace, IndustrialDataTip, and Int32Industrial-retry2 scenarios; measured dimensions/frame rate/duration/size/hash; decoded-frame and static-capture visual review; repository media hash comparison.
+Evidence: D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-final, D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\marketplace-media-vs2022-object-name, and the tracked hashes above.
+Boundary / next dependency: This media closure does not prove exact VS2022 17.9 runtime or 125%-200% DPI. No commit, push, CI dispatch, Marketplace upload, tag, release, or deployment was performed.
+```

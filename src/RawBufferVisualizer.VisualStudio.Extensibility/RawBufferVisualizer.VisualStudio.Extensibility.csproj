@@ -5,9 +5,9 @@
     <IsPackable>false</IsPackable>
     <CreateVsixContainer>false</CreateVsixContainer>
     <AssemblyVSIXSubPath>OutOfProc</AssemblyVSIXSubPath>
-    <AssemblyVersion>2.0.7.0</AssemblyVersion>
-    <FileVersion>2.0.7.0</FileVersion>
-    <Version>2.0.7</Version>
+    <AssemblyVersion>2.0.8.0</AssemblyVersion>
+    <FileVersion>2.0.8.0</FileVersion>
+    <Version>2.0.8</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -31,11 +31,14 @@
     <MSBuild Projects="..\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj"
              Targets="Build"
              Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
-    <Error Condition="!Exists('..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll')"
+    <PropertyGroup>
+      <_ObjectSourceVsixOutputDirectory>$(BaseOutputPath)..\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0</_ObjectSourceVsixOutputDirectory>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(_ObjectSourceVsixOutputDirectory)\RawBufferVisualizer.VisualStudio.ObjectSource.dll')"
            Text="The netstandard2.0 debugger object source was not built for the VSIX." />
     <ItemGroup>
-      <_ObjectSourceVsixPayload Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.dll" />
-      <_ObjectSourceVsixPayload Include="..\..\.build\bin\RawBufferVisualizer.VisualStudio.ObjectSource\$(Configuration)\netstandard2.0\*.deps.json" />
+      <_ObjectSourceVsixPayload Include="$(_ObjectSourceVsixOutputDirectory)\*.dll" />
+      <_ObjectSourceVsixPayload Include="$(_ObjectSourceVsixOutputDirectory)\*.deps.json" />
       <Content Include="@(_ObjectSourceVsixPayload)">
         <Link>netstandard2.0\%(_ObjectSourceVsixPayload.Filename)%(_ObjectSourceVsixPayload.Extension)</Link>
         <VSIXSubPath>netstandard2.0</VSIXSubPath>

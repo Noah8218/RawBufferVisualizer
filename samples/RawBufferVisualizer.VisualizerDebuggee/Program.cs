@@ -74,11 +74,20 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     Array.IndexOf(args, "--no-break") < 0);
             }
 
+            if (TryGetArgument(args, "--industrial-datatip-debug", out var industrialDataTipImagePath))
+            {
+                return RunIndustrialImageDebug(
+                    industrialDataTipImagePath,
+                    Array.IndexOf(args, "--no-break") < 0,
+                    useDistinctDataTipMat: true);
+            }
+
             if (TryGetArgument(args, "--industrial-image-debug", out var industrialImagePath))
             {
                 return RunIndustrialImageDebug(
                     industrialImagePath,
-                    Array.IndexOf(args, "--no-break") < 0);
+                    Array.IndexOf(args, "--no-break") < 0,
+                    useDistinctDataTipMat: false);
             }
 
             if (TryGetArgument(args, "--emgu-tiff-smoke", out var tiffPath))
@@ -489,7 +498,13 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             {
                 PrintCase(
                     ref caseNumber,
-                    "partialOpenCvMatList (3 valid, 2 failed) and emguMatArray (2 valid)");
+                    "partialOpenCvMatList (46 valid, 2 failed) and emguMatArray (2 valid)");
+                Debugger.Break();
+
+                PrepareSecondAutomaticCollectionBreak(partialOpenCvMatList);
+                PrintCase(
+                    ref caseNumber,
+                    "partialOpenCvMatList changed to 40 valid items; item 0 has a new pointer and size");
                 Debugger.Break();
                 GC.KeepAlive(partialOpenCvMatList);
                 GC.KeepAlive(emguMatArray);
@@ -511,16 +526,45 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
         private static List<Mat> CreatePartialOpenCvMatList()
         {
-            var disposed = CreateMatMono8(64, 48);
-            disposed.Dispose();
-            return new List<Mat>
+            var result = new List<Mat>();
+            for (var index = 0; index < 46; index++)
             {
-                CreateMatMono8(64, 48),
-                CreateMatBgr24(64, 48),
-                null!,
-                CreateMatBgra32(64, 48),
-                disposed
-            };
+                switch (index % 3)
+                {
+                    case 0:
+                        result.Add(CreateMatMono8(640, 480));
+                        break;
+                    case 1:
+                        result.Add(CreateMatBgr24(640, 480));
+                        break;
+                    default:
+                        result.Add(CreateMatBgra32(640, 480));
+                        break;
+                }
+            }
+
+            var disposed = CreateMatMono8(640, 480);
+            disposed.Dispose();
+            result.Add(null!);
+            result.Add(disposed);
+            return result;
+        }
+
+        private static void PrepareSecondAutomaticCollectionBreak(List<Mat> mats)
+        {
+            var previousFirst = mats[0];
+            mats[0] = CreateMatBgr24(96, 72);
+            previousFirst.Dispose();
+            mats[1].SetTo(new Scalar(23, 137, 211));
+            for (var index = mats.Count - 1; index >= 40; index--)
+            {
+                if (index < 46)
+                {
+                    mats[index]?.Dispose();
+                }
+
+                mats.RemoveAt(index);
+            }
         }
 
         private static Emgu.CV.Mat[] CreateAutomaticEmguMatArray()
@@ -532,7 +576,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             };
         }
 
-        private static int RunIndustrialImageDebug(string path, bool shouldBreak)
+        private static int RunIndustrialImageDebug(string path, bool shouldBreak, bool useDistinctDataTipMat)
         {
             if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
             {
@@ -543,6 +587,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             var pinnedViews = new List<PinnedRawBufferView>();
             Bitmap? industrialBitmap = null;
             Mat? industrialOpenCvMat = null;
+            Mat? dataTipIndustrialMat = null;
             Emgu.CV.Mat? industrialEmguMat = null;
             try
             {
@@ -602,7 +647,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     ", BGR24/Mono8; Buffer Doctor BGR24 " +
                     doctorWidth.ToString() + " x " + doctorHeight.ToString() +
                     " with " + doctorPadding.ToString() + " bytes of row padding.");
-                var dataTipIndustrialMat = industrialOpenCvMat;
+                dataTipIndustrialMat = useDistinctDataTipMat ? CreateMat(width, height, MatType.CV_8UC3, bgr24) : industrialOpenCvMat;
                 if (shouldBreak)
                 {
                     Debugger.Break();
@@ -627,6 +672,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             }
             finally
             {
+                if (!ReferenceEquals(dataTipIndustrialMat, industrialOpenCvMat))
+                {
+                    dataTipIndustrialMat?.Dispose();
+                }
+
                 industrialOpenCvMat?.Dispose();
                 industrialEmguMat?.Dispose();
                 industrialBitmap?.Dispose();

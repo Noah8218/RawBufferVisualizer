@@ -10,7 +10,7 @@ namespace RawBufferVisualizer.Tests
             RecognizesOnlySupportedOneDimensionalArrays();
             RecognizesSupportedListTypeSpellings();
             RejectsBroadOrUnsafeCollectionShapes();
-            EnforcesBoundedScheduling();
+            SupportsLargeDiscoveryAndBoundedBatches();
             BuildsStableElementExpressions();
         }
 
@@ -59,21 +59,34 @@ namespace RawBufferVisualizer.Tests
             AssertNotSupported("Vendor.Camera.MatList");
         }
 
-        private static void EnforcesBoundedScheduling()
+        private static void SupportsLargeDiscoveryAndBoundedBatches()
         {
             Assert(
-                AutomaticImageCollectionPolicy.GetScheduledItemCount(5, 16) == 5,
+                AutomaticImageCollectionPolicy.GetScheduledItemCount(5, 128) == 5,
                 "A small collection should be inspected in full.");
             Assert(
-                AutomaticImageCollectionPolicy.GetScheduledItemCount(20, 16)
-                    == AutomaticImageCollectionPolicy.MaximumItemsPerCollection,
-                "The per-collection limit was not enforced.");
+                AutomaticImageCollectionPolicy.GetScheduledItemCount(50, 128) == 50,
+                "A 50-image collection should be discoverable before UI batching.");
             Assert(
-                AutomaticImageCollectionPolicy.GetScheduledItemCount(8, 3) == 3,
+                AutomaticImageCollectionPolicy.GetScheduledItemCount(200, 128)
+                    == AutomaticImageCollectionPolicy.MaximumItemsPerScan,
+                "The per-scan discovery limit was not enforced.");
+            Assert(
+                AutomaticImageCollectionPolicy.GetScheduledItemCount(50, 3) == 3,
                 "The per-scan remaining capacity was not enforced.");
             Assert(
                 AutomaticImageCollectionPolicy.GetScheduledItemCount(8, 0) == 0,
                 "An exhausted scan budget should schedule no collection items.");
+            Assert(
+                AutomaticImageCollectionPolicy.GetBatchItemCount(50)
+                    == AutomaticImageCollectionPolicy.MaximumItemsPerBatch,
+                "The initial UI batch should remain bounded to eight items.");
+            Assert(
+                AutomaticImageCollectionPolicy.GetBatchItemCount(5) == 5,
+                "A small remaining batch should be loaded in full.");
+            Assert(
+                AutomaticImageCollectionPolicy.GetBatchItemCount(0) == 0,
+                "An empty batch should schedule no UI work.");
         }
 
         private static void BuildsStableElementExpressions()

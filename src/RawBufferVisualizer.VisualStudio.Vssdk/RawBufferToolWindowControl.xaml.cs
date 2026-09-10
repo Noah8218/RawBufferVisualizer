@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -67,6 +68,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool _automationProbeRunning;
         private bool _automaticScanPending;
         private bool _automaticScanRunning;
+        private bool _automaticScanDispatchQueued;
+        private bool _automaticStopRequested;
+        private readonly DebuggerHandoffSessionGate _automaticScanSessionGate =
+            new DebuggerHandoffSessionGate();
+        private AutomaticVisionScanResult? _automaticScanResult;
+        private long _automaticScanGeneration = -1;
+        private int _automaticScanCursor;
+        private int _automaticRefreshedCount;
+        private int _automaticMappingCount;
+        private int _automaticFailedCount;
+        private int _automaticHiddenCount;
         private RawOpenGlViewState? _linkedViewState;
         private ImageDocument? _compareA;
         private ImageDocument? _compareB;
@@ -161,255 +173,317 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            SetAutomaticScanStatus("Scanning current stack frame...");
-            AutomaticVisionScanResult scan;
+            _automaticScanSessionGate.EnterRunMode();
+            _automaticScanSessionGate.EnterBreakMode();
+            _automaticStopRequested = true;
+            _automaticScanPending = true;
+            QueueAutomaticScan();
+        }
+
+        private async Task RunAutomaticScanAsync(long generation)
+        {
+#pragma warning disable VSTHRD109
+            ThreadHelper.ThrowIfNotOnUIThread();
+#pragma warning restore VSTHRD109
+            if (_automaticScanRunning || !IsAutomaticScanCurrent(generation))
+            {
+                return;
+            }
+
+            var activeDocumentBeforeScan = _activeDocument;
+            _automaticScanRunning = true;
+            _automaticStopRequested = false;
+            SetAutomaticScanBusy(true, "Discovering image objects...");
+            SetAutomaticScanStatus("Scanning the current stack frame. Existing rows remain available while values refresh.");
             try
             {
-                scan = _automaticVisionInspector.Scan(
-                    _dte.Debugger,
-                    true);
+                await Dispatcher.Yield(DispatcherPriority.Render);
+                if (!IsAutomaticScanCurrent(generation))
+                {
+                    return;
+                }
+
+                var scan = _automaticVisionInspector.Scan(_dte!.Debugger, true);
+                if (!IsAutomaticScanCurrent(generation))
+                {
+                    return;
+                }
+
+                RawBufferVisualizerPackageLog.Write(string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Automatic scan discovered {0} candidate(s) from {1} local(s) and {2} argument(s); {3} duplicate expression(s), {4} bounded candidate(s), {5} deferred type analysis(es)",
+                    scan.Inspections.Count,
+                    scan.LocalExpressionCount,
+                    scan.ArgumentExpressionCount,
+                    scan.DuplicateExpressionCount,
+                    scan.TruncatedCandidateCount,
+                    scan.DeferredTypeAnalysisCount));
+                AutomaticFrameText.Text = string.IsNullOrWhiteSpace(scan.FrameDisplayName)
+                    ? "Current stack frame"
+                    : scan.FrameDisplayName;
+                ReconcileAutomaticInspectionDocuments(scan);
+                _automaticScanResult = scan;
+                _automaticScanGeneration = generation;
+                _automaticScanCursor = 0;
+                _automaticRefreshedCount = 0;
+                _automaticMappingCount = 0;
+                _automaticFailedCount = 0;
+                _automaticHiddenCount = 0;
+                UpdateAutomaticBatchUi();
+                await ProcessAutomaticBatchCoreAsync(generation, false);
+
+                if (activeDocumentBeforeScan == null && _activeDocument == null)
+                {
+                    var firstAutomaticDocument = _documents.FirstOrDefault(
+                        document => document.IsAutomaticInspection && !document.IsError)
+                        ?? _documents.FirstOrDefault(document => document.IsAutomaticInspection);
+                    if (firstAutomaticDocument != null)
+                    {
+                        ActivateDocument(firstAutomaticDocument);
+                    }
+                }
+
+                RawBufferVisualizerPackageLog.Write("Automatic scan ended");
             }
             catch (Exception ex)
             {
                 SetAutomaticScanStatus("Scan failed: " + ex.Message);
-                return;
-            }
-
-            RawBufferVisualizerPackageLog.Write(
-                string.Format(
-                    CultureInfo.InvariantCulture,
-                    "Automatic scan inferred {0} candidate(s) from {1} local(s) and {2} argument(s); {3} duplicate expression(s) skipped",
-                    scan.Inspections.Count,
-                    scan.LocalExpressionCount,
-                    scan.ArgumentExpressionCount,
-                    scan.DuplicateExpressionCount));
-            RemoveAutomaticInspectionDocuments();
-            AutomaticFrameText.Text = string.IsNullOrWhiteSpace(scan.FrameDisplayName)
-                ? "Current stack frame"
-                : scan.FrameDisplayName;
-
-            var opened = 0;
-            var needsMapping = 0;
-            var failed = 0;
-            var hidden = 0;
-            _automaticScanRunning = true;
-            try
-            {
-                for (var i = 0; i < scan.Inspections.Count; i++)
-                {
-                    var inspection = scan.Inspections[i];
-                    var collectionSummary = scan.FindCollectionSummary(
-                        inspection.CollectionRootExpression);
-                    try
-                    {
-                        if (!string.IsNullOrWhiteSpace(inspection.PreflightError))
-                        {
-                            AddAutomaticOpenFailure(
-                                inspection,
-                                inspection.PreflightError);
-                            failed++;
-                            if (collectionSummary != null)
-                            {
-                                collectionSummary.FailedCount++;
-                            }
-
-                            continue;
-                        }
-
-                        if (inspection.KnownImageKind != AutomaticKnownImageKind.None)
-                        {
-                            RawBufferVisualizerPackageLog.Write(
-                                "Automatic scan opening known image " + inspection.RootExpression);
-                            string knownOpenError;
-                            if (TryOpenKnownRegisteredImage(
-                                _dte.Debugger,
-                                inspection,
-                                out knownOpenError))
-                            {
-                                var knownDocument = FindHandoffDocument(inspection.StableKey);
-                                if (knownDocument != null)
-                                {
-                                    knownDocument.SetAutomaticInspection(
-                                        100,
-                                        inspection.GetMembersSummary(),
-                                        "Member inference and live memory descriptor validation passed.",
-                                        inspection.Inventory,
-                                        inspection.AssemblyName,
-                                        GetDebuggeeProcessId(_dte.Debugger),
-                                        false);
-                                    ImageList.Items.Refresh();
-                                    UpdateAutomaticInspectionPanel(knownDocument);
-                                }
-
-                                opened++;
-                                if (collectionSummary != null)
-                                {
-                                    collectionSummary.OpenedCount++;
-                                }
-
-                                continue;
-                            }
-
-                            RawBufferVisualizerPackageLog.Write(
-                                "Automatic scan known image open failed " +
-                                inspection.RootExpression +
-                                ": " +
-                                knownOpenError);
-                            AddAutomaticOpenFailure(inspection, knownOpenError);
-                            failed++;
-                            if (collectionSummary != null)
-                            {
-                                collectionSummary.FailedCount++;
-                            }
-
-                            continue;
-                        }
-
-                        var mapping = inspection.Mapping ?? inspection.CreateTransientMapping();
-                        var dataTypeName = inspection.GetDataTypeName();
-                        var isArrayBacked = dataTypeName.EndsWith("[]", StringComparison.Ordinal);
-                        var canOpen = inspection.UsesSavedMapping || inspection.Inference.CanAutoOpen;
-                        if (canOpen)
-                        {
-                            RawBufferVisualizerPackageLog.Write(
-                                "Automatic scan opening " + inspection.RootExpression);
-                            string openError;
-                            var openedSuccessfully = isArrayBacked
-                                ? TryOpenMappedArray(
-                                    _dte.Debugger,
-                                    scan.FrameDisplayName,
-                                    inspection.RootExpression,
-                                    mapping,
-                                    inspection.RuntimeTypeName,
-                                    dataTypeName,
-                                    inspection.UsesSavedMapping ? (RawPixelFormat?)null : inspection.Inference.PixelFormat,
-                                    out openError,
-                                    inspection.StableKey)
-                                : TryOpenMappedVariable(
-                                    _dte.Debugger,
-                                    inspection.RootExpression,
-                                    mapping,
-                                    inspection.RuntimeTypeName,
-                                    out openError,
-                                    inspection.StableKey);
-                            if (openedSuccessfully)
-                            {
-                                RawBufferVisualizerPackageLog.Write(
-                                    "Automatic scan opened " + inspection.RootExpression);
-                                var document = FindHandoffDocument(inspection.StableKey);
-                                if (document != null)
-                                {
-                                    document.SetAutomaticInspection(
-                                        inspection.UsesSavedMapping ? 100 : inspection.Inference.ConfidenceScore,
-                                        inspection.GetMembersSummary(),
-                                        inspection.UsesSavedMapping
-                                            ? "Saved type mapping applied and live memory validated."
-                                            : "Member inference and live memory descriptor validation passed.",
-                                        inspection.Inventory,
-                                        inspection.AssemblyName,
-                                        GetDebuggeeProcessId(_dte.Debugger),
-                                        false,
-                                        mapping.Members);
-                                    ImageList.Items.Refresh();
-                                    UpdateAutomaticInspectionPanel(document);
-                                }
-
-                                opened++;
-                                if (collectionSummary != null)
-                                {
-                                    collectionSummary.OpenedCount++;
-                                }
-
-                                continue;
-                            }
-
-                            RawBufferVisualizerPackageLog.Write(
-                                "Automatic scan open failed " + inspection.RootExpression + ": " + openError);
-                            AddAutomaticOpenFailure(inspection, openError);
-                            failed++;
-                            if (collectionSummary != null)
-                            {
-                                collectionSummary.FailedCount++;
-                            }
-
-                            continue;
-                        }
-
-                        if (inspection.Inference.ConfidenceScore < 40)
-                        {
-                            hidden++;
-                            continue;
-                        }
-
-                        var reason = isArrayBacked
-                            ? "Managed array buffer was recognized, but its debugger memory could not be read safely."
-                            : inspection.Inference.RequiresExplicitLayout
-                                ? "Padding, chunk data, or an image offset was detected; map an explicit stride or use an SDK adapter."
-                                : inspection.Inference.RequiresPixelFormatMapping
-                                    ? "Pixel format needs one explicit mapping before this buffer can be opened."
-                                    : "Required image metadata is incomplete or below the automatic-open confidence gate.";
-                        AddAutomaticMappingCandidate(inspection, reason);
-                        needsMapping++;
-                        if (collectionSummary != null)
-                        {
-                            collectionSummary.MappingCount++;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        var reason = "Unexpected inspection failure: " + ex.Message;
-                        RawBufferVisualizerPackageLog.Write(
-                            "Automatic scan candidate error " + inspection.RootExpression + ": " + ex);
-                        AddAutomaticOpenFailure(inspection, reason);
-                        failed++;
-                        if (collectionSummary != null)
-                        {
-                            collectionSummary.FailedCount++;
-                        }
-                    }
-                }
+                RawBufferVisualizerPackageLog.Write("Automatic scan contained error " + ex);
             }
             finally
             {
                 _automaticScanRunning = false;
+                SetAutomaticScanBusy(false, string.Empty);
+                UpdateAutomaticBatchUi();
+                UpdateStatus();
+                QueueAutomaticScan();
+            }
+        }
+
+        private async Task ProcessAutomaticBatchCoreAsync(long generation, bool loadAll)
+        {
+#pragma warning disable VSTHRD109
+            ThreadHelper.ThrowIfNotOnUIThread();
+#pragma warning restore VSTHRD109
+            var scan = _automaticScanResult;
+            if (scan == null || !IsAutomaticScanCurrent(generation))
+            {
+                return;
             }
 
-            var activeAutomaticDocument = _documents.LastOrDefault(
-                    document => document.IsAutomaticInspection && !document.IsError)
-                ?? _documents.LastOrDefault(document => document.IsAutomaticInspection);
-            if (activeAutomaticDocument != null)
+            var remainingCount = scan.Inspections.Count - _automaticScanCursor;
+            var batchCount = loadAll
+                ? remainingCount
+                : AutomaticImageCollectionPolicy.GetBatchItemCount(remainingCount);
+            var processedInBatch = 0;
+            var batchWatch = Stopwatch.StartNew();
+            while (_automaticScanCursor < scan.Inspections.Count
+                   && processedInBatch < batchCount
+                   && !_automaticStopRequested
+                   && IsAutomaticScanCurrent(generation))
             {
-                ActivateDocument(activeAutomaticDocument);
-            }
+                if (!loadAll
+                    && processedInBatch > 0
+                    && batchWatch.ElapsedMilliseconds >= AutomaticImageCollectionPolicy.BatchSoftTimeBudgetMilliseconds)
+                {
+                    break;
+                }
 
-            var collectionStatus = BuildAutomaticCollectionStatus(scan);
-            if (scan.Inspections.Count == 0 && scan.CollectionSummaries.Count == 0)
-            {
-                SetAutomaticScanStatus("No image-like locals or arguments met the 40% candidate threshold.");
-            }
-            else if (scan.Inspections.Count == 0)
-            {
-                SetAutomaticScanStatus(collectionStatus.TrimStart());
-            }
-            else
-            {
-                SetAutomaticScanStatus(string.Format(
+                AutomaticScanProgressText.Text = string.Format(
                     CultureInfo.InvariantCulture,
-                    "{0} detected: {1} opened, {2} need mapping, {3} failed{4}.",
-                    scan.Inspections.Count,
-                    opened,
-                    needsMapping,
-                    failed,
-                    hidden > 0 ? ", " + hidden + " hidden" : string.Empty)
-                    + collectionStatus);
-            }
+                    "Scanning images {0} / {1}...",
+                    processedInBatch + 1,
+                    batchCount);
+                WriteSessionStateIfRequested();
+                await Dispatcher.Yield(DispatcherPriority.Render);
+                if (_automaticStopRequested || !IsAutomaticScanCurrent(generation))
+                {
+                    break;
+                }
 
-            UpdateStatus();
+                ProcessAutomaticInspection(scan, scan.Inspections[_automaticScanCursor]);
+                _automaticScanCursor++;
+                processedInBatch++;
+                UpdateAutomaticBatchUi();
+                await Dispatcher.Yield(DispatcherPriority.Background);
+            }
+        }
+
+        private void ProcessAutomaticInspection(
+            AutomaticVisionScanResult scan,
+            AutomaticVisionInspection inspection)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var collectionSummary = scan.FindCollectionSummary(inspection.CollectionRootExpression);
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(inspection.PreflightError))
+                {
+                    AddAutomaticOpenFailure(inspection, inspection.PreflightError);
+                    _automaticFailedCount++;
+                    if (collectionSummary != null)
+                    {
+                        collectionSummary.FailedCount++;
+                    }
+
+                    return;
+                }
+
+                if (inspection.KnownImageKind != AutomaticKnownImageKind.None)
+                {
+                    string knownOpenError;
+                    if (TryOpenKnownRegisteredImage(_dte!.Debugger, inspection, out knownOpenError))
+                    {
+                        var knownDocument = FindHandoffDocument(inspection.StableKey);
+                        if (knownDocument != null)
+                        {
+                            knownDocument.SetAutomaticInspection(
+                                100,
+                                inspection.GetMembersSummary(),
+                                "Current values and paused image memory were validated.",
+                                inspection.Inventory,
+                                inspection.AssemblyName,
+                                GetDebuggeeProcessId(_dte.Debugger),
+                                false);
+                            RefreshAutomaticDocumentPresentation(knownDocument);
+                        }
+
+                        _automaticRefreshedCount++;
+                        if (collectionSummary != null)
+                        {
+                            collectionSummary.OpenedCount++;
+                        }
+
+                        return;
+                    }
+
+                    AddAutomaticOpenFailure(inspection, knownOpenError);
+                    _automaticFailedCount++;
+                    if (collectionSummary != null)
+                    {
+                        collectionSummary.FailedCount++;
+                    }
+
+                    return;
+                }
+
+                var mapping = inspection.Mapping ?? inspection.CreateTransientMapping();
+                var dataTypeName = inspection.GetDataTypeName();
+                var isArrayBacked = dataTypeName.EndsWith("[]", StringComparison.Ordinal);
+                var canOpen = inspection.UsesSavedMapping || inspection.Inference.CanAutoOpen;
+                if (canOpen)
+                {
+                    string openError;
+                    var openedSuccessfully = isArrayBacked
+                        ? TryOpenMappedArray(
+                            _dte!.Debugger,
+                            scan.FrameDisplayName,
+                            inspection.RootExpression,
+                            mapping,
+                            inspection.RuntimeTypeName,
+                            dataTypeName,
+                            inspection.UsesSavedMapping ? (RawPixelFormat?)null : inspection.Inference.PixelFormat,
+                            out openError,
+                            inspection.StableKey)
+                        : TryOpenMappedVariable(
+                            _dte!.Debugger,
+                            inspection.RootExpression,
+                            mapping,
+                            inspection.RuntimeTypeName,
+                            out openError,
+                            inspection.StableKey);
+                    if (openedSuccessfully)
+                    {
+                        var document = FindHandoffDocument(inspection.StableKey);
+                        if (document != null)
+                        {
+                            var validation = inspection.UsesSavedMapping
+                                ? "Saved type mapping applied; current values and live memory validated."
+                                : inspection.UsesCachedInference
+                                    ? "Cached type analysis reused; current values and live memory validated."
+                                    : "Member inference and live memory descriptor validation passed.";
+                            document.SetAutomaticInspection(
+                                inspection.UsesSavedMapping ? 100 : inspection.Inference.ConfidenceScore,
+                                inspection.GetMembersSummary(),
+                                validation,
+                                inspection.Inventory,
+                                inspection.AssemblyName,
+                                GetDebuggeeProcessId(_dte.Debugger),
+                                false,
+                                mapping.Members);
+                            RefreshAutomaticDocumentPresentation(document);
+                        }
+
+                        _automaticRefreshedCount++;
+                        if (collectionSummary != null)
+                        {
+                            collectionSummary.OpenedCount++;
+                        }
+
+                        return;
+                    }
+
+                    if (!inspection.UsesSavedMapping)
+                    {
+                        _automaticVisionInspector.InvalidateCachedTypeAnalysis(inspection.RuntimeTypeName);
+                    }
+
+                    AddAutomaticOpenFailure(inspection, openError);
+                    _automaticFailedCount++;
+                    if (collectionSummary != null)
+                    {
+                        collectionSummary.FailedCount++;
+                    }
+
+                    return;
+                }
+
+                if (inspection.Inference.ConfidenceScore < 40)
+                {
+                    _automaticHiddenCount++;
+                    return;
+                }
+
+                var reason = isArrayBacked
+                    ? "Managed array buffer was recognized, but its debugger memory could not be read safely."
+                    : inspection.Inference.RequiresExplicitLayout
+                        ? "Padding, chunk data, or an image offset was detected; map an explicit stride or use an SDK adapter."
+                        : inspection.Inference.RequiresPixelFormatMapping
+                            ? "Pixel format needs one explicit mapping before this buffer can be opened."
+                            : "Required image metadata is incomplete or below the automatic-open confidence gate.";
+                AddAutomaticMappingCandidate(inspection, reason);
+                _automaticMappingCount++;
+                if (collectionSummary != null)
+                {
+                    collectionSummary.MappingCount++;
+                }
+            }
+            catch (Exception ex)
+            {
+                if (!inspection.UsesSavedMapping
+                    && inspection.KnownImageKind == AutomaticKnownImageKind.None)
+                {
+                    _automaticVisionInspector.InvalidateCachedTypeAnalysis(inspection.RuntimeTypeName);
+                }
+
+                AddAutomaticOpenFailure(inspection, "Unexpected inspection failure: " + ex.Message);
+                _automaticFailedCount++;
+                if (collectionSummary != null)
+                {
+                    collectionSummary.FailedCount++;
+                }
+
+                RawBufferVisualizerPackageLog.Write(
+                    "Automatic scan candidate error " + inspection.RootExpression + ": " + ex);
+            }
         }
 
         public int InvalidateLiveSources()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            CancelAutomaticInspectionWork(true);
+            SetAutomaticScanBusy(false, string.Empty);
+            SetAutomaticScanStatus("Debuggee is running. Automatic inspection will resume at the next Break.");
             const string unavailableMessage = "Live debugger image memory is no longer readable.";
             var invalidatedCount = 0;
             var activeInvalidated = false;
@@ -446,76 +520,38 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return invalidatedCount;
         }
 
-        private static string BuildAutomaticCollectionStatus(
-            AutomaticVisionScanResult scan)
+        public void EndAutomaticInspectionSession()
         {
-            if (scan.CollectionSummaries.Count == 0
-                && scan.SkippedCollectionRootCount == 0)
-            {
-                return string.Empty;
-            }
-
-            var summaries = new List<string>();
-            for (var index = 0; index < scan.CollectionSummaries.Count; index++)
-            {
-                var summary = scan.CollectionSummaries[index];
-                var text = string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}: {1} inspected, {2} opened",
-                    summary.RootExpression,
-                    summary.ScheduledCount,
-                    summary.OpenedCount);
-                if (summary.MappingCount > 0)
-                {
-                    text += string.Format(
-                        CultureInfo.InvariantCulture,
-                        ", {0} need mapping",
-                        summary.MappingCount);
-                }
-
-                if (summary.FailedCount > 0)
-                {
-                    text += string.Format(
-                        CultureInfo.InvariantCulture,
-                        ", {0} failed",
-                        summary.FailedCount);
-                }
-
-                if (summary.TruncatedCount > 0)
-                {
-                    text += string.Format(
-                        CultureInfo.InvariantCulture,
-                        ", {0} not scanned (limit)",
-                        summary.TruncatedCount);
-                }
-
-                summaries.Add(text);
-            }
-
-            var result = summaries.Count == 0
-                ? " Collections:"
-                : " Collections: " + string.Join("; ", summaries);
-            if (scan.SkippedCollectionRootCount > 0)
-            {
-                result += string.Format(
-                    CultureInfo.InvariantCulture,
-                    "{0}{1} collection root(s) not scanned (limit)",
-                    summaries.Count == 0 ? " " : "; ",
-                    scan.SkippedCollectionRootCount);
-            }
-
-            return result + ".";
+            ThreadHelper.ThrowIfNotOnUIThread();
+            CancelAutomaticInspectionWork(true);
+            _automaticVisionInspector.ClearSessionCache();
         }
 
         public void ScheduleAutomaticScan()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (_automaticScanPending)
+            if (_disposed)
             {
                 return;
             }
 
+            _automaticScanSessionGate.EnterBreakMode();
             _automaticScanPending = true;
+            QueueAutomaticScan();
+        }
+
+        private void QueueAutomaticScan()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (_disposed
+                || !_automaticScanPending
+                || _automaticScanRunning
+                || _automaticScanDispatchQueued)
+            {
+                return;
+            }
+
+            _automaticScanDispatchQueued = true;
 #pragma warning disable VSTHRD001, VSTHRD110
             // The debugger's Break event can arrive before the debug engine has released its
             // transition locks. Scheduling at ContextIdle lets that event return before DTE
@@ -525,18 +561,29 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 DispatcherPriority.ContextIdle,
                 new Action(() =>
                 {
-                    _automaticScanPending = false;
-                    RawBufferVisualizerPackageLog.Write("Automatic scan started");
                     try
                     {
-                        ScanLocals();
-                        RawBufferVisualizerPackageLog.Write("Automatic scan ended");
+                        _automaticScanDispatchQueued = false;
+                        if (_disposed || !_automaticScanPending || _automaticScanRunning)
+                        {
+                            return;
+                        }
+
+                        _automaticScanPending = false;
+                        var generation = _automaticScanSessionGate.Capture();
+                        if (generation < 0)
+                        {
+                            return;
+                        }
+
+                        RawBufferVisualizerPackageLog.Write("Automatic scan started");
+                        _ = RunAutomaticScanAsync(generation);
                     }
                     catch (Exception ex)
                     {
-                        _automaticScanRunning = false;
-                        RawBufferVisualizerPackageLog.Write("Automatic scan unhandled error " + ex);
-                        throw;
+                        _automaticScanDispatchQueued = false;
+                        SetAutomaticScanStatus("Scan could not be scheduled: " + ex.Message);
+                        RawBufferVisualizerPackageLog.Write("Automatic scan schedule error " + ex);
                     }
                 }));
 #pragma warning restore VSTHRD001, VSTHRD110
@@ -544,85 +591,118 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void AddAutomaticMappingCandidate(AutomaticVisionInspection inspection, string reason)
         {
-            var details = inspection.Inference.Reasons.Count == 0
-                ? string.Empty
-                : string.Join(Environment.NewLine, inspection.Inference.Reasons);
-            var document = ImageDocument.CreateError(
-                inspection.RootExpression,
-                inspection.RuntimeTypeName,
+            UpsertAutomaticErrorDocument(
+                inspection,
                 "MappingRequired",
                 reason,
-                details,
-                false,
-                inspection.Inventory,
-                inspection.AssemblyName,
-                _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger));
-            document.SetAutomaticInspection(
-                inspection.UsesSavedMapping ? 100 : inspection.Inference.ConfidenceScore,
-                inspection.GetMembersSummary(),
                 reason,
-                inspection.Inventory,
-                inspection.AssemblyName,
-                _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger),
-                true,
-                inspection.Inference.Members);
-            _workspace.Add(document);
-            if (!_automaticScanRunning)
-            {
-                ActivateDocument(document);
-            }
+                true);
         }
 
         private void AddAutomaticOpenFailure(AutomaticVisionInspection inspection, string reason)
         {
+            var errorMessage = string.IsNullOrWhiteSpace(reason)
+                ? "The detected image could not be opened. Scan again after checking its lifetime and current values."
+                : reason;
+            UpsertAutomaticErrorDocument(
+                inspection,
+                "AutomaticOpenFailed",
+                errorMessage,
+                "Recognition succeeded, but current-value or paused-memory validation failed. Other detected images remain available.",
+                false);
+        }
+
+        private void UpsertAutomaticErrorDocument(
+            AutomaticVisionInspection inspection,
+            string errorType,
+            string errorMessage,
+            string validationSummary,
+            bool mappingRequired)
+        {
             var details = inspection.Inference.Reasons.Count == 0
                 ? string.Empty
                 : string.Join(Environment.NewLine, inspection.Inference.Reasons);
-            var document = ImageDocument.CreateError(
-                inspection.RootExpression,
-                inspection.RuntimeTypeName,
-                "AutomaticOpenFailed",
-                string.IsNullOrWhiteSpace(reason)
-                    ? "The detected image could not be opened. Scan again after checking its lifetime and current values."
-                    : reason,
-                details,
-                false,
-                inspection.Inventory,
-                inspection.AssemblyName,
-                _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger));
+            var processId = _dte == null || _dte.Debugger == null
+                ? 0
+                : GetDebuggeeProcessId(_dte.Debugger);
+            var document = FindHandoffDocument(inspection.StableKey);
+            if (document == null)
+            {
+                document = ImageDocument.CreateError(
+                    inspection.RootExpression,
+                    inspection.RuntimeTypeName,
+                    errorType,
+                    errorMessage,
+                    details,
+                    false,
+                    inspection.Inventory,
+                    inspection.AssemblyName,
+                    processId,
+                    inspection.StableKey);
+                _workspace.Add(document);
+            }
+            else
+            {
+                document.ReplaceWithError(
+                    inspection.RootExpression,
+                    inspection.RuntimeTypeName,
+                    errorType,
+                    errorMessage,
+                    details,
+                    inspection.Inventory,
+                    inspection.AssemblyName,
+                    processId);
+            }
+
             document.SetAutomaticInspection(
                 inspection.UsesSavedMapping ? 100 : inspection.Inference.ConfidenceScore,
                 inspection.GetMembersSummary(),
-                "Recognition succeeded, but current-value or paused-memory validation failed. Other detected images remain available.",
+                validationSummary,
                 inspection.Inventory,
                 inspection.AssemblyName,
-                _dte == null || _dte.Debugger == null ? 0 : GetDebuggeeProcessId(_dte.Debugger),
-                false,
-                inspection.Inference.Members);
-            _workspace.Add(document);
+                processId,
+                mappingRequired,
+                inspection.Mapping == null ? inspection.Inference.Members : inspection.Mapping.Members);
+            RefreshAutomaticDocumentPresentation(document, true);
         }
 
-        private void RemoveAutomaticInspectionDocuments()
+        private void ReconcileAutomaticInspectionDocuments(AutomaticVisionScanResult scan)
         {
-            for (var i = _documents.Count - 1; i >= 0; i--)
+            if (!scan.IsComplete)
             {
-                var document = _documents[i];
-                if (!document.IsAutomaticInspection)
-                {
-                    continue;
-                }
+                return;
+            }
 
-                if (ReferenceEquals(_compareA, document))
+            var liveKeys = new HashSet<string>(
+                scan.Inspections.Select(inspection => inspection.StableKey),
+                StringComparer.Ordinal);
+            _syncingDocumentSelection = true;
+            try
+            {
+                for (var index = _documents.Count - 1; index >= 0; index--)
                 {
-                    _compareA = null;
-                }
+                    var document = _documents[index];
+                    if (!document.IsAutomaticInspection || liveKeys.Contains(document.HandoffId))
+                    {
+                        continue;
+                    }
 
-                if (ReferenceEquals(_compareB, document))
-                {
-                    _compareB = null;
-                }
+                    if (ReferenceEquals(_compareA, document))
+                    {
+                        _compareA = null;
+                    }
 
-                _workspace.RemoveAt(i, false);
+                    if (ReferenceEquals(_compareB, document))
+                    {
+                        _compareB = null;
+                    }
+
+                    _workspace.RemoveAt(index, false);
+                }
+            }
+            finally
+            {
+                _syncingDocumentSelection = false;
             }
 
             if (_activeDocument == null && _documents.Count > 0)
@@ -631,8 +711,241 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             else if (_activeDocument == null)
             {
+                ImageList.SelectedItem = null;
                 ClearDocumentPresentation();
             }
+
+            UpdateCompareText();
+        }
+
+        private void RefreshAutomaticDocumentPresentation(ImageDocument document, bool renderActive = false)
+        {
+            ImageList.Items.Refresh();
+            if (!ReferenceEquals(_activeDocument, document))
+            {
+                return;
+            }
+
+            UpdateAutomaticInspectionPanel(document);
+            if (renderActive)
+            {
+                DescriptorText.Text = FormatDescriptor(document);
+                UpdateInterpretationControls(document.Descriptor);
+                RenderActiveDocument();
+            }
+        }
+
+        private bool IsAutomaticScanCurrent(long generation)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (_disposed
+                || !_automaticScanSessionGate.IsCurrent(generation)
+                || _dte == null
+                || _dte.Debugger == null)
+            {
+                return false;
+            }
+
+            try
+            {
+                return _dte.Debugger.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private void CancelAutomaticInspectionWork(bool clearBatch)
+        {
+            _automaticScanSessionGate.EnterRunMode();
+            _automaticStopRequested = true;
+            _automaticScanPending = false;
+            if (!clearBatch)
+            {
+                return;
+            }
+
+            _automaticScanResult = null;
+            _automaticScanGeneration = -1;
+            _automaticScanCursor = 0;
+#pragma warning disable VSTHRD010
+            UpdateAutomaticBatchUi();
+#pragma warning restore VSTHRD010
+        }
+
+        private void SetAutomaticScanBusy(bool isBusy, string progressText)
+        {
+            ScanNowButton.IsEnabled = !isBusy;
+            AutomaticScanProgressPanel.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
+            AutomaticScanProgressText.Text = progressText;
+            AutomaticStopButton.IsEnabled = isBusy;
+            if (isBusy)
+            {
+                AutomaticBatchActionsPanel.Visibility = Visibility.Collapsed;
+            }
+        }
+
+        private void UpdateAutomaticBatchUi()
+        {
+            var scan = _automaticScanResult;
+            if (scan == null)
+            {
+                AutomaticCandidateCountText.Text = string.Empty;
+                AutomaticCandidateCountText.Visibility = Visibility.Collapsed;
+                AutomaticBatchSummaryText.Text = string.Empty;
+                AutomaticBatchSummaryText.Visibility = Visibility.Collapsed;
+                AutomaticBatchActionsPanel.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            var candidateText = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} image object{1} detected",
+                scan.Inspections.Count,
+                scan.Inspections.Count == 1 ? string.Empty : "s");
+            if (scan.TruncatedCandidateCount > 0)
+            {
+                candidateText += string.Format(
+                    CultureInfo.InvariantCulture,
+                    " · {0} outside the {1}-object discovery limit",
+                    scan.TruncatedCandidateCount,
+                    AutomaticImageCollectionPolicy.MaximumItemsPerScan);
+            }
+
+            if (scan.DeferredTypeAnalysisCount > 0)
+            {
+                candidateText += string.Format(
+                    CultureInfo.InvariantCulture,
+                    " · {0} new type(s) deferred",
+                    scan.DeferredTypeAnalysisCount);
+            }
+
+            if (scan.TruncatedRootExpressionCount > 0)
+            {
+                candidateText += string.Format(
+                    CultureInfo.InvariantCulture,
+                    " · {0} root expression(s) outside the scan limit",
+                    scan.TruncatedRootExpressionCount);
+            }
+
+            AutomaticCandidateCountText.Text = candidateText;
+            AutomaticCandidateCountText.Visibility = Visibility.Visible;
+            var deferredCount = Math.Max(0, scan.Inspections.Count - _automaticScanCursor);
+            var summary = string.Format(
+                CultureInfo.InvariantCulture,
+                "{0} refreshed · {1} deferred · {2} failed",
+                _automaticRefreshedCount,
+                deferredCount,
+                _automaticFailedCount);
+            if (_automaticMappingCount > 0)
+            {
+                summary += string.Format(
+                    CultureInfo.InvariantCulture,
+                    " · {0} need mapping",
+                    _automaticMappingCount);
+            }
+
+            if (_automaticHiddenCount > 0)
+            {
+                summary += string.Format(
+                    CultureInfo.InvariantCulture,
+                    " · {0} hidden",
+                    _automaticHiddenCount);
+            }
+
+            AutomaticBatchSummaryText.Text = summary;
+            AutomaticBatchSummaryText.Visibility = scan.Inspections.Count == 0
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            var isCurrentBreak = false;
+#pragma warning disable VSTHRD010
+            isCurrentBreak = IsAutomaticScanCurrent(_automaticScanGeneration);
+#pragma warning restore VSTHRD010
+            var canLoadMore = deferredCount > 0
+                && !_automaticScanRunning
+                && isCurrentBreak;
+            AutomaticBatchActionsPanel.Visibility = canLoadMore
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            if (scan.Inspections.Count == 0)
+            {
+                SetAutomaticScanStatus("No image-like locals or arguments were detected in this frame.");
+            }
+            else if (deferredCount > 0)
+            {
+                SetAutomaticScanStatus(_automaticStopRequested
+                    ? "Loading paused. Review the current rows or continue this Break."
+                    : "Initial batch complete. Review the current rows or load more from this Break.");
+            }
+            else
+            {
+                SetAutomaticScanStatus("Current Break scan is complete.");
+            }
+
+            if (!scan.IsComplete)
+            {
+                SetAutomaticScanStatus(
+                    AutomaticScanStatusText.Text
+                    + " Discovery was bounded or incomplete, so unmatched existing rows were retained.");
+            }
+
+            WriteSessionStateIfRequested();
+        }
+
+        private async Task ContinueAutomaticBatchAsync(bool loadAll)
+        {
+#pragma warning disable VSTHRD109
+            ThreadHelper.ThrowIfNotOnUIThread();
+#pragma warning restore VSTHRD109
+            if (_automaticScanRunning || _automaticScanResult == null)
+            {
+                return;
+            }
+
+            if (!IsAutomaticScanCurrent(_automaticScanGeneration))
+            {
+                SetAutomaticScanStatus("This Break is no longer active. Pause again or use Scan Now.");
+                UpdateAutomaticBatchUi();
+                return;
+            }
+
+            _automaticScanRunning = true;
+            _automaticStopRequested = false;
+            SetAutomaticScanBusy(true, "Preparing the next image batch...");
+            try
+            {
+                await ProcessAutomaticBatchCoreAsync(_automaticScanGeneration, loadAll);
+            }
+            catch (Exception ex)
+            {
+                SetAutomaticScanStatus("Batch loading failed: " + ex.Message);
+                RawBufferVisualizerPackageLog.Write("Automatic batch error " + ex);
+            }
+            finally
+            {
+                _automaticScanRunning = false;
+                SetAutomaticScanBusy(false, string.Empty);
+                UpdateAutomaticBatchUi();
+                UpdateStatus();
+                QueueAutomaticScan();
+            }
+        }
+
+        private void StopAutomaticScan_Click(object sender, RoutedEventArgs e)
+        {
+            _automaticStopRequested = true;
+            SetAutomaticScanStatus("Stopping after the current image...");
+        }
+
+        private void LoadNextAutomaticBatch_Click(object sender, RoutedEventArgs e)
+        {
+            _ = ContinueAutomaticBatchAsync(false);
+        }
+
+        private void LoadAllAutomaticBatch_Click(object sender, RoutedEventArgs e)
+        {
+            _ = ContinueAutomaticBatchAsync(true);
         }
 
         private void SetAutomaticScanStatus(string text)
@@ -672,6 +985,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             else
             {
+#pragma warning disable VSTHRD010
+                CancelAutomaticInspectionWork(true);
+#pragma warning restore VSTHRD010
+                SetAutomaticScanBusy(false, string.Empty);
                 SetAutomaticScanStatus("Paused and saved. Scan Now remains available.");
             }
         }
@@ -1158,6 +1475,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void Clear_Click(object sender, RoutedEventArgs e)
         {
+#pragma warning disable VSTHRD010
+            CancelAutomaticInspectionWork(true);
+#pragma warning restore VSTHRD010
+            SetAutomaticScanBusy(false, string.Empty);
             _syncingDocumentSelection = true;
             try
             {
@@ -1173,6 +1494,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _compareB = null;
             _blinkTimer.Stop();
             ClearDocumentPresentation();
+            SetAutomaticScanStatus("All loaded images were cleared. Scan Now remains available in Break Mode.");
             UpdateTempUsageStatus();
         }
 
@@ -1191,6 +1513,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+#pragma warning disable VSTHRD010
+            CancelAutomaticInspectionWork(true);
+#pragma warning restore VSTHRD010
             _disposed = true;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _performanceTimer.Stop();
@@ -2354,11 +2679,60 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void EditAutomaticMapping_Click(object sender, RoutedEventArgs e)
         {
             Dispatcher.VerifyAccess();
-            if (_activeDocument != null && _activeDocument.IsAutomaticInspection && _activeDocument.HasMemberInventory)
+            if (_activeDocument == null || !_activeDocument.IsAutomaticInspection)
             {
-                ShowTypeMappingDialog(_activeDocument);
+                return;
+            }
+
+            if (!_activeDocument.HasMemberInventory
+                && !TryLoadAutomaticMemberInventory(_activeDocument, out var inventoryError))
+            {
+                DiagnosticsList.Items.Insert(0, "Error: mapping members could not be loaded. " + inventoryError);
+                SetTransientStatus("Mapping members unavailable");
+                return;
+            }
+
+            ShowTypeMappingDialog(_activeDocument);
+        }
+
+#pragma warning disable VSTHRD010
+        private bool TryLoadAutomaticMemberInventory(ImageDocument document, out string error)
+        {
+            error = string.Empty;
+            try
+            {
+                if (_dte == null
+                    || _dte.Debugger == null
+                    || _dte.Debugger.CurrentMode != EnvDTE.dbgDebugMode.dbgBreakMode)
+                {
+                    error = "Pause the debugger and try again.";
+                    return false;
+                }
+
+                var expression = _dte.Debugger.GetExpression(document.ObjectName, true, 2000);
+                if (expression == null || !expression.IsValidValue)
+                {
+                    error = "The current expression could not be evaluated: " + document.ObjectName;
+                    return false;
+                }
+
+                var inventory = BuildEnvInventory(expression);
+                if (inventory.Count == 0)
+                {
+                    error = "The current expression has no readable data members.";
+                    return false;
+                }
+
+                document.SetMemberInventory(inventory);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
+                return false;
             }
         }
+#pragma warning restore VSTHRD010
 
         private void ShowTypeMappingDialog(ImageDocument document)
         {
@@ -2509,7 +2883,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             AutomaticInspectionConfidenceText.Text = document.AutomaticConfidenceText;
             AutomaticInspectionMembersText.Text = document.AutomaticMembersSummary;
             AutomaticInspectionValidationText.Text = document.AutomaticValidationSummary;
-            EditAutomaticMappingButton.Visibility = document.HasMemberInventory
+            EditAutomaticMappingButton.Visibility = (document.HasMemberInventory
+                    || document.SuggestedMappingMembers != null)
                 && (!document.IsError || document.AutomaticMappingRequired)
                 ? Visibility.Visible
                 : Visibility.Collapsed;
@@ -4748,12 +5123,39 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     "automaticScanStatus",
                     AutomaticScanStatusText == null ? string.Empty : AutomaticScanStatusText.Text,
                     true);
+                AppendJsonProperty(
+                    builder,
+                    "automaticCandidateCount",
+                    AutomaticCandidateCountText == null ? string.Empty : AutomaticCandidateCountText.Text,
+                    true);
+                AppendJsonProperty(
+                    builder,
+                    "automaticBatchSummary",
+                    AutomaticBatchSummaryText == null ? string.Empty : AutomaticBatchSummaryText.Text,
+                    true);
+                AppendJsonProperty(
+                    builder,
+                    "automaticProgress",
+                    AutomaticScanProgressText == null ? string.Empty : AutomaticScanProgressText.Text,
+                    true);
+                AppendJsonProperty(
+                    builder,
+                    "automaticProgressVisible",
+                    AutomaticScanProgressPanel != null && AutomaticScanProgressPanel.Visibility == Visibility.Visible,
+                    true);
+                AppendJsonProperty(
+                    builder,
+                    "automaticLoadMoreVisible",
+                    AutomaticBatchActionsPanel != null && AutomaticBatchActionsPanel.Visibility == Visibility.Visible,
+                    true);
                 builder.AppendLine("  \"documents\": [");
                 for (var i = 0; i < _documents.Count; i++)
                 {
                     var document = _documents[i];
                     builder.AppendLine("    {");
                     AppendJsonProperty(builder, "objectName", document.ObjectName, true, 6);
+                    AppendJsonProperty(builder, "instanceId", RuntimeHelpers.GetHashCode(document), true, 6);
+                    AppendJsonProperty(builder, "handoffId", document.HandoffId, true, 6);
                     AppendJsonProperty(builder, "title", document.Title, true, 6);
                     AppendJsonProperty(builder, "summary", document.Summary, true, 6);
                     AppendJsonProperty(builder, "sourceType", document.SourceType, true, 6);
@@ -5467,12 +5869,39 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 DebuggeeProcessId = debuggeeProcessId;
                 AutomaticMappingRequired = mappingRequired;
                 SuggestedMappingMembers = suggestedMappingMembers;
-                var cleanTitle = Title.StartsWith("Open failed: ", StringComparison.Ordinal)
-                    ? Title.Substring("Open failed: ".Length)
-                    : Title.Trim();
+                var cleanTitle = GetAutomaticBaseTitle(Title);
                 Title = IsError
                     ? (mappingRequired ? "[Map] " : "[Failed] ") + cleanTitle
                     : "[Auto] " + cleanTitle;
+            }
+
+            public void SetMemberInventory(List<VisualizerMemberInventoryItem> memberInventory)
+            {
+                MemberInventory = memberInventory ?? throw new ArgumentNullException(nameof(memberInventory));
+            }
+
+            private static string GetAutomaticBaseTitle(string title)
+            {
+                var result = title == null ? string.Empty : title.Trim();
+                var prefixes = new[] { "Open failed: ", "[Auto] ", "[Map] ", "[Failed] " };
+                var removedPrefix = true;
+                while (removedPrefix)
+                {
+                    removedPrefix = false;
+                    for (var index = 0; index < prefixes.Length; index++)
+                    {
+                        if (!result.StartsWith(prefixes[index], StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        result = result.Substring(prefixes[index].Length).TrimStart();
+                        removedPrefix = true;
+                        break;
+                    }
+                }
+
+                return result;
             }
 
             public bool IsError
@@ -5799,7 +6228,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 bool deleteSnapshotDirectoryOnDispose,
                 List<VisualizerMemberInventoryItem>? memberInventory,
                 string? itemAssemblyName,
-                int debuggeeProcessId)
+                int debuggeeProcessId,
+                string? handoffId)
             {
                 DisplayPath = GetDisplayPath(displayPath);
                 Title = "Open failed: " + CreateTitle(DisplayPath);
@@ -5821,7 +6251,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ErrorDetails = errorDetails ?? string.Empty;
                 ErrorOccurredUtc = DateTime.UtcNow;
                 ErrorId = CreateSupportId("ERROR", ErrorOccurredUtc);
-                HandoffId = string.Empty;
+                HandoffId = handoffId ?? string.Empty;
                 IsPreview = false;
                 SourceUnavailableMessage = string.Empty;
                 MemberInventory = memberInventory;
@@ -5856,7 +6286,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 bool deleteSnapshotDirectoryOnDispose = false,
                 List<VisualizerMemberInventoryItem>? memberInventory = null,
                 string? itemAssemblyName = null,
-                int debuggeeProcessId = 0)
+                int debuggeeProcessId = 0,
+                string? handoffId = null)
             {
                 return new ImageDocument(
                     displayPath,
@@ -5867,7 +6298,53 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     deleteSnapshotDirectoryOnDispose,
                     memberInventory,
                     itemAssemblyName,
-                    debuggeeProcessId);
+                    debuggeeProcessId,
+                    handoffId);
+            }
+
+            public void ReplaceWithError(
+                string displayPath,
+                string sourceType,
+                string errorType,
+                string errorMessage,
+                string errorDetails,
+                List<VisualizerMemberInventoryItem>? memberInventory,
+                string? itemAssemblyName,
+                int debuggeeProcessId)
+            {
+                var errorDescriptor = new RawImageDescriptor
+                {
+                    Width = 1,
+                    Height = 1,
+                    Stride = 1,
+                    PixelFormat = RawPixelFormat.Mono8,
+                    ValidBits = 8,
+                    ByteOrder = RawByteOrder.LittleEndian
+                };
+                ReplaceSource(
+                    displayPath,
+                    RawImageSource.FromMemory(new byte[] { 0 }, errorDescriptor),
+                    errorDescriptor,
+                    "Open failed: " + CreateTitle(GetDisplayPath(displayPath)),
+                    sourceType,
+                    false,
+                    false);
+                ObjectName = CreateTitle(DisplayPath);
+                Thumbnail = CreateErrorThumbnailSource();
+                ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Unknown open failure." : errorMessage;
+                ErrorType = string.IsNullOrWhiteSpace(errorType) ? "Unknown" : errorType;
+                ErrorDetails = errorDetails ?? string.Empty;
+                ErrorOccurredUtc = DateTime.UtcNow;
+                ErrorId = CreateSupportId("ERROR", ErrorOccurredUtc);
+                MemberInventory = memberInventory;
+                ItemAssemblyName = itemAssemblyName ?? string.Empty;
+                DebuggeeProcessId = debuggeeProcessId;
+                IsAutomaticInspection = false;
+                AutomaticConfidence = 0;
+                AutomaticMembersSummary = string.Empty;
+                AutomaticValidationSummary = string.Empty;
+                AutomaticMappingRequired = false;
+                SuggestedMappingMembers = null;
             }
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)

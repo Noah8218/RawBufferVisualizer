@@ -62,7 +62,9 @@ Use the MP4 for social posts and the GIF for README or Marketplace Markdown. If 
 
 ## Create A Continuous GIF And MP4
 
-The tracked `2.0.6` documentation assets are a reviewed 3.0-second, 12-frame code-DataTip GIF, a 3.25-second, 13-frame Locals GIF, and the 6.0-second, 24-frame complete sequence above. All are 960 x 532 at 4 fps, use frames captured from the exact installed 2.0.6 extension, show the current labelled **Clear all** UI, and contain no procedural stripe or gradient fixture. The FFmpeg workflow below is optional for maintainers who start from a continuous screen recording; FFmpeg is not required to install or use Raw Buffer Visualizer.
+The tracked `2.0.8` documentation assets were captured from the exact installed 2.0.8 candidate on Visual Studio 2022 `17.14.37516.0`. The code-DataTip GIF is 3.0 seconds/12 frames/195,057 bytes, the Locals GIF is 3.25 seconds/13 frames/456,412 bytes, and the complete GIF is 6.0 seconds/24 frames/486,571 bytes. All are 960 x 532 at 4 fps, show the current image-card and **Clear all** UI, and contain no procedural stripe or gradient fixture. The DataTip sequence additionally proves that the opened card retains the exact `dataTipIndustrialMat` expression name. The matching 6.0-second H.264 MP4 is 208,144 bytes. The FFmpeg workflow below is optional for maintainers who start from a continuous screen recording; FFmpeg is not required to install or use Raw Buffer Visualizer.
+
+Tracked SHA-256 values: DataTip GIF `1C0A2F1EDA707F979E0E536ED93EF73DECD848A39E4F51837CF599BB1800A0F9`; Locals GIF `7C24C08D3FFE1A9867900071E7E2EC2FCCE7605B41FEA8322816407DC35A6DD2`; complete GIF `2FC407646CE21CB55B411816102063ED2D3552818B1B79D5F0B72A52A53665E3`; MP4 `4D239318B7CEAE6C9E4648C4F292321D88E020B7C853A3D10DD7658415F2BA5A`.
 
 The repository does not install FFmpeg automatically. Install a Windows build from the [official FFmpeg download page](https://ffmpeg.org/download.html), or use Winget manually:
 

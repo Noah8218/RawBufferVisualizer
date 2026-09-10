@@ -14,6 +14,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public int ArgumentExpressionCount { get; set; }
         public int DuplicateExpressionCount { get; set; }
         public int SkippedCollectionRootCount { get; set; }
+        public int TruncatedCandidateCount { get; set; }
+        public int TruncatedRootExpressionCount { get; set; }
+        public int DeferredTypeAnalysisCount { get; set; }
+        public bool IsComplete { get; set; } = true;
         public List<AutomaticVisionInspection> Inspections { get; } = new List<AutomaticVisionInspection>();
         public List<AutomaticCollectionScanSummary> CollectionSummaries { get; } =
             new List<AutomaticCollectionScanSummary>();
@@ -61,6 +65,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public VisionMemberInferenceResult Inference { get; set; } = new VisionMemberInferenceResult();
         public TypeMapping? Mapping { get; set; }
         public bool UsesSavedMapping { get; set; }
+        public bool UsesCachedInference { get; set; }
+        public string DataTypeName { get; set; } = string.Empty;
         public AutomaticKnownImageKind KnownImageKind { get; set; }
         public string CollectionRootExpression { get; set; } = string.Empty;
         public string PreflightError { get; set; } = string.Empty;
@@ -100,6 +106,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public string GetDataTypeName()
         {
+            if (!string.IsNullOrWhiteSpace(DataTypeName))
+            {
+                return DataTypeName;
+            }
+
             var memberName = Mapping == null ? Inference.Members.Data : Mapping.Members.Data;
             var item = FindInventoryItem(memberName);
             return item == null ? string.Empty : item.TypeName;
@@ -158,14 +169,46 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private const int MaxMembersPerLocal = 128;
         private const int MaxNestedMembersPerLocal = 64;
         private const int CollectionExpressionTimeoutMilliseconds = 500;
+        private const int MaximumNewTypeAnalysesPerScan = 2;
+        private const int MaximumRootExpressionsPerScan = 128;
 
-        private sealed class AutomaticCollectionScanBudget
+        private readonly Dictionary<string, CachedTypeAnalysis> _typeAnalysisCache =
+            new Dictionary<string, CachedTypeAnalysis>(StringComparer.Ordinal);
+
+        private sealed class CachedTypeAnalysis
+        {
+            public bool IsCandidate { get; set; }
+            public List<VisualizerMemberInventoryItem> Inventory { get; set; } =
+                new List<VisualizerMemberInventoryItem>();
+            public VisionMemberInferenceResult Inference { get; set; } = new VisionMemberInferenceResult();
+            public TypeMapping? Mapping { get; set; }
+            public string DataTypeName { get; set; } = string.Empty;
+        }
+
+        private sealed class AutomaticScanBudget
         {
             public int RemainingItems { get; set; } =
                 AutomaticImageCollectionPolicy.MaximumItemsPerScan;
 
             public int RemainingRoots { get; set; } =
                 AutomaticImageCollectionPolicy.MaximumCollectionRootsPerScan;
+
+            public int RemainingNewTypeAnalyses { get; set; } = MaximumNewTypeAnalysesPerScan;
+
+            public int RemainingRootExpressions { get; set; } = MaximumRootExpressionsPerScan;
+        }
+
+        public void ClearSessionCache()
+        {
+            _typeAnalysisCache.Clear();
+        }
+
+        public void InvalidateCachedTypeAnalysis(string runtimeTypeName)
+        {
+            if (!string.IsNullOrWhiteSpace(runtimeTypeName))
+            {
+                _typeAnalysisCache.Remove(runtimeTypeName);
+            }
         }
 
         public AutomaticVisionScanResult Scan(EnvDTE.Debugger debugger)
@@ -182,6 +225,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var result = new AutomaticVisionScanResult();
             if (debugger == null)
             {
+                result.IsComplete = false;
                 return result;
             }
 
@@ -192,17 +236,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             catch
             {
+                result.IsComplete = false;
                 return result;
             }
 
             if (frame == null)
             {
+                result.IsComplete = false;
                 return result;
             }
 
             result.FrameDisplayName = GetFrameDisplayName(frame);
             var seenExpressions = new HashSet<string>(StringComparer.Ordinal);
-            var collectionBudget = new AutomaticCollectionScanBudget();
+            var scanBudget = new AutomaticScanBudget();
             EnvDTE.Expressions? locals = null;
             try
             {
@@ -211,19 +257,31 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             catch
             {
                 // A debugger engine may temporarily withhold one expression collection.
+                result.IsComplete = false;
             }
 
             if (locals != null)
             {
-                result.LocalExpressionCount = GetExpressionCount(locals);
-                ScanExpressions(
-                    debugger,
-                    result,
-                    locals,
-                    result.LocalExpressionCount,
-                    seenExpressions,
-                    includeImageCollections,
-                    collectionBudget);
+                if (TryGetExpressionCount(locals, out var localExpressionCount))
+                {
+                    result.LocalExpressionCount = localExpressionCount;
+                    ScanExpressions(
+                        debugger,
+                        result,
+                        locals,
+                        result.LocalExpressionCount,
+                        seenExpressions,
+                        includeImageCollections,
+                        scanBudget);
+                }
+                else
+                {
+                    result.IsComplete = false;
+                }
+            }
+            else
+            {
+                result.IsComplete = false;
             }
 
             EnvDTE.Expressions? arguments = null;
@@ -234,36 +292,72 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             catch
             {
                 // Locals can still be useful when argument enumeration is unavailable.
+                result.IsComplete = false;
             }
 
             if (arguments != null)
             {
-                result.ArgumentExpressionCount = GetExpressionCount(arguments);
-                ScanExpressions(
-                    debugger,
-                    result,
-                    arguments,
-                    result.ArgumentExpressionCount,
-                    seenExpressions,
-                    includeImageCollections,
-                    collectionBudget);
+                if (TryGetExpressionCount(arguments, out var argumentExpressionCount))
+                {
+                    result.ArgumentExpressionCount = argumentExpressionCount;
+                    ScanExpressions(
+                        debugger,
+                        result,
+                        arguments,
+                        result.ArgumentExpressionCount,
+                        seenExpressions,
+                        includeImageCollections,
+                        scanBudget);
+                }
+                else
+                {
+                    result.IsComplete = false;
+                }
+            }
+            else
+            {
+                result.IsComplete = false;
             }
 
             return result;
         }
 
-        private static void ScanExpressions(
+        private static void AddInspection(
+            AutomaticVisionScanResult result,
+            AutomaticScanBudget budget,
+            AutomaticVisionInspection inspection)
+        {
+            if (budget.RemainingItems <= 0)
+            {
+                result.TruncatedCandidateCount++;
+                result.IsComplete = false;
+                return;
+            }
+
+            budget.RemainingItems--;
+            result.Inspections.Add(inspection);
+        }
+
+        private void ScanExpressions(
             EnvDTE.Debugger debugger,
             AutomaticVisionScanResult result,
             EnvDTE.Expressions expressions,
             int expressionCount,
             HashSet<string> seenExpressions,
             bool includeImageCollections,
-            AutomaticCollectionScanBudget collectionBudget)
+            AutomaticScanBudget scanBudget)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             for (var i = 1; i <= expressionCount; i++)
             {
+                if (scanBudget.RemainingRootExpressions <= 0)
+                {
+                    result.TruncatedRootExpressionCount += expressionCount - i + 1;
+                    result.IsComplete = false;
+                    break;
+                }
+
+                scanBudget.RemainingRootExpressions--;
                 EnvDTE.Expression expression;
                 try
                 {
@@ -271,6 +365,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
                 catch
                 {
+                    result.IsComplete = false;
                     continue;
                 }
 
@@ -306,7 +401,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                             rootExpression,
                             runtimeTypeName,
                             collectionDescriptor,
-                            collectionBudget);
+                            scanBudget);
                     }
 
                     continue;
@@ -333,8 +428,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     continue;
                 }
 
-                RawBufferVisualizerPackageLog.Write(
-                    "Automatic scan inspecting " + rootExpression + " (" + runtimeTypeName + ")");
                 if (knownImageKind != AutomaticKnownImageKind.None)
                 {
                     if (IsNullOrUnavailable(expression))
@@ -344,7 +437,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         continue;
                     }
 
-                    result.Inspections.Add(new AutomaticVisionInspection
+                    AddInspection(result, scanBudget, new AutomaticVisionInspection
                     {
                         RootExpression = rootExpression,
                         RuntimeTypeName = runtimeTypeName,
@@ -353,23 +446,105 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     continue;
                 }
 
-                var inventory = BuildInventory(expression);
                 var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(runtimeTypeName);
-                var inference = VisionMemberInference.Infer(inventory, runtimeTypeName);
-                if (mapping == null && inference.ConfidenceScore < 40)
+                if (mapping != null)
                 {
+                    AddInspection(result, scanBudget, new AutomaticVisionInspection
+                    {
+                        RootExpression = rootExpression,
+                        RuntimeTypeName = runtimeTypeName,
+                        Mapping = mapping,
+                        UsesSavedMapping = true,
+                        DataTypeName = ReadMappedDataTypeName(debugger, rootExpression, mapping)
+                    });
                     continue;
                 }
 
-                result.Inspections.Add(new AutomaticVisionInspection
+                CachedTypeAnalysis cachedAnalysis;
+                if (_typeAnalysisCache.TryGetValue(runtimeTypeName, out cachedAnalysis))
+                {
+                    if (cachedAnalysis.IsCandidate)
+                    {
+                        AddInspection(result, scanBudget, new AutomaticVisionInspection
+                        {
+                            RootExpression = rootExpression,
+                            RuntimeTypeName = runtimeTypeName,
+                            Inventory = cachedAnalysis.Inventory,
+                            Inference = cachedAnalysis.Inference,
+                            Mapping = cachedAnalysis.Mapping,
+                            UsesCachedInference = true,
+                            DataTypeName = cachedAnalysis.DataTypeName
+                        });
+                    }
+
+                    continue;
+                }
+
+                if (!ShouldAnalyzeUnmappedType(runtimeTypeName))
+                {
+                    _typeAnalysisCache[runtimeTypeName] = new CachedTypeAnalysis();
+                    continue;
+                }
+
+                if (scanBudget.RemainingNewTypeAnalyses <= 0)
+                {
+                    result.DeferredTypeAnalysisCount++;
+                    result.IsComplete = false;
+                    continue;
+                }
+
+                scanBudget.RemainingNewTypeAnalyses--;
+                RawBufferVisualizerPackageLog.Write(
+                    "Automatic scan analyzing new image-like type " + rootExpression + " (" + runtimeTypeName + ")");
+                List<VisualizerMemberInventoryItem> inventory;
+                try
+                {
+                    inventory = BuildInventory(expression);
+                }
+                catch (Exception exception)
+                {
+                    result.IsComplete = false;
+                    var error = "Debugger member inspection failed: " + exception.Message;
+                    AddInspection(result, scanBudget, new AutomaticVisionInspection
+                    {
+                        RootExpression = rootExpression,
+                        RuntimeTypeName = runtimeTypeName,
+                        PreflightError = error
+                    });
+                    RawBufferVisualizerPackageLog.Write(
+                        "Automatic scan skipped unreadable image-like type "
+                        + rootExpression
+                        + " ("
+                        + runtimeTypeName
+                        + "): "
+                        + error);
+                    continue;
+                }
+
+                var inference = VisionMemberInference.Infer(inventory, runtimeTypeName);
+                if (inference.ConfidenceScore < 40)
+                {
+                    _typeAnalysisCache[runtimeTypeName] = new CachedTypeAnalysis();
+                    continue;
+                }
+
+                var inspection = new AutomaticVisionInspection
                 {
                     RootExpression = rootExpression,
                     RuntimeTypeName = runtimeTypeName,
                     Inventory = inventory,
+                    Inference = inference
+                };
+                inspection.DataTypeName = inspection.GetDataTypeName();
+                _typeAnalysisCache[runtimeTypeName] = new CachedTypeAnalysis
+                {
+                    IsCandidate = true,
+                    Inventory = inventory,
                     Inference = inference,
-                    Mapping = mapping,
-                    UsesSavedMapping = mapping != null
-                });
+                    Mapping = inspection.CreateTransientMapping(),
+                    DataTypeName = inspection.DataTypeName
+                };
+                AddInspection(result, scanBudget, inspection);
             }
         }
 
@@ -380,12 +555,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string rootExpression,
             string runtimeTypeName,
             AutomaticImageCollectionDescriptor descriptor,
-            AutomaticCollectionScanBudget budget)
+            AutomaticScanBudget budget)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (budget.RemainingRoots <= 0)
             {
                 result.SkippedCollectionRootCount++;
+                result.IsComplete = false;
                 return;
             }
 
@@ -403,7 +579,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     summary,
                     rootExpression,
                     runtimeTypeName,
-                    "The image collection is null or unavailable.");
+                    "The image collection is null or unavailable.",
+                    budget);
+                result.IsComplete = false;
                 return;
             }
 
@@ -421,17 +599,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     summary,
                     rootExpression,
                     runtimeTypeName,
-                    countError);
+                    countError,
+                    budget);
+                result.IsComplete = false;
                 return;
             }
-
-            summary.TotalCount = totalCount;
-            var scheduledCount = AutomaticImageCollectionPolicy.GetScheduledItemCount(
-                totalCount,
-                budget.RemainingItems);
-            summary.ScheduledCount = scheduledCount;
-            summary.TruncatedCount = Math.Max(0, totalCount - scheduledCount);
-            budget.RemainingItems -= scheduledCount;
 
             var knownImageKind = KnownImageType.GetAutomaticCaptureKind(
                 descriptor.ElementTypeName);
@@ -442,8 +614,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     summary,
                     rootExpression,
                     runtimeTypeName,
-                    "The collection element type is not supported by the automatic capture path.");
+                    "The collection element type is not supported by the automatic capture path.",
+                    budget);
                 return;
+            }
+
+            summary.TotalCount = totalCount;
+            var scheduledCount = AutomaticImageCollectionPolicy.GetScheduledItemCount(
+                totalCount,
+                budget.RemainingItems);
+            summary.ScheduledCount = scheduledCount;
+            summary.TruncatedCount = Math.Max(0, totalCount - scheduledCount);
+            budget.RemainingItems -= scheduledCount;
+            if (summary.TruncatedCount > 0)
+            {
+                result.TruncatedCandidateCount += summary.TruncatedCount;
+                result.IsComplete = false;
             }
 
             RawBufferVisualizerPackageLog.Write(
@@ -473,10 +659,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             AutomaticCollectionScanSummary summary,
             string rootExpression,
             string runtimeTypeName,
-            string error)
+            string error,
+            AutomaticScanBudget budget)
         {
             summary.ScanError = error;
-            result.Inspections.Add(new AutomaticVisionInspection
+            AddInspection(result, budget, new AutomaticVisionInspection
             {
                 RootExpression = rootExpression,
                 RuntimeTypeName = runtimeTypeName,
@@ -549,17 +736,69 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         }
 #pragma warning restore VSTHRD010
 
-        private static int GetExpressionCount(EnvDTE.Expressions expressions)
+        private static bool TryGetExpressionCount(EnvDTE.Expressions expressions, out int count)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            count = 0;
             try
             {
-                return Math.Max(0, expressions.Count);
+                count = Math.Max(0, expressions.Count);
+                return true;
             }
             catch
             {
-                return 0;
+                return false;
             }
+        }
+
+#pragma warning disable VSTHRD010
+        private static string ReadMappedDataTypeName(
+            EnvDTE.Debugger debugger,
+            string rootExpression,
+            TypeMapping mapping)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (mapping.Members == null || string.IsNullOrWhiteSpace(mapping.Members.Data))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                var expression = debugger.GetExpression(
+                    rootExpression + "." + mapping.Members.Data,
+                    true,
+                    CollectionExpressionTimeoutMilliseconds);
+                return expression == null ? string.Empty : ReadExpressionType(expression);
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+#pragma warning restore VSTHRD010
+
+        private static bool ShouldAnalyzeUnmappedType(string runtimeTypeName)
+        {
+            var typeName = runtimeTypeName.Trim();
+            if (typeName.StartsWith("System.", StringComparison.Ordinal)
+                || typeName.StartsWith("Microsoft.", StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            if (typeName.IndexOf("image", StringComparison.OrdinalIgnoreCase) >= 0
+                || typeName.IndexOf("frame", StringComparison.OrdinalIgnoreCase) >= 0
+                || typeName.IndexOf("bitmap", StringComparison.OrdinalIgnoreCase) >= 0
+                || typeName.IndexOf("buffer", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                return true;
+            }
+
+            var dot = typeName.LastIndexOf('.');
+            var leafName = dot >= 0 ? typeName.Substring(dot + 1) : typeName;
+            return string.Equals(leafName, "Mat", StringComparison.Ordinal)
+                || leafName.EndsWith("Mat", StringComparison.Ordinal);
         }
 
         private static bool ShouldSkipRootType(string runtimeTypeName)

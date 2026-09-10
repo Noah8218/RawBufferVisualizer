@@ -22,9 +22,11 @@ namespace RawBufferVisualizer.VisualStudio
     /// </summary>
     public static class AutomaticImageCollectionPolicy
     {
-        public const int MaximumItemsPerCollection = 8;
-        public const int MaximumItemsPerScan = 16;
+        public const int MaximumItemsPerCollection = 128;
+        public const int MaximumItemsPerScan = 128;
         public const int MaximumCollectionRootsPerScan = 8;
+        public const int MaximumItemsPerBatch = 8;
+        public const int BatchSoftTimeBudgetMilliseconds = 2000;
 
         private const string OpenCvSharpMatTypeName = "OpenCvSharp.Mat";
         private const string EmguCvMatTypeName = "Emgu.CV.Mat";
@@ -69,6 +71,13 @@ namespace RawBufferVisualizer.VisualStudio
             return Math.Min(
                 totalCount,
                 Math.Min(MaximumItemsPerCollection, remainingScanCapacity));
+        }
+
+        public static int GetBatchItemCount(int remainingItemCount)
+        {
+            return remainingItemCount <= 0
+                ? 0
+                : Math.Min(remainingItemCount, MaximumItemsPerBatch);
         }
 
         public static string CreateElementExpression(string rootExpression, int index)

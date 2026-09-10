@@ -4,11 +4,34 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.7` changes are queued.
+No post-`2.0.8` changes are queued.
+
+## [2.0.8] - 2026-09-04
+
+Raw Buffer Visualizer `2.0.8` corrects the Visual Studio 2022 debugger payload packaged for the signed 32-bit matrix support introduced in 2.0.7.
+
+### Fixed
+
+- Packages the `netstandard2.0` debugger ObjectSource, Core, SDK, and dependency manifest from the current routed Release build instead of a stale repository-local build directory.
+- Adds a fail-closed SHA-256 gate that compares every debugger-side payload in the VSIX with the corresponding fresh build output before a candidate can be produced.
+- Restores direct OpenCvSharp `CV_32SC1` and Emgu CV `Cv32S` C1 visualization on the Visual Studio 2022 debugger-host path while retaining the existing `Int32` rendering and inspection behavior.
+
+### Improved
+
+- Bounds Automatic Inspector discovery to 128 current-frame image candidates and opens an initial batch of at most eight images or a soft two-second budget.
+- Adds non-modal candidate/refreshed/deferred/failed counts plus **Load next 8**, **Load all this Break**, and **Stop** for large results.
+- Refreshes matching automatic rows in place across repeated Break/F10/Scan Now operations, coalesces overlapping scans, and prevents cached inference from bypassing the mapping-required safety gate.
+
+### Release safety
+
+- Public `2.0.7.0` is superseded because its packaged `netstandard2.0` ObjectSource was byte-identical to the 2.0.6 payload. Reinstalling 2.0.7 cannot correct that package content; use 2.0.8 or later.
+- The Marketplace extension identity and Visual Studio 2022 `17.9+` / stable Visual Studio 2026 `18.x` targets are unchanged.
 
 ## [2.0.7] - 2026-09-03
 
 Raw Buffer Visualizer `2.0.7` adds signed 32-bit, one-channel matrix visualization for segmentation labels, integer result maps, and other `CV_32SC1`-style buffers.
+
+Release status: public but superseded by `2.0.8`. The published VSIX contains a stale `netstandard2.0` debugger ObjectSource, so direct `CV_32SC1` visualization can fail with `Unsupported Mat type: CV_32SC1` on the Visual Studio 2022 debugger-host path even though the feature exists in source.
 
 ### Added
 
@@ -257,7 +280,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.7...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.8...HEAD
+[2.0.8]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.7...v2.0.8
 [2.0.7]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.6...v2.0.7
 [2.0.6]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.5...v2.0.6
 [2.0.5]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.4...v2.0.5

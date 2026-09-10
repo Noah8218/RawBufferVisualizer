@@ -1,16 +1,24 @@
-Raw Buffer Visualizer 2.0.7
+Raw Buffer Visualizer 2.0.8
+
+DEBUGGER PAYLOAD CORRECTION
+- Restores the signed Int32 debugger path for OpenCvSharp CV_32SC1 and Emgu CV Cv32S C1 on Visual Studio 2022.
+- Packages the current netstandard2.0 debugger payload instead of the stale payload shipped in 2.0.7.
+- Verifies the VSIX debugger payload against the fresh Release build before packaging succeeds.
 
 SIGNED 32-BIT MATRICES
-- Opens OpenCvSharp CV_32SC1 and Emgu CV Cv32S C1 as Int32 images.
-- Includes direct debugger visualizers, Automatic Inspector, and supported Mat collections.
-- Uses signed min/max grayscale autoscaling while keeping exact signed pixel values and four raw bytes in the inspector.
-- Preserves explicit byte order and padded stride for pointer, snapshot, mapped int[], sampled, and tiled paths.
+- Retains signed min/max grayscale autoscaling, exact signed pixel values, four raw bytes, collections, mapped int[], pointer/snapshot inputs, padded stride, sampled previews, and tiled rendering.
+
+AUTOMATIC INSPECTOR
+- Limits discovery to 128 candidates and loads the first eight images or a soft two-second batch before offering Load next 8, Load all this Break, and Stop.
+- Refreshes matching image rows in place across repeated F10, Break, and Scan Now operations instead of duplicating unchanged entries.
+- Reuses type analysis for performance while keeping mapping-required objects behind the mapping gate on every scan.
+- Shows candidate, refreshed, deferred, and failed counts without interrupting the debugger with a modal prompt.
 
 COMPATIBILITY
 - Visual Studio 2022 17.9+ and stable Visual Studio 2026 18.x remain the supported installation targets.
-- CV_32SC1 is one signed 32-bit channel. Multi-channel signed Mats and 3D data remain outside this release.
+- Public 2.0.7 is superseded; reinstalling 2.0.7 does not replace its stale packaged debugger payload.
 
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
 
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#207
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#208
