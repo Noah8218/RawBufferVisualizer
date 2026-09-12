@@ -197,7 +197,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             long bufferLength;
             try
             {
-                bufferLength = checked((long)stride * height);
+                bufferLength = descriptor.GetRequiredByteCount();
             }
             catch (OverflowException)
             {

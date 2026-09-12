@@ -17,6 +17,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
     internal static class DebuggerVisualizerLaunch
     {
         private static readonly TimeSpan HandoffAcknowledgementTimeout = TimeSpan.FromSeconds(30);
+        private const long DirectMemoryThreshold = 8L * 1024L * 1024L;
         private const long PreviewFirstThreshold = 64L * 1024L * 1024L;
 
         public static async Task<IRemoteUserControl> CreateControlAsync(
@@ -141,6 +142,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
+                var errorMessage = CreateTechnicalFailureMessage(ex, sourceType);
                 if (publishedRequestPaths.Count > 0)
                 {
                     VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
@@ -159,14 +161,14 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     visualStudioProcessId,
                     displayName,
                     sourceType,
-                    ex.Message,
+                    errorMessage,
                     cancellationToken,
                     errorType: ex.GetType().FullName,
                     errorDetails: ex.ToString(),
                     handoffId: handoffId);
                 if (!closeWhenLoaded)
                 {
-                    session.ReportFailure(ex.Message);
+                    session.ReportFailure(errorMessage);
                 }
             }
 
@@ -334,6 +336,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     }
                     catch (Exception ex)
                     {
+                        var errorMessage = CreateTechnicalFailureMessage(ex, summary.SourceType);
                         if (itemPublishedRequestPaths.Count > 0)
                         {
                             VisualizerHandoffInbox.ScheduleTerminalArtifactCleanup(
@@ -355,7 +358,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                 collectionExpression,
                                 string.IsNullOrWhiteSpace(item.DisplayName) ? "Item " + index : item.DisplayName),
                             summary.SourceType,
-                            ex.Message,
+                            errorMessage,
                             ex.GetType().FullName,
                             ex.ToString(),
                             handoffId,
@@ -400,18 +403,19 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
             catch (Exception ex)
             {
+                var errorMessage = CreateTechnicalFailureMessage(ex, sourceType);
                 closeWhenLoaded = await TryForwardFailureAsync(
                     visualStudioProcessId,
                     "Image collection",
                     sourceType,
-                    ex.Message,
+                    errorMessage,
                     cancellationToken,
                     requestPaths,
                     ex.GetType().FullName,
                     ex.ToString());
                 if (!closeWhenLoaded)
                 {
-                    session.ReportFailure(ex.Message);
+                    session.ReportFailure(errorMessage);
                 }
             }
 
@@ -483,6 +487,22 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             }
         }
 
+        private static string CreateTechnicalFailureMessage(Exception exception, string sourceType)
+        {
+            var errorType = exception.GetType().FullName ?? exception.GetType().Name;
+            if (!errorType.EndsWith("RemoteInvocationException", StringComparison.Ordinal))
+            {
+                return exception.Message;
+            }
+
+            return string.Format(
+                CultureInfo.InvariantCulture,
+                "Debugger RPC request failed: operation=metadata; source={0}; exception={1}; hresult=0x{2:X8}; image payload=not received.",
+                string.IsNullOrWhiteSpace(sourceType) ? "the image object" : sourceType,
+                errorType,
+                unchecked((uint)exception.HResult));
+        }
+
         private static bool ShouldForwardPreview(VisualizerSnapshotMetadata metadata)
         {
             return metadata.BufferLength >= PreviewFirstThreshold;
@@ -490,7 +510,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
 
         private static bool ShouldUseDirectMemory(VisualizerSnapshotMetadata metadata)
         {
-            return metadata.BufferLength >= PreviewFirstThreshold
+            return metadata.BufferLength >= DirectMemoryThreshold
                 && metadata.SupportsDirectMemory
                 && metadata.ProcessId > 0
                 && metadata.BufferAddress != 0;
@@ -1041,7 +1061,32 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             while (offset < metadata.BufferLength)
             {
                 var count = (int)Math.Min(metadata.ChunkSize, metadata.BufferLength - offset);
-                var chunk = await requestChunk(offset, count);
+                VisualizerSnapshotChunk chunk;
+                try
+                {
+                    chunk = await requestChunk(offset, count);
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    var chunkNumber = (offset / metadata.ChunkSize) + 1;
+                    var chunkCount = (metadata.BufferLength + metadata.ChunkSize - 1) / metadata.ChunkSize;
+                    throw new InvalidOperationException(
+                        string.Format(
+                            CultureInfo.InvariantCulture,
+                            "Debugger RPC request failed: operation=snapshot-chunk; chunk={0}/{1}; offset={2:N0} bytes; requested={3:N0} bytes; total={4:N0} bytes; exception={5}; hresult=0x{6:X8}.",
+                            chunkNumber,
+                            chunkCount,
+                            offset,
+                            count,
+                            metadata.BufferLength,
+                            ex.GetType().FullName,
+                            unchecked((uint)ex.HResult)),
+                        ex);
+                }
 
                 if (chunk == null || chunk.Buffer == null)
                 {

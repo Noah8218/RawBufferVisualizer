@@ -1,18 +1,18 @@
 # Architecture And Validation
 
-This document describes the current local `2.0.8.0` architecture while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.7 added signed 32-bit, one-channel matrix mapping and rendering. Version 2.0.8 corrects routed debugger-payload packaging and adds bounded, incremental Automatic Inspector processing without widening the multi-channel or 3D scope. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
+This document describes the current local `2.0.9.0` architecture while preserving earlier release baselines for regression history. The 2.0 line locks the vendor-neutral 2D carrier/layout contract, shared fail-closed transfer validation, live-source invalidation, debugger-session handoff admission, and ranked interpretation repair inside the mapping dialog. The hybrid package keeps the in-process `net472` VSSDK 17.9 package separate from the out-of-process `net8` debugger providers. Version 2.0.5 added expression-name recovery, native-object-versus-pixel pointer provenance, complete native-read enforcement, and complete registered image-array identities. Version 2.0.7 added signed 32-bit, one-channel matrix mapping and rendering. Version 2.0.8 corrected routed debugger-payload packaging and added bounded, incremental Automatic Inspector processing. Version 2.0.9 routes medium pointer-backed images around the repeated debugger-RPC snapshot path, corrects inferred ROI spans, and normalizes visible remote failures into technical fields without widening the multi-channel or 3D scope. This is the technical source for debugger transfer, viewer behavior, compatibility, tests, packaging, and troubleshooting.
 
 ## Supported Environment
 
 | Surface | Current target |
 | --- | --- |
-| Visual Studio extension | Public `2.0.7.0` and local `2.0.8.0`: VS2022 `17.9+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
+| Visual Studio extension | Public `2.0.8.0` and local `2.0.9.0`: VS2022 `17.9+` and stable VS2026 `18.x`, Community/Professional/Enterprise x64 |
 | Extension/VSSDK projects | VSSDK package `net472`; out-of-process provider `net8.0-windows8.0` |
 | Core/SDK/object source | `net472`, `netstandard2.0`, and/or `net8.0` depending on project |
 | Standalone WPF viewer | `net472` and `net8.0-windows` |
 | Build machine | Visual Studio 2022 with .NET desktop development and .NET 8 SDK or newer |
 
-The current 2.0.8 source uses VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. The exact final candidate passed installed checks on exact VS2022 Community `17.9.34902.65`, serviced VS2022 Community `17.14.37516.0`, and stable VS2026 Community `18.9.12128.139`, including 17/17 critical-file equality on each host. The exact 17.9 host passed seven installed scenario groups with zero package-protocol errors; 125%-200% DPI checks remain publication prerequisites. See [release-qualification-2.0.8.md](release-qualification-2.0.8.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
+The current 2.0.9 source uses VisualStudio.Extensibility `17.9.2092`, Visual Studio SDK `17.9.37000`, VSSDK BuildTools `17.9.3184`, and `[17.9,18.0)`. The exact 2.0.9 package passed the reported-size OpenCvSharp Mat, Emgu CV Mat, and ImagePtr workflow on exact VS2022 Community `17.9.34902.65` and serviced VS2022 Community `17.14.37516.0`. It passed the registered-open pinned-dock regression on those hosts and stable VS2026 Community `18.9.12128.139`; all 71 installer-deployed files matched the candidate on every host. The final stable-VS2026 reported-size run did not reach debuggee launch and is not a runtime pass. See [release-qualification-2.0.9.md](release-qualification-2.0.9.md). Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, and explicit .NET 9/10 matrices are not support claims.
 
 ## System Shape
 
@@ -187,15 +187,15 @@ When the debugging UI context activates, the VSSDK package preloads asynchronous
 
 1. The provider asks the object source for `VisualizerSnapshotMetadata`.
 2. Metadata includes descriptor, source type/name, expression identity, buffer length, source-pointer provenance, and direct pixel-memory fields when the source supports them.
-3. For buffers below 64 MiB, the extension writes descriptor metadata and requests raw chunks into an owned `.raw` file.
-4. For buffers at or above 64 MiB, the extension first requests a sampled preview bounded to 512 x 512.
-5. If the large source supports direct memory and has a valid process ID/address, the docked viewer receives a live process-memory request after the preview.
-6. If direct memory is unavailable, the extension falls back to chunking the full source to an owned temp snapshot after checking disk space.
+3. Pointer-backed sources at or above 8 MiB with a valid process ID/address go directly to the checked live process-memory path instead of serializing the complete image through debugger RPC.
+4. Smaller pointer-backed sources and non-pointer sources write descriptor metadata and request at most 4 MiB per RPC chunk into an owned `.raw` snapshot after checking disk space.
+5. Buffers at or above 64 MiB first request a sampled preview bounded to 512 x 512. Eligible pointer-backed sources then switch to live memory; sources without a valid direct-memory contract continue through the snapshot path.
+6. Inferred pointer-backed spans use `stride * (height - 1) + minimum row bytes`; explicit buffer lengths remain authoritative.
 7. The producer writes complete request JSON to a unique `.publishing.<guid>` path and atomically moves it to the visible `.rbuf-handoff` path in an inbox scoped to the hosting `devenv.exe` process.
 8. The docked package claims a ready request exactly once by using an exclusive claim guard and moving it to a unique `.processing.<guid>` path.
 9. `ClaimedHandoffOpenCoordinator` reads the processing file and publishes an explicit ACK only after the ToolWindow-supplied opener adds the image/error document successfully. A failed open atomically publishes its reason before a NACK marker.
 10. The producer treats only ACK as success. Disappearance of the ready file means Processing, not acknowledgement; NACK and conflicting terminal markers are failures.
-11. The temporary Modern host closes after every request reaches a successful ACK; the docked VSSDK window remains. Modern timeout/cancel and Classic fire-and-forget both schedule the shared terminal-artifact cleanup.
+11. The temporary Modern host closes after every request reaches a successful ACK because `DockedVisualizerControl` disposes its `VisualizerTarget`; the docked VSSDK window remains. The package must not enumerate or close same-caption Visual Studio frames. Modern timeout/cancel and Classic fire-and-forget both schedule the shared terminal-artifact cleanup.
 
 Registered unmanaged producers (`RawBufferView`, ImagePtr, OpenCvSharp Mat, Emgu Mat, and Bitmap) route chunk and sampled-preview reads through `CurrentProcessMemoryReader`. It uses current-process `ReadProcessMemory` and accepts a request only when the complete requested byte count is returned. Freed memory, inaccessible pages, and partial native reads therefore become a controlled `IOException`; a partially filled or zero-filled image is not returned as valid data. Sampled preview uses one bounded page cache per transfer. Bitmap reads remain inside `LockBits`/`UnlockBits`, and a negative native stride is normalized from the lowest row address so the transferred descriptor keeps top-to-bottom row order.
 
@@ -205,7 +205,21 @@ Transient handoff reads and terminal-marker moves retry `IOException` and `Unaut
 
 `RawBufferDocumentWorkspace<TDocument>` is the single owner of the ToolWindow document collection, active-document state, removal, clear, and disposal. The ToolWindow translates user/UI events into workspace operations and owns presentation updates, but does not mutate the collection or active state directly. `ImageDocument` owns its image source and a `VisualStudioSnapshotLeaseOwner`; `RawBufferToolWindow.Dispose` disposes the control, which disposes the workspace and all remaining documents.
 
-The 64 MiB threshold is `PreviewFirstThreshold` in `DebuggerVisualizerLaunch.cs`. The preview is an early visible state, not proof that the full/live source is available forever.
+Manual open failures are coalesced only when the normalized display path, source type, error type, and technical error message all match an existing non-automatic error document. The ToolWindow replaces that row's error source, timestamp, report ID, inventory, and current details in place. A different expression or cause remains a distinct row, and Automatic Inspector retains its separate row-reconciliation policy.
+
+`DirectMemoryThreshold` is 8 MiB and `PreviewFirstThreshold` is 64 MiB in `DebuggerVisualizerLaunch.cs`. The direct-memory threshold bounds repeated debugger RPC snapshot requests; the preview threshold bounds time to first visible content for very large images. A preview is not proof that the full/live source remains available after execution resumes.
+
+### 2.0.8 field timeout regression rule
+
+The 2.0.9 boundary is based on a Visual Studio 2022 `17.9.34902.65` support report from public 2.0.8. A `6768 x 3225` `Mono8` payload is 21,826,800 bytes and required six 4 MiB debugger RPC chunk requests. The host failed during `WriteRawChunksCoreAsync` with `StreamJsonRpc.RemoteInvocationException`; the localized exception text did not identify the transfer stage or failed request.
+
+Future transfer changes must retain all of these checks:
+
+- exercise OpenCvSharp Mat, Emgu CV Mat, and the exact registered ImagePtr target at the reported `6768 x 3225` size on the oldest supported Visual Studio host;
+- prove that all three use checked live process memory, open without an error row, retain exact pointer/pixel metadata, and become `UNAVAILABLE` after Continue or process exit;
+- exercise a pointer-backed payload below 8 MiB and prove that its snapshot survives Continue;
+- prove inferred ROI length against an inaccessible page boundary so the final-row calculation cannot read trailing stride padding;
+- keep any remote exception's localized message and stack only in `ErrorDetails`; the visible error must report the RPC operation and include source or chunk, byte counts where applicable, exception type, and HRESULT.
 
 ## Collection Transfer Flow
 

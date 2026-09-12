@@ -745,6 +745,21 @@ foreach ($layoutWidth in $Widths) {
     Capture-Window $helper.Handle $errorCapturePath
 
     $imageList = $control.FindName("ImageList")
+    $errorDocumentCountBeforeRepeat = $imageList.Items.Count
+    $firstErrorId = $errorId
+    $control.OpenPath($missingMetadataPath)
+    Wait-Dispatcher 250
+    $errorDocumentCountAfterRepeat = $imageList.Items.Count
+    $repeatedErrorId = $errorIdText.Text
+    $repeatedErrorCapturePath = Join-Path $outputRoot "error-repeated-$layoutWidth.png"
+    Capture-Window $helper.Handle $repeatedErrorCapturePath
+    $repeatedErrorCoalesced = $errorDocumentCountAfterRepeat -eq $errorDocumentCountBeforeRepeat -and
+        $repeatedErrorId.StartsWith("RBV-ERROR-", [System.StringComparison]::Ordinal) -and
+        $repeatedErrorId -ne $firstErrorId
+    if (-not $repeatedErrorCoalesced) {
+        throw "Repeated identical error did not refresh one row at width $layoutWidth. Before=$errorDocumentCountBeforeRepeat After=$errorDocumentCountAfterRepeat FirstId='$firstErrorId' LatestId='$repeatedErrorId'."
+    }
+
     $imageList.SelectedIndex = 0
     Wait-Dispatcher 250
     $recoveredFromError = $errorPanel.Visibility -eq [System.Windows.Visibility]::Collapsed -and
@@ -1214,6 +1229,10 @@ foreach ($layoutWidth in $Widths) {
         SupportReportPath = $supportReportPath
         SupportReportFileValid = $supportReportFileValid
         ErrorCapture = $errorCapturePath
+        RepeatedErrorCoalesced = $repeatedErrorCoalesced
+        RepeatedErrorDocumentCount = $errorDocumentCountAfterRepeat
+        RepeatedErrorId = $repeatedErrorId
+        RepeatedErrorCapture = $repeatedErrorCapturePath
         RecoveredFromError = $recoveredFromError
         RecoveryNonDarkRatio = [Math]::Round($recoveryNonDarkRatio, 6)
         RecoveryCapture = $recoveryCapturePath

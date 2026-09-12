@@ -1,24 +1,27 @@
-Raw Buffer Visualizer 2.0.8
+Raw Buffer Visualizer 2.0.9
 
-DEBUGGER PAYLOAD CORRECTION
-- Restores the signed Int32 debugger path for OpenCvSharp CV_32SC1 and Emgu CV Cv32S C1 on Visual Studio 2022.
-- Packages the current netstandard2.0 debugger payload instead of the stale payload shipped in 2.0.7.
-- Verifies the VSIX debugger payload against the fresh Release build before packaging succeeds.
+NATIVE IMAGE TRANSFER
+- Pointer-backed OpenCvSharp Mat, Emgu CV Mat, ImagePtr, and RawBufferView payloads at or above 8 MiB use checked live process-memory reads instead of repeated full-image debugger RPC snapshot requests.
+- Pointer-backed images below 8 MiB and non-pointer sources retain 4 MiB snapshot chunks.
+- Live rows become UNAVAILABLE after Continue or process exit; copied snapshots remain viewable.
 
-SIGNED 32-BIT MATRICES
-- Retains signed min/max grayscale autoscaling, exact signed pixel values, four raw bytes, collections, mapped int[], pointer/snapshot inputs, padded stride, sampled previews, and tiled rendering.
+ROI MEMORY RANGE
+- Inferred image length ends at the final pixel row instead of including nonexistent trailing stride padding.
+- The same rule applies to registered Mats, inferred ImagePtr and RawBufferView values, and Automatic Inspector's known-image capture.
+- Explicit buffer lengths remain authoritative; unreadable, released, partial, and overflowed ranges fail closed.
 
-AUTOMATIC INSPECTOR
-- Limits discovery to 128 candidates and loads the first eight images or a soft two-second batch before offering Load next 8, Load all this Break, and Stop.
-- Refreshes matching image rows in place across repeated F10, Break, and Scan Now operations instead of duplicating unchanged entries.
-- Reuses type analysis for performance while keeping mapping-required objects behind the mapping gate on every scan.
-- Shows candidate, refreshed, deferred, and failed counts without interrupting the debugger with a modal prompt.
+TECHNICAL DIAGNOSTICS
+- Debugger RPC failures report the operation, source or chunk, byte offset and sizes when applicable, exception type, and HRESULT.
+- The visible error uses stable technical wording while the original localized debugger exception remains in the local support report.
+
+TOOL WINDOW RELIABILITY
+- Reopening the same expression after the same failure refreshes its existing error row with a new report ID instead of appending duplicate rows.
+- Opening Bitmap, Mat, RawBufferView, or other registered visualizers no longer closes or replaces the pinned docked Tool Window.
 
 COMPATIBILITY
 - Visual Studio 2022 17.9+ and stable Visual Studio 2026 18.x remain the supported installation targets.
-- Public 2.0.7 is superseded; reinstalling 2.0.7 does not replace its stale packaged debugger payload.
 
 The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
 
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#208
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#209

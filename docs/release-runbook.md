@@ -19,7 +19,7 @@ Microsoft's command-line publishing flow uses `VsixPublisher.exe publish` with a
 Use the bump script:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 2.0.8
+powershell -ExecutionPolicy Bypass -File .\scripts\Bump-VisualStudioExtensionVersion.ps1 -Version 2.0.9
 ```
 
 This updates all five version sources:
@@ -33,13 +33,13 @@ This updates all five version sources:
 Example:
 
 ```xml
-<AssemblyVersion>2.0.8.0</AssemblyVersion>
-<FileVersion>2.0.8.0</FileVersion>
-<Version>2.0.8</Version>
+<AssemblyVersion>2.0.9.0</AssemblyVersion>
+<FileVersion>2.0.9.0</FileVersion>
+<Version>2.0.9</Version>
 ```
 
 ```xml
-<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="2.0.8.0" Language="en-US" Publisher="Noah Choi" />
+<Identity Id="RawBufferVisualizer.34f8ad30-2f11-4c37-a9d4-00f3a8c1d29f" Version="2.0.9.0" Language="en-US" Publisher="Noah Choi" />
 ```
 
 ## Release communication gate
@@ -55,7 +55,7 @@ The bump script changes binary version sources only. For every release, intentio
 Run the coherence guard:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.8
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.9
 ```
 
 The guard fails when any version, Overview product heading/current-version section, path, manifest metadata, or GitHub Release notes flow is stale. `Publish-VisualStudioMarketplace.ps1` requires an explicit `-VsixPath`, rejects a VSIX whose manifest version differs from the current extension project version, and defaults only the Overview to `docs\marketplace-overview-<VSIX version>.md`; it no longer uploads the root README as the Overview. Never depend on a repository publish folder containing the current qualified candidate.
@@ -70,10 +70,10 @@ Run this before pushing the version bump:
 dotnet restore .\RawBufferVisualizer.sln
 dotnet build .\RawBufferVisualizer.sln --configuration Release --no-restore
 dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.8
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-ReleaseCommunication.ps1 -ExpectedVersion 2.0.9
 powershell -ExecutionPolicy Bypass -File .\scripts\Test-EnvironmentCheckContracts.ps1
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -BuildRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\20260904\build -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\20260904\candidate -NoZip
-powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\20260904\layout-widths
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -BuildRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.9\build-final-r2 -PublishRoot D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.9\candidate-final-r2 -NoZip
+powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedLayoutWidths.ps1 -Configuration Release -Framework net472 -NoBuild -OutputDir D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.9\layout-widths
 powershell -STA -ExecutionPolicy Bypass -File .\scripts\SmokeDockedMemorySoak.ps1 -Configuration Release -Framework net472 -NoBuild
 ```
 
@@ -92,26 +92,26 @@ When the exact `.build` VSIX has already passed an explicit current-source Relea
 
 The VSIX to upload or smoke-test is:
 
-Use only the exact candidate recorded in [release-qualification-2.0.8.md](release-qualification-2.0.8.md). Do not upload it until the owner approves the candidate and copy, the matching source is committed and pushed, CI passes for that commit, and the exact bytes pass installed qualification on the required available hosts. Do not rebuild or substitute the candidate bytes after qualification.
+Use only the exact candidate recorded in [release-qualification-2.0.9.md](release-qualification-2.0.9.md). Do not upload it until the owner approves the candidate and copy, the matching source is committed and pushed, CI passes for that commit, and the exact bytes pass installed qualification on the required available hosts. Do not rebuild or substitute the candidate bytes after qualification.
 
 Validate the exact package and generated Marketplace manifest without publishing:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath <FULLY_QUALIFIED_2_0_8_VSIX> -OverviewPath .\docs\marketplace-overview-2.0.8.md -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.8\20260904\marketplace\vs-publish.json -DryRun
+powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioMarketplace.ps1 -VsixPath <FULLY_QUALIFIED_2_0_9_VSIX> -OverviewPath .\docs\marketplace-overview-2.0.9.md -Publisher openvisionlab -PublishManifestPath D:\OpenVisionLab-TestData\RawBufferVisualizer\release-2.0.9\marketplace\vs-publish.json -DryRun
 ```
 
-Omitting `-VsixPath` is an error. Passing public `2.0.7` or any earlier/superseded candidate as `2.0.8` is also an error. Before upload, the source must be committed/pushed, CI must pass for that commit, installed qualification must pass, and the exact candidate path, length, and SHA-256 must match [release-qualification-2.0.8.md](release-qualification-2.0.8.md). Marketplace upload remains owner-controlled.
+Omitting `-VsixPath` is an error. Passing public `2.0.8` or any earlier/superseded candidate as `2.0.9` is also an error. Before upload, the source must be committed/pushed, CI must pass for that commit, installed qualification must pass, and the exact candidate path, length, and SHA-256 must match [release-qualification-2.0.9.md](release-qualification-2.0.9.md). Marketplace upload remains owner-controlled.
 
 ## Pre-publish clean/update gate
 
-Before uploading, perform both a clean install and an in-place update from exact public `2.0.7` on a serviced Visual Studio 2022 profile. Also qualify the same bytes on real VS2022 `17.9` and stable VS2026 `18.x`. Do not uninstall the public baseline, run registration repair, or clear skipped-package state before the update test.
+Before uploading, perform both a clean install and an in-place update from exact public `2.0.8` on a serviced Visual Studio 2022 profile. Also qualify the same bytes on real VS2022 `17.9` and stable VS2026 `18.x`. Do not uninstall the public baseline, run registration repair, or clear skipped-package state before the update test.
 
 1. Install the exact candidate VSIX.
 2. Restart Visual Studio.
 3. Run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.8.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.9.0
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticVisionInspector -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario AutomaticCollections -Configuration Release -NoBuild -NoInstall
 powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures.ps1 -Scenario MultiLibraryHybrid -Configuration Release -NoBuild -NoInstall
@@ -124,7 +124,7 @@ powershell -ExecutionPolicy Bypass -File .\scripts\SmokeInstalledVsixNewFeatures
 6. Confirm Fit remains aspect-correct after resize and Manual zoom/pan remains stable.
 7. Record the candidate SHA-256, Windows/Visual Studio versions, result JSON, screenshots, `package.log`, and relevant `ActivityLog.xml`.
 
-Install the same unchanged VSIX on real Visual Studio 2022 `17.9` when available, the current serviced Visual Studio 2022 instance, and stable Visual Studio 2026 `18.x`; repeat at least `Int32Industrial`, `ImagePtrColdStart`, `ConcurrentDictionary`, `ReleaseAnnouncement`, `AutomaticCollections`, `MultiLibraryHybrid`, `EnvironmentCheck`, and the pointer provenance/safety changed path. Pass `-VisualStudioInstanceId` explicitly so installation and smoke evidence name the intended product generation. The `2.0.8` VSIX manifest uses `[17.9,18.0)`; Visual Studio 2026 supports API version 17.x and evaluates only the lower bound for compatibility. Record each exact host build and do not substitute a Preview/Insiders build. Because 2.0.8 corrects a `ClrCustomVisualizerVSHost` payload failure reported on 17.9, exact 17.9 direct `CV_32SC1` DataTip/Locals execution is a required publication gate, not optional compatibility debt.
+Install the same unchanged VSIX on real Visual Studio 2022 `17.9`, the current serviced Visual Studio 2022 instance, and stable Visual Studio 2026 `18.x`; repeat the affected `6768 x 3225` OpenCvSharp Mat, Emgu CV Mat, and exact registered ImagePtr path on each available host. On exact 17.9 also repeat `Int32Industrial`, `ImagePtrColdStart`, `ConcurrentDictionary`, `ReleaseAnnouncement`, `AutomaticCollections`, `MultiLibraryHybrid`, `EnvironmentCheck`, and pointer provenance/safety where the changed dependency graph requires them. Pass `-VisualStudioInstanceId` explicitly so installation and smoke evidence name the intended product generation. The `2.0.9` VSIX manifest uses `[17.9,18.0)`; Visual Studio 2026 supports API version 17.x and evaluates only the lower bound for compatibility. Record each exact host build and do not substitute a Preview/Insiders build. Because 2.0.9 corrects a debugger-RPC transfer failure reported on 17.9, exact 17.9 execution of all three reported-size pointer-backed source types is a required publication gate.
 
 Before the VS2026 install, run `Test-VisualStudioMarketplaceUpdate.ps1` or inspect both `%LOCALAPPDATA%\Microsoft\VisualStudio\18.0_<instance>\Extensions` and `<VS2026>\Common7\IDE\VSExtensions`. A historical extension migrated into the per-machine `VSExtensions` root owns the same extension ID and cannot be replaced by an ordinary per-user developer install. Remove or update it through Visual Studio **Manage Extensions** or Visual Studio Installer with administrator rights. Never delete the `Program Files` extension directory manually. Preserve the newest `dd_VSIXInstaller_*.log` if the setup catalog no longer contains that historical component.
 
@@ -146,7 +146,7 @@ Recommended inputs:
 | `publisher` | Leave empty if `VS_MARKETPLACE_PUBLISHER` is set. |
 | `internal_name` | `RawBufferVisualizer` |
 | `categories` | `other` |
-| `expected_version` | Exact VSIX version, for example `2.0.8.0`. |
+| `expected_version` | Exact VSIX version, for example `2.0.9.0`. |
 
 The workflow publishes only when `publish=true`; the default path is a dry validation build.
 
@@ -165,7 +165,7 @@ Use a real supported Visual Studio 2022 machine that already has public `2.0.7` 
 7. Verify the installed version:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.8.0
+powershell -ExecutionPolicy Bypass -File .\scripts\Test-VisualStudioMarketplaceUpdate.ps1 -ExpectedVersion 2.0.9.0
 ```
 
 8. Debug `RawBufferVisualizer.VisualizerDebuggee`.
@@ -190,7 +190,7 @@ Then restart Visual Studio, reinstall the candidate without repair, and repeat t
 
 Root cause to check in `ActivityLog.xml`: Visual Studio may keep a stale VSSDK `CodeBase` pointing to a deleted folder under `%LOCALAPPDATA%\Microsoft\VisualStudio\17.0_<id>\Extensions`. Version `1.0.24.0` and later no longer auto-loads the package on startup; the docked window loads when the visualizer command is invoked.
 
-If the popup appears only when inspecting an image, also check whether `ActivityLog.xml` reports a missing or mismatched `Microsoft.VisualStudio.Threading` or Extensibility contract assembly. In 2.0.8 the in-process `RawBufferVisualizer.VisualStudio.Vssdk.dll` remains pinned to the qualified 17.9 threading contract, preloads asynchronously in the Debugging UI context, and the provider is packaged under `OutOfProc`; the release package step rejects a newer VSSDK threading reference, missing preload contract, unsafe initialization, mismatched `[17.9,18.0)` declaration, or stale debugger-side payload.
+If the popup appears only when inspecting an image, also check whether `ActivityLog.xml` reports a missing or mismatched `Microsoft.VisualStudio.Threading` or Extensibility contract assembly. In 2.0.9 the in-process `RawBufferVisualizer.VisualStudio.Vssdk.dll` remains pinned to the qualified 17.9 threading contract, preloads asynchronously in the Debugging UI context, and the provider is packaged under `OutOfProc`; the release package step rejects a newer VSSDK threading reference, missing preload contract, unsafe initialization, mismatched `[17.9,18.0)` declaration, or stale debugger-side payload.
 
 The package also writes a small diagnostic log here:
 
@@ -217,6 +217,7 @@ The package also writes a small diagnostic log here:
 - Initialized OpenCvSharp/Emgu Mats do not open automatically, Bitmap appears as an automatic row, or repeated **Scan Now** duplicates rows.
 - Fit changes image aspect after resize, or Manual resize resets zoom/center.
 - The clean-PC smoke passes only after a registry repair.
-- The update from public `2.0.7` to candidate/public `2.0.8` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
-- Exact Visual Studio 2022 17.9 direct `CV_32SC1` visualization still reports `Unsupported Mat type: CV_32SC1` or has not been exercised on the corrected bytes.
+- The update from public `2.0.8` to candidate/public `2.0.9` requires uninstall, repair, `/ResetSkipPkgs`, or another recovery action.
+- Exact Visual Studio 2022 17.9 cannot open the reported `6768 x 3225` OpenCvSharp Mat, Emgu CV Mat, and ImagePtr through checked live process memory, or any row reports a debugger RPC snapshot failure.
+- A visible debugger RPC error repeats only the localized host text instead of reporting operation, source or chunk, byte counts when applicable, exception type, and HRESULT; the original host text and stack must remain available in the support report.
 - The unchanged candidate has not passed the stable VS2026 installed-runtime core matrix.

@@ -6,6 +6,8 @@ param(
     [int]$Width = 8192,
     [int]$Height = 8192,
     [string]$OutputDir = "artifacts\perf\installed-vsix-large-mats",
+    [string]$TestBuildRoot = "",
+    [switch]$AllowMedium,
     [switch]$NoBuild,
     [switch]$NoInstall,
     [switch]$KeepVisualStudio
@@ -16,8 +18,26 @@ $ErrorActionPreference = "Stop"
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
 
-$outputRoot = Join-Path $repoRoot $OutputDir
+$outputRoot = if ([IO.Path]::IsPathRooted($OutputDir)) {
+    [IO.Path]::GetFullPath($OutputDir)
+}
+else {
+    Join-Path $repoRoot $OutputDir
+}
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
+$defaultTestBuildRoot = Join-Path $repoRoot ".build"
+if ([string]::IsNullOrWhiteSpace($TestBuildRoot)) {
+    $testDrive = Get-PSDrive -Name D -ErrorAction SilentlyContinue
+    $TestBuildRoot = if ($testDrive) {
+        "D:\OpenVisionLab-TestData\RawBufferVisualizer\installed-vsix-large-mats\build"
+    }
+    else {
+        $defaultTestBuildRoot
+    }
+}
+$testBuildRootPath = [IO.Path]::GetFullPath($TestBuildRoot)
+$testBinRoot = Join-Path $testBuildRootPath "bin"
+New-Item -ItemType Directory -Force -Path $testBinRoot | Out-Null
 $readyPath = Join-Path $outputRoot "large-mats.ready"
 $sessionPath = Join-Path $outputRoot "large-mats-session.json"
 $resultPath = Join-Path $outputRoot "large-mats-installed-vsix.json"
@@ -33,9 +53,10 @@ if ($Width -le 0 -or $Height -le 0) {
 }
 
 $expectedBytes = [int64]$Width * [int64]$Height
-if ($expectedBytes -lt 64MB) {
+if ($expectedBytes -lt 64MB -and -not $AllowMedium) {
     throw "The installed VSIX large-Mat smoke requires at least 64 MB. Requested payload: $expectedBytes bytes."
 }
+$expectedSourceMode = if ($expectedBytes -ge 8MB) { "live" } else { "mem" }
 
 function Assert-NoVisualStudio {
     $running = @(Get-Process -Name devenv -ErrorAction SilentlyContinue)
@@ -203,7 +224,8 @@ public static class RawBufferInstalledVsixRot {
                 continue;
             }
 
-            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0 ||
+                displayName.IndexOf("VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
                 object dte;
                 table.GetObject(monikers[0], out dte);
                 return dte;
@@ -254,13 +276,72 @@ Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName UIAutomationClient
 Add-Type -AssemblyName UIAutomationTypes
 
+function Get-TestMonitor {
+    $screens = @([Windows.Forms.Screen]::AllScreens)
+    if ($screens.Count -eq 0) {
+        throw "No interactive monitor was reported for the installed VSIX smoke test."
+    }
+
+    $screen = if ($screens.Count -eq 2) {
+        $screens |
+            Sort-Object @{ Expression = { $_.WorkingArea.Width * $_.WorkingArea.Height }; Ascending = $true },
+                        @{ Expression = { $_.Bounds.Left }; Ascending = $true } |
+            Select-Object -First 1
+    }
+    elseif ($screens.Count -eq 1) {
+        $screens[0]
+    }
+    else {
+        $screens | Sort-Object { $_.Bounds.Left } | Select-Object -First 1
+    }
+
+    [pscustomobject]@{
+        DeviceName = [string]$screen.DeviceName
+        Bounds = $screen.Bounds
+        WorkingArea = $screen.WorkingArea
+        IsPrimary = [bool]$screen.Primary
+        ScreenCount = $screens.Count
+    }
+}
+
+$script:TestMonitor = Get-TestMonitor
+$script:LastWindowRect = $null
+
 function Focus-Window([IntPtr]$Handle) {
+    $bounds = $script:TestMonitor.Bounds
+    $targetX = $bounds.Left + 20
+    $targetY = $bounds.Top + 20
+    $targetWidth = [Math]::Max(320, [Math]::Min(1500, $bounds.Width - 40))
+    $targetHeight = [Math]::Max(240, [Math]::Min(900, $bounds.Height - 40))
+
     [RawBufferInstalledVsixNative]::ShowWindow($Handle, 9) | Out-Null
-    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_TOPMOST, 20, 20, 1500, 900, 0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_TOPMOST, $targetX, $targetY, $targetWidth, $targetHeight, 0x0040) | Out-Null
     [RawBufferInstalledVsixNative]::BringWindowToTop($Handle) | Out-Null
     [RawBufferInstalledVsixNative]::SetForegroundWindow($Handle) | Out-Null
     Start-Sleep -Milliseconds 250
-    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_NOTOPMOST, 20, 20, 1500, 900, 0x0040) | Out-Null
+    [RawBufferInstalledVsixNative]::SetWindowPos($Handle, [RawBufferInstalledVsixNative]::HWND_NOTOPMOST, $targetX, $targetY, $targetWidth, $targetHeight, 0x0040) | Out-Null
+
+    $rect = New-Object RawBufferInstalledVsixNative+RECT
+    if (-not [RawBufferInstalledVsixNative]::GetWindowRect($Handle, [ref]$rect)) {
+        throw "Visual Studio window bounds could not be read after monitor placement."
+    }
+
+    $intersects = $rect.Right -gt $bounds.Left -and
+        $rect.Left -lt $bounds.Right -and
+        $rect.Bottom -gt $bounds.Top -and
+        $rect.Top -lt $bounds.Bottom
+    if (-not $intersects) {
+        throw "Visual Studio window does not intersect the selected test monitor $($script:TestMonitor.DeviceName)."
+    }
+
+    $script:LastWindowRect = [pscustomobject]@{
+        Left = $rect.Left
+        Top = $rect.Top
+        Right = $rect.Right
+        Bottom = $rect.Bottom
+        Width = $rect.Right - $rect.Left
+        Height = $rect.Bottom - $rect.Top
+    }
 }
 
 function Send-Keys([IntPtr]$Handle, [string]$Keys) {
@@ -366,18 +447,82 @@ function Select-AutomationItem([System.Windows.Automation.AutomationElement]$Ele
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
 }
 
+function Invoke-AutomationElement([System.Windows.Automation.AutomationElement]$Element) {
+    $pattern = $null
+    if ($Element.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$pattern)) {
+        ([System.Windows.Automation.InvokePattern]$pattern).Invoke()
+        return
+    }
+
+    $rect = $Element.Current.BoundingRectangle
+    [RawBufferInstalledVsixNative]::SetCursorPos([int]($rect.Left + $rect.Width / 2), [int]($rect.Top + $rect.Height / 2)) | Out-Null
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+    [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+}
+
 function Click-VisualizerGlyph([System.Windows.Automation.AutomationElement]$TreeItem) {
+    $localizedView = [string]([char]0xBCF4) + [string]([char]0xAE30)
     $rect = $TreeItem.Current.BoundingRectangle
-    if ($rect.Width -lt 220 -or $rect.Height -lt 8) {
+    if ($rect.Width -lt 80 -or $rect.Height -lt 8 -or [bool]$TreeItem.Current.IsOffscreen) {
         throw "Variable row has invalid bounds: $($rect.Width) x $($rect.Height)"
     }
 
     Select-AutomationItem $TreeItem
-    $x = [int][Math]::Max($rect.Left + 20, $rect.Right - 170)
+    $hoverX = [int]($rect.Left + ($rect.Width * 0.78))
     $y = [int]($rect.Top + $rect.Height / 2)
+    [RawBufferInstalledVsixNative]::SetCursorPos($hoverX, $y) | Out-Null
+    Start-Sleep -Milliseconds 200
+
+    $root = [System.Windows.Automation.AutomationElement]::RootElement
+    $viewElement = $null
+    $elements = $root.FindAll(
+        [System.Windows.Automation.TreeScope]::Descendants,
+        [System.Windows.Automation.Condition]::TrueCondition)
+    for ($index = 0; $index -lt $elements.Count; $index++) {
+        $element = $elements.Item($index)
+        if (@("View", $localizedView) -notcontains [string]$element.Current.Name) {
+            continue
+        }
+
+        $candidate = $element.Current.BoundingRectangle
+        if ($candidate.Right -gt $rect.Left -and
+            $candidate.Left -lt $rect.Right -and
+            $candidate.Bottom -gt $rect.Top -and
+            $candidate.Top -lt $rect.Bottom) {
+            $viewElement = $element
+            break
+        }
+    }
+
+    $x = if ($viewElement) {
+        $viewRect = $viewElement.Current.BoundingRectangle
+        [int]($viewRect.Left + $viewRect.Width / 2)
+    }
+    else {
+        $hoverX
+    }
     [RawBufferInstalledVsixNative]::SetCursorPos($x, $y) | Out-Null
+    Start-Sleep -Milliseconds 250
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
     [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+
+    if ([Version]$vsInstance.installationVersion -lt [Version]'18.0') {
+        Start-Sleep -Milliseconds 350
+        $menuItem = Get-ElementsByControlType $root ([System.Windows.Automation.ControlType]::MenuItem) |
+            Where-Object {
+                -not [bool]$_.Current.IsOffscreen -and
+                [string]$_.Current.Name -like "*Raw Buffer Visualizer*"
+            } |
+            Select-Object -First 1
+        if ($menuItem) {
+            Invoke-AutomationElement $menuItem
+        }
+        else {
+            [RawBufferInstalledVsixNative]::SetCursorPos($x - 100, $y + 22) | Out-Null
+            [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTDOWN, 0, 0, 0, [UIntPtr]::Zero)
+            [RawBufferInstalledVsixNative]::mouse_event([RawBufferInstalledVsixNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
+        }
+    }
 }
 
 function Dismiss-DebuggerEvaluationWarning {
@@ -482,7 +627,11 @@ function Close-DebugSolutionWithoutSaving([int]$ProcessId) {
 function Dismiss-VisualizerStatusWindow([Diagnostics.Process]$Process, [IntPtr]$MainHandle) {
     $Process.Refresh()
     if ($Process.MainWindowHandle -ne 0 -and $Process.MainWindowHandle -ne $MainHandle) {
-        Send-Keys $Process.MainWindowHandle "{ESC}"
+        try {
+            Send-Keys $Process.MainWindowHandle "{ESC}"
+        }
+        catch {
+        }
     }
 }
 
@@ -596,7 +745,7 @@ if (-not (Test-Path -LiteralPath $devenvCandidate)) {
 }
 $devenvPath = (Resolve-Path -LiteralPath $devenvCandidate).Path
 $sampleProject = Join-Path $repoRoot "samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj"
-$debuggeePath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualizerDebuggee\Debug\net472\RawBufferVisualizer.VisualizerDebuggee.exe"
+$debuggeePath = Join-Path $testBinRoot "RawBufferVisualizer.VisualizerDebuggee\Debug\net472\RawBufferVisualizer.VisualizerDebuggee.exe"
 
 if (-not $NoInstall) {
     $installArguments = @(
@@ -619,7 +768,7 @@ if (-not $NoInstall) {
 }
 
 if (-not $NoBuild) {
-    & dotnet build $sampleProject -c Debug
+    & dotnet build $sampleProject -c Debug "-p:RawBufferVisualizerBuildRoot=$testBuildRootPath"
     if ($LASTEXITCODE -ne 0) {
         throw "VisualizerDebuggee build failed with exit code $LASTEXITCODE."
     }
@@ -681,18 +830,23 @@ try {
     } 180 | Out-Null
     $ready = Read-ReadyValues $readyPath
     $debuggeeProcessId = [int]$ready.processId
-    if ([int64]$ready.openCvBytes -ne $expectedBytes -or [int64]$ready.emguBytes -ne $expectedBytes) {
-        throw "Debuggee payload lengths do not match $expectedBytes bytes: OpenCv=$($ready.openCvBytes), Emgu=$($ready.emguBytes)."
+    if ([int64]$ready.openCvBytes -ne $expectedBytes -or
+        [int64]$ready.emguBytes -ne $expectedBytes -or
+        [int64]$ready.imagePtrBytes -ne $expectedBytes) {
+        throw "Debuggee payload lengths do not match $expectedBytes bytes: OpenCv=$($ready.openCvBytes), Emgu=$($ready.emguBytes), ImagePtr=$($ready.imagePtrBytes)."
     }
 
     Show-LocalsWindow $visualStudio.Id
     Wait-Until "large Mat Locals" {
         $root = Get-AutomationRoot $mainHandle
-        if ((Find-TreeItem $root "largeOpenCvMat") -and (Find-TreeItem $root "largeEmguMat")) { $true } else { $null }
+        if ((Find-TreeItem $root "largeOpenCvMat") -and
+            (Find-TreeItem $root "largeEmguMat") -and
+            (Find-TreeItem $root "largeImagePtr")) { $true } else { $null }
     } 90 | Out-Null
 
     $openCvResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largeOpenCvMat" "OpenCvSharp.Mat" 1 37 $openCvScreenshotPath
     $emguResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largeEmguMat" "Emgu.CV.Mat" 2 173 $finalScreenshotPath
+    $imagePtrResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largeImagePtr" "Cressem.ImageModel.ImagePtr" 3 37 $finalScreenshotPath
 
     $session = Wait-Until "docked two-image session" {
         if (-not (Test-Path -LiteralPath $sessionPath)) {
@@ -700,7 +854,7 @@ try {
         }
 
         $parsed = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-        if ($parsed.documentCount -ge 2 -and ([string]$parsed.status).IndexOf("live 64 tiles", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
+        if ($parsed.documentCount -ge 3) {
             $parsed
         }
         else {
@@ -709,12 +863,12 @@ try {
     } 60
 
     $documents = @($session.documents)
-    foreach ($sourceType in @("OpenCvSharp.Mat", "Emgu.CV.Mat")) {
+    foreach ($sourceType in @("OpenCvSharp.Mat", "Emgu.CV.Mat", "Cressem.ImageModel.ImagePtr")) {
         $document = $documents | Where-Object { $_.sourceType -eq $sourceType } | Select-Object -First 1
         if (-not $document) {
             throw "Session did not preserve source type: $sourceType"
         }
-        if ($document.width -ne $Width -or $document.height -ne $Height -or $document.sourceMode -ne "live") {
+        if ($document.width -ne $Width -or $document.height -ne $Height -or $document.sourceMode -ne $expectedSourceMode) {
             throw "Invalid $sourceType session metadata: $($document | ConvertTo-Json -Compress)"
         }
     }
@@ -727,7 +881,7 @@ try {
         }
     }
     $oversizedFiles = @($newTempFiles | Where-Object { $_.bytes -ge $expectedBytes })
-    if ($oversizedFiles.Count -gt 0) {
+    if ($expectedSourceMode -eq "live" -and $oversizedFiles.Count -gt 0) {
         throw "The visualizer copied a complete large Mat into TEMP: $(($oversizedFiles | ConvertTo-Json -Compress))"
     }
 
@@ -738,29 +892,37 @@ try {
     } 30 | Out-Null
 
     Focus-Window $mainHandle
-    $imageView = Wait-Until "Raw Buffer image view after debug stop" {
-        Find-ElementByAutomationId (Get-AutomationRoot $mainHandle) "RawBufferOpenGlImageView"
-    } 30
-    $bounds = $imageView.Current.BoundingRectangle
-    $centerX = [int]($bounds.Left + $bounds.Width / 2)
-    $centerY = [int]($bounds.Top + $bounds.Height / 2)
-    [RawBufferInstalledVsixNative]::SetCursorPos($centerX + 12, $centerY + 12) | Out-Null
-    Start-Sleep -Milliseconds 200
-    [RawBufferInstalledVsixNative]::SetCursorPos($centerX - 12, $centerY - 12) | Out-Null
+    if ($expectedSourceMode -eq "mem") {
+        $imageView = Wait-Until "Raw Buffer snapshot image view after debug stop" {
+            Find-ElementByAutomationId (Get-AutomationRoot $mainHandle) "RawBufferOpenGlImageView"
+        } 30
+        $bounds = $imageView.Current.BoundingRectangle
+        $centerX = [int]($bounds.Left + $bounds.Width / 2)
+        $centerY = [int]($bounds.Top + $bounds.Height / 2)
+        [RawBufferInstalledVsixNative]::SetCursorPos($centerX + 12, $centerY + 12) | Out-Null
+        Start-Sleep -Milliseconds 200
+        [RawBufferInstalledVsixNative]::SetCursorPos($centerX - 12, $centerY - 12) | Out-Null
+    }
 
-    $sourceUnavailableSession = $null
+    $postStopSession = $null
     $deadline = [DateTime]::UtcNow.AddSeconds(20)
     do {
         $fatalDialog = Find-DesktopElementNameContaining "Debuggee image memory is no longer readable"
         if ($fatalDialog) {
-            throw "Live-memory shutdown escaped to an unhandled exception dialog: $fatalDialog"
+            throw "Source shutdown escaped to an unhandled exception dialog: $fatalDialog"
         }
 
         if (Test-Path -LiteralPath $sessionPath) {
             $candidate = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
-            if ($candidate.activeSourceUnavailable -eq $true -and
-                ([string]$candidate.status).IndexOf("Live source unavailable", [StringComparison]::OrdinalIgnoreCase) -ge 0) {
-                $sourceUnavailableSession = $candidate
+            $isExpected = if ($expectedSourceMode -eq "live") {
+                $candidate.activeSourceUnavailable -eq $true -and
+                    ([string]$candidate.status).IndexOf("Live source unavailable", [StringComparison]::OrdinalIgnoreCase) -ge 0
+            }
+            else {
+                $candidate.activeSourceUnavailable -ne $true -and $candidate.documentCount -ge 3
+            }
+            if ($isExpected) {
+                $postStopSession = $candidate
                 break
             }
         }
@@ -768,8 +930,8 @@ try {
         Start-Sleep -Milliseconds 250
     } while ([DateTime]::UtcNow -lt $deadline)
 
-    if (-not $sourceUnavailableSession) {
-        throw "Docked viewer did not enter the controlled live-source-unavailable state after the debuggee exited."
+    if (-not $postStopSession) {
+        throw "Docked viewer did not enter the expected $expectedSourceMode post-stop state."
     }
 
     Start-Sleep -Milliseconds 750
@@ -795,9 +957,13 @@ try {
         }
         openCvSharp = $openCvResult
         emguCv = $emguResult
+        imagePtr = $imagePtrResult
         session = $session
-        sourceUnavailableSession = $sourceUnavailableSession
+        postStopSession = $postStopSession
         sourceUnavailableScreenshotPath = $sourceUnavailableScreenshotPath
+        expectedSourceMode = $expectedSourceMode
+        monitor = $script:TestMonitor
+        windowRect = $script:LastWindowRect
         newTempFiles = $newTempFiles
         maximumNewTempFileBytes = if ($newTempFiles.Count -gt 0) { [int64](($newTempFiles | Measure-Object -Property bytes -Maximum).Maximum) } else { 0 }
         resultPath = $resultPath

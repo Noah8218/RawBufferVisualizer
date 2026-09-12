@@ -118,7 +118,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var length = GetOptionalLong(target, "Length", "BufferLength", "Size", "ByteLength", "_length", "_size");
             if (length <= 0)
             {
-                length = checked((long)stride * height);
+                length = descriptor.GetRequiredByteCount();
             }
 
             return new ImagePtrView

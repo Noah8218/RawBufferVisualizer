@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.0.8";
+        public const string CurrentVersion = "2.0.9";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#208";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#209";
 
         public const string HighlightEnvironmentCheck =
-            "Corrected the Visual Studio 2022 debugger payload for signed Int32 Mats";
+            "Pointer-backed images at or above 8 MiB bypass debugger RPC snapshot transfer";
 
         public const string HighlightColdPreview =
-            "Large Automatic Inspector results load in bounded batches with Load next, Load all, and Stop";
+            "ROI and inferred pointer spans stop at the final pixel row without trailing padding";
 
         public const string HighlightPanelToggles =
-            "Repeated Break scans refresh existing rows; cached inference never bypasses mapping safety";
+            "Registered opens keep the dock pinned; repeated RPC failures refresh one technical error row";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

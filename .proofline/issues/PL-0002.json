@@ -1,0 +1,337 @@
+{
+  "schema_version": 2,
+  "identity": {
+    "id": "PL-0002",
+    "aliases": [],
+    "type": "bug",
+    "mode": "composite",
+    "title": "Public 2.0.8 times out on medium Mat and ImagePtr transfers and overstates ROI memory spans",
+    "risk": "high"
+  },
+  "origin": {
+    "kind": "public 2.0.8 field report",
+    "summary": "A Visual Studio 2022 17.9 user reported evaluation timeouts for 6768 x 3225 Mono8 OpenCvSharp Mat and ImagePtr objects, repeated error rows, and loss of a pinned Raw Buffer Visualizer tab while inspecting ROI-backed data.",
+    "refs": [
+      "C:/Users/USER/Downloads/새 폴더 (2)/latest-error-report.txt",
+      "C:/Users/USER/Downloads/새 폴더 (2)/0.png",
+      "C:/Users/USER/Downloads/새 폴더 (2)/1.png",
+      "C:/Users/USER/Downloads/새 폴더 (2)/2.png",
+      "C:/Users/USER/Downloads/새 폴더 (2)/3.png"
+    ]
+  },
+  "state": {
+    "status": "doing",
+    "current_summary": "The exact public 2.0.8 package is identified byte-for-byte and the frozen 2.0.9 r2 candidate is qualified on the VS2022 reported-size and three-host dock-retention paths. The owner accepted the unexecuted stable-VS2026 reported-size and actual public-2.0.8 in-place-update checks as known evidence gaps for source delivery and authorized the 2.0.9 source commit and origin/main push; CI and owner-controlled Marketplace upload remain separate.",
+    "next_action": "Confirm CI for the pushed 2.0.9 release-source commit; after CI succeeds, hand the unchanged frozen VSIX and reviewed Overview to the owner for the separately controlled Marketplace upload. Do not create a tag, GitHub Release, or deployment without separate authorization."
+  },
+  "problem": {
+    "claims": [
+      {
+        "id": "P1",
+        "state": "confirmed",
+        "text": "The public 2.0.8 registered-object path can time out while retrieving a 20.8 MiB Mat or ImagePtr through 4 MiB JSON/RPC chunks on Visual Studio 2022 17.9.",
+        "evidence_refs": [
+          "E1",
+          "E2"
+        ]
+      },
+      {
+        "id": "P2",
+        "state": "confirmed",
+        "text": "OpenCvSharp Mat, Emgu CV Mat, ImagePtr with inferred length, and RawBufferView with inferred length can overstate the readable range by including a full final-row stride instead of only the final row's required pixel bytes.",
+        "evidence_refs": [
+          "E3"
+        ]
+      },
+      {
+        "id": "P3",
+        "state": "confirmed",
+        "text": "Repeated visualization failures are appended as separate error documents rather than updating the matching failure row.",
+        "evidence_refs": [
+          "E4",
+          "E9"
+        ]
+      },
+      {
+        "id": "P4",
+        "state": "reported",
+        "text": "Opening another registered object can cause a pinned Raw Buffer Visualizer tab to disappear.",
+        "evidence_refs": [
+          "E4",
+          "E10"
+        ]
+      }
+    ],
+    "impact": "Industrial images can fail to open, ROI-backed views can read beyond their valid pixel span, repeated failures can flood the image list, and users can lose the docked inspection surface during a debugging session."
+  },
+  "criteria": [
+    {
+      "id": "C1",
+      "text": "OpenCvSharp ROI, Emgu ROI, inferred ImagePtr, and inferred RawBufferView expose exactly stride * (height - 1) + minimumRowBytes and do not read trailing bytes after the final row.",
+      "evidence_refs": [
+        "E5"
+      ]
+    },
+    {
+      "id": "C2",
+      "text": "A 6768 x 3225 Mono8 OpenCvSharp Mat, Emgu CV Mat, and ImagePtr open through the registered debugger visualizer on exact Visual Studio 2022 17.9 without an evaluation timeout.",
+      "evidence_refs": [
+        "E6",
+        "E12"
+      ]
+    },
+    {
+      "id": "C3",
+      "text": "Sequential and repeated registered-object opens preserve the permanent docked Raw Buffer Visualizer and complete deterministic handoff cleanup.",
+      "evidence_refs": [
+        "E6",
+        "E10"
+      ]
+    },
+    {
+      "id": "C4",
+      "text": "After UI approval, repeated failures for the same expression and cause update one visible error row instead of flooding the list.",
+      "evidence_refs": [
+        "E9"
+      ]
+    },
+    {
+      "id": "C5",
+      "text": "All focused automated tests, package payload checks, release communication checks, and the supported installed-host matrix pass for the exact 2.0.9 candidate, with exact checks and remaining publication dependencies recorded.",
+      "evidence_refs": [
+        "E7",
+        "E8",
+        "E11",
+        "E12",
+        "E13",
+        "E14",
+        "E15"
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M1",
+      "summary": "Reproduce and lock field failures",
+      "status": "done",
+      "required": true,
+      "criteria_refs": [],
+      "issue_refs": []
+    },
+    {
+      "id": "M2",
+      "summary": "Repair inferred native span and medium transfer",
+      "status": "done",
+      "required": true,
+      "criteria_refs": [
+        "C1",
+        "C2"
+      ],
+      "issue_refs": []
+    },
+    {
+      "id": "M3",
+      "summary": "Repair approved host and error-row behavior",
+      "status": "done",
+      "required": true,
+      "criteria_refs": [
+        "C3",
+        "C4"
+      ],
+      "issue_refs": []
+    },
+    {
+      "id": "M4",
+      "summary": "Qualify exact installed 2.0.9 candidate",
+      "status": "done",
+      "required": true,
+      "criteria_refs": [
+        "C2",
+        "C3",
+        "C5"
+      ],
+      "issue_refs": []
+    },
+    {
+      "id": "M5",
+      "summary": "Align version, release documents, and deliverable",
+      "status": "done",
+      "required": true,
+      "criteria_refs": [
+        "C5"
+      ],
+      "issue_refs": []
+    }
+  ],
+  "relations": [],
+  "context": [
+    {
+      "kind": "transfer owner",
+      "location": "src/RawBufferVisualizer.VisualStudio.Extensibility/DebuggerVisualizerLaunch.cs"
+    },
+    {
+      "kind": "object-source owners",
+      "location": "src/RawBufferVisualizer.VisualStudio.ObjectSource"
+    },
+    {
+      "kind": "memory descriptor contract",
+      "location": "src/RawBufferVisualizer.Core/RawTypes.cs"
+    }
+  ],
+  "artifacts": [
+    {
+      "kind": "field support report",
+      "location": "C:/Users/USER/Downloads/새 폴더 (2)/latest-error-report.txt",
+      "summary": "Public 2.0.8 on exact VS 17.9 failed inside WriteRawChunksCoreAsync with evaluation timeout and no image payload."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "E1",
+      "kind": "field report",
+      "location": "C:/Users/USER/Downloads/새 폴더 (2)/latest-error-report.txt",
+      "observation": "Extension 2.0.8.0 on Visual Studio 17.9.34902.65 reached DebuggerVisualizerLaunch.WriteRawChunksCoreAsync and failed in VisualizerObjectSourceClient.RequestDataAsync with the Korean evaluation-timeout message; no image payload was produced.",
+      "observed_at": "2026-09-11T11:44:08Z"
+    },
+    {
+      "id": "E2",
+      "kind": "source inspection",
+      "location": "src/RawBufferVisualizer.VisualStudio.Extensibility/DebuggerVisualizerLaunch.cs; src/RawBufferVisualizer.VisualStudio.ObjectSource/VisualizerChunkedTransfer.cs",
+      "observation": "The field image is 21,826,800 bytes. Public 2.0.8 snapshots pointer-backed inputs below 64 MiB and requests up to 4 MiB per JSON/RPC chunk, requiring six remote requests for this image.",
+      "observed_at": "2026-09-12T00:00:00+09:00"
+    },
+    {
+      "id": "E3",
+      "kind": "source inspection",
+      "location": "src/RawBufferVisualizer.VisualStudio.ObjectSource/OpenCvSharpMatVisualizerObjectSource.cs; src/RawBufferVisualizer.VisualStudio.ObjectSource/EmguCvMatVisualizerObjectSource.cs; src/RawBufferVisualizer.VisualStudio.ObjectSource/ImagePtrVisualizerObjectSource.cs; src/RawBufferVisualizer.Sdk/RawBufferView.cs",
+      "observation": "These inferred native views use stride * height, while RawImageDescriptor defines the valid readable image span as stride * (height - 1) + minimumRowBytes. A right/bottom ROI therefore advertises bytes beyond its final pixel row.",
+      "observed_at": "2026-09-12T00:00:00+09:00"
+    },
+    {
+      "id": "E4",
+      "kind": "field screenshots and source inspection",
+      "location": "C:/Users/USER/Downloads/새 폴더 (2)/0.png; C:/Users/USER/Downloads/새 폴더 (2)/1.png; C:/Users/USER/Downloads/새 폴더 (2)/2.png; C:/Users/USER/Downloads/새 폴더 (2)/3.png; src/RawBufferVisualizer.VisualStudio.Vssdk/RawBufferToolWindowControl.xaml.cs",
+      "observation": "The screenshots show multiple timeout rows and a Visual Studio visualizer-helper invalid-state page. The current error-document path appends and activates each error without matching an existing expression/cause.",
+      "observed_at": "2026-09-12T00:00:00+09:00"
+    },
+    {
+      "id": "E5",
+      "kind": "automated test",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/focused-build-v4; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/legacy-matrix-build",
+      "observation": "Aggregate tests passed protected-page final-row spans for RawBufferView, ImagePtr, legacy OpenCvSharp Mat, and Emgu CV Mat. All five OpenCvSharp and five Emgu compatibility points also passed.",
+      "observed_at": "2026-09-12T12:30:00+09:00"
+    },
+    {
+      "id": "E6",
+      "kind": "installed runtime",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.9-final; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.14-final; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2026-18.9-final-run2",
+      "observation": "The unchanged exact 2.0.9 VSIX opened 6768 x 3225 OpenCvSharp Mat, Emgu CV Mat, and ImagePtr values as three checked live documents with zero errors on VS2022 17.9.34902.65, VS2022 17.14.37516.0, and stable VS2026 18.9.12128.139; sequential opens retained the dock and every row became UNAVAILABLE after process exit.",
+      "observed_at": "2026-09-12T12:30:00+09:00"
+    },
+    {
+      "id": "E7",
+      "kind": "release qualification",
+      "location": "docs/release-qualification-2.0.9.md; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/candidate-install-equality.json",
+      "observation": "The 2,521,551-byte VSIX with SHA-256 2D45B8A957A0CBD3798BC62509BC9B4CA495E3AE49B32ECC76B134069E7CBD66 passed routed packaging, release communication, Marketplace dry validation, exact 4 MiB and 8 MiB boundary runs, and 71/71 installed-file equality on each of the three supported hosts.",
+      "observed_at": "2026-09-12T12:46:00+09:00"
+    },
+    {
+      "id": "E8",
+      "kind": "binary and source audit",
+      "location": "src/RawBufferVisualizer.VisualStudio.Extensibility/DebuggerVisualizerLaunch.cs; scripts/Test-ReleaseCommunication.ps1; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/candidate-string-audit-20260912-1245",
+      "observation": "Registered out-of-process single and collection failure exits use technical metadata or chunk fields and retain ex.ToString only for the support report. The exact provider DLL contains both technical RPC formats and does not contain the reported Korean timeout text; production source contains no Korean UI literal.",
+      "observed_at": "2026-09-12T12:45:00+09:00"
+    },
+    {
+      "id": "E9",
+      "kind": "automated UI smoke",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/ui-host-fix/baseline/error-repeated-900.png; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/ui-host-fix/after/layout-widths.json",
+      "observation": "Before the repair, reopening the same missing file increased the error-list count from two to three. After the repair, 540, 900, and 1160 pixel WPF runs retained two documents while replacing the matching row's error ID and diagnostics.",
+      "observed_at": "2026-09-12T14:29:14+09:00"
+    },
+    {
+      "id": "E10",
+      "kind": "installed runtime",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.9-dock-retention-r2-pass/DockRetention-installed-vsix.json; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.14-dock-retention-r2/DockRetention-installed-vsix.json; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2026-18.9-dock-retention-r2/DockRetention-installed-vsix.json",
+      "observation": "On VS2022 17.9, VS2022 17.14, and stable VS2026 18.9, registered Bitmap then RawBufferView opens produced two documents and zero errors in the same pinned pane runtime ID, with no visible invalid-state helper page or package protocol error.",
+      "observed_at": "2026-09-12T14:29:14+09:00"
+    },
+    {
+      "id": "E11",
+      "kind": "release qualification",
+      "location": "docs/release-qualification-2.0.9.md; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/candidate-final-r2; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/candidate-install-equality-r2.json",
+      "observation": "The 2,520,780-byte 2.0.9.0 VSIX with SHA-256 EB0F862EDA94FBDCC938A5AA26BF812C8A1BB1B25567FE8D7D1992A90799DDC0 passed routed packaging, aggregate tests, release communication, Environment Check contracts, Marketplace dry validation, and 71/71 installed-file equality on VS2022 17.9, VS2022 17.14, and stable VS2026 18.9.",
+      "observed_at": "2026-09-12T14:29:14+09:00"
+    },
+    {
+      "id": "E12",
+      "kind": "installed runtime",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.9-reported-size-r2-retry/large-mats-installed-vsix.json; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.14-reported-size-r2/large-mats-installed-vsix.json",
+      "observation": "The exact r2 candidate opened 6768 x 3225 OpenCvSharp Mat, Emgu CV Mat, and ImagePtr values as three live documents with zero errors and expected pixels on VS2022 17.9 and 17.14, then marked all three sources UNAVAILABLE after process exit. The final stable-VS2026 reported-size attempt did not launch the debuggee and is not counted as a pass.",
+      "observed_at": "2026-09-12T14:29:14+09:00"
+    },
+    {
+      "id": "E13",
+      "kind": "installed UI and dry-run verification",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2022-17.9-release-announcement-r2/ReleaseAnnouncement-installed-vsix.json; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/marketplace/vs-publish-r2.json",
+      "observation": "The exact installed 17.9 release announcement showed version 2.0.9, persisted Dismiss, reopened and closed from What's New, changed no image rows, and logged no protocol errors. Release communication and the Marketplace dry run passed without external publication.",
+      "observed_at": "2026-09-12T14:29:14+09:00"
+    },
+    {
+      "id": "E14",
+      "kind": "Marketplace readback",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/public-2.0.8-readback-20260912/public-readback-and-update-boundary.json",
+      "observation": "The official Visual Studio Gallery 2.0.8.0 VSIX is 2,521,139 bytes with SHA-256 612517FA64805853A072D19773709B6DD9D09AE9B095342028EB261086BBD9A2 and is byte-identical to the preserved final 2.0.8 candidate.",
+      "observed_at": "2026-09-12T16:06:21+09:00"
+    },
+    {
+      "id": "E15",
+      "kind": "environment boundary",
+      "location": "D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/public-2.0.8-readback-20260912/public-readback-and-update-boundary.json; D:/OpenVisionLab-TestData/RawBufferVisualizer/release-2.0.9/installed-vs2026-18.10-reported-size-r2/launch-boundary.json",
+      "observation": "The current 17.9 profile retained a valid 2.0.9 installation after public-2.0.8 baseline staging failed with installer exit code -2146233079, so the in-place update never began. The post-update VS2026 18.10 field-size attempt remained at the empty Visual Studio start window with no debuggee or extension runtime, so it is not a product-runtime result. No registration repair or ResetSkipPkgs was used.",
+      "observed_at": "2026-09-12T16:12:50+09:00"
+    }
+  ],
+  "events": [
+    {
+      "id": "T1",
+      "kind": "transition",
+      "at": "2026-09-12T00:00:00+09:00",
+      "from": "open",
+      "to": "doing",
+      "summary": "Owner authorized repair and exact 2.0.9 preparation after public 2.0.8 field failures."
+    },
+    {
+      "id": "D1",
+      "kind": "decision",
+      "at": "2026-09-12T00:00:00+09:00",
+      "summary": "Core memory-range and transport work proceeds immediately; visible error-row and tool-window behavior waits for owner approval of the supplied UI mockup.",
+      "evidence_refs": [
+        "E1",
+        "E4"
+      ]
+    },
+    {
+      "id": "D2",
+      "kind": "decision",
+      "at": "2026-09-12T14:29:14+09:00",
+      "summary": "Owner approved coalescing repeated identical manual errors and preserving the permanent pinned Tool Window across registered visualizer opens; the smallest existing-owner changes were implemented.",
+      "evidence_refs": [
+        "E9",
+        "E10"
+      ],
+      "supersedes": [
+        "D1"
+      ]
+    },
+    {
+      "id": "D3",
+      "kind": "decision",
+      "at": "2026-09-12T18:07:08.9978783+09:00",
+      "summary": "Owner accepted the two explicitly unexecuted runtime checks as release risk for source delivery and authorized commit plus origin/main push; this decision does not convert either check into test evidence.",
+      "evidence_refs": []
+    }
+  ],
+  "created_at": "2026-09-12T00:00:00+09:00",
+  "updated_at": "2026-09-12T18:07:08.9978783+09:00"
+}

@@ -56,7 +56,7 @@ namespace RawBufferVisualizer.LegacyCompatibility
 
                 Require(view.Descriptor.Width == 3 && view.Descriptor.Height == 2, "OpenCvSharp dimensions");
                 Require(view.Descriptor.PixelFormat == RawPixelFormat.BGR24, "OpenCvSharp pixel format");
-                Require(view.BufferLength == (long)view.Descriptor.Stride * 2, "OpenCvSharp buffer length");
+                Require(view.BufferLength == view.Descriptor.GetRequiredByteCount(), "OpenCvSharp buffer length");
                 Require(chunk.Buffer.Length > 0, "OpenCvSharp chunk length");
                 Require(metadata.BufferAddress == mat.Data.ToInt64(), "OpenCvSharp pixel Data address");
                 Require(metadata.SourcePointerAddress == ReadPointerProperty(mat, "CvPtr").ToInt64(), "OpenCvSharp Ptr address");
@@ -116,7 +116,7 @@ namespace RawBufferVisualizer.LegacyCompatibility
 
                 Require(view.Descriptor.Width == 3 && view.Descriptor.Height == 2, "Emgu dimensions");
                 Require(view.Descriptor.PixelFormat == RawPixelFormat.BGR24, "Emgu pixel format");
-                Require(view.BufferLength == (long)view.Descriptor.Stride * 2, "Emgu buffer length");
+                Require(view.BufferLength == view.Descriptor.GetRequiredByteCount(), "Emgu buffer length");
                 Require(chunk.Buffer.Length > 0, "Emgu chunk length");
                 Require(metadata.BufferAddress == mat.DataPointer.ToInt64(), "Emgu pixel DataPointer address");
                 Require(metadata.SourcePointerAddress == ReadPointerProperty(mat, "Ptr").ToInt64(), "Emgu Ptr address");

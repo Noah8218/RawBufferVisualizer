@@ -1206,9 +1206,18 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 var openCvMetadata = OpenCvSharpMatVisualizerTransfer.CreateMetadata(openCvView);
                 var emguView = EmguCvMatVisualizerTransfer.CreateView(largeEmguMat, nameof(largeEmguMat));
                 var emguMetadata = EmguCvMatVisualizerTransfer.CreateMetadata(emguView);
-                if (!openCvMetadata.SupportsDirectMemory || !emguMetadata.SupportsDirectMemory)
+                var largeImagePtr = new Cressem.ImageModel.ImagePtr(
+                    largeOpenCvMat.Data,
+                    openCvMetadata.BufferLength,
+                    width,
+                    height,
+                    openCvMetadata.Descriptor.Stride,
+                    1);
+                var imagePtrView = ImagePtrVisualizerTransfer.CreateView(largeImagePtr);
+                var imagePtrMetadata = ImagePtrVisualizerTransfer.CreateMetadata(imagePtrView);
+                if (!openCvMetadata.SupportsDirectMemory || !emguMetadata.SupportsDirectMemory || !imagePtrMetadata.SupportsDirectMemory)
                 {
-                    throw new InvalidOperationException("Large Mat metadata must support direct debugger memory.");
+                    throw new InvalidOperationException("Large registered-image metadata must support direct debugger memory.");
                 }
 
                 if (!string.IsNullOrWhiteSpace(readyPath))
@@ -1228,16 +1237,19 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                             "height=" + height.ToString(),
                             "openCvBytes=" + openCvMetadata.BufferLength.ToString(),
                             "emguBytes=" + emguMetadata.BufferLength.ToString(),
+                            "imagePtrBytes=" + imagePtrMetadata.BufferLength.ToString(),
                             "openCvValue=37",
-                            "emguValue=173"
+                            "emguValue=173",
+                            "imagePtrValue=37"
                         });
                 }
 
                 Console.WriteLine(
                     "Large Mat debugger smoke ready: " + width.ToString() + " x " + height.ToString() +
                     ", OpenCvSharp " + openCvMetadata.BufferLength.ToString() + " bytes" +
-                    ", Emgu " + emguMetadata.BufferLength.ToString() + " bytes.");
-                BreakForLargeMats(largeOpenCvMat, largeEmguMat, shouldBreak);
+                    ", Emgu " + emguMetadata.BufferLength.ToString() + " bytes" +
+                    ", ImagePtr " + imagePtrMetadata.BufferLength.ToString() + " bytes.");
+                BreakForLargeMats(largeOpenCvMat, largeEmguMat, largeImagePtr, shouldBreak);
                 return 0;
             }
         }
@@ -1245,6 +1257,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         private static void BreakForLargeMats(
             Mat largeOpenCvMat,
             Emgu.CV.Mat largeEmguMat,
+            Cressem.ImageModel.ImagePtr largeImagePtr,
             bool shouldBreak)
         {
             if (shouldBreak)
@@ -1254,6 +1267,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
 
             GC.KeepAlive(largeOpenCvMat);
             GC.KeepAlive(largeEmguMat);
+            GC.KeepAlive(largeImagePtr);
         }
 
         private static int GetPositiveIntArgument(string[] args, string name, int defaultValue)

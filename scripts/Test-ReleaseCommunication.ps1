@@ -27,6 +27,19 @@ function Assert-Contains {
     }
 }
 
+function Assert-NotContains {
+    param(
+        [string]$Path,
+        [string]$Pattern,
+        [string]$Description
+    )
+
+    $content = Get-Content -Raw -LiteralPath $Path
+    if ($content -match $Pattern) {
+        throw "$Description is present: $Path"
+    }
+}
+
 function Get-ThreePartVersion {
     param([string]$Value)
 
@@ -53,6 +66,7 @@ $providerProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio
 $classicProjectPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj'
 $packageSourcePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferVisualizerPackage.cs'
 $announcementPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio\ReleaseAnnouncement.cs'
+$debuggerLaunchPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Extensibility\DebuggerVisualizerLaunch.cs'
 $toolWindowXamlPath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferToolWindowControl.xaml'
 $toolWindowCodePath = Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\RawBufferToolWindowControl.xaml.cs'
 $changeLogPath = Join-Path $repoRoot 'CHANGELOG.md'
@@ -66,6 +80,7 @@ foreach ($requiredPath in @(
     $classicProjectPath,
     $packageSourcePath,
     $announcementPath,
+    $debuggerLaunchPath,
     $toolWindowXamlPath,
     $toolWindowCodePath,
     $changeLogPath,
@@ -101,6 +116,11 @@ Assert-Contains $providerProjectPath "<AssemblyVersion>$escapedAssemblyVersion</
 Assert-Contains $classicProjectPath "<Version>$escapedPackageVersion</Version>" 'Classic project package version'
 Assert-Contains $packageSourcePath ('InstalledProductRegistration\([^\r\n]+"' + $escapedPackageVersion + '"\)') 'Installed product version'
 Assert-Contains $announcementPath ('CurrentVersion\s*=\s*"' + $escapedPackageVersion + '"') 'In-product announcement version'
+Assert-Contains $debuggerLaunchPath 'CreateTechnicalFailureMessage\(ex, (sourceType|summary\.SourceType)\)' 'Debugger RPC technical error routing'
+Assert-Contains $debuggerLaunchPath 'operation=metadata; source=\{0\}; exception=\{1\}; hresult=0x\{2:X8\}; image payload=not received' 'Debugger RPC metadata error fields'
+Assert-Contains $debuggerLaunchPath 'operation=snapshot-chunk; chunk=\{0\}/\{1\}; offset=\{2:N0\} bytes; requested=\{3:N0\} bytes; total=\{4:N0\} bytes; exception=\{5\}; hresult=0x\{6:X8\}' 'Debugger RPC snapshot error fields'
+Assert-Contains $debuggerLaunchPath 'errorDetails:\s*ex\.ToString\(\)' 'Original debugger exception report detail'
+Assert-NotContains $debuggerLaunchPath ([regex]::Escape('평가 시간 초과')) 'Localized Visual Studio timeout literal'
 Assert-Contains $toolWindowXamlPath '<ToggleButton x:Name="WhatsNewButton"[\s\S]*?AutomationProperties\.AutomationId="ReleaseAnnouncementOpenButton"[\s\S]*?Click="WhatsNew_Click"' "What's New toggle control"
 Assert-Contains $toolWindowCodePath 'WhatsNewButton\.IsChecked\s*=\s*shouldShow' "What's New initial toggle state"
 Assert-Contains $toolWindowCodePath 'private void WhatsNew_Click[\s\S]*?WhatsNewButton\.IsChecked != true[\s\S]*?ReleaseAnnouncementBanner\.Visibility = Visibility\.Collapsed[\s\S]*?Release highlights closed' "What's New repeated-click close behavior"

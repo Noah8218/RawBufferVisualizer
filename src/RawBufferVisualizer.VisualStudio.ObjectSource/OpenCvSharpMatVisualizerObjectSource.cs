@@ -118,7 +118,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             {
                 Buffer = data,
                 SourcePointer = sourcePointer,
-                BufferLength = checked((long)stride * height),
+                BufferLength = descriptor.GetRequiredByteCount(),
                 Descriptor = descriptor,
                 SourceType = MatFullName,
                 DisplayName = displayName ?? string.Empty

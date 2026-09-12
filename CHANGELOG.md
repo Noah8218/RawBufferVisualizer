@@ -4,7 +4,30 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
-No post-`2.0.8` changes are queued.
+No post-`2.0.9` changes are queued.
+
+## [2.0.9] - 2026-09-12
+
+Raw Buffer Visualizer `2.0.9` removes the debugger-RPC bottleneck reported for medium native images, corrects inferred ROI memory spans, and stabilizes repeated visualizer use in the docked Tool Window.
+
+### Fixed
+
+- Routes pointer-backed OpenCvSharp Mat, Emgu CV Mat, ImagePtr, and RawBufferView payloads of 8 MiB or more through the existing checked live-process-memory path instead of serializing the complete image through repeated debugger RPC snapshot requests.
+- Computes an inferred 2D buffer span as `stride * (height - 1) + minimum row bytes`, so a submatrix or ROI does not read nonexistent padding after its final row.
+- Applies the same final-row rule to registered Mat transfers, inferred ImagePtr/RawBufferView values, and Automatic Inspector's known registered-image capture.
+- Preserves explicit caller-supplied buffer lengths and continues to reject unreadable, released, partial, or overflowed memory ranges.
+- Refreshes an existing manual error row when the same expression fails again for the same technical reason, while generating a new report ID and retaining the latest diagnostic details.
+- Leaves the permanent pinned Tool Window open across consecutive registered visualizer invocations; temporary debugger-host lifetime remains owned by Visual Studio's `VisualizerTarget` contract.
+
+### Diagnostics
+
+- Keeps the original debugger exception in the local support report while replacing localized remote-exception text in the visible error with a stable technical RPC failure description.
+- Snapshot chunk failures now identify the RPC operation, chunk number, byte offset, requested byte count, total byte count, exception type, and HRESULT.
+
+### Compatibility
+
+- Keeps 4 MiB chunks for pointer-backed images below 8 MiB and for non-pointer snapshot sources.
+- Retains the existing Visual Studio 2022 `17.9+` x64 and stable Visual Studio 2026 `18.x` installation targets.
 
 ## [2.0.8] - 2026-09-04
 
@@ -280,7 +303,8 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
 
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.8...HEAD
+[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.9...HEAD
+[2.0.9]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.8...v2.0.9
 [2.0.8]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.7...v2.0.8
 [2.0.7]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.6...v2.0.7
 [2.0.6]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.5...v2.0.6

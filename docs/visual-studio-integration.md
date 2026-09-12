@@ -19,7 +19,7 @@ The first Visual Studio workflow supports this flow:
 1. The developer stops at a breakpoint.
 2. The developer opens the Raw Buffer Visualizer entry from DataTip, Watch, Locals, or Autos.
 3. The visualizer receives a supported image-like object from the debuggee process.
-4. The visualizer writes a temporary `.rbuf.json` plus `.raw` snapshot.
+4. Pointer-backed images at or above 8 MiB are opened through checked live process memory. Smaller or non-pointer sources are written as a temporary `.rbuf.json` plus `.raw` snapshot; pointer-backed images at or above 64 MiB also receive a sampled preview first.
 5. The Visual Studio docked visualizer adds the image to the shared `Images` session and renders it in the docked viewer.
 
 This keeps the normal debugging path inside the IDE. The standalone viewer remains available as a separate executable for opening saved `.rbuf.json` snapshots.
@@ -69,15 +69,15 @@ src\RawBufferVisualizer.VisualStudio.Extensibility\
 
 - VS 2022 debugger visualizer entry point.
 - Targets the modern Visual Studio extension model.
-- Receives chunked debugger data and writes temporary snapshot files.
-- Hands debugger snapshots to the docked Visual Studio image inspector.
+- Selects checked live process memory for pointer-backed images at or above 8 MiB; smaller or non-pointer sources use chunked debugger data and temporary snapshot files.
+- Hands live-memory requests, sampled previews, and debugger snapshots to the docked Visual Studio image inspector.
 
 ## Current Prototype Status
 
 - `RawBufferVisualizer.VisualStudio.ObjectSource` converts individual supported images and entries from typed or mixed lists, dictionaries, and supported image arrays.
 - `RawBufferVisualizer.VisualStudio.ObjectSource` includes Visual Studio custom object sources for individual images and image collections.
-- `RawBufferVisualizer.VisualStudio.ObjectSource` sends snapshot metadata first, then serves raw buffer chunks on request.
-- `RawBufferVisualizer.VisualStudio.Extensibility` writes that transfer to a temporary `.rbuf.json` plus `.raw` snapshot and hands it to the docked viewer.
+- `RawBufferVisualizer.VisualStudio.ObjectSource` sends metadata first. It serves 4 MiB raw-buffer chunks for snapshot transfers and a bounded sampled preview for pointer-backed images at or above 64 MiB.
+- `RawBufferVisualizer.VisualStudio.Extensibility` uses checked live process memory for pointer-backed images at or above 8 MiB. It writes smaller or non-pointer transfers to a temporary `.rbuf.json` plus `.raw` snapshot before handing them to the docked viewer.
 - The Modern debugger visualizer providers register individual supported images, open generic `List<>` and `Dictionary<,>` targets, non-generic `ArrayList` and `Hashtable`, and supported image arrays.
 - Classic debugger visualizer assemblies are not packaged in the Marketplace VSIX. This avoids duplicate Classic/Modern registrations while allowing Visual Studio's required open generic registration model for typed lists and dictionaries.
 - The Visual Studio debugger visualizer is hosted as a docked tool window and appends inspected images into one shared `Images` session.
@@ -204,9 +204,9 @@ public sealed class VisualizerSnapshotTransfer
 }
 ```
 
-The object source converts the target object into this transfer shape internally. The extension requests `VisualizerSnapshotMetadata` first, then requests `VisualizerSnapshotChunk` blocks until the raw payload is written to disk. The current chunk size is 4 MiB.
+The object source converts the target object into this transfer shape internally. The extension requests `VisualizerSnapshotMetadata` first. For pointer-backed OpenCvSharp Mat, Emgu CV Mat, ImagePtr, and RawBufferView sources at or above 8 MiB, the metadata produces a checked live-memory request and no complete raw payload crosses debugger RPC. Pointer-backed images at or above 64 MiB receive a bounded sampled preview before the live request. Smaller or non-pointer sources use `VisualizerSnapshotChunk` blocks until the raw payload is written to disk; the chunk size is 4 MiB.
 
-This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currently snapshot their source object once inside the object source, then return chunks from that snapshot.
+The snapshot path avoids one oversized serialization call while retaining a durable copy after Continue. The live-memory path avoids repeated medium-image RPC evaluation and becomes unavailable when debugging resumes or the process exits. Inferred 2D spans use `stride * (height - 1) + minimum row bytes`; an explicit caller-supplied buffer length remains authoritative.
 
 ## Version Policy
 
@@ -233,7 +233,7 @@ This avoids one oversized buffer serialization call. `Bitmap` and `Mat` currentl
 - Viewer opens docked inside Visual Studio with a generated temp snapshot.
 - Pixel format, width, height, stride, valid bits, and byte order match the debuggee object.
 - Mono, color, packed mono, float, and Bayer samples still render correctly after the VS path.
-- Large images are transferred through metadata plus repeated chunk requests instead of one full-buffer response.
+- Pointer-backed images at or above 8 MiB use checked live process memory; smaller or non-pointer snapshots use metadata plus 4 MiB chunk requests instead of one full-buffer response.
 - Repeated visualizer opens append images to the same `Images` list.
 - Unsupported target types fail with a clear message, not a silent no-op.
 

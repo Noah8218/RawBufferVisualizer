@@ -1,6 +1,6 @@
 [CmdletBinding()]
 param(
-    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "ImagePtrColdStart", "ConcurrentDictionary", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip", "Int32Industrial", "Int32IndustrialAutomatic")]
+    [ValidateSet("BufferDoctor", "SmartTypeMapper", "SmartTypeMapperPersisted", "OpenVariable", "AutomaticVisionInspector", "AutomaticCollections", "MultiLibraryHybrid", "DockRetention", "ImagePtrColdStart", "ConcurrentDictionary", "ReleaseAnnouncement", "EnvironmentCheck", "IndustrialMarketplace", "IndustrialDataTip", "Int32Industrial", "Int32IndustrialAutomatic")]
     [string]$Scenario = "BufferDoctor",
     [ValidateSet("Debug", "Release")]
     [string]$Configuration = "Release",
@@ -925,6 +925,36 @@ function Hide-RawBufferToolWindow([int]$ProcessId) {
     }
 }
 
+function Get-RawBufferToolWindowState([int]$ProcessId, [switch]$Pin) {
+    Invoke-Dte $ProcessId {
+        param($dte)
+        try {
+            $window = $dte.Windows.Item("Raw Buffer Visualizer")
+        }
+        catch {
+            return $null
+        }
+
+        if ($Pin) {
+            if ($window.IsFloating) {
+                $window.IsFloating = $false
+            }
+            $window.Visible = $true
+            $window.AutoHides = $false
+            $window.Activate()
+        }
+
+        [pscustomobject]@{
+            kind = ([string]$window.Kind).Trim('{', '}')
+            caption = [string]$window.Caption
+            visible = [bool]$window.Visible
+            autoHides = [bool]$window.AutoHides
+            isFloating = [bool]$window.IsFloating
+            hWnd = [long]$window.HWnd
+        }
+    }
+}
+
 function Assert-RawBufferViewMenuContract(
     [Diagnostics.Process]$Process,
     [IntPtr]$MainHandle) {
@@ -1055,7 +1085,8 @@ function Find-RawBufferToolWindowElement([IntPtr]$MainHandle) {
             $children = $e.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition)
             for ($j = 0; $j -lt $children.Count; $j++) {
                 $c = $children.Item($j)
-                if ([string]$c.Current.Name -eq "Raw Buffer Visualizer") {
+                if ([string]$c.Current.Name -eq "Raw Buffer Visualizer" -and
+                    (Find-ElementByAutomationId $e "ImageList")) {
                     return $e
                 }
             }
@@ -1063,6 +1094,15 @@ function Find-RawBufferToolWindowElement([IntPtr]$MainHandle) {
     }
 
     return $null
+}
+
+function Find-VisualizerHelperFailure([IntPtr]$MainHandle) {
+    Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::Text) |
+        Where-Object {
+            -not [bool]$_.Current.IsOffscreen -and
+            ([string]$_.Current.Name).Contains("System.InvalidOperationException")
+        } |
+        Select-Object -First 1
 }
 
 function Show-LocalsWindow([int]$ProcessId) {
@@ -3787,6 +3827,7 @@ function Invoke-MultiLibraryHybridScenario(
                 $null
             }
         } 60 | Out-Null
+
     }
 
     $finalState = Wait-Until "hybrid registered and automatic image session" {
@@ -3855,6 +3896,113 @@ function Invoke-MultiLibraryHybridScenario(
         errorCount = [int]$finalState.errorCount
         automaticScanStatus = [string]$finalState.automaticScanStatus
         boundedDiscoveryScanCount = $discoveryScanCount
+    }
+}
+
+function Invoke-DockRetentionScenario(
+    [Diagnostics.Process]$Process,
+    [IntPtr]$MainHandle) {
+    $registeredTypes = [ordered]@{
+        bitmap = "System.Drawing.Bitmap"
+        rawBufferView = "RawBufferVisualizer.Sdk.RawBufferView"
+    }
+
+    Show-LocalsWindow $Process.Id
+    Show-RawBufferToolWindow $Process.Id
+    Start-Sleep -Milliseconds 750
+
+    $dismissButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementDismissButton"
+    if ($dismissButton) {
+        Click-AutomationElement $dismissButton
+        Wait-Until "release announcement dismissal before dock-retention check" {
+            if (-not (Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ReleaseAnnouncementTitle")) { $true } else { $null }
+        } 30 | Out-Null
+    }
+
+    $pinnedWindowBefore = Get-RawBufferToolWindowState $Process.Id -Pin
+    if (-not $pinnedWindowBefore -or
+        [bool]$pinnedWindowBefore.autoHides -or
+        [bool]$pinnedWindowBefore.isFloating) {
+        throw "Raw Buffer Visualizer did not report a pinned docked DTE state before registered visualizer handoffs."
+    }
+
+    $pinnedToolElementBefore = Wait-Until "visible pinned Raw Buffer Visualizer content" {
+        Find-RawBufferToolWindowElement $MainHandle
+    } 30
+    $pinnedRuntimeIdBefore = @($pinnedToolElementBefore.GetRuntimeId()) -join "."
+    $windowStates = @($pinnedWindowBefore)
+    $openedSourceTypes = @()
+
+    foreach ($entry in $registeredTypes.GetEnumerator()) {
+        $variableName = [string]$entry.Key
+        $sourceType = [string]$entry.Value
+        $treeItem = Wait-Until "$variableName Locals row" {
+            Find-LocalsTreeItem (Get-AutomationRoot $MainHandle) $variableName
+        } 60
+        Click-VisualizerGlyph (Get-AutomationRoot $MainHandle) $treeItem
+        $openedSourceTypes += $sourceType
+
+        $currentState = Wait-Until "$sourceType registered visualizer handoff" {
+            Dismiss-DebuggerEvaluationWarning | Out-Null
+            if (-not (Test-Path -LiteralPath $sessionPath)) {
+                return $null
+            }
+            try {
+                $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
+                foreach ($openedType in $openedSourceTypes) {
+                    $matches = @($state.documents | Where-Object {
+                        [string]$_.sourceType -eq $openedType -and -not [bool]$_.isError
+                    })
+                    if ($matches.Count -ne 1) {
+                        return $null
+                    }
+                }
+                if ([int]$state.documentCount -eq $openedSourceTypes.Count -and
+                    [int]$state.errorCount -eq 0) {
+                    $state
+                }
+                else {
+                    $null
+                }
+            }
+            catch {
+                $null
+            }
+        } 60
+
+        $windowState = Wait-Until "pinned dock state after $variableName handoff" {
+            $state = Get-RawBufferToolWindowState $Process.Id
+            if ($state -and -not [bool]$state.autoHides -and -not [bool]$state.isFloating) { $state } else { $null }
+        } 30
+        $windowStates += $windowState
+
+        $toolElement = Wait-Until "same visible Raw Buffer Visualizer after $variableName handoff" {
+            Find-RawBufferToolWindowElement $MainHandle
+        } 30
+        $runtimeId = @($toolElement.GetRuntimeId()) -join "."
+        if ($runtimeId -ne $pinnedRuntimeIdBefore) {
+            throw "Registered visualizer handoff for '$variableName' replaced the pinned Raw Buffer Visualizer Tool Window."
+        }
+        if (Find-VisualizerHelperFailure $MainHandle) {
+            throw "Registered visualizer handoff for '$variableName' displayed a Visual Studio visualizer-host failure page."
+        }
+    }
+
+    $capturePath = Join-Path $outputRoot "dock-retention-after-registered-opens.png"
+    Capture-Window $MainHandle $capturePath
+    $statePath = Join-Path $outputRoot "dock-retention-window-states.json"
+    $windowStates | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $statePath -Encoding UTF8
+
+    [ordered]@{
+        scenario = "DockRetention"
+        screenshotPath = $capturePath
+        registeredVisualizerTypes = @($registeredTypes.Values)
+        documentCount = [int]$currentState.documentCount
+        errorCount = [int]$currentState.errorCount
+        pinnedToolWindowRuntimeId = $pinnedRuntimeIdBefore
+        pinnedToolWindowRetained = $true
+        visualizerHelperFailureVisible = $false
+        windowStatePath = $statePath
     }
 }
 
@@ -4223,6 +4371,7 @@ $scenarioArgument = switch ($Scenario) {
     "AutomaticVisionInspector" { "--smart-type-mapper-debug" }
     "AutomaticCollections" { "--automatic-collections-debug" }
     "MultiLibraryHybrid" { "--multi-library-debug" }
+    "DockRetention" { "--multi-library-debug" }
     "ImagePtrColdStart" { "--imageptr-cold-start-debug" }
     "ConcurrentDictionary" { "--concurrent-dictionary-debug" }
     "IndustrialMarketplace" {
@@ -4264,6 +4413,7 @@ try {
         Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
     }
     if ($Scenario -eq "MultiLibraryHybrid" -or
+        $Scenario -eq "DockRetention" -or
         $Scenario -eq "ImagePtrColdStart" -or
         $Scenario -eq "ConcurrentDictionary" -or
         $Scenario -eq "AutomaticCollections" -or
@@ -4281,7 +4431,8 @@ try {
         New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
         $automaticPreferenceJson = [ordered]@{
             version = 1
-            autoScanOnBreak = $Scenario -ne "IndustrialMarketplace" -and
+            autoScanOnBreak = $Scenario -ne "DockRetention" -and
+                $Scenario -ne "IndustrialMarketplace" -and
                 $Scenario -ne "IndustrialDataTip" -and
                 $Scenario -ne "ImagePtrColdStart" -and
                 $Scenario -ne "ConcurrentDictionary" -and
@@ -4293,7 +4444,7 @@ try {
             $automaticPreferenceJson,
             (New-Object Text.UTF8Encoding($false)))
     }
-    if ($Scenario -eq "ReleaseAnnouncement") {
+    if ($Scenario -eq "ReleaseAnnouncement" -or $Scenario -eq "DockRetention") {
         $releaseAnnouncementPreferenceIsolated = $true
         $releaseAnnouncementPreferenceExisted = Test-Path -LiteralPath $releaseAnnouncementPreferencePath
         if ($releaseAnnouncementPreferenceExisted) {
@@ -4355,6 +4506,9 @@ try {
         elseif ($Scenario -eq "MultiLibraryHybrid") {
             (Find-TreeItem $root "badStrideSnapshot") -ne $null
         }
+        elseif ($Scenario -eq "DockRetention") {
+            (Find-TreeItem $root "badStrideSnapshot") -ne $null
+        }
         elseif ($Scenario -eq "ImagePtrColdStart") {
             (Find-TreeItem $root "imagePtrBgr24") -ne $null
         }
@@ -4414,6 +4568,7 @@ try {
         "AutomaticVisionInspector" { Invoke-AutomaticVisionInspectorScenario $visualStudio $mainHandle }
         "AutomaticCollections" { Invoke-AutomaticCollectionsScenario $visualStudio $mainHandle }
         "MultiLibraryHybrid" { Invoke-MultiLibraryHybridScenario $visualStudio $mainHandle }
+        "DockRetention" { Invoke-DockRetentionScenario $visualStudio $mainHandle }
         "ImagePtrColdStart" { Invoke-ImagePtrColdStartScenario $visualStudio $mainHandle }
         "ConcurrentDictionary" { Invoke-ConcurrentDictionaryScenario $visualStudio $mainHandle }
         "IndustrialMarketplace" { Invoke-IndustrialMarketplaceScenario $visualStudio $mainHandle }

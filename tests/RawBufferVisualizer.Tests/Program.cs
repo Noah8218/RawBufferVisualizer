@@ -72,6 +72,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerSnapshotStoreWritesChunkedSnapshot();
                 VisualizerSnapshotStoreWritesCollection();
                 RawBufferViewCreatesDescriptorAndChunks();
+                InferredPointerViewsStopAtFinalPixelRow();
                 ProducerPointerReadsCurrentBytesAtSameAddress();
                 ProducerPointerReadsAcrossReadablePageBoundary();
                 ProducerPointerReadsFailClosedAfterDecommit();
@@ -1226,6 +1227,7 @@ namespace RawBufferVisualizer.Tests
 
             Assert(metadata.BufferLength == 6, "Chunk metadata buffer length failed.");
             Assert(metadata.ChunkSize == VisualizerChunkedTransfer.DefaultChunkSize, "Chunk metadata size failed.");
+            Assert(metadata.ChunkSize == 4 * 1024 * 1024, "Debugger RPC chunks must remain capped at 4 MiB.");
             Assert(
                 metadata.ExpressionIdentityHash == System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(identityTarget),
                 "Debugger expression identity metadata failed.");
@@ -1483,6 +1485,108 @@ namespace RawBufferVisualizer.Tests
             {
                 handle.Free();
             }
+        }
+
+        private static void InferredPointerViewsStopAtFinalPixelRow()
+        {
+            const uint memCommit = 0x1000;
+            const uint memReserve = 0x2000;
+            const uint memRelease = 0x8000;
+            const uint pageNoAccess = 0x01;
+            const uint pageReadWrite = 0x04;
+
+            var pageSize = Environment.SystemPageSize;
+            var address = VirtualAlloc(
+                IntPtr.Zero,
+                new UIntPtr((uint)(pageSize * 2)),
+                memCommit | memReserve,
+                pageReadWrite);
+            Assert(address != IntPtr.Zero, "VirtualAlloc failed for the final-row span test.");
+
+            try
+            {
+                var imageAddress = IntPtr.Add(address, pageSize - 6);
+                Marshal.Copy(new byte[] { 11, 12, 0, 0, 21, 22 }, 0, imageAddress, 6);
+                uint previousProtection;
+                Assert(
+                    VirtualProtect(
+                        IntPtr.Add(address, pageSize),
+                        new UIntPtr((uint)pageSize),
+                        pageNoAccess,
+                        out previousProtection),
+                    "VirtualProtect failed for the final-row span test.");
+
+                var rawView = new RawBufferView
+                {
+                    Buffer = imageAddress,
+                    Width = 2,
+                    Height = 2,
+                    Stride = 4,
+                    PixelFormat = RawPixelFormat.Mono8,
+                    Channels = 1,
+                    BitDepth = 8
+                };
+                Assert(rawView.GetBufferLength() == 6, "RawBufferView inferred length included final-row padding.");
+                AssertFinalPixelSpan(
+                    RawBufferViewVisualizerTransfer.CreateChunk(
+                        rawView,
+                        new VisualizerSnapshotChunkRequest { Count = VisualizerChunkedTransfer.DefaultChunkSize }),
+                    "RawBufferView");
+
+                var imagePtr = new InferredImagePtr
+                {
+                    Ptr = imageAddress,
+                    Width = 2,
+                    Height = 2,
+                    Step = 4,
+                    Bpp = 1
+                };
+                var imagePtrView = ImagePtrVisualizerTransfer.CreateView(imagePtr);
+                Assert(imagePtrView.BufferLength == 6, "ImagePtr inferred length included final-row padding.");
+                AssertFinalPixelSpan(
+                    ImagePtrVisualizerTransfer.CreateChunk(
+                        imagePtrView,
+                        new VisualizerSnapshotChunkRequest { Count = VisualizerChunkedTransfer.DefaultChunkSize }),
+                    "ImagePtr");
+
+                var legacyMat = CreateLegacyOpenCvSharpMat(
+                    rows: 2,
+                    cols: 2,
+                    step: 4,
+                    data: imageAddress,
+                    depth: 0,
+                    channels: 1);
+                var openCvView = OpenCvSharpMatVisualizerTransfer.CreateView(legacyMat, "roiMat");
+                Assert(openCvView.BufferLength == 6, "OpenCvSharp ROI length included final-row padding.");
+                AssertFinalPixelSpan(
+                    OpenCvSharpMatVisualizerTransfer.CreateChunk(
+                        openCvView,
+                        new VisualizerSnapshotChunkRequest { Count = VisualizerChunkedTransfer.DefaultChunkSize }),
+                    "OpenCvSharp ROI");
+
+                using (var emguMat = new Emgu.CV.Mat(2, 2, Emgu.CV.DepthType.Cv8U, 1, imageAddress, 4))
+                {
+                    var emguView = EmguCvMatVisualizerTransfer.CreateView(emguMat, "emguRoiMat");
+                    Assert(emguView.BufferLength == 6, "Emgu ROI length included final-row padding.");
+                    AssertFinalPixelSpan(
+                        EmguCvMatVisualizerTransfer.CreateChunk(
+                            emguView,
+                            new VisualizerSnapshotChunkRequest { Count = VisualizerChunkedTransfer.DefaultChunkSize }),
+                        "Emgu ROI");
+                }
+            }
+            finally
+            {
+                VirtualFree(address, UIntPtr.Zero, memRelease);
+            }
+        }
+
+        private static void AssertFinalPixelSpan(VisualizerSnapshotChunk chunk, string context)
+        {
+            Assert(chunk.Buffer.Length == 6, context + " did not stop at the final pixel byte.");
+            Assert(chunk.Buffer[0] == 11 && chunk.Buffer[1] == 12 && chunk.Buffer[4] == 21 && chunk.Buffer[5] == 22,
+                context + " changed row pixels while excluding final-row padding.");
+            Assert(chunk.TotalLength == 6 && chunk.IsLastChunk, context + " reported an incorrect final image span.");
         }
 
         private static void ProducerPointerReadsFailClosedAfterDecommit()
@@ -4182,6 +4286,15 @@ namespace RawBufferVisualizer.Tests
             public CompanyPixelType Mode { get; set; }
         }
 
+        private sealed class InferredImagePtr
+        {
+            public IntPtr Ptr { get; set; }
+            public int Width { get; set; }
+            public int Height { get; set; }
+            public int Step { get; set; }
+            public int Bpp { get; set; }
+        }
+
         private static BufferInterpretationCandidate ScoreDraft(RawImageSource source, RawImageDescriptor descriptor)
         {
             var drafts = BufferInterpretationCandidateGenerator.Generate(source.Length, descriptor);
@@ -4500,6 +4613,7 @@ namespace Emgu.CV
     {
         private readonly byte[] _buffer;
         private readonly GCHandle _handle;
+        private readonly IntPtr _externalDataPointer;
 
         public bool IsEmpty { get; private set; }
         public int Dims { get; private set; }
@@ -4511,7 +4625,7 @@ namespace Emgu.CV
 
         public IntPtr DataPointer
         {
-            get { return _handle.AddrOfPinnedObject(); }
+            get { return _externalDataPointer != IntPtr.Zero ? _externalDataPointer : _handle.AddrOfPinnedObject(); }
         }
 
         private IntPtr Ptr { get; } = new IntPtr(0x13579BDF);
@@ -4526,6 +4640,18 @@ namespace Emgu.CV
             Dims = 2;
             _buffer = buffer;
             _handle = GCHandle.Alloc(_buffer, GCHandleType.Pinned);
+        }
+
+        public Mat(int rows, int cols, DepthType depth, int numberOfChannels, IntPtr dataPointer, int step)
+        {
+            Rows = rows;
+            Cols = cols;
+            Depth = depth;
+            NumberOfChannels = numberOfChannels;
+            Step = step;
+            Dims = 2;
+            _buffer = Array.Empty<byte>();
+            _externalDataPointer = dataPointer;
         }
 
         public void Dispose()
