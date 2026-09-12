@@ -53,7 +53,7 @@ namespace RawBufferVisualizer.Sdk
                 return 0;
             }
 
-            return checked((long)descriptor.Stride * descriptor.Height);
+            return descriptor.GetRequiredByteCount();
         }
 
         public RawBufferSnapshot ToSnapshot()

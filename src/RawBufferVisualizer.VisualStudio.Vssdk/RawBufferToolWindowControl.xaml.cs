@@ -2995,18 +2995,49 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string? itemAssemblyName = null,
             int debuggeeProcessId = 0)
         {
-            var document = ImageDocument.CreateError(
+            var document = _documents.LastOrDefault(candidate => candidate.MatchesError(
+                displayPath,
+                sourceType,
+                errorType,
+                errorMessage));
+            if (document == null)
+            {
+                document = ImageDocument.CreateError(
+                    displayPath,
+                    sourceType,
+                    errorType,
+                    errorMessage,
+                    errorDetails,
+                    ShouldDeleteSnapshotDirectoryOnDispose(displayPath),
+                    memberInventory,
+                    itemAssemblyName,
+                    debuggeeProcessId);
+                _workspace.Add(document);
+                ActivateDocument(document);
+                return;
+            }
+
+            var wasActive = ReferenceEquals(_activeDocument, document);
+            document.ReplaceWithError(
                 displayPath,
                 sourceType,
                 errorType,
                 errorMessage,
                 errorDetails,
-                ShouldDeleteSnapshotDirectoryOnDispose(displayPath),
                 memberInventory,
                 itemAssemblyName,
                 debuggeeProcessId);
-            _workspace.Add(document);
-            ActivateDocument(document);
+            ImageList.Items.Refresh();
+            if (!wasActive)
+            {
+                ActivateDocument(document);
+                return;
+            }
+
+            UpdateAutomaticInspectionPanel(document);
+            DescriptorText.Text = FormatDescriptor(document);
+            UpdateInterpretationControls(document.Descriptor);
+            RenderActiveDocument();
         }
 
         private void ShowErrorPanel(ImageDocument document)
@@ -6246,8 +6277,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 };
                 Source = RawImageSource.FromMemory(new byte[] { 0 }, Descriptor);
                 Thumbnail = CreateErrorThumbnailSource();
-                ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Unknown open failure." : errorMessage;
-                ErrorType = string.IsNullOrWhiteSpace(errorType) ? "Unknown" : errorType;
+                ErrorMessage = NormalizeErrorMessage(errorMessage);
+                ErrorType = NormalizeErrorType(errorType);
                 ErrorDetails = errorDetails ?? string.Empty;
                 ErrorOccurredUtc = DateTime.UtcNow;
                 ErrorId = CreateSupportId("ERROR", ErrorOccurredUtc);
@@ -6302,6 +6333,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     handoffId);
             }
 
+            public bool MatchesError(
+                string displayPath,
+                string sourceType,
+                string errorType,
+                string errorMessage)
+            {
+                return IsError
+                    && !IsAutomaticInspection
+                    && string.Equals(DisplayPath, GetDisplayPath(displayPath), StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(SourceType, NormalizeSourceType(sourceType), StringComparison.Ordinal)
+                    && string.Equals(ErrorType, NormalizeErrorType(errorType), StringComparison.Ordinal)
+                    && string.Equals(ErrorMessage, NormalizeErrorMessage(errorMessage), StringComparison.Ordinal);
+            }
+
             public void ReplaceWithError(
                 string displayPath,
                 string sourceType,
@@ -6331,8 +6376,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     false);
                 ObjectName = CreateTitle(DisplayPath);
                 Thumbnail = CreateErrorThumbnailSource();
-                ErrorMessage = string.IsNullOrWhiteSpace(errorMessage) ? "Unknown open failure." : errorMessage;
-                ErrorType = string.IsNullOrWhiteSpace(errorType) ? "Unknown" : errorType;
+                ErrorMessage = NormalizeErrorMessage(errorMessage);
+                ErrorType = NormalizeErrorType(errorType);
                 ErrorDetails = errorDetails ?? string.Empty;
                 ErrorOccurredUtc = DateTime.UtcNow;
                 ErrorId = CreateSupportId("ERROR", ErrorOccurredUtc);
@@ -6493,6 +6538,21 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     return displayPath ?? string.Empty;
                 }
+            }
+
+            private static string NormalizeSourceType(string sourceType)
+            {
+                return string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
+            }
+
+            private static string NormalizeErrorType(string errorType)
+            {
+                return string.IsNullOrWhiteSpace(errorType) ? "Unknown" : errorType;
+            }
+
+            private static string NormalizeErrorMessage(string errorMessage)
+            {
+                return string.IsNullOrWhiteSpace(errorMessage) ? "Unknown open failure." : errorMessage;
             }
 
         }

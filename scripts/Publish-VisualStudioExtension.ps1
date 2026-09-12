@@ -297,6 +297,12 @@ function Assert-VssdkPackageLifecycleContract {
     if ($frameShow -lt 0 -or $showMonitoringStart -le $frameShow) {
         throw 'Inbox monitoring must start only after the docked ToolWindow frame has been shown.'
     }
+
+    foreach ($forbiddenCleanup in @('ScheduleDebuggerVisualizerHostCleanup', 'CloseDuplicateDebuggerVisualizerHostsAsync', 'CloseFrame(')) {
+        if ($source.Contains($forbiddenCleanup)) {
+            throw "The VSSDK package must not close same-caption debugger visualizer frames through '$forbiddenCleanup'; VisualizerTarget disposal owns the temporary debugger host lifetime."
+        }
+    }
 }
 
 function Assert-VisualStudioCompatibilityContract {

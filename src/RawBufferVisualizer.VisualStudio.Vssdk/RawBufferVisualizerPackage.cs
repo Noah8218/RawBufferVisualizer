@@ -20,7 +20,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     // The in-process package stays isolated from the newer out-of-process Extensibility SDK.
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.8")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.9")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(
@@ -42,7 +42,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public const int ScanLocalsCommandId = 0x0101;
 
         private static readonly Guid CommandSetGuid = new Guid(CommandSetGuidString);
-        private static readonly Guid RawBufferToolWindowGuid = new Guid(RawBufferToolWindow.WindowGuidString);
         private static readonly TimeSpan InboxPollMinInterval = TimeSpan.FromMilliseconds(500);
         private static readonly TimeSpan InboxPollMaxInterval = TimeSpan.FromSeconds(10);
 
@@ -584,11 +583,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            if (window.OpenClaimedHandoffRequest(requestPath, processingPath))
-            {
-                ScheduleDebuggerVisualizerHostCleanup();
-            }
-            else
+            if (!window.OpenClaimedHandoffRequest(requestPath, processingPath))
             {
                 WriteAutomationLog("Open rejected " + requestPath);
                 var state = VisualizerHandoffInbox.GetRequestState(requestPath);
@@ -643,70 +638,5 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private void ScheduleDebuggerVisualizerHostCleanup()
-        {
-            _ = JoinableTaskFactory.RunAsync(async delegate
-            {
-                try
-                {
-                    for (var attempt = 0; attempt < 8; attempt++)
-                    {
-                        await Task.Delay(attempt == 0 ? 100 : 250, DisposalToken);
-                        await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-                        if (await CloseDuplicateDebuggerVisualizerHostsAsync())
-                        {
-                            return;
-                        }
-                    }
-                }
-                catch (OperationCanceledException) when (DisposalToken.IsCancellationRequested)
-                {
-                }
-                catch (Exception ex)
-                {
-                    WriteAutomationLog("Visualizer host cleanup error " + ex);
-                }
-            });
-        }
-
-        private async Task<bool> CloseDuplicateDebuggerVisualizerHostsAsync()
-        {
-            await JoinableTaskFactory.SwitchToMainThreadAsync(DisposalToken);
-            var uiShell = await GetServiceAsync(typeof(SVsUIShell)) as IVsUIShell;
-            if (uiShell == null || ErrorHandler.Failed(uiShell.GetToolWindowEnum(out var frameEnumerator)))
-            {
-                return false;
-            }
-
-            var frames = new IVsWindowFrame[1];
-            var closed = false;
-            while (frameEnumerator.Next(1, frames, out var fetched) == VSConstants.S_OK && fetched == 1)
-            {
-                var frame = frames[0];
-                if (frame == null
-                    || ErrorHandler.Failed(frame.GetProperty((int)__VSFPROPID.VSFPROPID_Caption, out var captionValue))
-                    || !string.Equals(captionValue as string, "Raw Buffer Visualizer", StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                var persistenceGuid = Guid.Empty;
-                frame.GetGuidProperty((int)__VSFPROPID.VSFPROPID_GuidPersistenceSlot, out persistenceGuid);
-                if (persistenceGuid == RawBufferToolWindowGuid)
-                {
-                    continue;
-                }
-
-                var closeResult = frame.CloseFrame((uint)__FRAMECLOSE.FRAMECLOSE_NoSave);
-                WriteAutomationLog(
-                    "Closed duplicate debugger visualizer host "
-                    + persistenceGuid.ToString("D", CultureInfo.InvariantCulture)
-                    + " result "
-                    + closeResult.ToString(CultureInfo.InvariantCulture));
-                closed |= ErrorHandler.Succeeded(closeResult);
-            }
-
-            return closed;
-        }
     }
 }
