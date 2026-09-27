@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
 using System.Text;
+using System.Threading;
 using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.Sdk
@@ -123,26 +124,63 @@ namespace RawBufferVisualizer.Sdk
                 throw new InvalidOperationException("Snapshot descriptor is invalid.");
             }
 
-            var fullMetadataPath = Path.GetFullPath(metadataPath);
-            var rawPath = GetDefaultRawPath(fullMetadataPath);
-            var directory = Path.GetDirectoryName(fullMetadataPath);
-            if (!string.IsNullOrEmpty(directory))
+            using (var source = RawImageSource.FromMemory(Buffer, Descriptor))
             {
-                Directory.CreateDirectory(directory);
+                var saved = SaveSource(metadataPath, source, Descriptor);
+                MetadataPath = saved.MetadataPath;
+                RawPath = saved.RawPath;
             }
+        }
 
-            File.WriteAllBytes(rawPath, Buffer);
-
-            var dto = RawBufferSnapshotDto.From(Descriptor);
-            dto.RawFile = Path.GetFileName(rawPath);
-            using (var stream = File.Create(fullMetadataPath))
+        public static RawBufferSnapshotReference SaveSource(string metadataPath, RawImageSource source, RawImageDescriptor descriptor,
+            CancellationToken cancellationToken = default, IProgress<long>? progress = null)
+        {
+            if (source == null) throw new ArgumentNullException(nameof(source));
+            if (descriptor == null) throw new ArgumentNullException(nameof(descriptor));
+            if (RawBufferDiagnostics.HasErrors(RawBufferDiagnostics.AnalyzeLength(source.Length, descriptor)))
+                throw new InvalidOperationException("Snapshot descriptor is invalid.");
+            var savedDescriptor = descriptor.Clone();
+            var fullPath = Path.GetFullPath(metadataPath);
+            cancellationToken.ThrowIfCancellationRequested();
+            var expected = AtomicFileSave.ReadExisting(fullPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            // rawFile is the commit pointer. Never overwrite bytes that an existing snapshot may still reference.
+            var stem = Path.GetFileNameWithoutExtension(GetDefaultRawPath(fullPath));
+            var rawPath = Path.Combine(Path.GetDirectoryName(fullPath)!, stem.Substring(0, Math.Min(stem.Length, 218)) + "." + Guid.NewGuid().ToString("N") + ".raw");
+            var committed = false;
+            try
             {
-                var serializer = new DataContractJsonSerializer(typeof(RawBufferSnapshotDto));
-                serializer.WriteObject(stream, dto);
+                using (var stream = new FileStream(rawPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    source.CopyRawTo(stream, cancellationToken, progress);
+                    if (stream.Length != source.Length) throw new IOException("The snapshot payload length does not match its source.");
+                    stream.Flush(true);
+                }
+                cancellationToken.ThrowIfCancellationRequested();
+                var dto = RawBufferSnapshotDto.From(savedDescriptor);
+                dto.RawFile = Path.GetFileName(rawPath);
+                AtomicFileSave.Write(fullPath, SerializeDto(dto), expected, cancellationToken);
+                committed = true;
+                return new RawBufferSnapshotReference(fullPath, rawPath, savedDescriptor, source.Length);
             }
+            finally
+            {
+                if (!committed)
+                {
+                    try { File.Delete(rawPath); }
+                    catch (IOException) { }
+                    catch (UnauthorizedAccessException) { }
+                }
+            }
+        }
 
-            MetadataPath = fullMetadataPath;
-            RawPath = rawPath;
+        private static byte[] SerializeDto(RawBufferSnapshotDto dto)
+        {
+            using (var stream = new MemoryStream())
+            {
+                new DataContractJsonSerializer(typeof(RawBufferSnapshotDto)).WriteObject(stream, dto);
+                return stream.ToArray();
+            }
         }
 
         public static string SaveMetadata(string metadataPath, RawImageDescriptor descriptor, string? rawFileName = null)
@@ -170,11 +208,8 @@ namespace RawBufferVisualizer.Sdk
 
             var dto = RawBufferSnapshotDto.From(descriptor);
             dto.RawFile = Path.GetFileName(rawPath);
-            using (var stream = File.Create(fullMetadataPath))
-            {
-                var serializer = new DataContractJsonSerializer(typeof(RawBufferSnapshotDto));
-                serializer.WriteObject(stream, dto);
-            }
+            var expected = AtomicFileSave.ReadExisting(fullMetadataPath);
+            AtomicFileSave.Write(fullMetadataPath, SerializeDto(dto), expected);
 
             return rawPath;
         }

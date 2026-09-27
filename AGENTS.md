@@ -1,57 +1,34 @@
-# AGENTS.md
+# Repository Instructions
 
-This repository is maintained with Codex assistance. Keep changes practical, verified, and focused on the Raw Buffer Visualizer user workflow.
+## Orientation
 
-## New Session Orientation
+Resolve the current checkout with `git rev-parse --show-toplevel`; run `git status --short` and `git log --oneline -5`. No fixed C: checkout directory is required.
 
-The canonical working repository is the active Git worktree that contains this file. On this machine the current 2.x worktree is `C:\Git\RawBufferVisualizer_VSIX\RawBufferVisualizer_vs17.9_compat`. Do not treat `C:\Documents\RawBufferVisualizer`, an attachment directory, or a missing historical path as the source of truth.
+Follow [docs/README.md](docs/README.md), then [PRODUCT_CONCEPT.md](PRODUCT_CONCEPT.md) and [architecture and validation](docs/ARCHITECTURE_AND_VALIDATION.md). Read only the additional route needed for the task.
 
-Before implementation, release work, or documentation changes in a new conversation:
+Source and generated manifests own implementation/version facts. Distinguish source, compiled artifacts, installed binaries and published packages. Never infer current publication from a source version or an old local installer.
 
-1. Resolve the worktree with `git rev-parse --show-toplevel`, then run `git status --short` and `git log --oneline -5` there.
-2. Read [docs/README.md](docs/README.md) for the document map.
-3. Read [docs/MAINTAINER_HANDOFF.md](docs/MAINTAINER_HANDOFF.md) for the current version, release state, completed work, known gaps, and next priority.
-4. Read [docs/PRODUCT_DIRECTION_AND_ROADMAP.md](docs/PRODUCT_DIRECTION_AND_ROADMAP.md) before changing product scope or UX.
-5. Read [docs/ARCHITECTURE_AND_VALIDATION.md](docs/ARCHITECTURE_AND_VALIDATION.md) before changing debugger transfer, viewer rendering, compatibility, packaging, or smoke tests.
+## Product And Ownership
 
-If repository evidence differs from the handoff, trust the repository and current external state, then update the handoff in the same change. Do not copy old version numbers forward without checking the VSIX manifest, public Marketplace version, and latest CI result.
+Raw Buffer Visualizer is a C# 2D image/buffer debugger centered on one docked Visual Studio window. Camera control, acquisition, PLC/I/O, recipe execution and 3D inspection are outside this product.
 
-The product is an Image Watch-style C# machine-vision debugger visualizer centered on one docked Visual Studio window. Vision Replay Debugger, camera control, acquisition orchestration, PLC/I/O, and recipe execution are separate products and remain out of scope. Rendering implementation names are internal details and must not appear in user-facing copy.
+Reuse the current owner. Do not reopen a completed structural change without a requirement, reproducible defect or changed dependency boundary. Read the owner map before changing debugger transfer, rendering, storage or packaging.
 
-## Visual Studio Compatibility Contract
+## Compatibility And Validation
 
-- Keep shipped and development claims explicit. Exact Marketplace readback on 2026-09-04 confirms public `2.0.7.0`; that package is superseded because its `netstandard2.0` debugger ObjectSource is stale. Local `2.0.8.0` corrects the package path, passed exact-artifact qualification including Visual Studio 2022 `17.9.34902.65`, and remains a candidate until the owner authorizes each external step. Both retain Visual Studio 2022 `17.9+` plus stable Visual Studio 2026 `18.x` support targets.
-- The former 2.0.7 feature qualification is invalidated for the Visual Studio 2022 direct debugger-host path by error `RBV-ERROR-20260904005014-8DA38D99`. Record the incident in [docs/release-qualification-2.0.7.md](docs/release-qualification-2.0.7.md) and the correction in [docs/release-qualification-2.0.8.md](docs/release-qualification-2.0.8.md). Reinstalling the same 2.0.7 VSIX is not remediation.
-- The VSIX manifest range `[17.9,18.0)` remains the compatibility contract. Visual Studio 2026 uses the lower API-version bound for VSIX compatibility, supports Visual Studio API version 17.x, and ignores the upper bound. Any manifest, embedded release communication, or package-content change requires a new exact-package qualification.
-- For every VSIX build, compare SHA-256 for `netstandard2.0/RawBufferVisualizer.Core.dll`, `RawBufferVisualizer.Sdk.dll`, `RawBufferVisualizer.VisualStudio.ObjectSource.dll`, and `RawBufferVisualizer.VisualStudio.ObjectSource.deps.json` against the same fresh routed Release output. Any mismatch is a release blocker; file presence and source-level tests are not substitutes for byte equality.
-- Do not claim Visual Studio 2019, 32-bit Visual Studio, Preview/Insiders builds, or an untested exact VS2026 minor version as verified. Stable VS2026 `18.x` is a supported compatibility target; record the exact installed build only after the installed Tool Window, menu, debugger handoff, Automatic Inspector, and registered visualizer paths pass.
-- Before publishing a new release, run the installed-VSIX matrix on current serviced VS2022 and stable VS2026 when both environments are available. If one environment is unavailable, retain the support target but state the missing runtime qualification in the release record and Marketplace copy.
-- Before installing into VS2026, inspect both the per-user `18.0_<instance>\Extensions` root and the per-machine `Common7\IDE\VSExtensions` root for the Raw Buffer Visualizer extension ID. A migrated per-machine historical build must be removed or updated through Visual Studio Manage Extensions/Installer with administrator rights; never delete its `Program Files` directory manually or hide the conflict with a second extension ID.
-- Authoritative Microsoft compatibility reference: https://learn.microsoft.com/en-us/visualstudio/extensibility/migration/extension-compatibility?view=visualstudio
+- Read the VSIX manifest for the installation contract. Supported targets are VS2022 17.9+ x64 and stable VS2026 18.x; exact-host verification must name the tested binary and host. Do not claim VS2019, 32-bit or Preview/Insiders compatibility.
+- Before using a VSIX, compare its four `netstandard2.0` Core/SDK/ObjectSource/deps payloads against the fresh routed build. `scripts/Publish-VisualStudioExtension.ps1` owns these hash and registration checks. Presence alone does not prove freshness.
+- Preserve complete native reads, validated layout bounds, explicit pointer lifetimes and cancellation/session admission. An address is not object identity.
+- Use the focused checks in the documentation. Keep source checks, unit tests, actual UI interaction and installed-IDE verification distinct. Never silently install or restart to obtain evidence.
+- Keep generated test data on D: when available, otherwise an explicit isolated fallback. Respect the workstation monitor rule when launching desktop test windows.
+- Consult [vendor policy](docs/vendor-sdk-license-policy.md) before any proprietary SDK work.
 
-## README Image Gate
+## UI And Documentation
 
-Images used in `README.md`, Marketplace copy, or any first-impression GitHub documentation must pass a visual review before being committed or pushed.
+Before changing UI layout, text or workflow: describe the problem, show the proposed layout, obtain explicit approval, then implement. Preserve previously approved scope. Review README-visible images before changing or publishing them; do not add private desktop content or represent old screenshots as a new binary's proof.
 
-Checklist:
+Keep public documentation factual: product behavior, build instructions, contracts and licenses. Keep internal plans, review logs, work contracts and machine-specific artifacts outside the public change set. Preserve them separately before removing public references. Use the source version and an explicit date for verification snapshots.
 
-- Capture from the current built version, not an old or unrelated run.
-- Verify the screenshot visually before publishing.
-- Do not include unrelated program UI, desktop clutter, file explorers, unrelated Visual Studio panes, chat tools, or private user data.
-- Crop documentation screenshots to the Raw Buffer Visualizer surface unless surrounding Visual Studio context is intentionally needed.
-- Confirm the screenshot shows the claimed feature accurately: loaded image, pixel values, diagnostics, large-image status, or error state.
-- Keep before/after or review evidence under `artifacts/ui/` when replacing README images.
-- If a screenshot fails review, regenerate or crop it before updating `README.md`.
+## External Actions
 
-For README-visible images, do not rely only on file existence or automated capture success. The image itself must be inspected.
-
-## UI Change Review Gate
-
-Before any UI, UX, layout, visible text, visual state, navigation, or workflow-affordance change, follow this gate. This gate is mandatory; do not implement a UI change without completing it.
-
-1. **Review**: Describe the UI element to change and why the change is needed. Do not start implementation.
-2. **Mock up**: Draw the target layout as an ASCII diagram or a simple sketch showing the new position, size, and relationship to existing controls. Do not write code.
-3. **Confirm**: Wait for explicit user approval. If the user rejects or revises the mockup, repeat from step 1.
-4. **Implement**: Only after approval, write the code exactly as approved.
-
-This gate supersedes any direct request to "just make the change". When the user asks for a UI change, respond with the review description and the mockup first, and stop.
+Editing, committing, branch pushing, tagging, publishing and installing are separate authorization boundaries. Generic continuation does not authorize external communication. Before a push, present the exact changed-file list, commit message, account, repository, branch, visibility and triggered workflows. Preserve local changes until their ownership and scope are established.

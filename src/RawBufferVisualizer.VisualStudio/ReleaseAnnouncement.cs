@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.0.9";
+        public const string CurrentVersion = "2.1.0";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#209";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#210";
 
         public const string HighlightEnvironmentCheck =
-            "Pointer-backed images at or above 8 MiB bypass debugger RPC snapshot transfer";
+            "More image space and correct debugger status even when Auto Inspect is off";
 
         public const string HighlightColdPreview =
-            "ROI and inferred pointer spans stop at the final pixel row without trailing padding";
+            "Responsive discovery, accurate pixels, raw-value histograms and cancellable snapshot export";
 
         public const string HighlightPanelToggles =
-            "Registered opens keep the dock pinned; repeated RPC failures refresh one technical error row";
+            "Includes 2.0.9 native-image transfer, ROI range, error-row and pinned-window fixes";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

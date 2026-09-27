@@ -758,6 +758,13 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private void OpenGlDraw(object? sender, RenderEventArgs args)
         {
+            // Native WM_PAINT can arrive while WPF is still waiting to raise Loaded.
+            // EndInit in OpenGlControlLoaded creates the context and requests the first frame.
+            if (!_openGlInitialized)
+            {
+                return;
+            }
+
             var frameWatch = Stopwatch.StartNew();
             var gl = _openGlControl.OpenGL;
             try
@@ -1931,7 +1938,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
 
             _renderQueued = false;
-            if (_openGlControl.IsDisposed || !_openGlControl.IsHandleCreated)
+            if (!_openGlInitialized || _openGlControl.IsDisposed || !_openGlControl.IsHandleCreated)
             {
                 return;
             }
@@ -2080,11 +2087,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 {
                     if (x < 0 || y < 0 || x >= _descriptor!.Width || y >= _descriptor.Height)
                     {
-                        builder.Append("     ");
+                        builder.Append("      ");
                         continue;
                     }
 
-                    builder.Append(CompactPixelValue(_imageSource.DescribePixel(x, y)).PadLeft(5));
+                    builder.Append(CompactPixelValue(_imageSource.DescribePixel(x, y)).PadLeft(5)).Append(' ');
                 }
 
                 builder.AppendLine();
@@ -2159,11 +2166,16 @@ namespace RawBufferVisualizer.OpenGlCanvas
             }
 
             var viewportHeight = (int)Math.Max(1, viewportHeightValue);
-            for (var y = startY; y <= endY; y++)
+            var cellSize = Math.Min(viewportWidth / _viewWidth, viewportHeightValue / _viewHeight);
+            var fontSize = Math.Min(16.0f, Math.Max(10.0f, (float)(cellSize * 0.26)));
+            using (var font = new Drawing.Font("Consolas", fontSize))
             {
-                for (var x = startX; x <= endX; x++)
+                for (var y = startY; y <= endY; y++)
                 {
-                    DrawPixelValueText(gl, x, y, viewportWidth, viewportHeightValue, viewportHeight);
+                    for (var x = startX; x <= endX; x++)
+                    {
+                        DrawPixelValueText(gl, x, y, viewportWidth, viewportHeightValue, viewportHeight, font);
+                    }
                 }
             }
         }
@@ -2174,15 +2186,22 @@ namespace RawBufferVisualizer.OpenGlCanvas
             int y,
             double viewportWidth,
             double viewportHeightValue,
-            int viewportHeight)
+            int viewportHeight,
+            Drawing.Font font)
         {
             var left = (x - _viewLeft) / _viewWidth * viewportWidth;
             var top = (y - _viewTop) / _viewHeight * viewportHeightValue;
             var cellWidth = viewportWidth / _viewWidth;
             var cellHeight = viewportHeightValue / _viewHeight;
-            var fontSize = Math.Min(16.0f, Math.Max(10.0f, (float)(Math.Min(cellWidth, cellHeight) * 0.26)));
+            var fontSize = font.Size;
             var lines = GetPixelGridOverlayLines(x, y);
             var lineHeight = (int)Math.Ceiling(fontSize + 3);
+            var padding = Math.Max(4.0, cellWidth * 0.08);
+            foreach (var line in lines)
+            {
+                var measured = Forms.TextRenderer.MeasureText(line, font, Drawing.Size.Empty, Forms.TextFormatFlags.NoPadding | Forms.TextFormatFlags.SingleLine);
+                if (measured.Width + padding * 2 > cellWidth || lines.Length * lineHeight + 4 > cellHeight) return;
+            }
             var textX = (int)Math.Round(left + Math.Max(4.0, cellWidth * 0.08));
             var textY = viewportHeight - (int)Math.Round(top) - (int)Math.Round(Math.Max(14.0, cellHeight * 0.16));
             for (var i = 0; i < lines.Length; i++)

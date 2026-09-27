@@ -1,27 +1,30 @@
-Raw Buffer Visualizer 2.0.9
+Raw Buffer Visualizer 2.1.0
 
-NATIVE IMAGE TRANSFER
-- Pointer-backed OpenCvSharp Mat, Emgu CV Mat, ImagePtr, and RawBufferView payloads at or above 8 MiB use checked live process-memory reads instead of repeated full-image debugger RPC snapshot requests.
-- Pointer-backed images below 8 MiB and non-pointer sources retain 4 MiB snapshot chunks.
-- Live rows become UNAVAILABLE after Continue or process exit; copied snapshots remain viewable.
+INSPECTION AND IMAGE SPACE
+- Running, paused and session-ended status updates even with Auto Inspect off. Scan Now remains available when paused and idle; captured images survive session end.
+- Temporary panel/action notices expire on state changes without clearing actual image errors.
+- Long frame/help text moves beside Auto Inspect into question-mark help. Current state and scan errors stay visible below Images.
+- Candidate discovery processes Stop and debugger state changes and rejects obsolete work. Individual debugger calls must return before cancellation can continue.
 
-ROI MEMORY RANGE
-- Inferred image length ends at the final pixel row instead of including nonexistent trailing stride padding.
-- The same rule applies to registered Mats, inferred ImagePtr and RawBufferView values, and Automatic Inspector's known-image capture.
-- Explicit buffer lengths remain authoritative; unreadable, released, partial, and overflowed ranges fail closed.
+PIXEL ACCURACY AND HISTOGRAMS
+- Correct Bitmap signed stride, indexed palettes, premultiplied alpha and unused alpha handling.
+- Consistent Float32 scaling, precise numeric values, stable statistics and fewer temporary allocations; corrected sampled Bayer preview colors.
+- Raw-value histograms with explicit full/sample coverage and non-finite counts, RGB mean/R/G/B choices, bounded background calculation and stale-result rejection.
 
-TECHNICAL DIAGNOSTICS
-- Debugger RPC failures report the operation, source or chunk, byte offset and sizes when applicable, exception type, and HRESULT.
-- The visible error uses stable technical wording while the original localized debugger exception remains in the local support report.
+MAPPINGS AND SNAPSHOT EXPORT
+- Visible solution/user mapping scope and destination, assembly-safe lookup and conflict-protected saves.
+- Bounded background snapshot export with progress/cancellation and preservation of existing snapshots on failure.
 
-TOOL WINDOW RELIABILITY
-- Reopening the same expression after the same failure refreshes its existing error row with a new report ID instead of appending duplicate rows.
-- Opening Bitmap, Mat, RawBufferView, or other registered visualizers no longer closes or replaces the pinned docked Tool Window.
+ALSO INCLUDED: 2.0.9 FIXES
+- Pointer-backed Mat, ImagePtr and RawBufferView images at or above 8 MiB use checked live reads instead of repeated full-image debugger RPC transfer.
+- Inferred ROI spans end at the final pixel row without trailing padding. Explicit lengths and fail-closed validation are preserved.
+- Repeated matching failures refresh one technical error row with current details and a new report ID.
+- Consecutive registered opens keep the pinned docked Tool Window in place.
+- RPC errors identify operation, source/chunk, byte range when available, exception type and HRESULT; the original exception stays in the local report.
 
-COMPATIBILITY
-- Visual Studio 2022 17.9+ and stable Visual Studio 2026 18.x remain the supported installation targets.
+Live images become UNAVAILABLE after Continue or process exit. Captured snapshots remain viewable.
+Installation targets: Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x.
 
-The Raw Buffer Visualizer Tool Window shows these highlights once per version. What's New toggles them later; Dismiss records the version as seen.
-
+What's New toggles the release summary; Dismiss saves this version as seen.
 Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#209
+https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#210

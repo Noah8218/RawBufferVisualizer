@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.ComTypes;
 
@@ -80,6 +81,15 @@ namespace RawBufferVisualizer.VisualStudio
             }
 
             return null;
+        }
+
+        public static string? GetSolutionPath(object dte)
+        {
+            if (dte == null) throw new ArgumentNullException(nameof(dte));
+            var solution = dte.GetType().InvokeMember("Solution", BindingFlags.GetProperty, null, dte, null);
+            if (solution == null) return null;
+            var fullName = solution.GetType().InvokeMember("FullName", BindingFlags.GetProperty, null, solution, null) as string;
+            return string.IsNullOrWhiteSpace(fullName) ? null : fullName;
         }
 
         private static Dictionary<int, ProcessInfo> GetProcessTree()

@@ -30,6 +30,16 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new InvalidDataException("Collection item request is required.");
             }
 
+            if (request.Operation == VisualizerCollectionOperation.ConfigureMappings)
+            {
+                _cachedView = ImageCollectionVisualizerTransfer.CreateView(target,
+                    TypeMappingStore.FromSnapshot(request.Mappings ?? throw new InvalidDataException("Mapping context is required.")));
+                _cachedTarget = target;
+                _cachedView.Summary.ExpressionIdentityHash = RuntimeHelpers.GetHashCode(target);
+                SerializeAsJson(outgoingData, _cachedView.Summary);
+                return;
+            }
+
             var view = GetView(target);
             if (request.Operation == VisualizerCollectionOperation.Metadata)
             {
@@ -85,12 +95,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         Metadata = 0,
         Chunk = 1,
-        Preview = 2
+        Preview = 2,
+        ConfigureMappings = 3
     }
 
     public sealed class VisualizerCollectionItemRequest
     {
         public VisualizerCollectionOperation Operation { get; set; }
+        public TypeMappingSnapshot? Mappings { get; set; }
         public int Index { get; set; }
         public long Offset { get; set; }
         public int Count { get; set; }

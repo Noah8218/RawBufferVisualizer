@@ -1,0 +1,63 @@
+<Window x:Class="RawBufferVisualizer.Wpf.RawImportDialog" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Open RAW — image settings" Width="560" Height="640" MinWidth="360" MinHeight="240"
+        WindowStartupLocation="CenterOwner" ShowInTaskbar="False" Background="{DynamicResource RbvWindowBrush}"
+        Foreground="{DynamicResource RbvTextBrush}">
+    <Window.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="Themes/RawBufferVisualizerDark.xaml"/></ResourceDictionary.MergedDictionaries>
+            <Style TargetType="TextBlock" BasedOn="{StaticResource RbvTextBlockStyle}"><Setter Property="TextWrapping" Value="Wrap"/></Style>
+            <Style TargetType="ScrollBar" BasedOn="{StaticResource RbvScrollBarStyle}"/>
+            <Style x:Key="RawLabelStyle" TargetType="Label" BasedOn="{StaticResource RbvLabelStyle}">
+                <Setter Property="ContentTemplate"><Setter.Value><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></Setter.Value></Setter>
+            </Style>
+            <Style TargetType="TextBox">
+                <Setter Property="Margin" Value="0,4,0,12"/><Setter Property="Padding" Value="6,4"/>
+                <Setter Property="Background" Value="{StaticResource RbvInputBrush}"/><Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+                <Setter Property="CaretBrush" Value="{StaticResource RbvTextBrush}"/><Setter Property="BorderBrush" Value="{StaticResource RbvBorderBrush}"/>
+                <Setter Property="BorderThickness" Value="1"/><Setter Property="MinHeight" Value="28"/>
+                <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
+                    <Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"><ScrollViewer x:Name="PART_ContentHost"/></Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/></Trigger>
+                        <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value></Setter>
+            </Style>
+            <Style TargetType="ComboBox" BasedOn="{StaticResource RbvComboBoxStyle}"><Setter Property="Margin" Value="0,4,0,12"/></Style>
+        </ResourceDictionary>
+    </Window.Resources>
+    <DockPanel Margin="16">
+        <WrapPanel DockPanel.Dock="Bottom" HorizontalAlignment="Right" Margin="0,12,0,0">
+            <Button Content="Cancel" IsCancel="True" Command="{Binding CancelCommand}" Style="{StaticResource RbvButtonStyle}"/>
+            <Button x:Name="ConfirmRawButton" Content="Open RAW" IsDefault="True" Command="{Binding ConfirmCommand}" Style="{StaticResource RbvButtonStyle}" AutomationProperties.AutomationId="ConfirmRawButton"/>
+        </WrapPanel>
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="0,0,8,0">
+                <TextBlock Text="Image settings" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                <TextBlock Text="RAW has no size or format metadata. Enter the settings from the image producer; no previous image settings are applied." Margin="0,0,0,8"/>
+                <TextBlock Text="{Binding Path}" Foreground="{StaticResource RbvMutedTextBrush}" Margin="0,0,0,12"/>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <StackPanel><Label Content="Width (pixels)" Target="{Binding ElementName=RawWidth}" Style="{StaticResource RawLabelStyle}"/><TextBox x:Name="RawWidth" Text="{Binding Width, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="RawWidth"/></StackPanel>
+                    <StackPanel Grid.Column="2"><Label Content="Height (pixels)" Target="{Binding ElementName=RawHeight}" Style="{StaticResource RawLabelStyle}"/><TextBox x:Name="RawHeight" Text="{Binding Height, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="RawHeight"/></StackPanel>
+                </Grid>
+                <Label Content="Pixel format" Target="{Binding ElementName=RawFormat}" Style="{StaticResource RawLabelStyle}"/>
+                <ComboBox x:Name="RawFormat" ItemsSource="{Binding Formats}" SelectedItem="{Binding Format, Mode=TwoWay}" AutomationProperties.AutomationId="RawFormat"/>
+                <Label Content="Stride (bytes per row) — blank = tightly packed" Target="{Binding ElementName=RawStride}" Style="{StaticResource RawLabelStyle}"/>
+                <TextBox x:Name="RawStride" Text="{Binding Stride, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="RawStride"/>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                    <StackPanel><Label Content="Valid bits per channel" Target="{Binding ElementName=RawBits}" Style="{StaticResource RawLabelStyle}"/><TextBox x:Name="RawBits" Text="{Binding ValidBits, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.AutomationId="RawBits"/></StackPanel>
+                    <StackPanel Grid.Column="2"><Label Content="Byte order" Target="{Binding ElementName=RawByteOrder}" Style="{StaticResource RawLabelStyle}"/><ComboBox x:Name="RawByteOrder" ItemsSource="{Binding ByteOrders}" SelectedItem="{Binding ByteOrder, Mode=TwoWay}" AutomationProperties.AutomationId="RawByteOrder"/></StackPanel>
+                </Grid>
+                <TextBlock x:Name="RawByteSummary" Text="{Binding ByteSummary}" Margin="0,4,0,8"/>
+                <TextBlock x:Name="RawValidation" Text="{Binding ValidationMessage}" AutomationProperties.AutomationId="RawValidation">
+                    <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource RbvTextBlockStyle}"><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="Foreground" Value="{StaticResource RbvAttentionTextBrush}"/><Style.Triggers><DataTrigger Binding="{Binding HasError}" Value="True"><Setter Property="Foreground" Value="{StaticResource RbvErrorBrush}"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+                </TextBlock>
+            </StackPanel>
+        </ScrollViewer>
+    </DockPanel>
+</Window>

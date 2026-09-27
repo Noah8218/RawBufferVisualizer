@@ -75,7 +75,7 @@ namespace RawBufferVisualizer.Core
             return true;
         }
 
-        public IReadOnlyList<RawDiagnostic> Analyze()
+        public virtual IReadOnlyList<RawDiagnostic> Analyze()
         {
             return RawBufferDiagnostics.AnalyzeLength(Length, SourceDescriptor);
         }
@@ -87,9 +87,92 @@ namespace RawBufferVisualizer.Core
         public abstract byte[] ReadAllBytes();
         public abstract void CopyRawTo(string rawPath);
 
+        public virtual void CopyRawTo(Stream destination, CancellationToken cancellationToken, IProgress<long>? progress = null)
+        {
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+            var buffer = new byte[(int)Math.Min(Length, 1024 * 1024)];
+            long copied = 0;
+            cancellationToken.ThrowIfCancellationRequested();
+            progress?.Report(0);
+            while (copied < Length)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var count = (int)Math.Min(buffer.Length, Length - copied);
+                if (!TryReadRange(copied, buffer, 0, count)) throw new IOException("The source buffer is no longer readable.");
+                destination.Write(buffer, 0, count);
+                copied += count;
+                progress?.Report(copied);
+            }
+        }
+
+        public virtual RawPixelStatistics GetStatistics(int x, int y, int width, int height)
+        {
+            EnsureTileBounds(SourceDescriptor, x, y, width, height);
+            // Generated views have no raw payload; their statistics describe displayed colors.
+            var rendered = RenderTile(x, y, width, height, CreateRenderOptions());
+            var descriptor = new RawImageDescriptor { Width = width, Height = height, Stride = checked(width * 4), PixelFormat = RawPixelFormat.BGRA32, ValidBits = 8 };
+            return RawPixelStatistics.Calculate(rendered.Bgra32, descriptor, 0, 0, width, height);
+        }
+
         public virtual bool TryReadRange(long offset, byte[] destination, int offsetInDestination, int count)
         {
             return false;
+        }
+
+        public virtual RawPixelHistogram GetHistogram(RawHistogramChannel channel = RawHistogramChannel.Value, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RawPixelHistogram.ValidateChannel(SourceDescriptor.PixelFormat, channel);
+            var readPixel = CreateHistogramPixelReader();
+            return SampleHistogram(channel, false, (x, y) =>
+            {
+                var pixel = readPixel(x, y);
+                var offset = channel == RawHistogramChannel.Red ? 2 : channel == RawHistogramChannel.Green ? 1 : 0;
+                return channel == RawHistogramChannel.Value ? (pixel.Bgra32[0] + pixel.Bgra32[1] + pixel.Bgra32[2]) / 3.0 : pixel.Bgra32[offset];
+            }, cancellationToken);
+        }
+
+        internal virtual Func<int, int, RenderedImage> CreateHistogramPixelReader()
+        {
+            var options = CreateRenderOptions();
+            return (x, y) => RenderTile(x, y, 1, 1, options);
+        }
+
+        protected RawPixelHistogram SampleHistogram(RawHistogramChannel channel, bool raw, Func<int, int, double> readValue, CancellationToken cancellationToken)
+        {
+            RawPixelHistogram.ValidateChannel(SourceDescriptor.PixelFormat, channel);
+            var columns = Math.Min(256, SourceDescriptor.Width);
+            var rows = Math.Min(256, SourceDescriptor.Height);
+            var values = new double[columns * rows];
+            var bayer = SourceDescriptor.PixelFormat >= RawPixelFormat.BayerRGGB8 && SourceDescriptor.PixelFormat <= RawPixelFormat.BayerBGGR8;
+            for (var row = 0; row < rows; row++)
+            {
+                var y = HistogramCoordinate(row, rows, SourceDescriptor.Height, bayer);
+                for (var column = 0; column < columns; column++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var x = HistogramCoordinate(column, columns, SourceDescriptor.Width, bayer);
+                    values[row * columns + column] = readValue(x, y);
+                }
+            }
+            return RawPixelHistogram.Calculate(values, SourceDescriptor, raw, cancellationToken);
+        }
+
+        protected static double ReadHistogramValue(byte[] buffer, RawImageDescriptor descriptor, int x, int y, RawHistogramChannel channel)
+        {
+            if (!RawPixelHistogram.HasColorChannels(descriptor.PixelFormat)) return RawPixelInspector.ReadNumericValue(buffer, descriptor, x, y);
+            var offset = y * descriptor.Stride + x * descriptor.GetBytesPerPixel();
+            if (channel == RawHistogramChannel.Value) return (buffer[offset] + buffer[offset + 1] + buffer[offset + 2]) / 3.0;
+            var redFirst = descriptor.PixelFormat == RawPixelFormat.RGB24;
+            return buffer[offset + (channel == RawHistogramChannel.Green ? 1 : channel == RawHistogramChannel.Red ? (redFirst ? 0 : 2) : (redFirst ? 2 : 0))];
+        }
+
+        private static int HistogramCoordinate(int index, int count, int extent, bool bayer)
+        {
+            if (count == extent) return index;
+            // Sample adjacent Bayer pairs so a regular grid cannot select only one CFA phase.
+            if (bayer) return ((int)((long)(index / 2) * (extent - 2) / (count / 2 - 1)) & ~1) + (index & 1);
+            return count == 1 ? 0 : (int)((long)index * (extent - 1) / (count - 1));
         }
 
         public virtual RenderedImage RenderTileSampled(int x, int y, int width, int height, int sampleStep, RawRenderOptions? options)
@@ -262,6 +345,15 @@ namespace RawBufferVisualizer.Core
             return RawPixelInspector.Describe(_buffer, SourceDescriptor, x, y);
         }
 
+        public override RawPixelStatistics GetStatistics(int x, int y, int width, int height)
+        {
+            EnsureTileBounds(SourceDescriptor, x, y, width, height);
+            return RawPixelStatistics.Calculate(_buffer, SourceDescriptor, x, y, width, height);
+        }
+
+        public override RawPixelHistogram GetHistogram(RawHistogramChannel channel = RawHistogramChannel.Value, CancellationToken cancellationToken = default)
+            => SampleHistogram(channel, true, (x, y) => ReadHistogramValue(_buffer, SourceDescriptor, x, y, channel), cancellationToken);
+
         public override byte[] ReadAllBytes()
         {
             return (byte[])_buffer.Clone();
@@ -342,34 +434,13 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.BayerGRBG8:
                 case RawPixelFormat.BayerGBRG8:
                 case RawPixelFormat.BayerBGGR8:
-                    WriteBayerSample(_buffer[row + x], pixels, targetOffset, x, y);
+                    RawBufferRenderer.RenderBayerPixel(_buffer, SourceDescriptor, x, y, pixels, targetOffset);
                     break;
                 default:
                     throw new NotSupportedException("Unsupported pixel format: " + SourceDescriptor.PixelFormat);
             }
         }
 
-        private void WriteBayerSample(byte value, byte[] pixels, int targetOffset, int x, int y)
-        {
-            var color = RawBufferRenderer.GetBayerColor(SourceDescriptor.PixelFormat, x, y);
-            var b = (byte)0;
-            var g = (byte)0;
-            var r = (byte)0;
-            if (color == 0)
-            {
-                r = value;
-            }
-            else if (color == 1)
-            {
-                g = value;
-            }
-            else
-            {
-                b = value;
-            }
-
-            WriteBgra(pixels, targetOffset, b, g, r, 255);
-        }
     }
 
     internal abstract class RandomAccessRawImageSource : RawImageSource
@@ -393,9 +464,8 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.Mono12PackedLsb:
                     return CreateFixedRangeOptions(4095);
                 case RawPixelFormat.Float32:
-                    return CreateFixedRangeOptions(1);
                 case RawPixelFormat.Int32:
-                    return CreateInt32RangeOptions();
+                    return CreateNumericRangeOptions();
                 default:
                     return new RawRenderOptions();
             }
@@ -439,6 +509,9 @@ namespace RawBufferVisualizer.Core
             {
                 return RenderPackedTileSampled(x, y, width, height, sampleStep, options, cancellationToken);
             }
+
+            if (IsBayer(SourceDescriptor.PixelFormat))
+                return RenderBayerTileSampled(x, y, width, height, sampleStep, cancellationToken);
 
             var bytesPerPixel = GetStreamableBytesPerPixel(SourceDescriptor.PixelFormat);
             var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
@@ -495,6 +568,47 @@ namespace RawBufferVisualizer.Core
             }
 
             return RawPixelInspector.Describe(buffer, pixelDescriptor, localX, localY, x, y);
+        }
+
+        public override RawPixelStatistics GetStatistics(int x, int y, int width, int height)
+        {
+            EnsureTileBounds(SourceDescriptor, x, y, width, height);
+            var buffer = ReadTileWindow(x, y, width, height, false, out var descriptor, out var localX, out var localY);
+            return RawPixelStatistics.Calculate(buffer, descriptor, localX, localY, width, height);
+        }
+
+        public override RawPixelHistogram GetHistogram(RawHistogramChannel channel = RawHistogramChannel.Value, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            RawPixelHistogram.ValidateChannel(SourceDescriptor.PixelFormat, channel);
+            var sampleCount = Math.Min(256, SourceDescriptor.Width) * Math.Min(256, SourceDescriptor.Height);
+            var window = new byte[Math.Min(4096, 32 * 1024 * 1024 / sampleCount)];
+            var pixel = new byte[4];
+            var packed = IsPackedMono(SourceDescriptor.PixelFormat);
+            var bits = packed ? GetPackedBitsPerPixel(SourceDescriptor.PixelFormat) : SourceDescriptor.GetBytesPerPixel() * 8;
+            long windowStart = -1;
+            var windowLength = 0;
+            using (var stream = OpenRawReadStream())
+            {
+                return SampleHistogram(channel, true, (x, y) =>
+                {
+                    var bitOffset = (long)x * bits;
+                    var offset = (long)y * SourceDescriptor.Stride + bitOffset / 8;
+                    var firstBit = (int)(bitOffset % 8);
+                    var count = (firstBit + bits + 7) / 8;
+                    if (offset < windowStart || offset + count > windowStart + windowLength)
+                    {
+                        windowStart = offset;
+                        windowLength = (int)Math.Min(window.Length, Length - offset);
+                        stream.Position = offset;
+                        ReadExactly(stream, window, 0, windowLength);
+                    }
+                    var localOffset = (int)(offset - windowStart);
+                    if (packed) return ReadPackedBits(window, localOffset * 8 + firstBit, bits);
+                    Buffer.BlockCopy(window, localOffset, pixel, 0, count);
+                    return ReadHistogramValue(pixel, SourceDescriptor, 0, 0, channel);
+                }, cancellationToken);
+            }
         }
 
         public override byte[] ReadAllBytes()
@@ -574,6 +688,27 @@ namespace RawBufferVisualizer.Core
             using (var target = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None))
             {
                 source.CopyTo(target);
+            }
+        }
+
+        public override void CopyRawTo(Stream destination, CancellationToken cancellationToken, IProgress<long>? progress = null)
+        {
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+            cancellationToken.ThrowIfCancellationRequested();
+            using (var source = OpenRawReadStream())
+            {
+                var buffer = new byte[(int)Math.Min(Length, 1024 * 1024)];
+                long copied = 0;
+                progress?.Report(0);
+                while (copied < Length)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var count = (int)Math.Min(buffer.Length, Length - copied);
+                    ReadExactly(source, buffer, 0, count);
+                    destination.Write(buffer, 0, count);
+                    copied += count;
+                    progress?.Report(copied);
+                }
             }
         }
 
@@ -741,37 +876,41 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.BGRA32:
                     WriteBgra(pixels, targetOffset, rowBuffer[sourceOffset], rowBuffer[sourceOffset + 1], rowBuffer[sourceOffset + 2], rowBuffer[sourceOffset + 3]);
                     break;
-                case RawPixelFormat.BayerRGGB8:
-                case RawPixelFormat.BayerGRBG8:
-                case RawPixelFormat.BayerGBRG8:
-                case RawPixelFormat.BayerBGGR8:
-                    WriteBayerSample(rowBuffer[sourceOffset], pixels, targetOffset, x, y);
-                    break;
                 default:
                     throw new NotSupportedException("Unsupported file-backed pixel format: " + SourceDescriptor.PixelFormat);
             }
         }
 
-        private void WriteBayerSample(byte value, byte[] pixels, int targetOffset, int x, int y)
+        private RenderedImage RenderBayerTileSampled(int x, int y, int width, int height, int sampleStep, CancellationToken cancellationToken)
         {
-            var color = RawBufferRenderer.GetBayerColor(SourceDescriptor.PixelFormat, x, y);
-            var b = (byte)0;
-            var g = (byte)0;
-            var r = (byte)0;
-            if (color == 0)
+            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
+            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
+            var windowX = Math.Max(0, x - 1) & ~1;
+            var windowWidth = (int)Math.Min(SourceDescriptor.Width, (long)x + width + 1) - windowX;
+            var rows = new byte[checked(windowWidth * Math.Min(4, SourceDescriptor.Height))];
+            var window = SourceDescriptor.Clone();
+            window.Width = windowWidth;
+            window.Stride = windowWidth;
+            using (var stream = OpenRawReadStream())
             {
-                r = value;
-            }
-            else if (color == 1)
-            {
-                g = value;
-            }
-            else
-            {
-                b = value;
+                for (var sampleY = 0; sampleY < sampledHeight; sampleY++)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var sourceY = y + sampleY * sampleStep;
+                    var windowY = Math.Max(0, sourceY - 1) & ~1;
+                    window.Height = (int)Math.Min(SourceDescriptor.Height, (long)sourceY + 2) - windowY;
+                    for (var row = 0; row < window.Height; row++)
+                        ReadRowSpan(stream, windowY + row, windowX, windowWidth, rows, row * windowWidth);
+                    for (var sampleX = 0; sampleX < sampledWidth; sampleX++)
+                    {
+                        var sourceX = x + sampleX * sampleStep;
+                        RawBufferRenderer.RenderBayerPixel(rows, window, sourceX - windowX, sourceY - windowY, pixels, (sampleY * sampledWidth + sampleX) * 4);
+                    }
+                }
             }
 
-            WriteBgra(pixels, targetOffset, b, g, r, 255);
+            return new RenderedImage(sampledWidth, sampledHeight, pixels);
         }
 
         private void ReadRowSpan(Stream stream, int y, int x, int byteCount, byte[] target)
@@ -921,45 +1060,50 @@ namespace RawBufferVisualizer.Core
             return string.Join(" ", parts);
         }
 
-        private RawRenderOptions CreateInt32RangeOptions()
+        private RawRenderOptions CreateNumericRangeOptions()
         {
-            const int maximumSampleRows = 64;
-            const int maximumSampleColumns = 512;
-            const long maximumSampleBytes = 32L * 1024L * 1024L;
-
             var rowByteCount = checked(SourceDescriptor.Width * 4);
-            var byteLimitedRows = (int)Math.Max(1L, maximumSampleBytes / Math.Max(1, rowByteCount));
-            var sampledRows = Math.Min(SourceDescriptor.Height, Math.Min(maximumSampleRows, byteLimitedRows));
-            var sampledColumns = Math.Min(SourceDescriptor.Width, maximumSampleColumns);
-            var rowBuffer = new byte[rowByteCount];
-            var minimum = int.MaxValue;
-            var maximum = int.MinValue;
+            var sampledRows = RawBufferRenderer.GetRangeSampleRows(SourceDescriptor.Width, SourceDescriptor.Height);
+            var sampledColumns = RawBufferRenderer.GetRangeSampleColumns(SourceDescriptor.Width);
+            var rowBuffer = new byte[Math.Min(rowByteCount, 64 * 1024)];
+            var minimum = double.MaxValue;
+            var maximum = double.MinValue;
+            var isFloat = SourceDescriptor.PixelFormat == RawPixelFormat.Float32;
 
             using (var stream = OpenRawReadStream())
             {
                 for (var sampledY = 0; sampledY < sampledRows; sampledY++)
                 {
-                    var sourceY = sampledRows == 1
-                        ? 0
-                        : (int)((long)sampledY * (SourceDescriptor.Height - 1) / (sampledRows - 1));
-                    ReadRowSpan(stream, sourceY, 0, rowByteCount, rowBuffer);
+                    var sourceY = RawBufferRenderer.GetRangeSampleCoordinate(sampledY, sampledRows, SourceDescriptor.Height);
+                    var windowStart = 0;
+                    var windowLength = 0;
                     for (var sampledX = 0; sampledX < sampledColumns; sampledX++)
                     {
-                        var sourceX = sampledColumns == 1
-                            ? 0
-                            : (int)((long)sampledX * (SourceDescriptor.Width - 1) / (sampledColumns - 1));
-                        var value = RawBufferRenderer.ReadInt32(rowBuffer, sourceX * 4, SourceDescriptor.ByteOrder);
+                        var sourceX = RawBufferRenderer.GetRangeSampleCoordinate(sampledX, sampledColumns, SourceDescriptor.Width);
+                        var offset = checked(sourceX * 4);
+                        if (offset >= windowStart + windowLength)
+                        {
+                            windowStart = offset;
+                            windowLength = Math.Min(rowBuffer.Length, rowByteCount - windowStart);
+                            ReadRowSpan(stream, sourceY, sourceX, windowLength, rowBuffer);
+                        }
+
+                        var value = isFloat
+                            ? (double)RawBufferRenderer.ReadSingle(rowBuffer, offset - windowStart, SourceDescriptor.ByteOrder)
+                            : RawBufferRenderer.ReadInt32(rowBuffer, offset - windowStart, SourceDescriptor.ByteOrder);
+                        if (double.IsNaN(value) || double.IsInfinity(value)) continue;
                         minimum = Math.Min(minimum, value);
                         maximum = Math.Max(maximum, value);
                     }
                 }
             }
 
+            if (minimum == double.MaxValue) return CreateFixedRangeOptions(1);
             return new RawRenderOptions
             {
                 AutoScale = false,
                 BlackLevel = minimum,
-                WhiteLevel = maximum <= minimum ? (double)minimum + 1 : maximum
+                WhiteLevel = maximum <= minimum ? minimum + (isFloat ? Math.Max(1, Math.Abs(minimum) * 0.000001) : 1) : maximum
             };
         }
 
@@ -995,6 +1139,15 @@ namespace RawBufferVisualizer.Core
             _rawPath = Path.GetFullPath(rawPath);
         }
 
+        public override IReadOnlyList<RawDiagnostic> Analyze()
+        {
+            try { return RawBufferDiagnostics.AnalyzeLength(GetFileLength(_rawPath), SourceDescriptor); }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                return new[] { new RawDiagnostic(RawDiagnosticSeverity.Error, "RAW file unavailable: " + ex.Message) };
+            }
+        }
+
         public override RawImageSource WithDescriptor(RawImageDescriptor descriptor)
         {
             return new FileRawImageSource(_rawPath, descriptor);
@@ -1014,7 +1167,15 @@ namespace RawBufferVisualizer.Core
 
         protected override Stream OpenRawReadStream()
         {
-            return new FileStream(_rawPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.RandomAccess);
+            var stream = new FileStream(_rawPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite, 4096, FileOptions.RandomAccess);
+            try
+            {
+                var required = SourceDescriptor.GetRequiredByteCount();
+                if (stream.Length < required)
+                    throw new EndOfStreamException(string.Format(CultureInfo.InvariantCulture, "RAW file has {0:N0} bytes; the image requires {1:N0} bytes.", stream.Length, required));
+                return stream;
+            }
+            catch { stream.Dispose(); throw; }
         }
 
         private static long GetFileLength(string rawPath)

@@ -130,12 +130,29 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             byte[] pixels)
         {
             var target = 0;
+            var isBayer = IsBayer(descriptor.PixelFormat);
+            var bayerWindow = isBayer ? new byte[16] : null;
+            var bayerDescriptor = isBayer ? descriptor.Clone() : null;
             for (var previewY = 0; previewY < previewHeight; previewY++)
             {
                 var sourceY = Math.Min(descriptor.Height - 1, previewY * sampleStep);
                 for (var previewX = 0; previewX < previewWidth; previewX++)
                 {
                     var sourceX = Math.Min(descriptor.Width - 1, previewX * sampleStep);
+                    if (isBayer)
+                    {
+                        var left = Math.Max(0, sourceX - 1) & ~1;
+                        var top = Math.Max(0, sourceY - 1) & ~1;
+                        bayerDescriptor!.Width = (int)Math.Min(descriptor.Width, (long)sourceX + 2) - left;
+                        bayerDescriptor.Height = (int)Math.Min(descriptor.Height, (long)sourceY + 2) - top;
+                        bayerDescriptor.Stride = bayerDescriptor.Width;
+                        for (var y = 0; y < bayerDescriptor.Height; y++)
+                            for (var x = 0; x < bayerDescriptor.Width; x++)
+                                bayerWindow![y * bayerDescriptor.Stride + x] = source.Read(top + y, left + x);
+                        RawBufferRenderer.RenderBayerPixel(bayerWindow!, bayerDescriptor, sourceX - left, sourceY - top, pixels, target);
+                        target += 4;
+                        continue;
+                    }
                     byte b;
                     byte g;
                     byte r;
@@ -143,7 +160,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     pixels[target++] = b;
                     pixels[target++] = g;
                     pixels[target++] = r;
-                    pixels[target++] = 255;
+                    pixels[target++] = descriptor.PixelFormat == RawPixelFormat.BGRA32 ? source.Read(sourceY, checked(sourceX * 4 + 3)) : (byte)255;
                 }
             }
         }
@@ -260,10 +277,6 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     return;
 
                 case RawPixelFormat.Mono8:
-                case RawPixelFormat.BayerRGGB8:
-                case RawPixelFormat.BayerGRBG8:
-                case RawPixelFormat.BayerGBRG8:
-                case RawPixelFormat.BayerBGGR8:
                     var mono8 = source.Read(y, x);
                     b = mono8;
                     g = mono8;
@@ -431,6 +444,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
         }
 
+        private static bool IsBayer(RawPixelFormat format)
+        {
+            return format == RawPixelFormat.BayerRGGB8 || format == RawPixelFormat.BayerGRBG8 || format == RawPixelFormat.BayerGBRG8 || format == RawPixelFormat.BayerBGGR8;
+        }
+
         private static int DivideRoundUp(int value, int divisor)
         {
             return (int)(((long)value + divisor - 1) / divisor);
@@ -455,7 +473,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             var sourcePagesPerRow = Math.Max(
                 1,
                 DivideRoundUp(source.LogicalStride, Environment.SystemPageSize));
-            var estimatedPagesPerSampledRow = Math.Min(sourcePagesPerRow, previewWidth);
+            var estimatedPagesPerSampledRow = IsBayer(descriptor.PixelFormat)
+                ? checked(Math.Min(sourcePagesPerRow, previewWidth * 2) * 4)
+                : Math.Min(sourcePagesPerRow, previewWidth);
             var estimatedPageReads = (long)estimatedPagesPerSampledRow * previewHeight;
             if (estimatedPageReads <= MaximumEstimatedColdPageReads)
             {

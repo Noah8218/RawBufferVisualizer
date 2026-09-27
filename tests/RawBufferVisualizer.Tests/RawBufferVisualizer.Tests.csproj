@@ -3,8 +3,10 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0-windows</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\AutomaticInspectionStatusViewModel.cs" Link="AutomaticInspectionStatusViewModel.cs" />
     <ProjectReference Include="..\..\samples\Cressem.ImageModel.TestFixture\Cressem.ImageModel.TestFixture.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.BitmapAdapter\RawBufferVisualizer.BitmapAdapter.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
@@ -12,5 +14,6 @@
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.VisualStudio\RawBufferVisualizer.VisualStudio.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />
+    <ProjectReference Include="..\..\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj" />
   </ItemGroup>
 </Project>

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Input;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
@@ -23,6 +24,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private static readonly string[] ValidBitsNameCandidates = { "BitDepth", "Depth", "ValidBits", "_bitDepth", "_depth" };
         private static readonly string[] BufferLengthNameCandidates = { "Length", "BufferLength", "Size", "ByteLength", "_length", "_size" };
 
+        private readonly ICommand _saveMappingCommand;
         private readonly List<VisualizerMemberInventoryItem> _inventory;
         private readonly string _typeName;
         private readonly string _assemblyName;
@@ -44,15 +46,35 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             int debuggeeProcessId,
             TypeMappingMembers? suggestedMembers = null,
             bool pixelFormatOnly = false)
+            : this(inventory, typeName, assemblyName, debuggeeProcessId, suggestedMembers, pixelFormatOnly, TypeMappingStore.Default)
+        {
+        }
+
+        public TypeMappingDialog(List<VisualizerMemberInventoryItem> inventory, string typeName, string assemblyName,
+            int debuggeeProcessId, TypeMappingMembers? suggestedMembers, bool pixelFormatOnly, TypeMappingStore mappingStore)
         {
             InitializeComponent();
-            Closed += delegate { CancelDiagnosis(); };
+            var editSession = new TypeMappingEditSession(mappingStore, typeName, assemblyName);
+            var saveModel = new TypeMappingSaveViewModel(editSession, () => MessageBox.Show(this,
+                "A mapping for " + typeName + " already exists in the selected scope. Overwrite it?",
+                "Connect Your Buffer", MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes);
+            DataContext = saveModel;
+            _saveMappingCommand = saveModel.SaveCommand;
+            saveModel.Saved += OnMappingSaved;
+            Closed += delegate { CancelDiagnosis(); saveModel.Saved -= OnMappingSaved; };
+            SourceInitialized += delegate
+            {
+                var handle = new System.Windows.Interop.WindowInteropHelper(Owner ?? this).Handle;
+                var screen = System.Windows.Forms.Screen.FromHandle(handle);
+                var scale = System.Windows.Media.VisualTreeHelper.GetDpi(this);
+                MaxHeight = screen.WorkingArea.Height / scale.DpiScaleY;
+                MaxWidth = screen.WorkingArea.Width / scale.DpiScaleX;
+            };
             _inventory = inventory ?? new List<VisualizerMemberInventoryItem>();
             _typeName = typeName ?? string.Empty;
             _assemblyName = assemblyName ?? string.Empty;
             _debuggeeProcessId = debuggeeProcessId;
-            var existingMapping = TypeMappingStore.Default.FindMapping(_typeName, _assemblyName)
-                ?? TypeMappingStore.Default.FindMappingByTypeNameOnly(_typeName);
+            var existingMapping = editSession.ExistingMapping;
             _suggestedMembers = suggestedMembers;
             _initialMembers = suggestedMembers ?? existingMapping?.Members;
             _initialByteOrder = existingMapping?.ByteOrder ?? RawByteOrder.LittleEndian.ToString();
@@ -816,53 +838,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            try
-            {
-                var store = new TypeMappingStore(null, TypeMappingStore.GetDefaultUserMappingPath());
-                var file = store.LoadUserFile();
-                var existingIndex = -1;
-                for (var i = 0; i < file.Mappings.Count; i++)
-                {
-                    if (string.Equals(file.Mappings[i].TypeName, _typeName, StringComparison.Ordinal)
-                        && string.Equals(file.Mappings[i].AssemblyName, _assemblyName, StringComparison.Ordinal))
-                    {
-                        existingIndex = i;
-                        break;
-                    }
-                }
-
-                if (existingIndex >= 0)
-                {
-                    var overwrite = MessageBox.Show(
-                        this,
-                        "A mapping for " + _typeName + " already exists. Overwrite it?",
-                        "Connect Your Buffer",
-                        MessageBoxButton.YesNo,
-                        MessageBoxImage.Question);
-                    if (overwrite != MessageBoxResult.Yes)
-                    {
-                        return;
-                    }
-
-                    file.Mappings[existingIndex] = mapping;
-                }
-                else
-                {
-                    file.Mappings.Add(mapping);
-                }
-
-                store.Save(file);
-            }
-            catch (Exception ex)
-            {
-                StatusText.Text = "Mapping save failed: " + ex.Message;
-                return;
-            }
-
-            StatusText.Text = "Mapping saved to " + TypeMappingStore.GetDefaultUserMappingPath()
-                + ". Automatic Vision Inspector will apply it on the next scan.";
-            DialogResult = true;
+            _saveMappingCommand.Execute(mapping);
         }
+
+        private void OnMappingSaved(object? sender, EventArgs e) => DialogResult = true;
 
         private void CopyTemplate_Click(object sender, RoutedEventArgs e)
         {

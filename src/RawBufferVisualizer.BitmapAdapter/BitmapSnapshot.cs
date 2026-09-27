@@ -15,18 +15,23 @@ namespace RawBufferVisualizer.BitmapAdapter
                 throw new ArgumentNullException(nameof(bitmap));
             }
 
-            var format = ToRawPixelFormat(bitmap.PixelFormat);
+            var palette = bitmap.PixelFormat == PixelFormat.Format8bppIndexed ? Array.ConvertAll(bitmap.Palette.Entries, color => color.ToArgb()) : null;
+            if (palette != null && BitmapPixelConverter.IsIdentityGrayPalette(palette)) palette = null;
+            var format = palette == null ? ToRawPixelFormat(bitmap.PixelFormat) : RawPixelFormat.BGRA32;
             var bytesPerPixel = GetBytesPerPixel(format);
             var rect = new Rectangle(0, 0, bitmap.Width, bitmap.Height);
             var data = bitmap.LockBits(rect, ImageLockMode.ReadOnly, bitmap.PixelFormat);
             try
             {
-                var stride = Math.Abs(data.Stride);
-                var buffer = new byte[stride * bitmap.Height];
+                var stride = palette == null ? Math.Abs(data.Stride) : checked(bitmap.Width * 4);
+                var buffer = new byte[checked(stride * bitmap.Height)];
                 for (var y = 0; y < bitmap.Height; y++)
                 {
-                    var source = data.Scan0 + (data.Stride >= 0 ? y * data.Stride : (bitmap.Height - 1 - y) * stride);
-                    System.Runtime.InteropServices.Marshal.Copy(source, buffer, y * stride, bitmap.Width * bytesPerPixel);
+                    var source = new IntPtr(checked(data.Scan0.ToInt64() + (long)y * data.Stride));
+                    var sourcePixelStride = palette == null ? bytesPerPixel : 1;
+                    System.Runtime.InteropServices.Marshal.Copy(source, buffer, y * stride, checked(bitmap.Width * sourcePixelStride));
+                    if (format == RawPixelFormat.BGRA32)
+                        BitmapPixelConverter.NormalizeBgra32(buffer, y * stride, bitmap.Width, palette, bitmap.PixelFormat == PixelFormat.Format32bppPArgb, bitmap.PixelFormat == PixelFormat.Format32bppRgb, sourcePixelStride);
                 }
 
                 return new RawBufferSnapshot(buffer, new RawImageDescriptor

@@ -1,37 +1,49 @@
 param(
-    [string]$Configuration = "Debug",
+    [string]$Configuration = "Release",
     [string]$ViewerFramework = "net472",
     [string]$SampleFramework = "net8.0",
-    [string]$OutputDir = "artifacts\ui\viewer-interactions"
+    [string]$OutputDir = '',
+    [string]$BuildRoot = '',
+    [string]$SamplePath,
+    [switch]$NoBuild
 )
 
 $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
+$testRoot = if (Test-Path -LiteralPath 'D:\') { 'D:\OpenVisionLab-TestData\RawBufferVisualizer' } else { Join-Path $repoRoot 'artifacts' }
+if (-not (Test-Path -LiteralPath 'D:\')) { Write-Warning "D: is unavailable; using $testRoot for test outputs." }
+if ([string]::IsNullOrWhiteSpace($BuildRoot)) { $BuildRoot = Join-Path $testRoot 'build' }
+if ([string]::IsNullOrWhiteSpace($OutputDir)) { $OutputDir = Join-Path $testRoot 'ui\viewer-interactions' }
 Set-Location $repoRoot
 
-dotnet build .\RawBufferVisualizer.sln --configuration $Configuration | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    throw "Build failed with exit code $LASTEXITCODE."
+New-Item -ItemType Directory -Force -Path $OutputDir, "$OutputDir\temp" | Out-Null
+$env:TEMP = "$OutputDir\temp"; $env:TMP = $env:TEMP
+if (-not $NoBuild) {
+    dotnet build .\src\RawBufferVisualizer.Wpf\RawBufferVisualizer.Wpf.csproj --configuration $Configuration "-p:RawBufferVisualizerBuildRoot=$BuildRoot" | Out-Host
+    if ($LASTEXITCODE -ne 0) { throw "Build failed with exit code $LASTEXITCODE." }
 }
 
-dotnet run --project .\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj -f $SampleFramework --configuration $Configuration | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    throw "Sample generation failed with exit code $LASTEXITCODE."
+if (-not $SamplePath) {
+    Push-Location $OutputDir
+    try {
+        dotnet run --project "$repoRoot\samples\RawBufferVisualizer.Samples\RawBufferVisualizer.Samples.csproj" -f $SampleFramework --configuration $Configuration "-p:RawBufferVisualizerBuildRoot=$BuildRoot" | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "Sample generation failed with exit code $LASTEXITCODE." }
+    } finally { Pop-Location }
+    $SamplePath = Join-Path $OutputDir 'artifacts\samples\mono8-gradient.rbuf.json'
 }
 
-$viewerExe = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
+$viewerExe = Join-Path $BuildRoot "bin\RawBufferVisualizer.Wpf\$Configuration\$ViewerFramework\RawBufferVisualizer.Wpf.exe"
 if (-not (Test-Path $viewerExe)) {
     throw "Viewer exe not found: $viewerExe"
 }
 
-$samplePath = Join-Path $repoRoot "artifacts\samples\mono8-gradient.rbuf.json"
 if (-not (Test-Path $samplePath)) {
     throw "Sample file not found: $samplePath"
 }
 
-$captureRoot = Join-Path $repoRoot $OutputDir
+$captureRoot = $OutputDir
 New-Item -ItemType Directory -Force -Path $captureRoot | Out-Null
 
 Add-Type -AssemblyName System.Drawing
@@ -45,6 +57,8 @@ using System;
 using System.Runtime.InteropServices;
 public static class RawBufferInteractionNative {
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
@@ -83,18 +97,9 @@ function Wait-Until([string]$description, [scriptblock]$condition, [int]$timeout
     throw "$description timed out."
 }
 
-function Minimize-OtherWindows([int]$exceptPid) {
-    Get-Process | Where-Object {
-        $_.MainWindowHandle -ne 0 -and $_.Id -ne $exceptPid
-    } | ForEach-Object {
-        [RawBufferInteractionNative]::ShowWindow($_.MainWindowHandle, 6) | Out-Null
-    }
-}
-
 function Bring-Viewer([IntPtr]$hwnd, [int]$viewerProcessId) {
-    Minimize-OtherWindows $viewerProcessId
     [RawBufferInteractionNative]::ShowWindow($hwnd, 9) | Out-Null
-    [RawBufferInteractionNative]::SetWindowPos($hwnd, [RawBufferInteractionNative]::HWND_TOPMOST, 8, 8, 1280, 800, 0x0040) | Out-Null
+    [RawBufferInteractionNative]::SetWindowPos($hwnd, [RawBufferInteractionNative]::HWND_TOPMOST, $testScreen.WorkingArea.Left + 20, $testScreen.WorkingArea.Top + 15, 1280, 800, 0x0040) | Out-Null
     [RawBufferInteractionNative]::BringWindowToTop($hwnd) | Out-Null
     [RawBufferInteractionNative]::SetForegroundWindow($hwnd) | Out-Null
 }
@@ -104,6 +109,8 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
     [RawBufferInteractionNative]::GetWindowRect($hwnd, [ref]$rect) | Out-Null
     $width = $rect.Right - $rect.Left
     $height = $rect.Bottom - $rect.Top
+    if ($rect.Right -le $testScreen.Bounds.Left -or $rect.Left -ge $testScreen.Bounds.Right -or $rect.Bottom -le $testScreen.Bounds.Top -or $rect.Top -ge $testScreen.Bounds.Bottom) { throw 'Test EXE is outside the selected monitor.' }
+    @{Monitor=$testScreen.DeviceName;Bounds=$testScreen.Bounds;Rectangle=$rect}|ConvertTo-Json -Depth 3|Set-Content "$path.monitor.json"
     if ($width -le 0 -or $height -le 0) {
         throw "Invalid window bounds: $width x $height"
     }
@@ -226,14 +233,25 @@ function Move-MouseToImage([System.Windows.Automation.AutomationElement]$root, [
 }
 
 function Set-DialogPathAndAccept([string]$path) {
-    if (Test-Path -LiteralPath $path) {
-        Remove-Item -LiteralPath $path -Force
+    $edit = Wait-Until 'owned filename input' {
+        $condition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+        $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll([System.Windows.Automation.TreeScope]::Children, $condition)
+        foreach ($dialog in $windows) {
+            $hostControl = Find-Element $dialog 'FileNameControlHost' $false
+            if (-not $hostControl) { continue }
+            $entry = Find-Element $hostControl '1001' $false
+            if ($entry -and $entry.Current.IsEnabled) { return $entry }
+        }
     }
-
-    Set-Clipboard -Value $path
-    Start-Sleep -Milliseconds 500
-    [System.Windows.Forms.SendKeys]::SendWait("^v")
-    Start-Sleep -Milliseconds 200
+    $foreground = [RawBufferInteractionNative]::GetForegroundWindow()
+    $foregroundPid = [uint32]0
+    [RawBufferInteractionNative]::GetWindowThreadProcessId($foreground, [ref]$foregroundPid) | Out-Null
+    if ($foregroundPid -ne $process.Id) { throw 'The owned file picker is not foreground.' }
+    # This Windows dialog exposes its filename as a non-focusable UIA child; use its native mnemonic.
+    [System.Windows.Forms.SendKeys]::SendWait('%n')
+    [System.Windows.Forms.SendKeys]::SendWait('^a')
+    $escapedPath = $path -replace '([+^%~(){}])', '{$1}'
+    [System.Windows.Forms.SendKeys]::SendWait($escapedPath)
     [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
 }
 
@@ -246,7 +264,11 @@ function Add-Result([System.Collections.Generic.List[object]]$results, [string]$
 }
 
 $results = New-Object System.Collections.Generic.List[object]
-$process = Start-Process -FilePath $viewerExe -ArgumentList @($samplePath, $samplePath) -PassThru
+$screens = @([System.Windows.Forms.Screen]::AllScreens)
+$testScreen = if ($screens.Count -eq 2) { $screens | Sort-Object { $_.WorkingArea.Width * $_.WorkingArea.Height }, { $_.Bounds.Left } | Select-Object -First 1 } else { $screens | Select-Object -First 1 }
+if ($null -eq $testScreen) { throw 'Desktop monitor required.' }
+$launchArgs = @($samplePath, $samplePath) | ForEach-Object { '"' + $_ + '"' }
+$process = Start-Process -FilePath $viewerExe -ArgumentList $launchArgs -WindowStyle Hidden -PassThru
 try {
     $deadline = [DateTime]::Now.AddSeconds(30)
     do {
@@ -265,20 +287,23 @@ try {
 
     Wait-Until "status text" {
         $status = Get-ElementName (Get-Root $hwnd) "StatusText"
-        $status -match "640 x 480, Mono8"
+        $status -match "640\s*[x\u00D7]\s*480.*Mono8"
     } | Out-Null
     Add-Result $results "open sample" (Get-ElementName (Get-Root $hwnd) "StatusText")
 
     Find-Element (Get-Root $hwnd) "DocumentTabs" | Out-Null
     Find-Element (Get-Root $hwnd) "ImageList" | Out-Null
     Find-Element (Get-Root $hwnd) "LinkViewsBox" | Out-Null
-    $initialTabs = Get-DescendantsByControlType (Get-Root $hwnd) "DocumentTabs" ([System.Windows.Automation.ControlType]::TabItem)
+    $initialTabs = Get-DescendantsByControlType (Get-Root $hwnd) "DocumentTabs" ([System.Windows.Automation.ControlType]::ListItem)
     $initialListItems = Get-DescendantsByControlType (Get-Root $hwnd) "ImageList" ([System.Windows.Automation.ControlType]::ListItem)
-    if ($initialTabs.Count -lt 2 -or $initialListItems.Count -lt 2) {
-        throw "Session UI did not show both startup images."
+    if ($initialTabs.Count -ne 1 -or $initialListItems.Count -ne 1) {
+        throw "Repeated startup path must select one document."
     }
 
     Add-Result $results "session UI initial image" "tabs=$($initialTabs.Count); list=$($initialListItems.Count)"
+    Invoke-Button (Get-Root $hwnd) 'DuplicateButton'
+    Wait-Until 'explicit second view' { (Get-DescendantsByControlType (Get-Root $hwnd) 'DocumentTabs' ([System.Windows.Automation.ControlType]::ListItem)).Count -eq 2 } | Out-Null
+    Add-Result $results 'explicit duplicate' 'Two independently selectable document views'
 
     $capturePath = Join-Path $captureRoot "interaction-open.png"
     Capture-Window $hwnd $capturePath
@@ -323,31 +348,33 @@ try {
     } | Out-Null
     Add-Result $results "mouse wheel zoom" "$beforeWheel -> $(Get-ElementName (Get-Root $hwnd) "ZoomText")"
 
-    $pngPath = Join-Path $captureRoot "interaction-save.png"
+    $runId = [guid]::NewGuid().ToString('N').Substring(0,8)
+    $pngPath = Join-Path $captureRoot "interaction-save-$runId.png"
     Invoke-Button (Get-Root $hwnd) "SavePngButton"
     Set-DialogPathAndAccept $pngPath
     Wait-Until "save png" { Test-Path -LiteralPath $pngPath } 10 | Out-Null
     Add-Result $results "save png" $pngPath
 
-    $snapshotPath = Join-Path $captureRoot "interaction-snapshot.rbuf.json"
-    $rawPath = Join-Path $captureRoot "interaction-snapshot.raw"
-    if (Test-Path -LiteralPath $rawPath) {
-        Remove-Item -LiteralPath $rawPath -Force
-    }
+    $snapshotPath = Join-Path $captureRoot "interaction-snapshot-$runId.rbuf.json"
 
     Bring-Viewer $hwnd $process.Id
     Invoke-Button (Get-Root $hwnd) "SaveSnapshotButton"
     Set-DialogPathAndAccept $snapshotPath
     Wait-Until "save snapshot metadata" { Test-Path -LiteralPath $snapshotPath } 10 | Out-Null
+    $rawPath = Join-Path $captureRoot (Get-Content $snapshotPath -Raw | ConvertFrom-Json).rawFile
     Wait-Until "save snapshot raw" { Test-Path -LiteralPath $rawPath } 10 | Out-Null
     Add-Result $results "save snapshot" "$snapshotPath; $rawPath"
 
-    $tabsAfterSecondOpen = Get-DescendantsByControlType (Get-Root $hwnd) "DocumentTabs" ([System.Windows.Automation.ControlType]::TabItem)
+    Wait-Until 'snapshot export dialog closed and commands restored' {
+        $openButton = Find-Element (Get-Root $hwnd) 'OpenButton' $false
+        $openButton -and $openButton.Current.IsEnabled
+    } | Out-Null
+    $tabsAfterSecondOpen = Get-DescendantsByControlType (Get-Root $hwnd) "DocumentTabs" ([System.Windows.Automation.ControlType]::ListItem)
     Add-Result $results "startup second image tab" "tabs=$($tabsAfterSecondOpen.Count)"
 
     Select-Item $tabsAfterSecondOpen.Item(0)
     Wait-Until "switch back to first tab" {
-        (Get-ElementName (Get-Root $hwnd) "StatusText") -match "640 x 480, Mono8"
+        (Get-ElementName (Get-Root $hwnd) "StatusText") -match "640\s*[x\u00D7]\s*480.*Mono8"
     } | Out-Null
     Add-Result $results "switch first tab" (Get-ElementName (Get-Root $hwnd) "StatusText")
 
@@ -358,6 +385,13 @@ try {
         $pattern.Current.ToggleState -eq [System.Windows.Automation.ToggleState]::On
     } | Out-Null
     Add-Result $results "link views toggle" $toggleState.ToString()
+}
+catch {
+    if ($hwnd -and -not $process.HasExited) {
+        Capture-Window $hwnd (Join-Path $captureRoot 'failed.png')
+        (Get-Root $hwnd).FindAll([System.Windows.Automation.TreeScope]::Descendants, [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object { "$($_.Current.AutomationId): $($_.Current.Name)" } | Set-Content "$captureRoot\failed-ui.txt"
+    }
+    throw
 }
 finally {
     if ($process -and -not $process.HasExited) {
@@ -370,4 +404,5 @@ finally {
 }
 
 $results | Format-Table -AutoSize
+@{Status='Complete';Checks=$results;Screens=$screens;Monitor=$testScreen.DeviceName;Bounds=$testScreen.Bounds;Executable=$viewerExe;SHA256=(Get-FileHash $viewerExe).Hash;Boundary="Standalone $ViewerFramework EXE; installed Visual Studio is not exercised."}|ConvertTo-Json -Depth 5|Set-Content "$captureRoot\exe-verification.json"
 Write-Host "Viewer interaction smoke passed $($results.Count) checks."

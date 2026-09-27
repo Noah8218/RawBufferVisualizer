@@ -11,7 +11,7 @@ Review this file before publishing a Marketplace package or GitHub release. If d
 | SharpGL / SharpGL.WinForms / SharpGL.SceneGraph | 2.4.0 | Docked image canvas hosting | Yes | MIT license. Upstream: https://github.com/dwmkerr/sharpgl |
 | Microsoft.VisualStudio.DebuggerVisualizers | 17.6.1032901 | Debugger visualizer object source contracts | Indirect/build output dependent | Microsoft package license metadata: https://aka.ms/pexunj |
 | Microsoft.VisualStudio.Extensibility.Sdk / Build | 17.9.2092 | Visual Studio extensibility build/runtime contracts | Build/VSIX tooling | Package license file: `LICENSE_SDKOOB.txt` |
-| Microsoft.VSSDK.BuildTools | 17.14.2120 | VSSDK package generation | Build tooling | Package license file: `license.txt`; package also includes `NOTICE.txt` |
+| Microsoft.VSSDK.BuildTools | See the Vssdk project PackageReference | VSSDK package generation | Build tooling | Package license file: `license.txt`; package also includes `NOTICE.txt` |
 
 ## Optional Adapters And Samples
 
@@ -32,8 +32,6 @@ Review this file before publishing a Marketplace package or GitHub release. If d
 dotnet list .\RawBufferVisualizer.sln package --include-transitive
 ```
 
-## Proprietary Camera SDK Hold
+## Proprietary SDK Boundary
 
-No proprietary camera SDK is redistributed in the public `1.0.52` VSIX. A no-binary design does not by itself grant permission to download, test, integrate, or advertise compatibility with a proprietary SDK.
-
-Basler pylon, Allied Vision Vimba X, IDS peak, Teledyne FLIR Spinnaker, and other proprietary camera/frame-grabber/board direct adapters are blocked by project policy until their exact developer eligibility, purpose, hardware, distribution, and compatibility-wording conditions are cleared in writing. See [docs/vendor-sdk-license-policy.md](docs/vendor-sdk-license-policy.md). The former Basler `1.0.53` experiment was removed from active source; its historical evidence must not be presented as current support.
+No direct proprietary camera adapter is included in the source. See [vendor policy](docs/vendor-sdk-license-policy.md) before integrating or redistributing one.

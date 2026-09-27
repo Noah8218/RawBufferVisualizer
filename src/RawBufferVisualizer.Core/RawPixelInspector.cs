@@ -4,6 +4,33 @@ namespace RawBufferVisualizer.Core
 {
     public static class RawPixelInspector
     {
+        internal static double ReadNumericValue(byte[] buffer, RawImageDescriptor descriptor, int x, int y)
+        {
+            var row = y * descriptor.Stride;
+            switch (descriptor.PixelFormat)
+            {
+                case RawPixelFormat.Mono16:
+                    return RawBufferRenderer.ReadUInt16(buffer, row + x * 2, descriptor.ByteOrder);
+                case RawPixelFormat.Mono10PackedLsb:
+                    return RawBufferRenderer.ReadPackedLsb(buffer, row, x, 10);
+                case RawPixelFormat.Mono12PackedLsb:
+                    return RawBufferRenderer.ReadPackedLsb(buffer, row, x, 12);
+                case RawPixelFormat.Float32:
+                    return RawBufferRenderer.ReadSingle(buffer, row + x * 4, descriptor.ByteOrder);
+                case RawPixelFormat.Int32:
+                    return RawBufferRenderer.ReadInt32(buffer, row + x * 4, descriptor.ByteOrder);
+                case RawPixelFormat.RGB24:
+                case RawPixelFormat.BGR24:
+                    var rgb = row + x * 3;
+                    return (buffer[rgb] + buffer[rgb + 1] + buffer[rgb + 2]) / 3;
+                case RawPixelFormat.BGRA32:
+                    var bgra = row + x * 4;
+                    return (buffer[bgra] + buffer[bgra + 1] + buffer[bgra + 2]) / 3.0;
+                default:
+                    return buffer[row + x];
+            }
+        }
+
         public static string Describe(byte[] buffer, RawImageDescriptor descriptor, int x, int y)
         {
             return Describe(buffer, descriptor, x, y, x, y);
@@ -39,7 +66,7 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.Mono12PackedLsb:
                     return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, GV={2}, Value={2}, Raw={3}", displayX, displayY, RawBufferRenderer.ReadPackedLsb(buffer, row, x, 12), DescribeRawBytes(buffer, descriptor, x, y));
                 case RawPixelFormat.Float32:
-                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2:0.###}, Raw={3}", displayX, displayY, RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder), DescribeRawBytes(buffer, descriptor, x, y));
+                    return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2:R}, Raw={3}", displayX, displayY, RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder), DescribeRawBytes(buffer, descriptor, x, y));
                 case RawPixelFormat.Int32:
                     return string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, Value={2}, Raw={3}", displayX, displayY, RawBufferRenderer.ReadInt32(buffer, row + (x * 4), descriptor.ByteOrder), DescribeRawBytes(buffer, descriptor, x, y));
                 case RawPixelFormat.RGB24:
@@ -73,7 +100,7 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.Mono12PackedLsb:
                     return RawBufferRenderer.ReadPackedLsb(buffer, row, x, 12).ToString(CultureInfo.InvariantCulture);
                 case RawPixelFormat.Float32:
-                    return RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder).ToString("0.###", CultureInfo.InvariantCulture);
+                    return RawBufferRenderer.ReadSingle(buffer, row + (x * 4), descriptor.ByteOrder).ToString("R", CultureInfo.InvariantCulture);
                 case RawPixelFormat.Int32:
                     return RawBufferRenderer.ReadInt32(buffer, row + (x * 4), descriptor.ByteOrder).ToString(CultureInfo.InvariantCulture);
                 case RawPixelFormat.RGB24:

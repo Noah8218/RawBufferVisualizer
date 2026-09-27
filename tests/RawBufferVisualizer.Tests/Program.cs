@@ -26,10 +26,107 @@ namespace RawBufferVisualizer.Tests
     {
         private static readonly Type LegacyOpenCvSharpMatRuntimeType = CreateLegacyOpenCvSharpMatRuntimeType();
 
-        private static int Main()
+        private static int Main(string[] args)
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--usability")
+                {
+                    UsabilityTests.RunAll();
+                    return 0;
+                }
+
+                if (args.Length == 1 && args[0] == "--histogram")
+                {
+                    HistogramTests.RunAll();
+                    PixelCorrectnessTests.RunAll();
+                    return 0;
+                }
+
+                if (args.Length == 1 && args[0] == "--automatic-scan")
+                {
+                    AutomaticInspectionPreferencesTests.RunAll();
+                    AutomaticImageCollectionPolicyTests.RunAll();
+                    VisionInferenceAutoOpensDirectPointerShape();
+                    VisionInferenceSupportsOneLevelNestedMembers();
+                    VisionInferenceRequestsOnlyAmbiguousPixelFormat();
+                    VisionInferenceHidesLowConfidenceShape();
+                    Console.WriteLine("Automatic scan: 9 preference/collection regressions and 4 inference regressions passed.");
+                    return 0;
+                }
+
+                if (args.Length == 3 && args[0] == "--mapping-wire")
+                {
+                    System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(args[1]));
+                    System.Runtime.Loader.AssemblyLoadContext.Default.LoadFromAssemblyPath(Path.GetFullPath(args[2]));
+                    MappingSaveTests.RunWire();
+                    return 0;
+                }
+
+                if (args.Length == 3 && args[0] == "--mapping-save-writer")
+                    return MappingSaveTests.RunWriter(args[1], args[2]);
+
+                if (args.Length == 1 && args[0] == "--mapping-save")
+                {
+                    MappingSaveTests.RunAll();
+                    TypeMappingFileRoundTrips();
+                    TypeMappingResolutionPrefersSolutionLocal();
+                    TypeMappingExtractsMappedCompanyFrame();
+                    TypeMappingAppliesEnumPixelFormatMap();
+                    TypeMappingFailureIncludesMemberInventory();
+                    TypeMappingMissingMemberFailsVisibly();
+                    RawBufferViewTemplateUsesSelectedMapping();
+                    SnapshotRoundTrips();
+                    SnapshotReferenceLoadsMetadata();
+                    SnapshotReferenceLoadsUtf8BomPrettyMetadata();
+                    SnapshotReferenceRejectsNumericEnumValues();
+                    VisualizerSnapshotStoreWritesChunkedSnapshot();
+                    VisualizerSnapshotStoreWritesCollection();
+                    ImageCollectionVisualizerHandlesListArrayAndDictionary();
+                    ProcessMemorySourceRendersLikeMemory();
+                    VisualizerBridgeWritesLaunchSnapshot();
+                    VisualizerBridgePreparesChunkedLaunchSnapshot();
+                    VisualizerBridgePreparesMultiLaunchSnapshots();
+                    Console.WriteLine("Mapping/save and 18 existing focused regressions passed.");
+                    return 0;
+                }
+
+                if (args.Length == 1 && args[0] == "--pixel-correctness")
+                {
+                    PixelCorrectnessTests.RunAll();
+                    Mono8RendersToBgra();
+                    Mono10PackedLsbRenders();
+                    Mono12PackedLsbInspects();
+                    Rgb24KeepsChannelOrder();
+                    Bgr24KeepsChannelOrder();
+                    Bgra32KeepsChannelOrder();
+                    BayerRggbRendersColor();
+                    Int32RendersAndInspectsSignedValues();
+                    AllSupportedFormatsRender();
+                    TileRenderMatchesFullRender();
+                    FileBackedSourceRendersLikeMemory();
+                    ProcessMemorySourceRendersLikeMemory();
+                    FileBackedSampledRenderHonorsCancellation();
+                    SampledMemorySourceMatchesFileBackedSourceForAllFormats();
+                    FileBackedPackedSourceRendersLikeMemory();
+                    DifferenceSourceRendersAbsDiff();
+                    SplitSourceRendersLeftAndRight();
+                    PixelInspectorReportsRawBytes();
+                    VisualizerSampledPreviewSamplesByteAndPointerSources();
+                    InferredPointerViewsStopAtFinalPixelRow();
+                    ProducerPointerReadsAcrossReadablePageBoundary();
+                    ProducerPointerReadsFailClosedAfterDecommit();
+                    ProducerPointerReadsRejectProtectedBoundary();
+                    BitmapVisualizerObjectSourceCreatesTransfer();
+                    BitmapVisualizerObjectSourceNormalizesNegativeStride();
+                    BitmapAdapterCreatesSnapshot();
+                    Console.WriteLine("Pixel correctness and 26 existing focused regressions passed.");
+                    return 0;
+                }
+
+                MappingSaveTests.RunAll();
+                PixelCorrectnessTests.RunAll();
+                HistogramTests.RunAll();
                 Mono8RendersToBgra();
                 Mono10PackedLsbRenders();
                 Mono12PackedLsbInspects();
@@ -1825,8 +1922,9 @@ namespace RawBufferVisualizer.Tests
                 Assert(transfer.DisplayName == "bitmapMono8", "Bitmap visualizer Mono8 display name failed.");
                 Assert(transfer.SourceType == typeof(Bitmap).FullName, "Bitmap visualizer Mono8 source type failed.");
                 Assert(transfer.Descriptor.Width == 2 && transfer.Descriptor.Height == 1, "Bitmap visualizer Mono8 dimensions failed.");
-                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.Mono8, "Bitmap visualizer Mono8 pixel format failed.");
-                Assert(transfer.Buffer.Length >= 2, "Bitmap visualizer Mono8 buffer length failed.");
+                // The default indexed Bitmap palette is colored, not an identity grayscale ramp.
+                Assert(transfer.Descriptor.PixelFormat == RawPixelFormat.BGRA32, "Bitmap visualizer must resolve the default indexed palette.");
+                Assert(transfer.Buffer.Length == 8, "Bitmap visualizer indexed BGRA buffer length failed.");
             }
 
             using (var bitmap = new Bitmap(2, 1, PixelFormat.Format24bppRgb))

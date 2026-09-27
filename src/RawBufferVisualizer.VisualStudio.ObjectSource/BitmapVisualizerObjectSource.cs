@@ -60,6 +60,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public IntPtr CapturedScan0 { get; set; }
         public string SourceType { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
+        internal int SourceStride { get; set; }
+        internal int[]? Palette { get; set; }
     }
 
     public static class BitmapVisualizerTransfer
@@ -79,7 +81,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             var pixelFormat = Get<object>(bitmap, "PixelFormat");
-            var format = ToRawPixelFormat(pixelFormat);
+            var palette = pixelFormat.ToString() == "Format8bppIndexed" ? ReadPalette(bitmap) : null;
+            if (palette != null && BitmapPixelConverter.IsIdentityGrayPalette(palette)) palette = null;
+            var format = palette == null ? ToRawPixelFormat(pixelFormat) : RawPixelFormat.BGRA32;
             var bytesPerPixel = GetBytesPerPixel(format);
             var width = Get<int>(bitmap, "Width");
             var height = Get<int>(bitmap, "Height");
@@ -104,7 +108,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             {
                 Width = width,
                 Height = height,
-                Stride = stride,
+                Stride = palette == null ? stride : checked(width * 4),
                 PixelFormat = format,
                 ValidBits = bytesPerPixel == 1 ? 8 : bytesPerPixel * 8,
                 ByteOrder = RawByteOrder.LittleEndian
@@ -116,7 +120,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 PixelFormat = pixelFormat,
                 Descriptor = descriptor,
                 BytesPerPixel = bytesPerPixel,
-                BufferLength = checked((long)stride * height),
+                BufferLength = checked((long)descriptor.Stride * height),
+                SourceStride = stride,
+                Palette = palette,
                 CapturedScan0 = capturedScan0,
                 SourceType = BitmapFullName,
                 DisplayName = displayName ?? string.Empty
@@ -190,15 +196,24 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             {
                 var dataStride = Get<int>(bitmapData, "Stride");
                 EnsureStrideMatches(view, dataStride);
-                return VisualizerSampledPreview.CreateFromRows(
+                var sourceDescriptor = view.Descriptor.Clone();
+                sourceDescriptor.Stride = view.SourceStride;
+                if (view.Palette != null)
+                {
+                    sourceDescriptor.PixelFormat = RawPixelFormat.Mono8;
+                    sourceDescriptor.ValidBits = 8;
+                }
+                var preview = VisualizerSampledPreview.CreateFromRows(
                     Get<IntPtr>(bitmapData, "Scan0"),
                     dataStride,
-                    view.BufferLength,
-                    view.Descriptor,
+                    checked((long)view.SourceStride * sourceDescriptor.Height),
+                    sourceDescriptor,
                     view.SourceType,
                     view.DisplayName,
                     request.MaximumWidth,
                     request.MaximumHeight);
+                BitmapPixelConverter.NormalizeBgra32(preview.Buffer, 0, checked(preview.Descriptor.Width * preview.Descriptor.Height), view.Palette, view.PixelFormat.ToString() == "Format32bppPArgb", view.PixelFormat.ToString() == "Format32bppRgb");
+                return preview;
             }
             finally
             {
@@ -281,9 +296,12 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 scan0,
                 dataStride,
                 view.Descriptor.Height,
-                view.BufferLength);
+                checked((long)view.SourceStride * view.Descriptor.Height));
             var stride = view.Descriptor.Stride;
             var pixelBytes = checked(view.Descriptor.Width * view.BytesPerPixel);
+            var premultiplied = view.PixelFormat.ToString() == "Format32bppPArgb";
+            var opaque = view.PixelFormat.ToString() == "Format32bppRgb";
+            byte[]? converted = null;
             var copied = 0;
             while (copied < target.Length)
             {
@@ -296,8 +314,22 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     var copyLength = Math.Min(segmentLength, pixelBytes - column);
                     var rowOffset = dataStride >= 0
                         ? checked((long)row * dataStride)
-                        : checked((long)(view.Descriptor.Height - 1 - row) * stride);
-                    reader.CopyTo(rowOffset + column, target, copied, copyLength);
+                        : checked((long)(view.Descriptor.Height - 1 - row) * view.SourceStride);
+                    if (view.Palette != null || premultiplied || opaque)
+                    {
+                        var firstPixel = column / 4;
+                        var pixelCount = checked((column % 4 + copyLength + 3) / 4);
+                        var requiredBytes = checked(pixelCount * 4);
+                        if (converted == null || converted.Length < requiredBytes) converted = new byte[requiredBytes];
+                        var sourcePixelStride = view.Palette == null ? 4 : 1;
+                        reader.CopyTo(rowOffset + (long)firstPixel * sourcePixelStride, converted, 0, checked(pixelCount * sourcePixelStride));
+                        BitmapPixelConverter.NormalizeBgra32(converted, 0, pixelCount, view.Palette, premultiplied, opaque, sourcePixelStride);
+                        Buffer.BlockCopy(converted, column % 4, target, copied, copyLength);
+                    }
+                    else
+                    {
+                        reader.CopyTo(rowOffset + column, target, copied, copyLength);
+                    }
                 }
 
                 copied += segmentLength;
@@ -306,10 +338,19 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private static void EnsureStrideMatches(BitmapVisualizerView view, int dataStride)
         {
-            if (Math.Abs((long)dataStride) != view.Descriptor.Stride)
+            if (Math.Abs((long)dataStride) != view.SourceStride)
             {
                 throw new InvalidOperationException("Bitmap stride changed while the visualizer was active.");
             }
+        }
+
+        private static int[] ReadPalette(object bitmap)
+        {
+            var entries = (Array)Get<object>(Get<object>(bitmap, "Palette"), "Entries");
+            var palette = new int[entries.Length];
+            var toArgb = FindMethod(entries.GetType().GetElementType()!, "ToArgb", 0);
+            for (var i = 0; i < palette.Length; i++) palette[i] = (int)toArgb.Invoke(entries.GetValue(i), null)!;
+            return palette;
         }
 
         private static object LockBits(object bitmap, int width, int height, object pixelFormat)
