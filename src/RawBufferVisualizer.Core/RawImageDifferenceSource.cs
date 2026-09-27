@@ -82,6 +82,18 @@ namespace RawBufferVisualizer.Core
                 _b.DescribePixel(x, y));
         }
 
+        internal override Func<int, int, RenderedImage> CreateHistogramPixelReader()
+        {
+            var left = _a.CreateHistogramPixelReader();
+            var right = _b.CreateHistogramPixelReader();
+            return (x, y) =>
+            {
+                var a = left(x, y).Bgra32;
+                var b = right(x, y).Bgra32;
+                return new RenderedImage(1, 1, new[] { AbsByte(a[0], b[0]), AbsByte(a[1], b[1]), AbsByte(a[2], b[2]), (byte)255 });
+            };
+        }
+
         public override byte[] ReadAllBytes()
         {
             throw new NotSupportedException("Diff view is generated on demand and has no raw byte payload.");

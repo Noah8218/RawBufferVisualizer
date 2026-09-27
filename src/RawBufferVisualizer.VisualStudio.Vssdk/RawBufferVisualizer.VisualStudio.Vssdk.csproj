@@ -11,9 +11,9 @@
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
     <CreatePkgDefAssemblyToProcess>$(BaseOutputPath)$(Configuration)\$(TargetFramework)\$(MSBuildProjectName).dll</CreatePkgDefAssemblyToProcess>
     <TargetVsixContainerName>RawBufferVisualizer.VisualStudio.Extensibility.vsix</TargetVsixContainerName>
-    <AssemblyVersion>2.0.9.0</AssemblyVersion>
-    <FileVersion>2.0.9.0</FileVersion>
-    <Version>2.0.9</Version>
+    <AssemblyVersion>2.1.0.0</AssemblyVersion>
+    <FileVersion>2.1.0.0</FileVersion>
+    <Version>2.1.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -67,4 +67,9 @@
   </ItemGroup>
 
   <Target Name="GenerateVssdkPkgDef" AfterTargets="Build" DependsOnTargets="CopyPkgDef" />
+  <ItemGroup>
+    <Compile Include="..\Shared.Wpf\*.cs" Link="Presentation\%(Filename)%(Extension)" />
+    <Page Include="..\Shared.Wpf\SnapshotExportDialog.xaml" Link="Presentation\SnapshotExportDialog.xaml" />
+    <Page Include="..\Shared.Wpf\HistogramView.xaml" Link="Presentation\HistogramView.xaml" />
+  </ItemGroup>
 </Project>

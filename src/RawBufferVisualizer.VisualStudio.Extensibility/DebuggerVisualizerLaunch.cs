@@ -187,7 +187,11 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             try
             {
                 visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
-                var summary = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerCollectionSummary>(
+                var dte = VisualStudioInstance.GetDte(visualStudioProcessId)
+                    ?? throw new InvalidOperationException("The hosting Visual Studio solution context is unavailable.");
+                var mappings = TypeMappingStore.ForSolution(VisualStudioInstance.GetSolutionPath(dte)).ExportEffectiveMappings();
+                var summary = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerCollectionItemRequest, VisualizerCollectionSummary>(
+                    new VisualizerCollectionItemRequest { Operation = VisualizerCollectionOperation.ConfigureMappings, Mappings = mappings },
                     jsonSerializer: null,
                     cancellationToken);
                 if (summary == null)

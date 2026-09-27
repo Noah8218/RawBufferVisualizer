@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading.Tasks;
 using Microsoft.VisualStudio.Shell;
 using RawBufferVisualizer.VisualStudio;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
@@ -172,6 +173,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private const int MaximumNewTypeAnalysesPerScan = 2;
         private const int MaximumRootExpressionsPerScan = 128;
 
+        private TypeMappingStore _mappingStore = TypeMappingStore.Default;
+        private string? _mappingContentVersion;
         private readonly Dictionary<string, CachedTypeAnalysis> _typeAnalysisCache =
             new Dictionary<string, CachedTypeAnalysis>(StringComparer.Ordinal);
 
@@ -211,19 +214,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        public AutomaticVisionScanResult Scan(EnvDTE.Debugger debugger)
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            return Scan(debugger, false);
-        }
-
-        public AutomaticVisionScanResult Scan(
+        // The caller owns dispatcher scheduling and current-Break/Stop validity. All debugger
+        // access stays on that UI thread; the callback is also the isolated-host test seam.
+#pragma warning disable VSTHRD109
+        public async Task<AutomaticVisionScanResult> ScanAsync(
             EnvDTE.Debugger debugger,
-            bool includeImageCollections)
+            Func<Task<bool>> continueScanAsync,
+            bool includeImageCollections = false,
+            TypeMappingStore? mappingStore = null)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            if (continueScanAsync == null) throw new ArgumentNullException(nameof(continueScanAsync));
+            _mappingStore = mappingStore ?? TypeMappingStore.Default;
+            var version = _mappingStore.GetContentVersion();
+            if (_mappingContentVersion != version)
+            {
+                ClearSessionCache();
+                _mappingContentVersion = version;
+            }
             var result = new AutomaticVisionScanResult();
-            if (debugger == null)
+            if (debugger == null || !await continueScanAsync())
             {
                 result.IsComplete = false;
                 return result;
@@ -265,14 +275,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 if (TryGetExpressionCount(locals, out var localExpressionCount))
                 {
                     result.LocalExpressionCount = localExpressionCount;
-                    ScanExpressions(
+                    if (!await ScanExpressionsAsync(
                         debugger,
                         result,
                         locals,
                         result.LocalExpressionCount,
                         seenExpressions,
                         includeImageCollections,
-                        scanBudget);
+                        scanBudget,
+                        continueScanAsync)) return result;
                 }
                 else
                 {
@@ -282,6 +293,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             else
             {
                 result.IsComplete = false;
+            }
+
+            if (!await continueScanAsync())
+            {
+                result.IsComplete = false;
+                return result;
             }
 
             EnvDTE.Expressions? arguments = null;
@@ -300,14 +317,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 if (TryGetExpressionCount(arguments, out var argumentExpressionCount))
                 {
                     result.ArgumentExpressionCount = argumentExpressionCount;
-                    ScanExpressions(
+                    if (!await ScanExpressionsAsync(
                         debugger,
                         result,
                         arguments,
                         result.ArgumentExpressionCount,
                         seenExpressions,
                         includeImageCollections,
-                        scanBudget);
+                        scanBudget,
+                        continueScanAsync)) return result;
                 }
                 else
                 {
@@ -338,18 +356,25 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             result.Inspections.Add(inspection);
         }
 
-        private void ScanExpressions(
+        private async Task<bool> ScanExpressionsAsync(
             EnvDTE.Debugger debugger,
             AutomaticVisionScanResult result,
             EnvDTE.Expressions expressions,
             int expressionCount,
             HashSet<string> seenExpressions,
             bool includeImageCollections,
-            AutomaticScanBudget scanBudget)
+            AutomaticScanBudget scanBudget,
+            Func<Task<bool>> continueScanAsync)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             for (var i = 1; i <= expressionCount; i++)
             {
+                if (!await continueScanAsync())
+                {
+                    result.IsComplete = false;
+                    return false;
+                }
+
                 if (scanBudget.RemainingRootExpressions <= 0)
                 {
                     result.TruncatedRootExpressionCount += expressionCount - i + 1;
@@ -446,7 +471,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     continue;
                 }
 
-                var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(runtimeTypeName);
+                var mapping = _mappingStore.FindMappingByTypeNameOnly(runtimeTypeName);
                 if (mapping != null)
                 {
                     AddInspection(result, scanBudget, new AutomaticVisionInspection
@@ -499,7 +524,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 List<VisualizerMemberInventoryItem> inventory;
                 try
                 {
-                    inventory = BuildInventory(expression);
+                    var completedInventory = await BuildInventoryAsync(expression, continueScanAsync);
+                    if (completedInventory == null || !await continueScanAsync())
+                    {
+                        result.IsComplete = false;
+                        return false;
+                    }
+
+                    inventory = completedInventory;
                 }
                 catch (Exception exception)
                 {
@@ -546,6 +578,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 };
                 AddInspection(result, scanBudget, inspection);
             }
+
+            return true;
         }
 
         private static void ScanKnownImageCollection(
@@ -858,18 +892,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || value.IndexOf("not exist", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
-        private static List<VisualizerMemberInventoryItem> BuildInventory(EnvDTE.Expression expression)
+        private static async Task<List<VisualizerMemberInventoryItem>?> BuildInventoryAsync(EnvDTE.Expression expression, Func<Task<bool>> continueScanAsync)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             var inventory = new List<VisualizerMemberInventoryItem>();
+            if (!await continueScanAsync()) return null;
             var directMembers = GetDataMembers(expression);
             if (directMembers == null)
             {
                 return inventory;
             }
 
-            for (var i = 1; i <= directMembers.Count && inventory.Count < MaxMembersPerLocal; i++)
+            // Limit attempted COM reads, including invalid names and failed Item calls.
+            var directCount = Math.Min(directMembers.Count, MaxMembersPerLocal);
+            for (var i = 1; i <= directCount && inventory.Count < MaxMembersPerLocal; i++)
             {
+                if (!await continueScanAsync()) return null;
                 EnvDTE.Expression member;
                 try
                 {
@@ -903,13 +941,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     continue;
                 }
 
-                var nestedCount = 0;
-                for (var n = 1;
-                     n <= nestedMembers.Count
-                         && nestedCount < MaxNestedMembersPerLocal
-                         && inventory.Count < MaxMembersPerLocal;
-                     n++)
+                var nestedCount = Math.Min(nestedMembers.Count, MaxNestedMembersPerLocal);
+                for (var n = 1; n <= nestedCount && inventory.Count < MaxMembersPerLocal; n++)
                 {
+                    if (!await continueScanAsync()) return null;
                     EnvDTE.Expression nestedMember;
                     try
                     {
@@ -924,13 +959,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     if (nestedItem != null)
                     {
                         inventory.Add(nestedItem);
-                        nestedCount++;
                     }
                 }
             }
 
             return inventory;
         }
+
+#pragma warning restore VSTHRD109
 
         private static VisualizerMemberInventoryItem? CreateInventoryItem(EnvDTE.Expression expression, string? prefix)
         {

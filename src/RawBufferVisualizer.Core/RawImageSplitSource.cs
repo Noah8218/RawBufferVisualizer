@@ -87,6 +87,14 @@ namespace RawBufferVisualizer.Core
                 x < split ? "A=[" + _a.DescribePixel(x, y) + "]" : "B=[" + _b.DescribePixel(x, y) + "]");
         }
 
+        internal override Func<int, int, RenderedImage> CreateHistogramPixelReader()
+        {
+            var left = _a.CreateHistogramPixelReader();
+            var right = _b.CreateHistogramPixelReader();
+            var split = SourceDescriptor.Width / 2;
+            return (x, y) => x < split ? left(x, y) : right(x, y);
+        }
+
         public override byte[] ReadAllBytes()
         {
             throw new NotSupportedException("Split view is generated on demand and has no raw byte payload.");

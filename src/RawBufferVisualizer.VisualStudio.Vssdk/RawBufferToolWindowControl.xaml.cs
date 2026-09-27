@@ -21,18 +21,16 @@ using Microsoft.VisualStudio.Shell;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.OpenGlCanvas;
 using RawBufferVisualizer.Sdk;
+using RawBufferVisualizer.Presentation;
 using RawBufferVisualizer.VisualStudio;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
-using Line = System.Windows.Shapes.Line;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
     public partial class RawBufferToolWindowControl : UserControl, IDisposable
     {
-        private const long MaxCpuPreviewBytes = 512L * 1024L * 1024L;
         private const long MaxInMemorySourceBytes = 512L * 1024L * 1024L;
         private const int MaxManagedArrayDebuggerElements = 256;
-        private const int HistogramMaxSampleDimension = 1024;
 
         private enum LayoutMode
         {
@@ -59,6 +57,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             get { return _activeDocument; }
         }
+        private readonly SnapshotExportOperation _snapshotExport = new SnapshotExportOperation();
+        private readonly HistogramViewModel _histogram = new HistogramViewModel();
+        private readonly AutomaticInspectionStatusViewModel _inspectionStatus = new AutomaticInspectionStatusViewModel();
+        private bool _savingSnapshot;
         private bool _disposed;
         private LayoutMode _layoutMode = LayoutMode.Unknown;
         private bool _syncingZoomSlider;
@@ -107,10 +109,33 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             new ReleaseAnnouncementPreferences();
         private VisualizerEnvironmentCheckResult? _environmentCheckResult;
         private EnvDTE80.DTE2? _dte;
+        private TypeMappingStore? _mappingStore;
 
         public void SetDte(EnvDTE80.DTE2 dte)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             _dte = dte;
+            var mode = dte.Debugger.CurrentMode;
+            if (mode == EnvDTE.dbgDebugMode.dbgBreakMode) NotifyDebuggerPaused();
+            else _inspectionStatus.SetMode(mode == EnvDTE.dbgDebugMode.dbgRunMode ? InspectionDebuggerMode.Running : InspectionDebuggerMode.Stopped);
+        }
+
+        public void NotifyDebuggerPaused()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _inspectionStatus.SetMode(InspectionDebuggerMode.Paused);
+            try { _inspectionStatus.Frame = _dte?.Debugger.CurrentStackFrame?.FunctionName ?? "Current paused stack frame"; }
+            catch (Exception ex) { RawBufferVisualizerPackageLog.Write("Paused frame name unavailable: " + ex.Message); }
+        }
+
+        private TypeMappingStore GetMappingStore()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var dte = _dte ?? TryGetDte();
+            var current = TypeMappingStore.ForSolution(dte == null ? null : dte.Solution.FullName);
+            if (_mappingStore == null || !string.Equals(_mappingStore.SolutionLocalPath, current.SolutionLocalPath, StringComparison.OrdinalIgnoreCase))
+                _mappingStore = current;
+            return _mappingStore;
         }
 
         public bool IsAutoInspectEnabled
@@ -126,6 +151,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public RawBufferToolWindowControl()
         {
             InitializeComponent();
+            AutomaticInspectionBar.DataContext = _inspectionStatus;
+            AutomaticHelpTip.DataContext = _inspectionStatus;
+            StatusText.DataContext = _inspectionStatus;
+            HistogramPanel.DataContext = _histogram;
+            CompactHistogramPanel.DataContext = _histogram;
             ApplyVisualStudioTheme();
             VSColorTheme.ThemeChanged += VSColorTheme_ThemeChanged;
             LoadAutomaticInspectionPreferences();
@@ -203,7 +233,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     return;
                 }
 
-                var scan = _automaticVisionInspector.Scan(_dte!.Debugger, true);
+                var scan = await _automaticVisionInspector.ScanAsync(
+                    _dte!.Debugger, () => ContinueAutomaticDiscoveryAsync(generation), true, GetMappingStore());
                 if (!IsAutomaticScanCurrent(generation))
                 {
                     return;
@@ -218,7 +249,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     scan.DuplicateExpressionCount,
                     scan.TruncatedCandidateCount,
                     scan.DeferredTypeAnalysisCount));
-                AutomaticFrameText.Text = string.IsNullOrWhiteSpace(scan.FrameDisplayName)
+                _inspectionStatus.Frame = string.IsNullOrWhiteSpace(scan.FrameDisplayName)
                     ? "Current stack frame"
                     : scan.FrameDisplayName;
                 ReconcileAutomaticInspectionDocuments(scan);
@@ -231,6 +262,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 _automaticHiddenCount = 0;
                 UpdateAutomaticBatchUi();
                 await ProcessAutomaticBatchCoreAsync(generation, false);
+                if (!IsAutomaticScanCurrent(generation)) return;
 
                 if (activeDocumentBeforeScan == null && _activeDocument == null)
                 {
@@ -247,17 +279,30 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             catch (Exception ex)
             {
-                SetAutomaticScanStatus("Scan failed: " + ex.Message);
+                if (IsAutomaticScanCurrent(generation)) SetAutomaticScanStatus("Scan failed: " + ex.Message, "Scan failed");
                 RawBufferVisualizerPackageLog.Write("Automatic scan contained error " + ex);
             }
             finally
             {
                 _automaticScanRunning = false;
-                SetAutomaticScanBusy(false, string.Empty);
-                UpdateAutomaticBatchUi();
-                UpdateStatus();
-                QueueAutomaticScan();
+                if (!_disposed)
+                {
+                    SetAutomaticScanBusy(false, string.Empty);
+                    UpdateAutomaticBatchUi();
+                    UpdateStatus();
+                    QueueAutomaticScan();
+                }
             }
+        }
+
+        private async Task<bool> ContinueAutomaticDiscoveryAsync(long generation)
+        {
+#pragma warning disable VSTHRD109
+            ThreadHelper.ThrowIfNotOnUIThread();
+#pragma warning restore VSTHRD109
+            if (_automaticStopRequested || !IsAutomaticScanCurrent(generation)) return false;
+            await Dispatcher.Yield(DispatcherPriority.Background);
+            return !_automaticStopRequested && IsAutomaticScanCurrent(generation);
         }
 
         private async Task ProcessAutomaticBatchCoreAsync(long generation, bool loadAll)
@@ -481,9 +526,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public int InvalidateLiveSources()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            _snapshotExport.CancelLiveExport();
+            _histogram.OnDebuggerResumed();
             CancelAutomaticInspectionWork(true);
             SetAutomaticScanBusy(false, string.Empty);
-            SetAutomaticScanStatus("Debuggee is running. Automatic inspection will resume at the next Break.");
+            _inspectionStatus.SetMode(InspectionDebuggerMode.Running);
             const string unavailableMessage = "Live debugger image memory is no longer readable.";
             var invalidatedCount = 0;
             var activeInvalidated = false;
@@ -525,6 +572,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ThreadHelper.ThrowIfNotOnUIThread();
             CancelAutomaticInspectionWork(true);
             _automaticVisionInspector.ClearSessionCache();
+            _inspectionStatus.SetMode(InspectionDebuggerMode.Stopped);
         }
 
         public void ScheduleAutomaticScan()
@@ -535,6 +583,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            NotifyDebuggerPaused();
             _automaticScanSessionGate.EnterBreakMode();
             _automaticScanPending = true;
             QueueAutomaticScan();
@@ -582,7 +631,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     catch (Exception ex)
                     {
                         _automaticScanDispatchQueued = false;
-                        SetAutomaticScanStatus("Scan could not be scheduled: " + ex.Message);
+                        SetAutomaticScanStatus("Scan could not be scheduled: " + ex.Message, "Scan failed");
                         RawBufferVisualizerPackageLog.Write("Automatic scan schedule error " + ex);
                     }
                 }));
@@ -738,17 +787,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool IsAutomaticScanCurrent(long generation)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            if (_disposed
-                || !_automaticScanSessionGate.IsCurrent(generation)
-                || _dte == null
-                || _dte.Debugger == null)
+            if (_disposed || !_automaticScanSessionGate.IsCurrent(generation))
             {
                 return false;
             }
 
             try
             {
-                return _dte.Debugger.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode;
+                return _dte?.Debugger?.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode;
             }
             catch
             {
@@ -776,7 +822,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void SetAutomaticScanBusy(bool isBusy, string progressText)
         {
-            ScanNowButton.IsEnabled = !isBusy;
+            _inspectionStatus.IsBusy = isBusy;
             AutomaticScanProgressPanel.Visibility = isBusy ? Visibility.Visible : Visibility.Collapsed;
             AutomaticScanProgressText.Text = progressText;
             AutomaticStopButton.IsEnabled = isBusy;
@@ -886,7 +932,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (!scan.IsComplete)
             {
                 SetAutomaticScanStatus(
-                    AutomaticScanStatusText.Text
+                    _inspectionStatus.Details
                     + " Discovery was bounded or incomplete, so unmatched existing rows were retained.");
             }
 
@@ -919,16 +965,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             catch (Exception ex)
             {
-                SetAutomaticScanStatus("Batch loading failed: " + ex.Message);
+                SetAutomaticScanStatus("Batch loading failed: " + ex.Message, "Scan failed");
                 RawBufferVisualizerPackageLog.Write("Automatic batch error " + ex);
             }
             finally
             {
                 _automaticScanRunning = false;
-                SetAutomaticScanBusy(false, string.Empty);
-                UpdateAutomaticBatchUi();
-                UpdateStatus();
-                QueueAutomaticScan();
+                if (!_disposed)
+                {
+                    SetAutomaticScanBusy(false, string.Empty);
+                    UpdateAutomaticBatchUi();
+                    UpdateStatus();
+                    QueueAutomaticScan();
+                }
             }
         }
 
@@ -948,12 +997,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _ = ContinueAutomaticBatchAsync(true);
         }
 
-        private void SetAutomaticScanStatus(string text)
+        private void SetAutomaticScanStatus(string text, string? alert = null)
         {
-            if (AutomaticScanStatusText != null)
-            {
-                AutomaticScanStatusText.Text = text;
-            }
+            _inspectionStatus.SetDetails(text, alert);
+        }
+
+        private void AutomaticHelp_Click(object sender, RoutedEventArgs e)
+        {
+            AutomaticHelpTip.PlacementTarget = AutomaticHelpButton;
+            AutomaticHelpTip.IsOpen = !AutomaticHelpTip.IsOpen;
+        }
+
+        private void AutomaticHelp_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape) { AutomaticHelpTip.IsOpen = false; e.Handled = true; }
         }
 
         private void ScanNow_Click(object sender, RoutedEventArgs e)
@@ -975,7 +1032,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (!_automaticInspectionPreferencesStore.TrySave(_automaticInspectionPreferences, out saveError))
             {
                 SetAutomaticScanStatus(
-                    (enabled ? "Enabled" : "Paused") + ", but the preference was not saved. " + saveError);
+                    (enabled ? "Enabled" : "Paused") + ", but the preference was not saved. " + saveError, "Setting not saved");
                 return;
             }
 
@@ -989,7 +1046,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 CancelAutomaticInspectionWork(true);
 #pragma warning restore VSTHRD010
                 SetAutomaticScanBusy(false, string.Empty);
-                SetAutomaticScanStatus("Paused and saved. Scan Now remains available.");
+                SetAutomaticScanStatus("Auto Inspect is off and saved. Scan Now is available while the debugger is paused.");
             }
         }
 
@@ -1000,14 +1057,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _loadingAutomaticInspectionPreferences = false;
             if (!string.IsNullOrWhiteSpace(_automaticInspectionPreferencesStore.LastLoadError))
             {
-                SetAutomaticScanStatus(_automaticInspectionPreferencesStore.LastLoadError);
+                SetAutomaticScanStatus(_automaticInspectionPreferencesStore.LastLoadError, "Setting load failed");
             }
             else
             {
                 SetAutomaticScanStatus(
                     _automaticInspectionPreferences.AutoScanOnBreak
-                        ? "Auto Inspect on Break is enabled and saved. Supported Mat collections are included automatically."
-                        : "Auto Inspect on Break is paused and saved. Scan Now remains available and includes supported Mat collections.");
+                        ? "Auto Inspect is on. This choice is saved."
+                        : "Auto Inspect is off. This choice is saved.");
             }
         }
 
@@ -1517,6 +1574,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             CancelAutomaticInspectionWork(true);
 #pragma warning restore VSTHRD010
             _disposed = true;
+            _snapshotExport.Dispose();
+            _histogram.Dispose();
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _performanceTimer.Stop();
             _blinkTimer.Stop();
@@ -1729,7 +1788,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
 
                 var typeName = expression.Type ?? string.Empty;
-                var mapping = TypeMappingStore.Default.FindMappingByTypeNameOnly(typeName);
+                var mapping = GetMappingStore().FindMappingByTypeNameOnly(typeName);
                 if (mapping != null)
                 {
                     string openError;
@@ -1748,7 +1807,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     return "Expression has no readable data members: " + expressionText;
                 }
 
-                var mappingDialog = new TypeMappingDialog(inventory, typeName, string.Empty, GetDebuggeeProcessId(debugger))
+                var mappingDialog = new TypeMappingDialog(inventory, typeName, string.Empty, GetDebuggeeProcessId(debugger), null, false, GetMappingStore())
                 {
                     Owner = Window.GetWindow(this)
                 };
@@ -2746,7 +2805,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 document.IsAutomaticInspection
                     && document.ErrorMessage.StartsWith(
                         "Pixel format needs one explicit mapping",
-                        StringComparison.Ordinal))
+                        StringComparison.Ordinal),
+                GetMappingStore())
             {
                 Owner = Window.GetWindow(this)
             };
@@ -2760,36 +2820,53 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private void SaveSnapshot_Click(object sender, RoutedEventArgs e)
+        // WPF routed-event boundary; the complete export workflow is caught below.
+#pragma warning disable VSTHRD100
+        private async void SaveSnapshot_Click(object sender, RoutedEventArgs e)
         {
-            if (!CanSaveActiveImage("Save Snapshot"))
-            {
-                return;
-            }
-
-            var dialog = new SaveFileDialog
-            {
-                Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json",
-                FileName = GetDefaultExportName(".rbuf.json")
-            };
-
-            if (dialog.ShowDialog() != true)
-            {
-                return;
-            }
-
+            if (_disposed || _savingSnapshot || !CanSaveActiveImage("Save Snapshot")) return;
+            _savingSnapshot = true;
+            var document = _activeDocument!;
+            var owner = Window.GetWindow(this);
+            VisualStudioSnapshotDirectoryLease? exportLease = null;
             try
             {
-                var rawPath = RawBufferSnapshot.SaveMetadata(dialog.FileName, _activeDocument!.Descriptor);
-                _activeDocument.Source.CopyRawTo(rawPath);
-                DiagnosticsList.Items.Add("Info: saved raw snapshot to " + dialog.FileName);
+                var source = document.Source;
+                var descriptor = document.Descriptor.Clone();
+                if (VisualStudioTempStore.TryGetOwnedSnapshotDirectory(document.DisplayPath, out _))
+                    exportLease = VisualStudioTempStore.CreateSnapshotDirectoryLease(document.DisplayPath);
+                var dialog = new SaveFileDialog
+                {
+                    Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json",
+                    FileName = GetDefaultExportName(".rbuf.json")
+                };
+                if ((owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) != true || _disposed) return;
+                var model = new SnapshotExportViewModel(_snapshotExport, dialog.FileName, source, descriptor);
+                var result = await SnapshotExportDialog.ShowAsync(owner, model);
+                if (!_disposed)
+                    DiagnosticsList.Items.Add(result != null ? "Info: saved raw snapshot to " + result.MetadataPath : model.Status);
             }
             catch (Exception ex)
             {
-                DiagnosticsList.Items.Add("Error: snapshot export failed. " + ex.Message);
-                MessageBox.Show(ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                if (!_disposed)
+                {
+                    DiagnosticsList.Items.Add("Error: snapshot export failed. " + ex.Message);
+                    if (owner != null) MessageBox.Show(owner, ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+            finally
+            {
+                if (exportLease != null)
+                {
+                    var directory = exportLease.DirectoryPath;
+                    exportLease.Dispose();
+                    VisualStudioTempStore.TryDeleteDirectory(directory);
+                }
+                _savingSnapshot = false;
             }
         }
+
+#pragma warning restore VSTHRD100
 
         private bool CanSaveActiveImage(string title)
         {
@@ -2894,7 +2971,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             HideErrorPanel();
             DiagnosticsList.Items.Clear();
-            HistogramCanvas.Children.Clear();
+            _histogram.SetSource(null);
             _lastHoverX = -1;
             _lastHoverY = -1;
             _pinnedInspectorX = -1;
@@ -2972,16 +3049,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            try
-            {
-                DrawHistogramIfReasonable(_activeDocument);
-            }
-            catch (RawImageSourceUnavailableException ex)
-            {
-                OpenGlImageView_SourceUnavailable(
-                    OpenGlImageView,
-                    new RawOpenGlSourceUnavailableEventArgs(ex));
-            }
+            UpdateHistogramSource();
             UpdateStatus();
         }
 
@@ -3406,67 +3474,21 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private void DrawHistogramIfReasonable(ImageDocument document)
+        private void UpdateHistogramSource()
         {
-            var estimatedPreviewBytes = RawImageTilePlanner.EstimateBgraByteCount(document.Descriptor);
-            if (document.Source.IsFileBacked || estimatedPreviewBytes > MaxCpuPreviewBytes)
+            var document = _activeDocument;
+            if (document == null || document.IsError || document.IsSourceUnavailable)
             {
-                DiagnosticsList.Items.Add(string.Format(
-                    CultureInfo.InvariantCulture,
-                    document.Source.IsFileBacked
-                        ? "Info: CPU histogram skipped because the source is file-backed. Display uses {1:N0} tiles."
-                        : "Info: CPU histogram skipped because BGRA preview would require {0:N0} bytes. Display uses {1:N0} tiles.",
-                    estimatedPreviewBytes,
-                    OpenGlImageView.TileCount));
+                _histogram.SetSource(null);
                 return;
             }
-
-            var sampleStep = GetHistogramSampleStep(document.Descriptor);
-            var rendered = document.Source.RenderTileSampled(0, 0, document.Descriptor.Width, document.Descriptor.Height, sampleStep, document.Source.CreateRenderOptions());
-            if (sampleStep > 1)
+            var path = document.DisplayPath;
+            _histogram.SetSource(document.Source, () =>
             {
-                DiagnosticsList.Items.Add(string.Format(CultureInfo.InvariantCulture, "Info: histogram sampled every {0:N0} pixels for responsiveness.", sampleStep));
-            }
-
-            DrawHistogram(rendered);
-        }
-
-        private static int GetHistogramSampleStep(RawImageDescriptor descriptor)
-        {
-            var maxDimension = Math.Max(descriptor.Width, descriptor.Height);
-            return Math.Max(1, (int)Math.Ceiling(maxDimension / (double)HistogramMaxSampleDimension));
-        }
-
-        private void DrawHistogram(RenderedImage rendered)
-        {
-            var bins = new int[256];
-            for (var i = 0; i < rendered.Bgra32.Length; i += 4)
-            {
-                bins[(rendered.Bgra32[i] + rendered.Bgra32[i + 1] + rendered.Bgra32[i + 2]) / 3]++;
-            }
-
-            var max = bins.Max();
-            if (max <= 0)
-            {
-                return;
-            }
-
-            var width = HistogramCanvas.ActualWidth > 0 ? HistogramCanvas.ActualWidth : 230;
-            var height = HistogramCanvas.ActualHeight > 0 ? HistogramCanvas.ActualHeight : 110;
-            for (var i = 0; i < bins.Length; i++)
-            {
-                var x = (i / 255.0) * width;
-                var lineHeight = (bins[i] / (double)max) * height;
-                HistogramCanvas.Children.Add(new Line
-                {
-                    X1 = x,
-                    X2 = x,
-                    Y1 = height,
-                    Y2 = height - lineHeight,
-                    Stroke = Brushes.SteelBlue,
-                    StrokeThickness = 1
-                });
-            }
+                var lease = new VisualStudioSnapshotLeaseOwner();
+                lease.Replace(path, ShouldDeleteSnapshotDirectoryOnDispose(path));
+                return lease;
+            });
         }
 
         private void SaveActiveDocumentView()
@@ -3999,6 +4021,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ShowSourceUnavailableState(string message)
         {
+            _histogram.SetSource(null, unavailableReason: message);
             DiagnosticsList.Items.Insert(
                 0,
                 "Warning: live debugger memory is unavailable. The viewer stopped reading this source; pause at a valid breakpoint and open the visualizer again. "
@@ -4247,7 +4270,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             SetMarkerText(string.Empty);
             ClearPixelStatus();
             OpenGlImageView.ClearPinnedMarker();
-            HistogramCanvas.Children.Clear();
+            _histogram.SetSource(null);
             DiagnosticsList.Items.Clear();
             OpenGlImageView.ResetRenderStats();
             UpdatePerformanceText();
@@ -4304,8 +4327,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            var blackText = options.BlackLevel.ToString("0.###", CultureInfo.InvariantCulture);
-            var whiteText = options.WhiteLevel.ToString("0.###", CultureInfo.InvariantCulture);
+            var format = _activeDocument?.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "G9" : "0.###";
+            var blackText = options.BlackLevel.ToString(format, CultureInfo.InvariantCulture);
+            var whiteText = options.WhiteLevel.ToString(format, CultureInfo.InvariantCulture);
             BlackLevelTextBox.Text = blackText;
             WhiteLevelTextBox.Text = whiteText;
             CompactBlackLevelTextBox.Text = blackText;
@@ -4375,11 +4399,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     if (x < 0 || x >= document.Descriptor.Width)
                     {
-                        builder.Append("     ");
+                        builder.Append("      ");
                         continue;
                     }
 
-                    builder.Append(CompactPixelValue(document.Source.DescribePixel(x, y)).PadLeft(5));
+                    builder.Append(CompactPixelValue(document.Source.DescribePixel(x, y)).PadLeft(5)).Append(' ');
                 }
 
                 builder.AppendLine();
@@ -4390,78 +4414,25 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static string BuildRoiStats(ImageDocument document, int centerX, int centerY, int radius)
         {
-            var count = 0;
-            var sum = 0.0;
-            var sumSquares = 0.0;
-            var min = double.MaxValue;
-            var max = double.MinValue;
-
-            for (var y = Math.Max(0, centerY - radius); y <= Math.Min(document.Descriptor.Height - 1, centerY + radius); y++)
-            {
-                for (var x = Math.Max(0, centerX - radius); x <= Math.Min(document.Descriptor.Width - 1, centerX + radius); x++)
-                {
-                    double value;
-                    if (!TryExtractNumericPixelValue(document.Source.DescribePixel(x, y), out value))
-                    {
-                        continue;
-                    }
-
-                    count++;
-                    sum += value;
-                    sumSquares += value * value;
-                    if (value < min)
-                    {
-                        min = value;
-                    }
-
-                    if (value > max)
-                    {
-                        max = value;
-                    }
-                }
-            }
-
-            if (count == 0)
+            var left = Math.Max(0, centerX - radius);
+            var top = Math.Max(0, centerY - radius);
+            var width = Math.Min(document.Descriptor.Width, centerX + radius + 1) - left;
+            var height = Math.Min(document.Descriptor.Height, centerY + radius + 1) - top;
+            var stats = document.Source.GetStatistics(left, top, width, height);
+            if (stats.Count == 0)
             {
                 return "No numeric pixels";
             }
 
-            var mean = sum / count;
-            var variance = Math.Max(0, (sumSquares / count) - (mean * mean));
-            var stdDev = Math.Sqrt(variance);
+            var format = document.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "G9" : "0.###";
             return string.Format(
                 CultureInfo.InvariantCulture,
-                "n={0}  min={1:0.###}  max={2:0.###}\nmean={3:0.###}  std={4:0.###}",
-                count,
-                min,
-                max,
-                mean,
-                stdDev);
-        }
-
-        private static bool TryExtractNumericPixelValue(string description, out double value)
-        {
-            if (TryReadDoubleToken(description, "GV=", out value)
-                || TryReadDoubleToken(description, "Value=", out value)
-                || TryReadDoubleToken(description, "Bayer R=", out value)
-                || TryReadDoubleToken(description, "Bayer G=", out value)
-                || TryReadDoubleToken(description, "Bayer B=", out value))
-            {
-                return true;
-            }
-
-            int r;
-            int g;
-            int b;
-            if (TryReadIntToken(description, "R=", out r)
-                && TryReadIntToken(description, "G=", out g)
-                && TryReadIntToken(description, "B=", out b))
-            {
-                value = (r + g + b) / 3.0;
-                return true;
-            }
-
-            return false;
+                "n={0}  min={1}  max={2}\nmean={3}  std={4}",
+                stats.Count,
+                stats.Minimum.ToString(format, CultureInfo.InvariantCulture),
+                stats.Maximum.ToString(format, CultureInfo.InvariantCulture),
+                stats.Mean.ToString(format, CultureInfo.InvariantCulture),
+                stats.StandardDeviation.ToString(format, CultureInfo.InvariantCulture));
         }
 
         private static string BuildLineProfile(ImageDocument document, int centerX, int y)
@@ -4576,7 +4547,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             double value;
             if (TryReadDoubleToken(description, "Value=", out value))
             {
-                return string.Format(CultureInfo.InvariantCulture, "Value {0:0.###}", value);
+                return "Value " + value.ToString(descriptor.PixelFormat == RawPixelFormat.Float32 ? "G9" : "0.###", CultureInfo.InvariantCulture);
             }
 
             foreach (var key in new[] { "Bayer R=", "Bayer G=", "Bayer B=" })
@@ -4867,6 +4838,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             UpdateCompactInspectorHeightLimit();
+            _histogram.SetVisible(InspectorPanel.Visibility == Visibility.Visible || CompactInspectorPanel.Visibility == Visibility.Visible);
             _layoutMode = nextMode;
         }
 
@@ -4929,26 +4901,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateCommandState();
             if (_activeDocument == null)
             {
-                StatusText.Text = string.Format(CultureInfo.InvariantCulture, "{0:N0} images", _documents.Count);
+                _inspectionStatus.SetImageStatus(string.Format(CultureInfo.InvariantCulture, "{0:N0} images", _documents.Count));
                 WriteSessionStateIfRequested();
                 return;
             }
 
             if (_activeDocument.IsError)
             {
-                StatusText.Text = "Error " + _activeDocument.ErrorId;
+                _inspectionStatus.SetImageStatus("Error " + _activeDocument.ErrorId, true);
                 WriteSessionStateIfRequested();
                 return;
             }
 
             if (_activeDocument.IsSourceUnavailable)
             {
-                StatusText.Text = "Live source unavailable";
+                _inspectionStatus.SetImageStatus("Live unavailable", true);
                 WriteSessionStateIfRequested();
                 return;
             }
 
-            StatusText.Text = string.Format(
+            _inspectionStatus.SetImageStatus(string.Format(
                 CultureInfo.InvariantCulture,
                 "{0}{1}x{2} {3} {4} {5} tiles",
                 _activeDocument.IsPreview ? "Preview " : string.Empty,
@@ -4956,7 +4928,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 _activeDocument.Descriptor.Height,
                 _activeDocument.Descriptor.PixelFormat,
                 GetSourceMode(_activeDocument.Source),
-                OpenGlImageView.TileCount);
+                OpenGlImageView.TileCount));
             WriteSessionStateIfRequested();
         }
 
@@ -5041,7 +5013,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             if (StatusText != null)
             {
-                StatusText.Text = text;
+                _inspectionStatus.SetTransientStatus(text);
             }
         }
 
@@ -5152,7 +5124,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(
                     builder,
                     "automaticScanStatus",
-                    AutomaticScanStatusText == null ? string.Empty : AutomaticScanStatusText.Text,
+                    _inspectionStatus.Details,
                     true);
                 AppendJsonProperty(
                     builder,

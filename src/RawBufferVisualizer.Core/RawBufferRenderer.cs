@@ -1,10 +1,21 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace RawBufferVisualizer.Core
 {
     public static class RawBufferRenderer
     {
+        internal static int GetRangeSampleRows(int width, int height)
+        {
+            var byteLimitedRows = Math.Max(1L, (32L * 1024L * 1024L) / ((long)width * 4));
+            return (int)Math.Min(height, Math.Min(64L, byteLimitedRows));
+        }
+
+        internal static int GetRangeSampleColumns(int width) => Math.Min(width, 512);
+
+        internal static int GetRangeSampleCoordinate(int index, int count, int length) => count == 1 ? 0 : (int)((long)index * (length - 1) / (count - 1));
+
         public static RenderedImage Render(byte[] buffer, RawImageDescriptor descriptor, RawRenderOptions? options = null)
         {
             return RenderTile(buffer, descriptor, 0, 0, descriptor.Width, descriptor.Height, options);
@@ -265,11 +276,15 @@ namespace RawBufferVisualizer.Core
 
             var min = double.MaxValue;
             var max = double.MinValue;
-            for (var y = 0; y < descriptor.Height; y++)
+            var sampledRows = GetRangeSampleRows(descriptor.Width, descriptor.Height);
+            var sampledColumns = GetRangeSampleColumns(descriptor.Width);
+            for (var sampleY = 0; sampleY < sampledRows; sampleY++)
             {
+                var y = GetRangeSampleCoordinate(sampleY, sampledRows, descriptor.Height);
                 var sourceRow = y * descriptor.Stride;
-                for (var x = 0; x < descriptor.Width; x++)
+                for (var sampleX = 0; sampleX < sampledColumns; sampleX++)
                 {
+                    var x = GetRangeSampleCoordinate(sampleX, sampledColumns, descriptor.Width);
                     var raw = ReadSingle(buffer, sourceRow + (x * 4), descriptor.ByteOrder);
                     if (double.IsNaN(raw) || double.IsInfinity(raw))
                     {
@@ -293,7 +308,7 @@ namespace RawBufferVisualizer.Core
                 return Tuple.Create(0.0, 1.0);
             }
 
-            return Tuple.Create(min, max);
+            return Tuple.Create(min, max <= min ? min + Math.Max(1, Math.Abs(min) * 0.000001) : max);
         }
 
         private static void RenderInt32(byte[] buffer, RawImageDescriptor descriptor, byte[] pixels, int x, int y, int width, int height, RawRenderOptions options)
@@ -388,12 +403,17 @@ namespace RawBufferVisualizer.Core
                 {
                     var imageX = x + tileX;
                     var imageY = y + tileY;
-                    var r = AverageBayerColor(buffer, descriptor, imageX, imageY, 0);
-                    var g = AverageBayerColor(buffer, descriptor, imageX, imageY, 1);
-                    var b = AverageBayerColor(buffer, descriptor, imageX, imageY, 2);
-                    WriteBgra(pixels, targetRow + (tileX * 4), b, g, r, 255);
+                    RenderBayerPixel(buffer, descriptor, imageX, imageY, pixels, targetRow + tileX * 4);
                 }
             }
+        }
+
+        public static void RenderBayerPixel(byte[] buffer, RawImageDescriptor descriptor, int x, int y, byte[] pixels, int targetOffset)
+        {
+            var r = AverageBayerColor(buffer, descriptor, x, y, 0);
+            var g = AverageBayerColor(buffer, descriptor, x, y, 1);
+            var b = AverageBayerColor(buffer, descriptor, x, y, 2);
+            WriteBgra(pixels, targetOffset, b, g, r, 255);
         }
 
         private static byte AverageBayerColor(byte[] buffer, RawImageDescriptor descriptor, int x, int y, int color)
@@ -459,13 +479,15 @@ namespace RawBufferVisualizer.Core
 
         internal static float ReadSingle(byte[] buffer, int offset, RawByteOrder byteOrder)
         {
-            var bytes = new[] { buffer[offset], buffer[offset + 1], buffer[offset + 2], buffer[offset + 3] };
-            if ((byteOrder == RawByteOrder.BigEndian) == BitConverter.IsLittleEndian)
-            {
-                Array.Reverse(bytes);
-            }
+            if ((byteOrder == RawByteOrder.LittleEndian) == BitConverter.IsLittleEndian) return BitConverter.ToSingle(buffer, offset);
+            return new SingleBits { Integer = ReadInt32(buffer, offset, byteOrder) }.Value;
+        }
 
-            return BitConverter.ToSingle(bytes, 0);
+        [StructLayout(LayoutKind.Explicit)]
+        private struct SingleBits
+        {
+            [FieldOffset(0)] public int Integer;
+            [FieldOffset(0)] public float Value;
         }
 
         internal static int ReadInt32(byte[] buffer, int offset, RawByteOrder byteOrder)

@@ -20,7 +20,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     // The in-process package stays isolated from the newer out-of-process Extensibility SDK.
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.0.9")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.1.0")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(
@@ -253,6 +253,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     return;
                 }
 
+                window.NotifyDebuggerPaused();
                 if (!window.IsAutoInspectEnabled)
                 {
                     WriteAutomationLog("Break mode scan skipped because Auto Inspect is paused.");
@@ -288,11 +289,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
-                var invalidatedCount = window == null ? 0 : window.InvalidateLiveSources();
-                if (endSession && window != null)
-                {
-                    window.EndAutomaticInspectionSession();
-                }
+                var invalidatedCount = 0;
+                try { invalidatedCount = window == null ? 0 : window.InvalidateLiveSources(); }
+                finally { if (endSession && window != null) window.EndAutomaticInspectionSession(); }
 
                 WriteAutomationLog(
                     eventDescription + "; invalidated "

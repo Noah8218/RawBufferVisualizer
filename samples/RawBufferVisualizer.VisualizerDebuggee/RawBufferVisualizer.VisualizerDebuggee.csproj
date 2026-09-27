@@ -16,7 +16,7 @@
     <PackageReference Include="Emgu.CV.runtime.windows" Version="$(EmguCvPackageVersion)" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="$(NuGetPackageRoot)opencvsharp4.runtime.win\$(OpenCvSharpPackageVersion)\runtimes\win-x64\native\OpenCvSharpExtern.dll" Link="OpenCvSharpExtern.dll">
+    <Content Include="$(NuGetPackageRoot)\opencvsharp4.runtime.win\$(OpenCvSharpPackageVersion)\runtimes\win-x64\native\OpenCvSharpExtern.dll" Link="OpenCvSharpExtern.dll">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>

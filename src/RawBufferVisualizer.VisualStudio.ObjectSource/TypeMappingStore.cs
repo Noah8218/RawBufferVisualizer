@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
+using System.Security.Cryptography;
+using RawBufferVisualizer.Sdk;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Json;
@@ -15,6 +18,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         [DataMember(Name = "mappings", Order = 1)]
         public List<TypeMapping> Mappings { get; set; } = new List<TypeMapping>();
+
+        internal string? OriginalPath { get; set; }
+        internal byte[]? OriginalBytes { get; set; }
     }
 
     [DataContract]
@@ -64,308 +70,229 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public string? BitDepth { get; set; }
     }
 
+    public sealed class TypeMappingSnapshot
+    {
+        public TypeMappingFile Solution { get; set; } = new TypeMappingFile();
+        public TypeMappingFile User { get; set; } = new TypeMappingFile();
+    }
+
+    public enum TypeMappingScope { Solution, User }
+
     public sealed class TypeMappingStore
     {
         public const int SupportedVersion = 1;
         public const string SolutionLocalFileName = ".rawbuffervisualizer.json";
         public const string UserMappingFileName = "type-mappings.json";
-
-        private static readonly object DefaultSync = new object();
-        private static TypeMappingStore? _default;
-
         private readonly object _sync = new object();
-        private readonly string? _solutionLocalPath;
-        private readonly string _userPath;
-        private TypeMappingFile? _solutionLocalCache;
+        private TypeMappingSnapshot? _snapshot;
+        private TypeMappingFile? _solutionCache;
         private TypeMappingFile? _userCache;
-        private DateTime _solutionLocalStamp;
-        private DateTime _userStamp;
 
         public TypeMappingStore(string? solutionLocalPath, string userPath)
         {
-            _solutionLocalPath = string.IsNullOrWhiteSpace(solutionLocalPath) ? null : Path.GetFullPath(solutionLocalPath!);
-            _userPath = string.IsNullOrWhiteSpace(userPath) ? GetDefaultUserMappingPath() : Path.GetFullPath(userPath);
-            LastLoadError = string.Empty;
+            SolutionLocalPath = string.IsNullOrWhiteSpace(solutionLocalPath) ? null : Path.GetFullPath(solutionLocalPath!);
+            UserPath = Path.GetFullPath(string.IsNullOrWhiteSpace(userPath) ? GetDefaultUserMappingPath() : userPath);
         }
 
-        public static TypeMappingStore Default
+        public static TypeMappingStore Default { get; } = CreateDefault();
+        public string? SolutionLocalPath { get; }
+        public string UserPath { get; }
+        public string LastLoadError { get; private set; } = string.Empty;
+
+        // A process base directory is not a Visual Studio solution. Hosts supply their current solution explicitly.
+        public static TypeMappingStore CreateDefault() => new TypeMappingStore(null, GetDefaultUserMappingPath());
+
+        public static TypeMappingStore ForSolution(string? solutionPath, string? userPath = null)
         {
-            get
-            {
-                lock (DefaultSync)
-                {
-                    return _default ?? (_default = CreateDefault());
-                }
-            }
+            var localPath = string.IsNullOrWhiteSpace(solutionPath) ? null
+                : Path.Combine(Path.GetDirectoryName(Path.GetFullPath(solutionPath!))!, SolutionLocalFileName);
+            return new TypeMappingStore(localPath, userPath ?? GetDefaultUserMappingPath());
         }
 
-        public string? SolutionLocalPath
-        {
-            get { return _solutionLocalPath; }
-        }
+        public static string GetDefaultUserMappingPath() => Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "RawBufferVisualizer", UserMappingFileName);
 
-        public string UserPath
-        {
-            get { return _userPath; }
-        }
-
-        public string LastLoadError { get; private set; }
-
-        public static TypeMappingStore CreateDefault()
-        {
-            return new TypeMappingStore(
-                FindSolutionLocalMappingPath(AppDomain.CurrentDomain.BaseDirectory),
-                GetDefaultUserMappingPath());
-        }
-
-        public static string GetDefaultUserMappingPath()
-        {
-            return Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "RawBufferVisualizer",
-                UserMappingFileName);
-        }
-
+        // Retained for callers that explicitly request ancestor discovery; never used to infer host context.
         public static string? FindSolutionLocalMappingPath(string startDirectory)
         {
-            if (string.IsNullOrWhiteSpace(startDirectory))
-            {
-                return null;
-            }
-
+            if (string.IsNullOrWhiteSpace(startDirectory)) return null;
             try
             {
-                var directory = new DirectoryInfo(Path.GetFullPath(startDirectory));
-                while (directory != null)
+                for (var directory = new DirectoryInfo(Path.GetFullPath(startDirectory)); directory != null; directory = directory.Parent)
                 {
                     var candidate = Path.Combine(directory.FullName, SolutionLocalFileName);
-                    if (File.Exists(candidate))
-                    {
-                        return candidate;
-                    }
-
-                    directory = directory.Parent;
+                    if (File.Exists(candidate)) return candidate;
                 }
             }
-            catch
-            {
-                return null;
-            }
-
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException || ex is ArgumentException) { }
             return null;
         }
+
+        public string GetPath(TypeMappingScope scope) => scope == TypeMappingScope.User ? UserPath
+            : scope == TypeMappingScope.Solution ? SolutionLocalPath ?? throw new InvalidOperationException("Open and save a solution before using solution mappings.")
+            : throw new ArgumentOutOfRangeException(nameof(scope));
 
         public TypeMapping? FindMapping(string typeName, string assemblyName)
         {
             lock (_sync)
             {
-                var solutionLocal = LoadFile(_solutionLocalPath, ref _solutionLocalCache, ref _solutionLocalStamp);
-                var match = FindInFile(solutionLocal, typeName, assemblyName);
-                if (match != null)
-                {
-                    return match;
-                }
-
-                var user = LoadFile(_userPath, ref _userCache, ref _userStamp);
-                return FindInFile(user, typeName, assemblyName);
+                LastLoadError = string.Empty;
+                var solution = _snapshot?.Solution ?? ReadForLookup(SolutionLocalPath, ref _solutionCache);
+                var user = _snapshot?.User ?? ReadForLookup(UserPath, ref _userCache);
+                var match = FindInFile(solution, typeName, assemblyName) ?? FindInFile(user, typeName, assemblyName);
+                return match == null ? null : CloneMapping(match);
             }
         }
 
-        public TypeMapping? FindMappingByTypeNameOnly(string typeName)
+        // Unknown assembly identity may only use an explicitly type-wide mapping, never a guessed assembly.
+        public TypeMapping? FindMappingByTypeNameOnly(string typeName) => FindMapping(typeName, string.Empty);
+
+        public TypeMappingSnapshot ExportEffectiveMappings()
         {
             lock (_sync)
             {
-                var solutionLocal = LoadFile(_solutionLocalPath, ref _solutionLocalCache, ref _solutionLocalStamp);
-                var match = FindUniqueByTypeName(solutionLocal, typeName);
-                if (match != null)
+                return new TypeMappingSnapshot
                 {
-                    return match;
-                }
-
-                var user = LoadFile(_userPath, ref _userCache, ref _userStamp);
-                return FindUniqueByTypeName(user, typeName);
+                    Solution = _snapshot == null
+                        ? SolutionLocalPath == null ? new TypeMappingFile() : LoadFile(TypeMappingScope.Solution)
+                        : Deserialize(Serialize(_snapshot.Solution)),
+                    User = _snapshot == null ? LoadUserFile() : Deserialize(Serialize(_snapshot.User))
+                };
             }
         }
 
-        public TypeMappingFile LoadUserFile()
+        public static TypeMappingStore FromSnapshot(TypeMappingSnapshot snapshot)
+        {
+            if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+            return new TypeMappingStore(null, GetDefaultUserMappingPath())
+            {
+                _snapshot = new TypeMappingSnapshot
+                {
+                    Solution = Deserialize(Serialize(snapshot.Solution)),
+                    User = Deserialize(Serialize(snapshot.User))
+                }
+            };
+        }
+
+        public TypeMappingFile LoadUserFile() => LoadFile(TypeMappingScope.User);
+
+        public TypeMappingFile LoadFile(TypeMappingScope scope)
         {
             lock (_sync)
             {
-                var loaded = LoadFile(_userPath, ref _userCache, ref _userStamp);
-                if (loaded != null)
-                {
-                    return loaded;
-                }
-
-                return new TypeMappingFile { Version = SupportedVersion };
+                if (_snapshot != null) throw new InvalidOperationException("Transferred mappings are read-only.");
+                var path = GetPath(scope);
+                var bytes = AtomicFileSave.ReadExisting(path);
+                var file = bytes == null ? new TypeMappingFile() : Deserialize(bytes);
+                file.OriginalPath = path;
+                file.OriginalBytes = bytes;
+                return file;
             }
         }
 
-        public void Save(TypeMappingFile file)
-        {
-            if (file == null)
-            {
-                throw new ArgumentNullException(nameof(file));
-            }
+        public void Save(TypeMappingFile file) => Save(file, TypeMappingScope.User);
 
+        public void Save(TypeMappingFile file, TypeMappingScope scope)
+        {
+            if (file == null) throw new ArgumentNullException(nameof(file));
             lock (_sync)
             {
-                var directory = Path.GetDirectoryName(_userPath);
-                if (!string.IsNullOrEmpty(directory))
-                {
-                    Directory.CreateDirectory(directory!);
-                }
+                if (_snapshot != null) throw new InvalidOperationException("Transferred mappings are read-only.");
+                var path = GetPath(scope);
+                if (file.OriginalPath != null && !string.Equals(file.OriginalPath, path, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("Reload the selected scope before saving to a different file.");
+                Validate(file);
+                var bytes = Serialize(file);
+                // A newly constructed file can create a missing destination, but cannot overwrite an unread file.
+                AtomicFileSave.Write(path, bytes, file.OriginalBytes);
+                file.OriginalPath = path;
+                file.OriginalBytes = bytes;
+            }
+        }
 
-                using (var stream = File.Create(_userPath))
-                {
-                    var serializer = new DataContractJsonSerializer(typeof(TypeMappingFile), CreateSettings());
-                    serializer.WriteObject(stream, file);
-                }
+        public string GetContentVersion()
+        {
+            lock (_sync)
+            using (var hash = SHA256.Create())
+            {
+                if (_snapshot != null) return Convert.ToBase64String(hash.ComputeHash(Serialize(_snapshot.Solution))) + "|" + Convert.ToBase64String(hash.ComputeHash(Serialize(_snapshot.User)));
+                var solution = SolutionLocalPath == null ? null : AtomicFileSave.ReadExisting(SolutionLocalPath);
+                var user = AtomicFileSave.ReadExisting(UserPath);
+                return SolutionLocalPath + "|" + UserPath + "|"
+                    + (solution == null ? "missing" : Convert.ToBase64String(hash.ComputeHash(solution))) + "|"
+                    + (user == null ? "missing" : Convert.ToBase64String(hash.ComputeHash(user)));
+            }
+        }
 
-                _userCache = file;
-                _userStamp = File.GetLastWriteTimeUtc(_userPath);
+        private TypeMappingFile? ReadForLookup(string? path, ref TypeMappingFile? cache)
+        {
+            if (path == null) return null;
+            try
+            {
+                var bytes = AtomicFileSave.ReadExisting(path);
+                if (bytes == null) return cache = null;
+                if (cache != null && bytes.SequenceEqual(cache.OriginalBytes!)) return cache;
+                var loaded = Deserialize(bytes);
+                loaded.OriginalBytes = bytes;
+                return cache = loaded;
+            }
+            catch (Exception ex) when (ex is IOException || ex is InvalidDataException || ex is UnauthorizedAccessException || ex is SerializationException || ex is ArgumentException)
+            {
+                LastLoadError += (LastLoadError.Length == 0 ? string.Empty : Environment.NewLine) + path + ": " + ex.Message;
+                return cache = null;
             }
         }
 
         private static TypeMapping? FindInFile(TypeMappingFile? file, string typeName, string assemblyName)
         {
-            if (file == null || file.Mappings == null || string.IsNullOrEmpty(typeName))
-            {
-                return null;
-            }
-
-            for (var i = 0; i < file.Mappings.Count; i++)
-            {
-                var mapping = file.Mappings[i];
-                if (mapping == null)
-                {
-                    continue;
-                }
-
-                if (!string.Equals(mapping.TypeName, typeName, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (!string.IsNullOrEmpty(mapping.AssemblyName)
-                    && !string.Equals(mapping.AssemblyName, assemblyName ?? string.Empty, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                return mapping;
-            }
-
-            return null;
+            if (file == null || string.IsNullOrEmpty(typeName)) return null;
+            return file.Mappings.FirstOrDefault(m => m.TypeName == typeName && m.AssemblyName == (assemblyName ?? string.Empty))
+                ?? file.Mappings.FirstOrDefault(m => m.TypeName == typeName && string.IsNullOrEmpty(m.AssemblyName));
         }
 
-        private static TypeMapping? FindUniqueByTypeName(TypeMappingFile? file, string typeName)
+        internal static TypeMapping CloneMapping(TypeMapping mapping)
         {
-            if (file == null || file.Mappings == null || string.IsNullOrEmpty(typeName))
-            {
-                return null;
-            }
-
-            TypeMapping? match = null;
-            for (var i = 0; i < file.Mappings.Count; i++)
-            {
-                var mapping = file.Mappings[i];
-                if (mapping == null || !string.Equals(mapping.TypeName, typeName, StringComparison.Ordinal))
-                {
-                    continue;
-                }
-
-                if (match != null)
-                {
-                    return null;
-                }
-
-                match = mapping;
-            }
-
-            return match;
+            var file = new TypeMappingFile();
+            file.Mappings.Add(mapping);
+            return Deserialize(Serialize(file)).Mappings[0];
         }
 
-        private TypeMappingFile? LoadFile(string? path, ref TypeMappingFile? cache, ref DateTime stamp)
+        private static byte[] Serialize(TypeMappingFile file)
         {
-            if (string.IsNullOrEmpty(path))
+            using (var stream = new MemoryStream())
             {
-                return null;
-            }
-
-            try
-            {
-                if (!File.Exists(path))
-                {
-                    cache = null;
-                    stamp = DateTime.MinValue;
-                    return null;
-                }
-
-                var writeTime = File.GetLastWriteTimeUtc(path);
-                if (cache != null && stamp == writeTime)
-                {
-                    return cache;
-                }
-
-                var file = LoadFileCore(path!);
-                cache = file;
-                stamp = writeTime;
-                return file;
-            }
-            catch (Exception ex)
-            {
-                LastLoadError = "Mapping file was ignored: " + ex.Message;
-                cache = null;
-                stamp = DateTime.MinValue;
-                return null;
+                new DataContractJsonSerializer(typeof(TypeMappingFile), CreateSettings()).WriteObject(stream, file);
+                return stream.ToArray();
             }
         }
 
-        private TypeMappingFile? LoadFileCore(string path)
+        private static TypeMappingFile Deserialize(byte[] bytes)
         {
-            var bytes = File.ReadAllBytes(path);
-            var offset = HasUtf8Bom(bytes) ? 3 : 0;
+            var offset = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
             using (var stream = new MemoryStream(bytes, offset, bytes.Length - offset))
             {
-                var serializer = new DataContractJsonSerializer(typeof(TypeMappingFile), CreateSettings());
-                var loaded = serializer.ReadObject(stream) as TypeMappingFile;
-                if (loaded == null)
-                {
-                    LastLoadError = "Mapping file is empty: " + path;
-                    return null;
-                }
-
-                if (loaded.Version != SupportedVersion)
-                {
-                    LastLoadError = string.Format(
-                        CultureInfo.InvariantCulture,
-                        "Mapping file version {0} is not supported (expected {1}): {2}",
-                        loaded.Version,
-                        SupportedVersion,
-                        path);
-                    return null;
-                }
-
-                LastLoadError = string.Empty;
-                return loaded;
+                var file = new DataContractJsonSerializer(typeof(TypeMappingFile), CreateSettings()).ReadObject(stream) as TypeMappingFile
+                    ?? throw new InvalidDataException("Mapping file is empty.");
+                Validate(file);
+                return file;
             }
         }
 
-        private static DataContractJsonSerializerSettings CreateSettings()
+        private static void Validate(TypeMappingFile file)
         {
-            return new DataContractJsonSerializerSettings
+            if (file.Version != SupportedVersion)
+                throw new InvalidDataException(string.Format(CultureInfo.InvariantCulture, "Mapping file version {0} is not supported (expected {1}).", file.Version, SupportedVersion));
+            if (file.Mappings == null) throw new InvalidDataException("The mappings array is required.");
+            var identities = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var mapping in file.Mappings)
             {
-                UseSimpleDictionaryFormat = true
-            };
+                if (mapping == null || string.IsNullOrWhiteSpace(mapping.TypeName) || mapping.Members == null)
+                    throw new InvalidDataException("Each mapping requires a type name and members.");
+                if (!identities.Add(mapping.TypeName + "\0" + (mapping.AssemblyName ?? string.Empty)))
+                    throw new InvalidDataException("Duplicate mapping identity: " + mapping.TypeName);
+            }
         }
 
-        private static bool HasUtf8Bom(byte[] bytes)
-        {
-            return bytes.Length >= 3
-                && bytes[0] == 0xEF
-                && bytes[1] == 0xBB
-                && bytes[2] == 0xBF;
-        }
+        private static DataContractJsonSerializerSettings CreateSettings() => new DataContractJsonSerializerSettings { UseSimpleDictionaryFormat = true };
     }
 }

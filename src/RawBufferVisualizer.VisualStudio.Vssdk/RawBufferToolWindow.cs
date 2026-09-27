@@ -13,6 +13,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public RawBufferToolWindow()
             : base(null)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             Caption = "Raw Buffer Visualizer";
             _control = new RawBufferToolWindowControl();
             Content = _control;
@@ -38,6 +39,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             _control.ScanLocals();
+        }
+
+        public void NotifyDebuggerPaused()
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _control.NotifyDebuggerPaused();
         }
 
         public void ScheduleAutomaticScan()

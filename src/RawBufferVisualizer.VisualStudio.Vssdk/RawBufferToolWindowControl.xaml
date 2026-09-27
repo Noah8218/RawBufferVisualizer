@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:gl="clr-namespace:RawBufferVisualizer.OpenGlCanvas;assembly=RawBufferVisualizer.OpenGlCanvas"
              xmlns:imaging="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.Imaging"
+             xmlns:presentation="clr-namespace:RawBufferVisualizer.Presentation"
              xmlns:catalog="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.ImageCatalog"
              MinWidth="320"
              MinHeight="260"
@@ -392,38 +393,55 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel Grid.Row="0" Margin="10,10,10,6">
+                <StackPanel x:Name="AutomaticInspectionBar" Grid.Row="0" Margin="10,10,10,6">
                     <WrapPanel>
-                        <CheckBox x:Name="AutoInspectBox"
-                                  Content="Auto Inspect on Break"
-                                  IsChecked="True"
-                                  Foreground="{StaticResource TextBrush}"
-                                  VerticalAlignment="Center"
-                                  ToolTip="Refresh image-like locals and arguments on Break. This choice is saved; the Tool Window is never forced open."
-                                  AutomationProperties.Name="Automatic Vision Inspector"
-                                  AutomationProperties.AutomationId="AutomaticVisionAutoInspectCheckBox"
-                                  Checked="AutoInspectBox_Changed"
-                                  Unchecked="AutoInspectBox_Changed"/>
+                        <Grid MaxWidth="{Binding ActualWidth, ElementName=AutomaticInspectionBar}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <CheckBox x:Name="AutoInspectBox"
+                                      IsChecked="True"
+                                      Foreground="{StaticResource TextBrush}"
+                                      VerticalAlignment="Center"
+                                      ToolTip="Refresh image-like locals and arguments on Break. This choice is saved; the Tool Window is never forced open."
+                                      AutomationProperties.Name="Automatic Vision Inspector"
+                                      AutomationProperties.AutomationId="AutomaticVisionAutoInspectCheckBox"
+                                      Checked="AutoInspectBox_Changed"
+                                      Unchecked="AutoInspectBox_Changed">
+                                <TextBlock Text="Auto Inspect on Break" TextWrapping="Wrap"/>
+                            </CheckBox>
+                            <Button x:Name="AutomaticHelpButton" Grid.Column="1"
+                                    Margin="4,0,0,0" Padding="3" MinWidth="24" Width="24" Height="24" VerticalAlignment="Center"
+                                    AutomationProperties.Name="Automatic inspection help"
+                                    AutomationProperties.AutomationId="AutomaticVisionHelpButton"
+                                    ToolTipService.InitialShowDelay="250"
+                                    Click="AutomaticHelp_Click" PreviewKeyDown="AutomaticHelp_PreviewKeyDown">
+                                <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.StatusHelp}" Width="16" Height="16"/>
+                                <Button.ToolTip>
+                                    <ToolTip x:Name="AutomaticHelpTip" StaysOpen="False" MaxWidth="340"
+                                             Background="{DynamicResource PanelBrush}" Foreground="{DynamicResource TextBrush}">
+                                        <StackPanel>
+                                            <TextBlock Text="Automatic inspection" FontWeight="SemiBold"/>
+                                            <TextBlock Text="Refresh image-like locals and arguments when the debugger pauses. This choice is saved. Scan Now works while paused, even with Auto Inspect off."
+                                                       Margin="0,5,0,0" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="AutomaticFrameText" Text="{Binding Frame}" Margin="0,8,0,0"
+                                                       FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="AutomaticScanStatusText" Text="{Binding Details}" Margin="0,5,0,0"
+                                                       FontSize="11" TextWrapping="Wrap"/>
+                                        </StackPanel>
+                                    </ToolTip>
+                                </Button.ToolTip>
+                            </Button>
+                        </Grid>
                         <Button x:Name="ScanNowButton"
+                                IsEnabled="{Binding CanScan}"
                                 Content="Scan Now"
                                 Margin="6,0,0,0"
                                 ToolTip="Scan the current stack frame without waiting for another break"
                                 AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
                                 Click="ScanNow_Click"/>
                     </WrapPanel>
-                    <TextBlock x:Name="AutomaticFrameText"
-                               Text="Current stack frame"
-                               Margin="0,6,0,0"
-                               FontFamily="Consolas"
-                               FontSize="11"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               TextWrapping="Wrap"/>
-                    <TextBlock x:Name="AutomaticScanStatusText"
-                               Text="Automatic inspection is ready."
-                               Margin="0,3,0,0"
-                               FontSize="11"
-                               Foreground="{StaticResource MutedTextBrush}"
-                               TextWrapping="Wrap"/>
                     <TextBlock x:Name="AutomaticCandidateCountText"
                                Visibility="Collapsed"
                                Margin="0,5,0,0"
@@ -694,10 +712,7 @@
                     <TextBlock Text="Line" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <TextBlock x:Name="LineProfileText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
 
-                    <TextBlock Text="Histogram" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
-                    <Border Height="110" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Background="{StaticResource InputBrush}">
-                        <Canvas x:Name="HistogramCanvas" Margin="8"/>
-                    </Border>
+                    <presentation:HistogramView x:Name="HistogramPanel" Margin="0,14,0,0" Background="{DynamicResource InputBrush}"/>
 
                     <TextBlock Text="Display Range" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold" ToolTip="Display black/white range. Raw data is not changed." Visibility="Collapsed"/>
                     <Grid Visibility="Collapsed">
@@ -841,6 +856,7 @@
                 <TabControl x:Name="CompactInspectorTabs">
                     <TabItem Header="Pixel">
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel>
                             <Grid Margin="4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1.1*"/>
@@ -867,6 +883,8 @@
                                     <TextBlock x:Name="CompactMarkerText" AutomationProperties.AutomationId="CompactMarkerText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="38"/>
                                 </StackPanel>
                             </Grid>
+                            <presentation:HistogramView x:Name="CompactHistogramPanel" Margin="4,12,4,4" Background="{DynamicResource InputBrush}"/>
+                            </StackPanel>
                         </ScrollViewer>
                     </TabItem>
                     <TabItem Header="Range" Visibility="Collapsed">
@@ -1029,6 +1047,8 @@
         <Border Grid.Row="3" Height="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
             <DockPanel LastChildFill="True">
                 <TextBlock x:Name="StatusText"
+                           Text="{Binding Status}" ToolTip="{Binding StatusDetails}"
+                           AutomationProperties.LiveSetting="Polite"
                            AutomationProperties.AutomationId="StatusText"
                            DockPanel.Dock="Right"
                            Width="220"

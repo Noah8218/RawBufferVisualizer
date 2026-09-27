@@ -43,7 +43,11 @@ namespace RawBufferVisualizer.VisualStudio.Classic
             {
                 var objectProvider2 = objectProvider as IVisualizerObjectProvider2
                     ?? throw new NotSupportedException("The Visual Studio object provider does not support JSON data.");
-                var summary = objectProvider2.GetDeserializableObject()
+                var dte = VisualStudioInstance.GetDte(visualStudioProcessId)
+                    ?? throw new InvalidOperationException("The hosting Visual Studio solution context is unavailable.");
+                var mappings = TypeMappingStore.ForSolution(VisualStudioInstance.GetSolutionPath(dte)).ExportEffectiveMappings();
+                var summary = objectProvider2.TransferDeserializableObject(
+                        new VisualizerCollectionItemRequest { Operation = VisualizerCollectionOperation.ConfigureMappings, Mappings = mappings })
                     .ToObject<VisualizerCollectionSummary>()
                     ?? throw new InvalidDataException("The debugger visualizer returned no collection summary.");
 

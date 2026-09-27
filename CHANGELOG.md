@@ -2,9 +2,34 @@
 
 This file records user-visible Raw Buffer Visualizer changes. The Tool Window shows a concise one-time summary for each installed version; the complete history remains available here.
 
-## [Unreleased]
+## [2.1.0] - 2026-09-15
 
-No post-`2.0.9` changes are queued.
+Source changes for inspection, pixel correctness, mapping/save and histograms, including the 2.0.9 fixes below. This entry does not establish Marketplace availability or installed-IDE qualification.
+
+### Fixed
+
+- Updates paused/running/session-ended status independently of the Auto Inspect preference, clears stale session information and enables manual scanning only while paused and idle.
+- Clears transient panel/action notices on state changes without clearing real image errors; closing What's New no longer leaves its old notice covering subsequent debugger status.
+- Corrects Bitmap signed stride, indexed palettes and alpha semantics across import/debugger paths; corrects sampled Bayer colors, Float32 source-consistent scaling, numeric readout precision and stable raw-value statistics.
+- Processes cancellation and debugger transitions during automatic discovery, bounds failed member attempts and prevents cancelled discovery from poisoning the cache or overwriting newer results.
+- Follows the current solution for mapping lookup, respects assembly identity and protects against corrupt, unsupported or concurrently changed mapping files.
+
+### Added and improved
+
+- Reclaims Images space by moving persistent frame/help paragraphs into the question-mark help beside Auto Inspect while retaining visible status and scan errors.
+- Adds raw-value histograms for supported scalar/Bayer/file/live sources, color-channel selection, explicit full/sample coverage, non-finite counts and cancellable background calculation.
+- Adds visible mapping scope/destination and bounded asynchronous snapshot saving with progress, cancellation and failure-safe preservation of existing snapshots.
+- Removes the Float32 renderer's temporary per-pixel byte-array allocation. No universal timing guarantee is implied.
+
+### Standalone application
+
+- Adds explicit RAW setup/validation, an empty-state example, accessible document selection/closing, duplicate activation, readable diagnostics, export outcomes and histogram explanations.
+- Replaces stale normal diagnostics with current file-read errors and supports Refresh recovery after an open RAW file is restored.
+- These standalone changes belong to the separate application and are not an additional application installed by the VSIX.
+
+### Included 2.0.9 corrections
+
+- Checked live reads for pointer-backed images at or above 8 MiB; final-row ROI spans; stable technical RPC diagnostics; refreshed matching error rows; and preserved pinned registered opens. The detailed 2.0.9 entry follows.
 
 ## [2.0.9] - 2026-09-12
 
@@ -53,8 +78,6 @@ Raw Buffer Visualizer `2.0.8` corrects the Visual Studio 2022 debugger payload p
 ## [2.0.7] - 2026-09-03
 
 Raw Buffer Visualizer `2.0.7` adds signed 32-bit, one-channel matrix visualization for segmentation labels, integer result maps, and other `CV_32SC1`-style buffers.
-
-Release status: public but superseded by `2.0.8`. The published VSIX contains a stale `netstandard2.0` debugger ObjectSource, so direct `CV_32SC1` visualization can fail with `Unsupported Mat type: CV_32SC1` on the Visual Studio 2022 debugger-host path even though the feature exists in source.
 
 ### Added
 
@@ -188,8 +211,6 @@ Raw Buffer Visualizer `2.0.0` adds safer 2D buffer inspection, Connect Doctor, a
 
 ## [1.0.53] - 2026-08-03
 
-Release status: published Marketplace release.
-
 ### Added
 
 - Added an **Environment** panel that checks only the supported Visual Studio host, loaded extension version, and temporary-storage writability required by the extension.
@@ -197,7 +218,7 @@ Release status: published Marketplace release.
 
 ### Improved
 
-- Large pointer-backed sampled previews now use a bounded estimate of cold storage page reads. On the restored workstation, the final regression run's first benchmark-process access completed in `0.992 s` for the dense 100k fixture and `0.692 s` for the dense 200k fixture without changing the existing five-second gate.
+- Large pointer-backed sampled previews use a bounded estimate of storage page reads.
 - Contributor and demo-media utilities remain documented in the development prerequisites instead of being presented as product runtime requirements.
 - Selecting **Environment** again closes the panel; the redundant in-panel **Close** action was removed.
 - Selecting **What's New** again closes the release highlights. **Dismiss** still records the version as seen, while a simple toggle close does not change that saved preference.
@@ -217,8 +238,6 @@ Release status: published Marketplace release.
 
 ## [1.0.52] - 2026-08-02
 
-Release status: locally qualified development candidate. Marketplace publication, propagation, and the corresponding GitHub tag/release are not complete.
-
 ### Fixed
 
 - Updated the stable Microsoft Visual Studio Extensibility SDK from `17.9.2092` to the `17.14` line so registered debugger visualizers activate on stable Visual Studio 2026 `18.x` hosts.
@@ -232,14 +251,10 @@ Release status: locally qualified development candidate. Marketplace publication
 - Hardened installed-VSIX UI automation for VS 2026 Locals virtualization by reacquiring a row after selection before clicking its debugger visualizer.
 - Carries forward the automatic Mat collection inspection and one-time release highlights prepared in the unpublished `1.0.51` candidate.
 
-### Compatibility evidence
-
-- Stable Visual Studio 2026 Community `18.8.2` (`18.8.12023.21`) passed the installed `ReleaseAnnouncement`, `AutomaticCollections`, and `MultiLibraryHybrid` core matrix: Bitmap registered handoff plus eight automatic opens produced nine documents, zero errors, one Open command, one Scan command, and zero protocol errors.
-- The original `1.0.51` candidate remains unchanged as failed evidence: its SHA-256 is `7219386F9B8C452EE6AB06AED73B7BB13AC4581547D0B47DC8E731B6797B015F`, and its registered debugger visualizer cannot activate on VS 2026 `18.8.2` because its older framework requests `ServiceHub.Host.Extensibility.Contracts, Version=17.0.0.0` while that host supplies `18.0.0.0`.
 
 ## [1.0.51] - 2026-08-01
 
-Release status: superseded local candidate. It was never published because stable Visual Studio 2026 runtime qualification failed.
+Not released: Visual Studio 2026 activation failed; use the later source line.
 
 ### Added
 
@@ -271,7 +286,7 @@ Release status: superseded local candidate. It was never published because stabl
 - New and selected images remain in aspect-correct Fit mode; manual zoom and pan are preserved.
 - Visual Studio package and View-menu registration checks reject duplicate or retired registrations.
 
-The public Marketplace `1.0.50.0` package was built before automatic Mat collection expansion and the in-product release-highlights banner. Those changes were first prepared in unpublished `1.0.51` and are carried into candidate `1.0.52`.
+Automatic Mat collection expansion and the release-highlights banner are included in the later 1.0.52 source line.
 
 ## [1.0.49] - 2026-07-29
 
@@ -302,24 +317,3 @@ This release was superseded by `1.0.49` after an external upgraded Visual Studio
 ### Improved
 
 - Smart Type Mapper became the explicit fallback for ambiguous compatible company-specific wrappers.
-
-[Unreleased]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.9...HEAD
-[2.0.9]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.8...v2.0.9
-[2.0.8]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.7...v2.0.8
-[2.0.7]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.6...v2.0.7
-[2.0.6]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.5...v2.0.6
-[2.0.5]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.4...v2.0.5
-[2.0.4]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.3...v2.0.4
-[2.0.3]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.2...v2.0.3
-[2.0.2]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.1...v2.0.2
-[2.0.1]: https://github.com/Noah8218/RawBufferVisualizer/compare/v2.0.0...v2.0.1
-[2.0.0]: https://github.com/Noah8218/RawBufferVisualizer/compare/v1.0.53...v2.0.0
-[1.0.53]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.53
-[1.0.52]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.52
-[1.0.51]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.51
-[1.0.50]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.50
-[1.0.49]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.49
-[1.0.48]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.48
-[1.0.47]: https://github.com/Noah8218/RawBufferVisualizer/releases/tag/v1.0.47
-
-The version links above are release targets used by the tag workflow. A link is expected to remain unavailable until that version's GitHub tag and Release have actually been created.
