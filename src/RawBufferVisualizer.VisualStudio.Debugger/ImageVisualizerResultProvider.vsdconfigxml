@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Configuration xmlns="http://schemas.microsoft.com/vstudio/vsdconfig/2008">
+  <ManagedComponent ComponentId="D8428D46-CF03-4C38-85D6-900B6819E46A" ComponentLevel="99900"
+                    AssemblyName="RawBufferVisualizer.VisualStudio.Debugger" Synchronized="true">
+    <Class Name="RawBufferVisualizer.VisualStudio.Debugger.ImageVisualizerResultProvider">
+      <Implements>
+        <InterfaceGroup>
+          <Filter>
+            <LanguageId RequiredValue="3F5162F8-07C6-11D3-9053-00C04FA302A1" />
+          </Filter>
+          <Interface Name="IDkmClrResultProvider" />
+          <Interface Name="IDkmClrCustomVisualizerObjectProvider" />
+        </InterfaceGroup>
+      </Implements>
+    </Class>
+  </ManagedComponent>
+</Configuration>

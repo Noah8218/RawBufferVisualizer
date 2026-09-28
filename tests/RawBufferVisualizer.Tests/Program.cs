@@ -30,6 +30,17 @@ namespace RawBufferVisualizer.Tests
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--pixel-measurement")
+                {
+                    PixelMeasurementTests.RunAll();
+                    return 0;
+                }
+                if (args.Length == 1 && args[0] == "--debugger-routing")
+                {
+                    DebuggerRoutingTests.RunAll();
+                    return 0;
+                }
+
                 if (args.Length == 1 && args[0] == "--usability")
                 {
                     UsabilityTests.RunAll();
@@ -124,6 +135,7 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                DebuggerRoutingTests.RunAll();
                 MappingSaveTests.RunAll();
                 PixelCorrectnessTests.RunAll();
                 HistogramTests.RunAll();

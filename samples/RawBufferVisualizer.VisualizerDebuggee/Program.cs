@@ -1122,6 +1122,17 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             };
             var imageObjectArray = new object[] { registrySnapshot };
             var imageSnapshotArray = new[] { registrySnapshot };
+            var imageSnapshotList = new List<RawBufferSnapshot> { registrySnapshot };
+            var emptyImageList = new List<RawBufferSnapshot>();
+            var integerList = new List<int> { 1, 2, 3 };
+            var stringList = new List<string> { "one", "two" };
+            var emptyIntegerList = new List<int>();
+            var mixedList = new List<object> { registrySnapshot, 42 };
+            var ordinaryObjectList = new List<object> { 42, "text", new object() };
+            var emptyObjectList = new List<object>();
+            var imageAfterNullList = new List<object?> { null, registrySnapshot };
+            var ordinaryDictionary = new Dictionary<string, int> { ["answer"] = 42 };
+            var imageKeyDictionary = new Dictionary<RawBufferSnapshot, int> { [registrySnapshot] = 42 };
 
             using (var primaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
             using (var secondaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
@@ -1173,6 +1184,17 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 GC.KeepAlive(imageHashtable);
                 GC.KeepAlive(imageObjectArray);
                 GC.KeepAlive(imageSnapshotArray);
+                GC.KeepAlive(imageSnapshotList);
+                GC.KeepAlive(emptyImageList);
+                GC.KeepAlive(integerList);
+                GC.KeepAlive(stringList);
+                GC.KeepAlive(emptyIntegerList);
+                GC.KeepAlive(mixedList);
+                GC.KeepAlive(ordinaryObjectList);
+                GC.KeepAlive(emptyObjectList);
+                GC.KeepAlive(imageAfterNullList);
+                GC.KeepAlive(ordinaryDictionary);
+                GC.KeepAlive(imageKeyDictionary);
                 GC.KeepAlive(primaryBitmap);
                 GC.KeepAlive(secondaryBitmap);
                 GC.KeepAlive(primaryOpenCvMat);
@@ -1260,11 +1282,13 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             Cressem.ImageModel.ImagePtr largeImagePtr,
             bool shouldBreak)
         {
+            var largeImageCollection = new List<object> { largeOpenCvMat, largeEmguMat };
             if (shouldBreak)
             {
                 Debugger.Break();
             }
 
+            GC.KeepAlive(largeImageCollection);
             GC.KeepAlive(largeOpenCvMat);
             GC.KeepAlive(largeEmguMat);
             GC.KeepAlive(largeImagePtr);

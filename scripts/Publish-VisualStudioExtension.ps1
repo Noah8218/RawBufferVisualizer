@@ -386,6 +386,11 @@ function Assert-HybridVssdkRegistration {
     if (-not $sourceManifest.Contains('Path="RawBufferVisualizer.VisualStudio.Vssdk.pkgdef"')) {
         throw "Source VSIX manifest must reference the isolated VSSDK pkgdef: $SourceManifestPath"
     }
+    foreach ($manifestText in @($sourceManifest, $generatedManifest)) {
+        if ($manifestText -notmatch 'Type="DebuggerEngineExtension"\s+Path="RawBufferVisualizer\.VisualStudio\.Debugger\.vsdconfig"') {
+            throw 'VSIX manifest must register the debugger routing component.'
+        }
+    }
 }
 
 if ($ViewerFramework -ne 'net472') {
@@ -468,6 +473,9 @@ $requiredEntries = @(
     'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef',
     'OutOfProc/RawBufferVisualizer.VisualStudio.Extensibility.dll',
     'RawBufferVisualizer.VisualStudio.Vssdk.dll',
+    'RawBufferVisualizer.VisualStudio.Classic.dll',
+    'RawBufferVisualizer.VisualStudio.Debugger.dll',
+    'RawBufferVisualizer.VisualStudio.Debugger.vsdconfig',
     'RawBufferVisualizer.OpenGlCanvas.dll',
     'netstandard2.0/RawBufferVisualizer.Core.dll',
     'netstandard2.0/RawBufferVisualizer.Sdk.dll',
@@ -501,8 +509,18 @@ foreach ($payloadName in @(
     }
 }
 
-if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Classic.dll') {
-    throw 'VSIX must not contain the obsolete Classic debugger visualizer assembly.'
+foreach ($payload in @(
+    @{ Project = 'RawBufferVisualizer.VisualStudio.Classic'; Name = 'RawBufferVisualizer.VisualStudio.Classic.dll' },
+    @{ Project = 'RawBufferVisualizer.VisualStudio.Debugger'; Name = 'RawBufferVisualizer.VisualStudio.Debugger.dll' },
+    @{ Project = 'RawBufferVisualizer.VisualStudio.Debugger'; Name = 'RawBufferVisualizer.VisualStudio.Debugger.vsdconfig' }
+)) {
+    $builtPath = Join-Path $buildRoot "bin\$($payload.Project)\$Configuration\net472\$($payload.Name)"
+    Assert-FileExists -Path $builtPath -Message 'Fresh debugger routing payload was not found'
+    $builtHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $builtPath).Hash
+    $packagedHash = Get-VsixEntrySha256 -Path $vsixPath -EntryName $payload.Name
+    if (-not [string]::Equals($builtHash, $packagedHash, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "VSIX contains a stale debugger routing payload: $($payload.Name). Built SHA-256 $builtHash; packaged SHA-256 $packagedHash."
+    }
 }
 
 if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef') {
@@ -517,7 +535,6 @@ if ($packagedVersion -ne $sourceVersion) {
 }
 
 Get-ChildItem -LiteralPath $buildOutput -Force |
-    Where-Object { $_.Name -ne 'RawBufferVisualizer.VisualStudio.Classic.dll' } |
     Copy-Item -Destination $publishDir -Recurse -Force
 
 $readmePath = Join-Path $publishDir 'README.txt'

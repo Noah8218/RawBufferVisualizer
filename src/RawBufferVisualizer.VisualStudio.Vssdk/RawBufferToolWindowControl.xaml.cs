@@ -60,6 +60,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private readonly SnapshotExportOperation _snapshotExport = new SnapshotExportOperation();
         private readonly HistogramViewModel _histogram = new HistogramViewModel();
         private readonly AutomaticInspectionStatusViewModel _inspectionStatus = new AutomaticInspectionStatusViewModel();
+        private readonly PixelMeasurementViewModel _measurement = new PixelMeasurementViewModel();
         private bool _savingSnapshot;
         private bool _disposed;
         private LayoutMode _layoutMode = LayoutMode.Unknown;
@@ -154,6 +155,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             AutomaticInspectionBar.DataContext = _inspectionStatus;
             AutomaticHelpTip.DataContext = _inspectionStatus;
             StatusText.DataContext = _inspectionStatus;
+            MeasurementCommands.DataContext = _measurement;
+            MeasurementStatusText.DataContext = _measurement;
+            _measurement.PropertyChanged += Measurement_PropertyChanged;
             HistogramPanel.DataContext = _histogram;
             CompactHistogramPanel.DataContext = _histogram;
             ApplyVisualStudioTheme();
@@ -1365,11 +1369,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var opened = openedDocument != null
                 && !openedDocument.IsError
                 && !openAddedErrorDocument
-                && string.Equals(
-                    Path.GetFullPath(openedDocument.DisplayPath),
-                    expectedDisplayPath,
-                    StringComparison.OrdinalIgnoreCase)
-                && openedDocument.IsPreview == request.IsPreview;
+                && ((request.IsPreview && !openedDocument.IsPreview)
+                    || (string.Equals(
+                        Path.GetFullPath(openedDocument.DisplayPath),
+                        expectedDisplayPath,
+                        StringComparison.OrdinalIgnoreCase)
+                        && openedDocument.IsPreview == request.IsPreview));
             if (opened)
             {
                 return ClaimedHandoffOpenResult.Success();
@@ -1426,11 +1431,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 fullPath = Path.GetFullPath(path);
+                var existingDocument = FindHandoffDocument(handoffId);
+                if (isPreview && existingDocument != null && !existingDocument.IsPreview && !existingDocument.IsError)
+                {
+                    VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(fullPath);
+                    return;
+                }
                 SetTransientStatus("Opening " + Path.GetFileName(fullPath));
                 var reference = RawBufferSnapshot.LoadReference(fullPath);
                 var source = CreateImageSource(reference.RawPath, reference.Descriptor, reference.RawByteLength);
                 var resolvedSourceType = string.IsNullOrWhiteSpace(sourceType) ? "Raw snapshot" : sourceType!;
-                var existingDocument = FindHandoffDocument(handoffId);
                 if (existingDocument != null)
                 {
                     var wasActive = ReferenceEquals(_activeDocument, existingDocument);
@@ -1576,6 +1586,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _disposed = true;
             _snapshotExport.Dispose();
             _histogram.Dispose();
+            _measurement.PropertyChanged -= Measurement_PropertyChanged;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _performanceTimer.Stop();
             _blinkTimer.Stop();
@@ -2920,6 +2931,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 ImageList.SelectedItem = document;
+                ImageList.UpdateLayout();
+                ImageList.ScrollIntoView(document);
             }
             finally
             {
@@ -2969,6 +2982,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void RenderActiveDocument()
         {
+            _measurement.SetImageSize(0, 0);
             HideErrorPanel();
             DiagnosticsList.Items.Clear();
             _histogram.SetSource(null);
@@ -3029,6 +3043,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var viewState = GetViewStateForRender(_activeDocument);
                 OpenGlImageView.ResetRenderStats();
                 OpenGlImageView.LoadRawImageSource(_activeDocument.Source);
+                _measurement.SetImageSize(_activeDocument.Descriptor.Width, _activeDocument.Descriptor.Height, _activeDocument.IsPreview);
                 UpdateLevelsControls();
                 ApplyRestoredView(viewState);
                 UpdatePerformanceText();
@@ -4038,8 +4053,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateStatus();
         }
 
+        private void Measurement_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            var start = _measurement.Start;
+            var end = _measurement.End;
+            OpenGlImageView.SetMeasurementOverlay(start == null ? (Point?)null : new Point(start.Item1, start.Item2),
+                end == null ? (Point?)null : new Point(end.Item1, end.Item2));
+        }
+
         private void OpenGlImageView_PixelSelected(object? sender, RawOpenGlPixelEventArgs e)
         {
+            _measurement.SelectCommand.Execute(Tuple.Create(e.X, e.Y));
             if (_activeDocument == null
                 || e.X < 0
                 || e.Y < 0
@@ -4257,6 +4281,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ClearDocumentPresentation()
         {
+            _measurement.SetImageSize(0, 0);
             OpenGlImageView.ClearImage();
             UpdateAutomaticInspectionPanel(null);
             ClearDiagnosisPresentation();
@@ -4937,6 +4962,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var hasActiveImage = _activeDocument != null
                 && !_activeDocument.IsError
                 && !_activeDocument.IsSourceUnavailable;
+            if (!hasActiveImage && _measurement.CanMeasure) _measurement.SetImageSize(0, 0);
             ClearButton.IsEnabled = _documents.Count > 0;
             SaveVisiblePngButton.IsEnabled = hasActiveImage;
             FitButton.IsEnabled = hasActiveImage;

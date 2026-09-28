@@ -6,6 +6,7 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\AutomaticInspectionStatusViewModel.cs" Link="AutomaticInspectionStatusViewModel.cs" />
     <ProjectReference Include="..\..\samples\Cressem.ImageModel.TestFixture\Cressem.ImageModel.TestFixture.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.BitmapAdapter\RawBufferVisualizer.BitmapAdapter.csproj" />

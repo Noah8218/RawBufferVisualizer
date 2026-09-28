@@ -1,4 +1,4 @@
-Raw Buffer Visualizer 2.2.0
+# Raw Buffer Visualizer 2.2.0
 
 - Opens supported image variables directly in the docked viewer without displaying an auxiliary Raw Buffer visualizer dialog.
 - Gives Raw Buffer priority for recognized image collections while retaining the usual visualizer for non-image collections such as List<int>. The menu uses the product name without Direct or test labels.

@@ -5,7 +5,9 @@ using System.IO;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
+using RawBufferVisualizer.Core;
 
+#if !DYNAMIC_VISUALIZER_REGISTRATION
 [assembly: DebuggerVisualizer(
     typeof(RawBufferVisualizer.VisualStudio.Classic.RawBufferClassicDebuggerVisualizer),
     typeof(RawBufferSnapshotVisualizerObjectSource),
@@ -66,6 +68,7 @@ using RawBufferVisualizer.VisualStudio.ObjectSource;
     typeof(ImagePtrVisualizerObjectSource),
     TargetTypeName = "Cressem.ImageModel.ImagePtr, Cressem.ImageModel, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
     Description = "Raw Buffer Visualizer")]
+#endif
 
 namespace RawBufferVisualizer.VisualStudio.Classic
 {
@@ -73,16 +76,24 @@ namespace RawBufferVisualizer.VisualStudio.Classic
     {
         private const string CommandSetGuid = "{8e7bc2db-12a4-4f45-8f5a-38c1846a0f26}";
         private const int ShowToolWindowCommandId = 0x0100;
+        private readonly Action<int> _wakeDockedToolWindow;
 
         public RawBufferClassicDebuggerVisualizer()
+            : this(WakeDockedToolWindow)
+        {
+        }
+
+        internal RawBufferClassicDebuggerVisualizer(Action<int> wakeDockedToolWindow)
             : base(FormatterPolicy.NewtonsoftJson)
         {
+            _wakeDockedToolWindow = wakeDockedToolWindow ?? throw new ArgumentNullException(nameof(wakeDockedToolWindow));
         }
 
         protected override void Show(
             IDialogVisualizerService windowService,
             IVisualizerObjectProvider objectProvider)
         {
+            // This entry transfers data only. Calling windowService would create the unwanted helper UI.
             var visualStudioProcessId = Process.GetCurrentProcess().Id;
             var displayName = "Raw buffer";
             var sourceType = "Debugger visualizer";
@@ -101,25 +112,68 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                 displayName = string.IsNullOrWhiteSpace(metadata.DisplayName)
                     ? GetShortTypeName(sourceType)
                     : metadata.DisplayName;
-                metadataPath = VisualizerSnapshotStore.WriteSnapshot(
-                    metadata,
-                    request => objectProvider2.TransferDeserializableObject(request)
-                        .ToObject<VisualizerSnapshotChunk>()
-                        ?? throw new InvalidDataException("The debugger visualizer returned an invalid chunk."));
+                var handoffId = Guid.NewGuid().ToString("N");
+                if (metadata.BufferLength >= 64L * 1024 * 1024)
+                {
+                    try
+                    {
+                        var preview = objectProvider2.TransferDeserializableObject(new VisualizerSnapshotChunkRequest
+                        {
+                            Operation = VisualizerSnapshotOperation.Preview,
+                            MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
+                            MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
+                        }).ToObject<VisualizerSnapshotTransfer>();
+                        if (preview?.Descriptor != null && preview.Buffer != null
+                            && preview.Descriptor.Width > 0 && preview.Descriptor.Height > 0
+                            && preview.Buffer.LongLength >= preview.Descriptor.GetRequiredByteCount())
+                        {
+                            var directory = VisualStudioTempStore.CreateSnapshotDirectory();
+                            try
+                            {
+                                var previewPath = Path.Combine(directory, "preview.rbuf.json");
+                                File.WriteAllBytes(RawBufferSnapshot.SaveMetadata(previewPath, preview.Descriptor), preview.Buffer);
+                                requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
+                                    visualStudioProcessId, previewPath, displayName,
+                                    sourceType + " (sampled preview of " + metadata.Descriptor.Width + "x" + metadata.Descriptor.Height + ")",
+                                    handoffId, true, metadata.ProcessId, metadata.BufferAddress,
+                                    metadata.SourcePointerAddress, metadata.SourcePointerLabel,
+                                    metadata.ExpressionIdentityHash, metadata.ExpressionSourceType));
+                            }
+                            catch
+                            {
+                                VisualStudioTempStore.TryDeleteDirectory(directory);
+                                throw;
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Trace.WriteLine("Raw Buffer Visualizer sampled preview unavailable: " + ex.Message);
+                    }
+                }
 
-                requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
-                    visualStudioProcessId,
-                    metadataPath,
-                    displayName,
-                    sourceType,
-                    null,
-                    false,
-                    metadata.ProcessId,
-                    metadata.BufferAddress,
-                    metadata.SourcePointerAddress,
-                    metadata.SourcePointerLabel,
-                    metadata.ExpressionIdentityHash,
-                    metadata.ExpressionSourceType));
+                if (metadata.BufferLength >= 8L * 1024 * 1024 && metadata.SupportsDirectMemory
+                    && metadata.ProcessId > 0 && metadata.BufferAddress != 0)
+                {
+                    requestPaths.Add(VisualizerHandoffInbox.WriteLiveMemoryRequest(
+                        visualStudioProcessId, metadata.ProcessId, metadata.BufferAddress,
+                        metadata.BufferLength, metadata.Descriptor, displayName, sourceType, handoffId,
+                        metadata.SourcePointerAddress, metadata.SourcePointerLabel,
+                        metadata.ExpressionIdentityHash, metadata.ExpressionSourceType));
+                }
+                else
+                {
+                    metadataPath = VisualizerSnapshotStore.WriteSnapshot(
+                        metadata,
+                        request => objectProvider2.TransferDeserializableObject(request)
+                            .ToObject<VisualizerSnapshotChunk>()
+                            ?? throw new InvalidDataException("The debugger visualizer returned an invalid chunk."));
+                    requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
+                        visualStudioProcessId, metadataPath, displayName, sourceType, handoffId,
+                        false, metadata.ProcessId, metadata.BufferAddress,
+                        metadata.SourcePointerAddress, metadata.SourcePointerLabel,
+                        metadata.ExpressionIdentityHash, metadata.ExpressionSourceType));
+                }
             }
             catch (Exception ex)
             {
@@ -138,7 +192,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
             }
 
             ScheduleTerminalCleanup(requestPaths);
-            WakeDockedToolWindow(visualStudioProcessId);
+            _wakeDockedToolWindow(visualStudioProcessId);
         }
 
         private static string GetShortTypeName(string sourceType)
