@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.VisualStudio.Debugger.Engine" Version="17.8.1101801" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VisualStudio.Debugger.Metadata" Version="17.8.1101801" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.VSSDK.Debugger.VSDConfigTool" Version="17.8.1101801" PrivateAssets="all" />
+  </ItemGroup>
+  <ItemGroup>
+    <VsdConfigXmlFiles Include="ImageVisualizerResultProvider.vsdconfigxml" />
+  </ItemGroup>
+</Project>

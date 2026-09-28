@@ -1,30 +1,9 @@
-Raw Buffer Visualizer 2.1.0
+Raw Buffer Visualizer 2.2.0
 
-INSPECTION AND IMAGE SPACE
-- Running, paused and session-ended status updates even with Auto Inspect off. Scan Now remains available when paused and idle; captured images survive session end.
-- Temporary panel/action notices expire on state changes without clearing actual image errors.
-- Long frame/help text moves beside Auto Inspect into question-mark help. Current state and scan errors stay visible below Images.
-- Candidate discovery processes Stop and debugger state changes and rejects obsolete work. Individual debugger calls must return before cancellation can continue.
+- Opens supported image variables directly in the docked viewer without displaying an auxiliary Raw Buffer visualizer dialog.
+- Gives Raw Buffer priority for recognized image collections while retaining the usual visualizer for non-image collections such as List<int>. The menu uses the product name without Direct or test labels.
+- Adds two-point horizontal and vertical pixel measurement. Sampled previews disable measurement; full-resolution images enable it. Selecting another image clears the measurement.
+- Keeps selected image rows visible, wraps long error titles, and prevents a late sampled preview from replacing an already loaded full-resolution image.
+- Preserves checked live reads for large pointer-backed images and correct debugger byte forwarding. Live sources become unavailable when execution continues or the process exits; captured snapshots remain viewable.
 
-PIXEL ACCURACY AND HISTOGRAMS
-- Correct Bitmap signed stride, indexed palettes, premultiplied alpha and unused alpha handling.
-- Consistent Float32 scaling, precise numeric values, stable statistics and fewer temporary allocations; corrected sampled Bayer preview colors.
-- Raw-value histograms with explicit full/sample coverage and non-finite counts, RGB mean/R/G/B choices, bounded background calculation and stale-result rejection.
-
-MAPPINGS AND SNAPSHOT EXPORT
-- Visible solution/user mapping scope and destination, assembly-safe lookup and conflict-protected saves.
-- Bounded background snapshot export with progress/cancellation and preservation of existing snapshots on failure.
-
-ALSO INCLUDED: 2.0.9 FIXES
-- Pointer-backed Mat, PointerFrame and RawBufferView images at or above 8 MiB use checked live reads instead of repeated full-image debugger RPC transfer.
-- Inferred ROI spans end at the final pixel row without trailing padding. Explicit lengths and fail-closed validation are preserved.
-- Repeated matching failures refresh one technical error row with current details and a new report ID.
-- Consecutive registered opens keep the pinned docked Tool Window in place.
-- RPC errors identify operation, source/chunk, byte range when available, exception type and HRESULT; the original exception stays in the local report.
-
-Live images become UNAVAILABLE after Continue or process exit. Captured snapshots remain viewable.
-Installation targets: Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x.
-
-What's New toggles the release summary; Dismiss saves this version as seen.
-Complete notes:
-https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#210
+Installation targets remain Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x. Runtime behavior depends on the supported image type and source lifetime. Sparse object-valued collections use bounded inspection; if no image is recognized in the inspected portion, the usual collection visualizer remains available.

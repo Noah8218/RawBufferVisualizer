@@ -9,6 +9,7 @@
              MinHeight="260"
              SizeChanged="Root_SizeChanged">
     <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BooleanVisibility"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
         <SolidColorBrush x:Key="InputBrush" Color="#1E1E1E"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
@@ -238,6 +239,13 @@
                             <TextBlock x:Name="ActualSizeButtonText" Text="1:1"/>
                         </StackPanel>
                     </Button>
+                    <StackPanel x:Name="MeasurementCommands" Orientation="Horizontal">
+                        <ToggleButton x:Name="MeasureButton" Content="{Binding ModeText}" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
+                                      IsEnabled="{Binding CanMeasure}" ToolTip="{Binding MeasurementToolTip}" ToolTipService.ShowOnDisabled="True"
+                                      AutomationProperties.Name="Measure pixel distance" AutomationProperties.AutomationId="MeasureButton"/>
+                        <Button Content="Clear" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
+                                AutomationProperties.Name="Clear measurement" AutomationProperties.AutomationId="ClearMeasurementButton"/>
+                    </StackPanel>
                     <Border Width="1" Height="20" Background="{StaticResource BorderBrush}" Margin="0,2,6,2"/>
                     <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
                     <CheckBox x:Name="SelectionOverlayBox" Content="Selection" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="8,0,0,0" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"/>
@@ -635,7 +643,7 @@
                         BorderBrush="#C94B4B"
                         BorderThickness="1">
                     <StackPanel>
-                        <TextBlock Text="Image could not be visualized" FontSize="16" FontWeight="SemiBold"/>
+                        <TextBlock Text="Image could not be visualized" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
                         <TextBlock x:Name="ErrorIdText" Margin="0,5,0,0" Foreground="#F48771" FontFamily="Consolas" FontSize="11"/>
                         <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
                         <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
@@ -1044,7 +1052,7 @@
             </Border>
         </Grid>
 
-        <Border Grid.Row="3" Height="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
+        <Border Grid.Row="3" MinHeight="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
             <DockPanel LastChildFill="True">
                 <TextBlock x:Name="StatusText"
                            Text="{Binding Status}" ToolTip="{Binding StatusDetails}"
@@ -1068,7 +1076,20 @@
                            FontSize="11"
                            TextTrimming="CharacterEllipsis"
                            AutomationProperties.AutomationId="TempUsageText"/>
+                <Grid>
+                <TextBlock x:Name="MeasurementStatusText" Text="{Binding Status}" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource StatusTextBrush}"
+                           AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="MeasurementStatusText"/>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <StackPanel.Style>
+                        <Style TargetType="StackPanel">
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsChecked, ElementName=MeasureButton}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </StackPanel.Style>
                     <TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MinWidth="76"/>
                     <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>
 
@@ -1110,6 +1131,7 @@
                     <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>
                     <TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MaxWidth="170" TextTrimming="CharacterEllipsis"/>
                 </StackPanel>
+                </Grid>
             </DockPanel>
         </Border>
     </Grid>

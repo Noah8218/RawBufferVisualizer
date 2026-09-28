@@ -65,6 +65,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private Point? _pinnedMarker;
         private Point? _selectedPixel;
         private Point? _hoverPixel;
+        private Point? _measurementStart;
+        private Point? _measurementEnd;
         private bool _selectionOverlayEnabled = true;
         private long _imageGeneration;
         private long _renderOptionsGeneration;
@@ -469,6 +471,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _pinnedMarker = null;
             _selectedPixel = null;
             _hoverPixel = null;
+            _measurementStart = null;
+            _measurementEnd = null;
             HidePixelOverlay();
             InvokePixelEvent(PixelHovered, new RawOpenGlPixelEventArgs(-1, -1));
             InvokePixelEvent(PixelSelected, new RawOpenGlPixelEventArgs(-1, -1));
@@ -569,6 +573,13 @@ namespace RawBufferVisualizer.OpenGlCanvas
         {
             _selectedPixel = null;
             InvokePixelEvent(PixelSelected, new RawOpenGlPixelEventArgs(-1, -1));
+            RequestRender();
+        }
+
+        public void SetMeasurementOverlay(Point? start, Point? end)
+        {
+            _measurementStart = start;
+            _measurementEnd = end;
             RequestRender();
         }
 
@@ -816,6 +827,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                     }
                     DrawSelectionOverlay(gl);
                     DrawPinnedMarker(gl);
+                    DrawMeasurementOverlay(gl);
                     gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
                     gl.Disable(OpenGL.GL_TEXTURE_2D);
                     gl.Flush();
@@ -852,6 +864,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 }
                 DrawSelectionOverlay(gl);
                 DrawPinnedMarker(gl);
+                DrawMeasurementOverlay(gl);
                 TrimTextureCache(gl);
                 gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
                 gl.Disable(OpenGL.GL_TEXTURE_2D);
@@ -2301,6 +2314,38 @@ namespace RawBufferVisualizer.OpenGlCanvas
             gl.Vertex(x, y - radius);
             gl.Vertex(x, y + radius);
             gl.End();
+        }
+
+        private void DrawMeasurementOverlay(OpenGL gl)
+        {
+            if (!_measurementStart.HasValue || _descriptor == null || _sourceUnavailable || !TryGetViewportSize(out var width, out var height)) return;
+            var start = _measurementStart.Value;
+            var end = _measurementEnd ?? start;
+            var radius = Math.Max(_viewWidth / width, _viewHeight / height) * 6.0;
+            gl.BindTexture(OpenGL.GL_TEXTURE_2D, 0);
+            gl.Disable(OpenGL.GL_TEXTURE_2D);
+            // Outline remains visible against both bright and dark image pixels.
+            for (var pass = 0; pass < 2; pass++)
+            {
+                gl.LineWidth(pass == 0 ? 4.0f : 2.0f);
+                var shade = pass == 0 ? 0.0f : 1.0f;
+                gl.Color(shade, shade, shade, 1.0f);
+                gl.Begin(OpenGL.GL_LINES);
+                gl.Vertex(start.X + 0.5, start.Y + 0.5);
+                gl.Vertex(end.X + 0.5, end.Y + 0.5);
+                gl.Vertex(start.X + 0.5 - radius, start.Y + 0.5);
+                gl.Vertex(start.X + 0.5 + radius, start.Y + 0.5);
+                gl.Vertex(start.X + 0.5, start.Y + 0.5 - radius);
+                gl.Vertex(start.X + 0.5, start.Y + 0.5 + radius);
+                if (_measurementEnd.HasValue)
+                {
+                    gl.Vertex(end.X + 0.5 - radius, end.Y + 0.5);
+                    gl.Vertex(end.X + 0.5 + radius, end.Y + 0.5);
+                    gl.Vertex(end.X + 0.5, end.Y + 0.5 - radius);
+                    gl.Vertex(end.X + 0.5, end.Y + 0.5 + radius);
+                }
+                gl.End();
+            }
         }
 
         private string[] GetPixelGridOverlayLines(int x, int y)
