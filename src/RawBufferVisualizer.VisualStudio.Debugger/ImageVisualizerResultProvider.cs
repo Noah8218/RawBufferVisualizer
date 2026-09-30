@@ -12,10 +12,23 @@ using Microsoft.VisualStudio.Debugger.Evaluation.ClrCompilation;
 
 namespace RawBufferVisualizer.VisualStudio.Debugger
 {
-    // Concord owns construction and dispatch. This component owns only the replacement result;
-    // the original C# provider still owns value formatting, children and editing.
+    /// <summary>
+    /// 역할: C# 이미지 평가 결과에 Classic 시각화 도우미와 확장 설치 경로를 연결한다.
+    /// 흐름: 원래 평가 결과 유지 → 확장 위치의 이미지 후보 등록 → Classic 전송 경로 위임.
+    /// 상태: 설치된 Classic DLL의 전체 이름을 캐시하고 원래 평가 결과를 보관하여 C# 공급자에 위임한다.
+    /// 연관 클래스:
+    /// - DkmSuccessEvaluationResult: 원래 결과와 교체 결과의 수명 및 호출 전달.
+    /// - ImageVisualizerTypePolicy: 이미지 타입과 소유한 ObjectSource 판별.
+    /// - RawBufferClassicDebuggerVisualizer: 단일 이미지의 Classic 진입점.
+    /// - ImageCollectionClassicDebuggerVisualizer: 이미지 컬렉션의 Classic 진입점.
+    /// </summary>
     public sealed class ImageVisualizerResultProvider : IDkmClrResultProvider, IDkmClrCustomVisualizerObjectProvider
     {
+        private const string ClassicAssemblyName = "RawBufferVisualizer.VisualStudio.Classic";
+        private const string SingleImageVisualizerTypeName = "RawBufferVisualizer.VisualStudio.Classic.RawBufferClassicDebuggerVisualizer";
+        private const string CollectionVisualizerTypeName = "RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer";
+        private static readonly Lazy<string> ClassicAssemblyIdentity = new Lazy<string>(ReadClassicAssemblyIdentity);
+
         public void GetResult(DkmClrValue value, DkmWorkList workList, DkmClrType? declaredType,
             DkmClrCustomTypeInfo? customTypeInfo, DkmInspectionContext inspectionContext,
             ReadOnlyCollection<string>? formatSpecifiers, string resultName, string? resultFullName,
@@ -45,8 +58,8 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                             {
                                 candidates.Add(DkmCustomUIVisualizerInfo.Create(0, "Raw Buffer Visualizer",
                                     "Open image in the docked Raw Buffer Visualizer", "ClrCustomVisualizerVSHost",
-                                    "RawBufferVisualizer.VisualStudio.Classic." + (collection ? "ImageCollectionClassicDebuggerVisualizer" : "RawBufferClassicDebuggerVisualizer"),
-                                    "RawBufferVisualizer.VisualStudio.Classic", DkmClrCustomVisualizerAssemblyLocation.Debuggee,
+                                    collection ? CollectionVisualizerTypeName : SingleImageVisualizerTypeName,
+                                    ClassicAssemblyIdentity.Value, DkmClrCustomVisualizerAssemblyLocation.Extension,
                                     "RawBufferVisualizer.VisualStudio.ObjectSource." + source,
                                     "RawBufferVisualizer.VisualStudio.ObjectSource"));
                             }
@@ -70,7 +83,7 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                                 new OriginalResult(success));
                         }
                     }
-                    catch (Exception ex) when (ex is DkmException || ex is ArgumentException || ex is InvalidOperationException || ex is OverflowException)
+                    catch (Exception ex) when (ex is DkmException || ex is ArgumentException || ex is InvalidOperationException || ex is OverflowException || ex is IOException || ex is BadImageFormatException)
                     {
                         // Missing/unloaded metadata must never break ordinary expression evaluation.
                         System.Diagnostics.Trace.WriteLine("Raw Buffer Visualizer candidate unavailable: " + ex.Message);
@@ -78,6 +91,13 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
 
                     completionRoutine(new DkmEvaluationAsyncResult(replacement));
                 });
+        }
+
+        private static string ReadClassicAssemblyIdentity()
+        {
+            string path = Path.Combine(Path.GetDirectoryName(typeof(ImageVisualizerResultProvider).Assembly.Location), ClassicAssemblyName + ".dll");
+            // VS indexes extension visualizers by type + Assembly.FullName, including version/culture/token.
+            return AssemblyName.GetAssemblyName(path).FullName;
         }
 
         private static bool CanPrependVisualizer(ReadOnlyCollection<DkmCustomUIVisualizerInfo>? candidates)

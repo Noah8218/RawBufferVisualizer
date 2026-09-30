@@ -2,6 +2,13 @@
 
 This file records user-visible Raw Buffer Visualizer changes. The Tool Window shows a concise one-time summary for each installed version; the complete history remains available here.
 
+## [2.2.1] - 2026-10-01
+
+- Registers the Classic visualizer as an extension-owned component so .NET Framework ObjectSource loading uses the extension installation directory.
+- Uses the installed Classic DLL's full assembly identity for Visual Studio installation-path lookup for single images and collections.
+- Checks compiled registration and debugger payload hashes during packaging to reject missing or stale loader metadata.
+- Retains 2.2.0's docked image opening, image-only collection routing and pixel measurement. Update the extension and restart Visual Studio; no manual DLL copy to the IDE's global Visualizers directory is required.
+
 ## [2.2.0] - 2026-09-28
 
 - Opens supported image variables directly in the docked viewer without displaying an auxiliary Raw Buffer visualizer dialog.

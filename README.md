@@ -18,14 +18,15 @@ Supported extension targets are Visual Studio 2022 17.9+ x64 and stable Visual S
 
 ## Source Version
 
-Current source version: **2.2.0**. The project is version-managed; [the VSIX manifest](src/RawBufferVisualizer.VisualStudio.Vssdk/source.extension.vsixmanifest) owns the installation version. Source version is distinct from the version currently available on Marketplace.
+Current source version: **2.2.1**. The project is version-managed; [the VSIX manifest](src/RawBufferVisualizer.VisualStudio.Vssdk/source.extension.vsixmanifest) owns the installation version. Source version is distinct from the version currently available on Marketplace.
 
-Version 2.2.0 opens registered images directly in the docked viewer, prioritizes image collections without replacing non-image collection viewers, and adds horizontal/vertical pixel measurement for full-resolution images.
+Version 2.2.1 corrects debugger visualizer installation-path registration and full assembly identity lookup. It retains 2.2.0's docked image opening, image-only collection routing and horizontal/vertical pixel measurement for full-resolution images.
 
 ### Recent Source History
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.2.1 | 2026-10-01 | Corrected Classic visualizer loading and package registration checks |
 | 2.2.0 | 2026-09-28 | Dialog-free image opening, image-only collection routing and pixel measurement |
 | 2.1.0 | 2026-09-15 | Inspection status, discovery responsiveness, pixel/histogram behavior and safer saves |
 | 2.0.9 | 2026-09-12 | Checked live transfer for medium native images, final-row ROI spans and pinned-view stability |
@@ -37,7 +38,7 @@ Version 2.2.0 opens registered images directly in the docked viewer, prioritizes
 | 2.0.3 | 2026-08-24 | ConcurrentDictionary visualization and first-use ImagePtr handoff |
 | 2.0.2 | 2026-08-09 | Restored VS2022 17.9+ targeting and compact controls |
 
-See [CHANGELOG](CHANGELOG.md) for details and older history, [English overview](docs/marketplace-overview-2.2.0.md), [Korean overview](docs/marketplace-overview-2.2.0.ko.md), and [2.2.0 change notes](docs/marketplace-release-notes-2.2.0.md).
+See [CHANGELOG](CHANGELOG.md) for details and older history, [English overview](docs/marketplace-overview-2.2.1.md), [Korean overview](docs/marketplace-overview-2.2.1.ko.md), and [2.2.1 change notes](docs/marketplace-release-notes-2.2.1.md).
 
 ## Build And Contribute
 

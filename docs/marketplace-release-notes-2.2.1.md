@@ -1,4 +1,4 @@
-Raw Buffer Visualizer 2.2.1
+# Raw Buffer Visualizer 2.2.1
 
 - Registers the Classic visualizer as an extension-owned component so .NET Framework ObjectSource loading uses the extension installation directory.
 - Uses the installed Classic DLL's full assembly identity for Visual Studio installation-path lookup for single images and collections.

@@ -338,6 +338,163 @@ function Assert-VisualStudioCompatibilityContract {
     }
 }
 
+function Get-CompiledInstructions {
+    param([Reflection.MethodBase]$Method)
+
+    $codes = @{}
+    foreach ($field in [Reflection.Emit.OpCodes].GetFields([Reflection.BindingFlags]'Public,Static')) {
+        if ($field.FieldType -eq [Reflection.Emit.OpCode]) {
+            $code = $field.GetValue($null)
+            $codes[[int]$code.Value -band 0xffff] = $code
+        }
+    }
+    $body = $Method.GetMethodBody()
+    if ($null -eq $body) { return }
+    $bytes = $body.GetILAsByteArray()
+    $cursor = 0
+    while ($cursor -lt $bytes.Length) {
+        $value = [int]$bytes[$cursor++]
+        if ($value -eq 0xfe) { $value = 0xfe00 -bor [int]$bytes[$cursor++] }
+        $code = $codes[$value]
+        $operand = $null
+        switch ($code.OperandType.ToString()) {
+            'InlineMethod' { $operand = $Method.Module.ResolveMethod([BitConverter]::ToInt32($bytes, $cursor)) }
+            'InlineField' { $operand = $Method.Module.ResolveField([BitConverter]::ToInt32($bytes, $cursor)) }
+            'InlineString' { $operand = $Method.Module.ResolveString([BitConverter]::ToInt32($bytes, $cursor)) }
+        }
+        [pscustomobject]@{ Code = $code.Name; Operand = $operand }
+        switch ($code.OperandType.ToString()) {
+            'InlineNone' { }
+            { $_ -in @('ShortInlineBrTarget','ShortInlineI','ShortInlineVar') } { $cursor++ }
+            'InlineVar' { $cursor += 2 }
+            { $_ -in @('InlineI8','InlineR') } { $cursor += 8 }
+            'InlineSwitch' { $cursor += 4 + 4 * [BitConverter]::ToInt32($bytes, $cursor) }
+            default { $cursor += 4 }
+        }
+    }
+}
+
+function Assert-ClassicVisualizerInstallPathContract {
+    param(
+        [string]$SourcePath,
+        [string]$SourceManifestPath,
+        [string]$GeneratedManifestPath,
+        [string]$ClassicAssemblyPath,
+        [string]$DebuggerVisualizersReferencePath,
+        [string]$DebuggerAssemblyPath,
+        [string]$EngineReferencePath,
+        [string]$MetadataReferencePath
+    )
+
+    $source = Get-Content -Raw -LiteralPath $SourcePath
+    if (-not $source.Contains('ClassicAssemblyIdentity.Value, DkmClrCustomVisualizerAssemblyLocation.Extension')) {
+        throw 'Classic candidates must use Extension location so the debuggee ObjectSource probes the VSIX installation folder. ResolveAssembly alone does not provide this path.'
+    }
+    if ($source.Contains('DkmClrCustomVisualizerAssemblyLocation.Debuggee')) {
+        throw 'The extension-owned Classic visualizer must not be registered as a debuggee assembly.'
+    }
+
+    foreach ($path in @($SourceManifestPath, $GeneratedManifestPath)) {
+        [xml]$manifest = Get-Content -Raw -LiteralPath $path
+        $assets = @($manifest.PackageManifest.Assets.Asset | Where-Object {
+            [string]$_.Type -eq 'Microsoft.VisualStudio.DotnetCustomVisualizer' -and
+            [string]$_.Path -eq 'RawBufferVisualizer.VisualStudio.Classic.dll'
+        })
+        if ($assets.Count -ne 1) {
+            throw "Exactly one Classic DotnetCustomVisualizer asset is required for installation-path lookup: $path"
+        }
+    }
+
+    # SDK packages contain reference assemblies, so inspect compiled IL without executing them.
+    [void][Reflection.Assembly]::ReflectionOnlyLoadFrom($MetadataReferencePath)
+    [void][Reflection.Assembly]::ReflectionOnlyLoadFrom($EngineReferencePath)
+    [void][Reflection.Assembly]::ReflectionOnlyLoadFrom($DebuggerVisualizersReferencePath)
+    $assemblyDirectory = Split-Path -Parent $ClassicAssemblyPath
+    $resolver = [ResolveEventHandler] {
+        param($sender, $eventArgs)
+        $name = [Reflection.AssemblyName]::new($eventArgs.Name).Name
+        $candidate = Join-Path $assemblyDirectory ($name + '.dll')
+        if (Test-Path -LiteralPath $candidate) { return [Reflection.Assembly]::ReflectionOnlyLoadFrom($candidate) }
+        return [Reflection.Assembly]::ReflectionOnlyLoad($eventArgs.Name)
+    }.GetNewClosure()
+    [AppDomain]::CurrentDomain.add_ReflectionOnlyAssemblyResolve($resolver)
+    try {
+        $debugger = [Reflection.Assembly]::ReflectionOnlyLoadFrom($DebuggerAssemblyPath)
+        $provider = $debugger.GetType('RawBufferVisualizer.VisualStudio.Debugger.ImageVisualizerResultProvider', $true)
+        $field = $provider.GetField('ClassicAssemblyIdentity', [Reflection.BindingFlags]'NonPublic,Static')
+        $reader = $provider.GetMethod('ReadClassicAssemblyIdentity', [Reflection.BindingFlags]'NonPublic,Static')
+        if ($null -eq $field -or $null -eq $reader) {
+            throw 'Compiled Classic candidate must read the full assembly identity used by VS installation-path lookup.'
+        }
+        $instructions = @(Get-CompiledInstructions -Method $reader)
+        $calls = @($instructions | Where-Object { $_.Operand -is [Reflection.MethodBase] } | ForEach-Object { $_.Operand.DeclaringType.FullName + '.' + $_.Operand.Name })
+        foreach ($required in @('System.Reflection.AssemblyName.GetAssemblyName', 'System.Reflection.AssemblyName.get_FullName', 'System.Reflection.Assembly.get_Location', 'System.IO.Path.Combine')) {
+            if ($required -notin $calls) { throw "Compiled Classic identity reader is missing $required." }
+        }
+        if ('RawBufferVisualizer.VisualStudio.Classic.dll' -notin @($instructions | ForEach-Object { $_.Operand })) {
+            throw 'Compiled candidate must read the adjacent Classic DLL rather than infer or hard-code its identity.'
+        }
+        $initializer = @(Get-CompiledInstructions -Method $provider.TypeInitializer)
+        if (@($initializer | Where-Object { $_.Code -eq 'ldftn' -and $_.Operand.Name -eq $reader.Name }).Count -ne 1 -or
+            @($initializer | Where-Object { $_.Code -eq 'stsfld' -and $_.Operand.Name -eq $field.Name }).Count -ne 1) {
+            throw 'Compiled Classic identity cache is not initialized by the DLL identity reader.'
+        }
+        $candidateReads = 0
+        foreach ($type in @($provider) + @($provider.GetNestedTypes([Reflection.BindingFlags]'Public,NonPublic'))) {
+            foreach ($method in $type.GetMethods([Reflection.BindingFlags]'Public,NonPublic,Instance,Static,DeclaredOnly')) {
+                $ops = @(Get-CompiledInstructions -Method $method)
+                $creates = @($ops | Where-Object { $_.Code -eq 'call' -and $_.Operand.DeclaringType.FullName -eq 'Microsoft.VisualStudio.Debugger.Evaluation.DkmCustomUIVisualizerInfo' -and $_.Operand.Name -eq 'Create' -and $_.Operand.GetParameters().Length -eq 9 })
+                if ($creates.Count -gt 0) {
+                    if (@($ops | Where-Object { $_.Code -eq 'ldsfld' -and $_.Operand.Name -eq $field.Name }).Count -ne 1) {
+                        throw 'Compiled owned candidate must use the full Classic identity cache.'
+                    }
+                    $candidateReads += $creates.Count
+                }
+            }
+        }
+        if ($candidateReads -ne 1) { throw 'Could not verify the compiled owned-candidate identity route.' }
+        $classic = [Reflection.Assembly]::ReflectionOnlyLoadFrom($ClassicAssemblyPath)
+        $attributes = @($classic.GetCustomAttributesData() | Where-Object { $_.AttributeType.FullName -eq 'System.Diagnostics.DebuggerVisualizerAttribute' })
+        if ($attributes.Count -ne 2) { throw 'Compiled Classic DLL must register exactly two self-targeted UI IDs for installation-path lookup.' }
+        $expected = @{
+            'RawBufferVisualizer.VisualStudio.Classic.RawBufferClassicDebuggerVisualizer' = 'RawBufferVisualizer.VisualStudio.ObjectSource.RawBufferSnapshotVisualizerObjectSource'
+            'RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer' = 'RawBufferVisualizer.VisualStudio.ObjectSource.ImageCollectionVisualizerObjectSource'
+        }
+        foreach ($attribute in $attributes) {
+            # Invoke getters explicitly: PowerShell can suppress a property-getter load failure.
+            $arguments = $attribute.GetType().GetProperty('ConstructorArguments').GetValue($attribute, $null)
+            $named = $attribute.GetType().GetProperty('NamedArguments').GetValue($attribute, $null)
+            $uiType = [string]$arguments[0].Value.FullName
+            $sourceType = [string]$arguments[1].Value.FullName
+            $target = @($named | Where-Object { $_.MemberName -eq 'Target' })
+            if (-not $expected.ContainsKey($uiType) -or $expected[$uiType] -ne $sourceType -or
+                $target.Count -ne 1 -or [string]$target[0].TypedValue.Value.FullName -ne $uiType) {
+                throw "Invalid compiled Classic installation-path registration: $uiType"
+            }
+            $expected.Remove($uiType)
+        }
+        if ($expected.Count -ne 0) { throw 'A compiled Classic UI installation-path registration is missing.' }
+    }
+    finally { [AppDomain]::CurrentDomain.remove_ReflectionOnlyAssemblyResolve($resolver) }
+}
+
+function Get-ProjectCompileReferencePath {
+    param([string]$AssetsPath, [string]$PackageName)
+
+    $assets = Get-Content -Raw -LiteralPath $AssetsPath -Encoding UTF8 | ConvertFrom-Json
+    $library = $assets.libraries.PSObject.Properties | Where-Object { $_.Name -like ($PackageName + '/*') } | Select-Object -First 1
+    foreach ($target in $assets.targets.PSObject.Properties) {
+        $dependency = $target.Value.PSObject.Properties | Where-Object { $_.Name -eq $library.Name } | Select-Object -First 1
+        if ($null -eq $dependency) { continue }
+        $reference = $dependency.Value.compile.PSObject.Properties | Where-Object { $_.Name -like ('*/' + $PackageName + '.dll') } | Select-Object -First 1
+        foreach ($folder in $assets.packageFolders.PSObject.Properties) {
+            $path = Join-Path (Join-Path $folder.Name $library.Value.path) $reference.Name
+            if (Test-Path -LiteralPath $path -PathType Leaf) { return $path }
+        }
+    }
+    throw "The restored $PackageName reference was not found: $AssetsPath"
+}
+
 function Assert-HybridVssdkRegistration {
     param(
         [string]$PkgdefPath,
@@ -466,6 +623,16 @@ Assert-HybridVssdkRegistration `
     -GeneratedManifestPath $manifestPath `
     -SourceManifestPath $sourceManifestPath
 
+Assert-ClassicVisualizerInstallPathContract `
+    -SourcePath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Debugger\ImageVisualizerResultProvider.cs') `
+    -SourceManifestPath $sourceManifestPath `
+    -GeneratedManifestPath $manifestPath `
+    -ClassicAssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Classic.dll') `
+    -DebuggerVisualizersReferencePath (Get-ProjectCompileReferencePath -AssetsPath (Join-Path $buildRoot 'intermediate\RawBufferVisualizer.VisualStudio.Classic\project.assets.json') -PackageName 'Microsoft.VisualStudio.DebuggerVisualizers') `
+    -DebuggerAssemblyPath (Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Debugger.dll') `
+    -EngineReferencePath (Get-ProjectCompileReferencePath -AssetsPath (Join-Path $buildRoot 'intermediate\RawBufferVisualizer.VisualStudio.Debugger\project.assets.json') -PackageName 'Microsoft.VisualStudio.Debugger.Engine') `
+    -MetadataReferencePath (Get-ProjectCompileReferencePath -AssetsPath (Join-Path $buildRoot 'intermediate\RawBufferVisualizer.VisualStudio.Debugger\project.assets.json') -PackageName 'Microsoft.VisualStudio.Debugger.Metadata')
+
 $entryNames = Get-VsixEntryNames -Path $vsixPath
 $requiredEntries = @(
     'extension.vsixmanifest',
@@ -529,6 +696,13 @@ if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef
 
 [xml]$packagedManifest = Get-VsixEntryText -Path $vsixPath -EntryName 'extension.vsixmanifest'
 Assert-VisualStudioCompatibilityContract -Manifest $packagedManifest
+$classicAssets = @($packagedManifest.PackageManifest.Assets.Asset | Where-Object {
+    [string]$_.Type -eq 'Microsoft.VisualStudio.DotnetCustomVisualizer' -and
+    [string]$_.Path -eq 'RawBufferVisualizer.VisualStudio.Classic.dll'
+})
+if ($classicAssets.Count -ne 1) {
+    throw 'Packaged VSIX must register the Classic DotnetCustomVisualizer installation path.'
+}
 $packagedVersion = [string]$packagedManifest.PackageManifest.Metadata.Identity.Version
 if ($packagedVersion -ne $sourceVersion) {
     throw "Packaged VSIX manifest version $packagedVersion does not match source manifest version $sourceVersion. Do not publish or install the stale VSIX."

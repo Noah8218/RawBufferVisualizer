@@ -41,9 +41,7 @@ internal static class Program
                 Console.WriteLine("Boundary: fake provider and pointer metadata; no full native read or installed IDE transfer is claimed.");
                 return 0;
             }
-            var registrations = typeof(RawBufferClassicDebuggerVisualizer).Assembly
-                .GetCustomAttributes(typeof(DebuggerVisualizerAttribute), false).Cast<DebuggerVisualizerAttribute>().ToArray();
-            Require(registrations.Length == 0, "Dynamic routing must not add static or test-only visualizer entries.");
+            VerifyInstallPathRegistrations();
 
             var mono8 = new RawBufferSnapshot(new byte[] { 1, 2, 3, 99, 4, 5, 6, 98 }, new RawImageDescriptor
             {
@@ -59,7 +57,7 @@ internal static class Program
             Verify(mono8, false, false); // Recovery after a failed chunk, using the same Show entry.
             Verify(new RawBufferSnapshot(new byte[1], mono8.Descriptor), false, true);
             Verify(packed, false, false);
-            Console.WriteLine("PASS: " + _cases + " Show cases; exact bytes/layout, error/recovery, repeated handoff, zero dialog-service calls; zero static registrations.");
+            Console.WriteLine("PASS: " + _cases + " Show cases; exact bytes/layout, error/recovery, repeated handoff, zero dialog-service calls; self-targeted install-path registrations only.");
             Console.WriteLine("Boundary: fake provider transport invokes the real ObjectSource and Show. This is not an installed Visual Studio host test.");
             return 0;
         }
@@ -95,10 +93,23 @@ internal static class Program
         public TestByteCollection(byte[] bytes) : base(bytes) { }
     }
 
+    private static void VerifyInstallPathRegistrations()
+    {
+        var registrations = typeof(RawBufferClassicDebuggerVisualizer).Assembly
+            .GetCustomAttributes(typeof(DebuggerVisualizerAttribute), false).Cast<DebuggerVisualizerAttribute>().ToArray();
+        Require(registrations.Length == 2, "Both Classic UI IDs must be registered for extension install-path lookup.");
+        foreach (var type in new[] { typeof(RawBufferClassicDebuggerVisualizer), typeof(ImageCollectionClassicDebuggerVisualizer) })
+        {
+            Require(registrations.Count(registration => registration.VisualizerTypeName == type.AssemblyQualifiedName
+                && registration.TargetTypeName == type.AssemblyQualifiedName) == 1,
+                "Install-path registrations must target only their own Classic UI class, never broad image or collection types.");
+        }
+    }
+
     private static void VerifyCollections()
     {
         var type = typeof(RawBufferClassicDebuggerVisualizer).Assembly.GetType("RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer", true)!;
-        Require(type.Assembly.GetCustomAttributes(typeof(DebuggerVisualizerAttribute), false).Length == 0, "Dynamic build must not statically register broad collection types.");
+        VerifyInstallPathRegistrations();
         var snapshot = new RawBufferSnapshot(new byte[] { 1, 2, 3 }, new RawImageDescriptor
         {
             Width = 3, Height = 1, Stride = 3, PixelFormat = RawPixelFormat.Mono8, ValidBits = 8
@@ -108,8 +119,8 @@ internal static class Program
         VerifyCollection(type, new object[] { snapshot }, snapshot, false, 1, 0);
         VerifyCollection(type, Array.Empty<object>(), snapshot, false, 0, 1);
         VerifyCollection(type, new object[] { snapshot, snapshot }, snapshot, false, 2, 0);
-        Console.WriteLine("PASS: 5 collection Show cases; mixed/null/error retention, empty collection, chunk failure/recovery, repeated handoff, exact bytes, zero dialog-service calls; zero static registrations.");
-        Console.WriteLine("Boundary: real ObjectSource and Show with fake transport/context; installed IDE behavior is verified separately.");
+        Console.WriteLine("PASS: 5 collection Show cases; mixed/null/error retention, empty collection, chunk failure/recovery, repeated handoff, exact bytes, zero dialog-service calls; self-targeted install-path registrations only.");
+        Console.WriteLine("Boundary: real ObjectSource and Show with fake transport/context; installed IDE qualification remains required.");
     }
 
     private static void VerifyCollection(Type type, object target, RawBufferSnapshot expected, bool failChunk, int successes, int errors)
