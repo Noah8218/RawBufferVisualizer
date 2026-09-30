@@ -16,6 +16,6 @@
 | Understand current user-visible behavior | [README](../README.md), [changelog](../CHANGELOG.md) |
 | Review image attribution | [Documentation image sources](industrial-image-testing.md) |
 | Review dependency and vendor boundaries | [Third-party notices](../THIRD-PARTY-NOTICES.md), [vendor policy](vendor-sdk-license-policy.md) |
-| Read the current product overview | [English](marketplace-overview-2.2.0.md), [Korean](marketplace-overview-2.2.0.ko.md) |
+| Read the current product overview | [English](marketplace-overview-2.2.1.md), [Korean](marketplace-overview-2.2.1.ko.md) |
 
 The source manifest owns the source version. Tests specify expected behavior; compilation alone does not prove installed Visual Studio behavior. Historical screenshots illustrate the established workflow and do not certify a newer binary.

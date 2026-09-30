@@ -56,7 +56,7 @@ try {
     Get-ChildItem -LiteralPath $stage -File -Recurse | ForEach-Object {
         [pscustomobject]@{ Path = $_.FullName.Substring($stage.Length + 1); SHA256 = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash }
     } | ConvertTo-Json | Set-Content -LiteralPath "$output\payload.json" -Encoding UTF8
-    Write-Output "Prepared transfer-only visualizers with no static registration: $stage. Runtime Visual Studio qualification remains required."
+    Write-Output "Prepared transfer-only visualizers with self-targeted install-path registrations: $stage. Runtime Visual Studio qualification remains required."
 }
 finally {
     $env:TEMP = $previousTemp

@@ -7,12 +7,12 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.2.0";
+        public const string CurrentVersion = "2.2.1";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#220";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#221";
 
         public const string HighlightEnvironmentCheck =
-            "Open images directly in the docked viewer without an auxiliary dialog";
+            "Fix debugger visualizer loading for images and collections";
 
         public const string HighlightColdPreview =
             "Image collections prefer Raw Buffer; non-image lists keep their usual visualizer";
