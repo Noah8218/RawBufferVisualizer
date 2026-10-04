@@ -1,4 +1,4 @@
-Raw Buffer Visualizer 2.2.3
+# Raw Buffer Visualizer 2.2.3
 
 - Clears the extension's Preview label so supported Visual Studio Marketplace searches can include it when Preview extensions are excluded.
 - Keeps the existing extension identity and the VS2022 17.9+ x64 installation contract. VS2022 17.8 and earlier remain unsupported.

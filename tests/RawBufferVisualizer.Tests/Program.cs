@@ -47,6 +47,13 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                if (args.Length == 1 && args[0] == "--release-announcement")
+                {
+                    ReleaseAnnouncementTests.RunAll();
+                    Console.WriteLine("Release announcement: 4 existing regressions passed.");
+                    return 0;
+                }
+
                 if (args.Length == 1 && args[0] == "--histogram")
                 {
                     HistogramTests.RunAll();

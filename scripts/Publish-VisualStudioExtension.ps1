@@ -308,6 +308,10 @@ function Assert-VssdkPackageLifecycleContract {
 function Assert-VisualStudioCompatibilityContract {
     param([xml]$Manifest)
 
+    if ([string]$Manifest.PackageManifest.Metadata.Preview -ne 'false') {
+        throw 'The stable VSIX must explicitly declare Preview=false so Marketplace searches that exclude Preview extensions can include it.'
+    }
+
     $installationTargets = @($Manifest.PackageManifest.Installation.InstallationTarget)
     $expectedIds = @(
         'Microsoft.VisualStudio.Community',

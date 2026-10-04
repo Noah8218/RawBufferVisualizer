@@ -18,7 +18,11 @@ Supported extension targets are Visual Studio 2022 17.9+ x64 and stable Visual S
 
 ## Source Version
 
-Current source version: **2.2.1**. The project is version-managed; [the VSIX manifest](src/RawBufferVisualizer.VisualStudio.Vssdk/source.extension.vsixmanifest) owns the installation version. Source version is distinct from the version currently available on Marketplace.
+Current source version: **2.2.3**. The project is version-managed; [the VSIX manifest](src/RawBufferVisualizer.VisualStudio.Vssdk/source.extension.vsixmanifest) owns the installation version. Source version is distinct from the version currently available on Marketplace.
+
+Version 2.2.3 clears the extension's Preview label for supported Marketplace searches that exclude Preview extensions. The installation range remains VS2022 17.9+ x64.
+
+Version 2.2.2 preserves the user-selected viewer position and tab group across image-object changes, reopening and Visual Studio layout restoration.
 
 Version 2.2.1 corrects debugger visualizer installation-path registration and full assembly identity lookup. It retains 2.2.0's docked image opening, image-only collection routing and horizontal/vertical pixel measurement for full-resolution images.
 
@@ -26,6 +30,8 @@ Version 2.2.1 corrects debugger visualizer installation-path registration and fu
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.2.3 | 2026-10-01 | Cleared Preview metadata while preserving the supported installation range |
+| 2.2.2 | 2026-10-01 | Preserved user-selected docking, floating and document-tab placement |
 | 2.2.1 | 2026-10-01 | Corrected Classic visualizer loading and package registration checks |
 | 2.2.0 | 2026-09-28 | Dialog-free image opening, image-only collection routing and pixel measurement |
 | 2.1.0 | 2026-09-15 | Inspection status, discovery responsiveness, pixel/histogram behavior and safer saves |
@@ -34,11 +40,8 @@ Version 2.2.1 corrects debugger visualizer installation-path registration and fu
 | 2.0.7 | 2026-09-03 | Signed Int32 image support; package superseded by 2.0.8 |
 | 2.0.6 | 2026-09-03 | Version progression preserving the 2.0.5 behavior |
 | 2.0.5 | 2026-09-03 | Pointer provenance, complete reads and image-array registration |
-| 2.0.4 | 2026-08-25 | Explicit full-viewer Clear all action |
-| 2.0.3 | 2026-08-24 | ConcurrentDictionary visualization and first-use ImagePtr handoff |
-| 2.0.2 | 2026-08-09 | Restored VS2022 17.9+ targeting and compact controls |
 
-See [CHANGELOG](CHANGELOG.md) for details and older history, [English overview](docs/marketplace-overview-2.2.1.md), [Korean overview](docs/marketplace-overview-2.2.1.ko.md), and [2.2.1 change notes](docs/marketplace-release-notes-2.2.1.md).
+See [CHANGELOG](CHANGELOG.md) for details and older history, [English overview](docs/marketplace-overview-2.2.3.md), [Korean overview](docs/marketplace-overview-2.2.3.ko.md), and [2.2.3 change notes](docs/marketplace-release-notes-2.2.3.md).
 
 ## Build And Contribute
 
