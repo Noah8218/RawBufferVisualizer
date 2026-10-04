@@ -20,7 +20,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     // The in-process package stays isolated from the newer out-of-process Extensibility SDK.
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [ProvideAutoLoad(UIContextGuids80.Debugging, PackageAutoLoadFlags.BackgroundLoad)]
-    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.2.1")]
+    [InstalledProductRegistration("Raw Buffer Visualizer", "Docked raw buffer image inspector", "2.2.3")]
     [ProvideBindingPath]
     [ProvideMenuResource("Menus.ctmenu", 2)]
     [ProvideToolWindow(
@@ -543,12 +543,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var frame = (IVsWindowFrame)window.Frame;
-            var dockResult = frame.SetProperty((int)__VSFPROPID.VSFPROPID_FrameMode, (int)VSFRAMEMODE.VSFM_Dock);
-            if (ErrorHandler.Failed(dockResult))
-            {
-                WriteAutomationLog("Dock request failed " + dockResult.ToString(CultureInfo.InvariantCulture));
-            }
-
             ErrorHandler.ThrowOnFailure(frame.Show());
             EnsureInboxMonitoringStarted();
             return (RawBufferToolWindow)window;

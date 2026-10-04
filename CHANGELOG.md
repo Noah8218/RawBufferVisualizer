@@ -2,6 +2,19 @@
 
 This file records user-visible Raw Buffer Visualizer changes. The Tool Window shows a concise one-time summary for each installed version; the complete history remains available here.
 
+## [2.2.3] - 2026-10-01
+
+- Clears the extension's Preview label so supported Visual Studio Marketplace searches can include it when Preview extensions are excluded.
+- Adds a package check that rejects Preview-marked source, generated and packaged manifests for stable releases.
+- Keeps the existing extension identity, VS2022 17.9+ x64 installation range and prior viewer behavior.
+
+## [2.2.2] - 2026-10-01
+
+- Keeps the user-selected docked position and tab group when another image object is visualized.
+- Preserves floating-window position and size and document-tab mode instead of forcing the viewer to dock again.
+- Reuses Visual Studio's saved editing and debugging layouts when the window is reopened or the IDE restarts; the two modes keep separate layouts.
+- Retains the 2.2.1 visualizer-loading corrections and the existing image-only collection routing and pixel measurement.
+
 ## [2.2.1] - 2026-10-01
 
 - Registers the Classic visualizer as an extension-owned component so .NET Framework ObjectSource loading uses the extension installation directory.
