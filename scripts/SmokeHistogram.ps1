@@ -144,7 +144,7 @@ function BoundResult($view,$vm) {
     Check ($view.FindName('HistogramLowerLabel').Text -eq $vm.LowerLabel -and $view.FindName('HistogramUpperLabel').Text -eq $vm.UpperLabel) 'Rendered axes match numeric labels'
     Check ($view.FindName('HistogramFrequencyScale').Text -eq $vm.FrequencyScale -and $view.FindName('HistogramAxisDescription').Text -eq $vm.AxisDescription) 'Rendered frequency and value-axis explanations match the result'
     Check ($view.FindName('HistogramSamplingDescription').Text -eq $vm.SamplingDescription -and $view.FindName('HistogramChannelDescription').Text -eq $vm.ChannelDescription) 'Rendered sampling and RGB-mean explanations follow the current source/channel'
-    $textColor=$view.FindResource('RbvTextBrush').Color
+    $textColor=$view.FindResource($(if ($view.Tag -eq 'Docked') { 'SecondaryTextBrush' } else { 'RbvTextBrush' })).Color
     Check ($view.FindName('HistogramCoverage').Foreground.Color -eq $textColor -and $view.FindName('HistogramStatus').Foreground.Color -eq $textColor) 'Optional text preserves the rendered theme foreground'
 }
 function Exercise($window,$view,$vm,$hostName) {
@@ -159,14 +159,27 @@ function Exercise($window,$view,$vm,$hostName) {
     $combo.SelectedIndex=2; Done $vm
     Check ($vm.SelectedChannelIndex -eq 2 -and $vm.Result.Minimum -eq 30) "$hostName view-to-model G selection"
     # A real click grants foreground input to the isolated host before keyboard input.
-    Click $combo; Check $combo.IsDropDownOpen "$hostName pointer opens channel popup"; Capture $window "$hostName-channel-popup"
-    Key 0x1B; Check (-not $combo.IsDropDownOpen) "$hostName Escape closes popup"
-    $combo.Focus()|Out-Null; Pump
-    Check $combo.IsKeyboardFocused "$hostName channel receives keyboard focus"
-    Key 0x73; Check $combo.IsDropDownOpen "$hostName keyboard opens channel popup"
-    Key 0x28; Key 0x0D; Done $vm
-    Check ($vm.SelectedChannelIndex -eq 3 -and $vm.Result.Minimum -eq 90) "$hostName keyboard B selection"
-    $button.Focus()|Out-Null; Key 0x09; Check $combo.IsKeyboardFocused "$hostName Tab moves from action to channel"
+    if ($view.Tag -eq 'Docked') {
+        $segments=$combo.Template.FindName('SegmentList',$combo)
+        Click $segments.ItemContainerGenerator.ContainerFromIndex(1); Done $vm
+        Check ($combo.SelectedIndex -eq 1 -and $vm.Result.Minimum -eq 9) "$hostName pointer selects segmented R channel"
+        Capture $window "$hostName-channel-segments"
+    } else {
+        Click $combo; Check $combo.IsDropDownOpen "$hostName pointer opens channel popup"; Capture $window "$hostName-channel-popup"
+        Key 0x1B; Check (-not $combo.IsDropDownOpen) "$hostName Escape closes popup"
+    }
+    if ($view.Tag -eq 'Docked') {
+        $segments.Focus() | Out-Null; Key 0x24; Key 0x27; Key 0x27; Key 0x27; Done $vm
+        Check ($combo.IsKeyboardFocusWithin -and $vm.SelectedChannelIndex -eq 3 -and $vm.Result.Minimum -eq 90) "$hostName keyboard B segment selection"
+        $button.Focus()|Out-Null; Key 0x09; Check $combo.IsKeyboardFocusWithin "$hostName Tab reaches segmented channel"
+    } else {
+        $combo.Focus()|Out-Null; Pump
+        Check $combo.IsKeyboardFocused "$hostName channel receives keyboard focus"
+        Key 0x73; Check $combo.IsDropDownOpen "$hostName keyboard opens channel popup"
+        Key 0x28; Key 0x0D; Done $vm
+        Check ($vm.SelectedChannelIndex -eq 3 -and $vm.Result.Minimum -eq 90) "$hostName keyboard B selection"
+        $button.Focus()|Out-Null; Key 0x09; Check $combo.IsKeyboardFocused "$hostName Tab moves from action to channel"
+    }
     [HistogramNative]::keybd_event(0x10,0,0,[UIntPtr]::Zero);Key 0x09;[HistogramNative]::keybd_event(0x10,0,2,[UIntPtr]::Zero);Pump
     Check $button.IsKeyboardFocused "$hostName Shift+Tab returns to action"
     $button.Focus()|Out-Null; Pointer $button; Check ($button.IsKeyboardFocused -and $button.IsMouseOver) "$hostName focused/hover action"

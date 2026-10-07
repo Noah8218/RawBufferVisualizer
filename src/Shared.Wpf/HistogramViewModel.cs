@@ -35,12 +35,22 @@ namespace RawBufferVisualizer.Presentation
         public string? Error { get; private set; }
         public string[] Channels { get; } = new[] { "RGB mean", "R", "G", "B" };
         public bool HasChannels => _source != null && RawPixelHistogram.HasColorChannels(_source.Descriptor.PixelFormat);
+        public bool HasSource => _source != null;
         public bool IsRunning => _running;
         public Task Completion => _completion;
         public ICommand ActionCommand => _actionCommand;
         public string ActionText => _running ? "Cancel" : "Refresh";
         public string LowerLabel => Result?.FiniteCount > 0 ? Number(Result.LowerBound) : string.Empty;
         public string UpperLabel => Result?.FiniteCount > 0 ? Number(Result.UpperBound) : string.Empty;
+        public string MiddleLabel
+        {
+            get
+            {
+                if (Result == null || Result.FiniteCount == 0) return string.Empty;
+                var middle = (Result.LowerBound + Result.UpperBound) / 2;
+                return Number(_source?.Descriptor.PixelFormat == RawPixelFormat.Float32 ? middle : Math.Round(middle));
+            }
+        }
         public string Coverage => Result == null ? string.Empty : string.Format(CultureInfo.CurrentCulture,
             Result.IsSampled ? "Sampled: {0:N0} / {1:N0} pixels" : "All pixels: {0:N0}", Result.SampleCount, Result.TotalPixels);
         public string ValueRange => Result?.FiniteCount > 0 ? (Result.IsSampled ? "Sample range: " : "Range: ") + Number(Result.Minimum) + " to " + Number(Result.Maximum) : string.Empty;
