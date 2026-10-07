@@ -28,6 +28,7 @@ namespace RawBufferVisualizer.Tests
             Across(new byte[] { 0, 1, 255, 222, 222, 0, 128, 255 }, descriptor, source =>
             {
                 var histogram = source.GetHistogram();
+                Check(Math.Abs(histogram.Mean - 106.5) < 1e-10 && Math.Abs(histogram.StandardDeviation - Math.Sqrt(146435.0 / 6 - 106.5 * 106.5)) < 1e-10, "Statistics count pixels and exclude row padding");
                 Check(histogram.SampleCount == 6 && !histogram.IsSampled && histogram.UsesRawValues, "Raw sample coverage");
                 Check(histogram.Bins[0] == 2 && histogram.Bins[1] == 1 && histogram.Bins[128] == 1 && histogram.Bins[255] == 2 && histogram.Bins.Sum() == 6, "Padding must not be counted");
                 Throws<ArgumentOutOfRangeException>(() => source.GetHistogram(RawHistogramChannel.Red));
@@ -69,18 +70,19 @@ namespace RawBufferVisualizer.Tests
                 {
                     var h = source.GetHistogram();
                     Check(h.Minimum == -0.25 && h.Maximum == 0.75 && h.Bins[0] == 1 && h.Bins[96] == 1 && h.Bins[255] == 1, "Float32 values must not pass through display quantization");
+                    Check(Math.Abs(h.Mean - 5.0 / 24) < 1e-12 && Math.Abs(h.StandardDeviation - Math.Sqrt(49.0 / 288)) < 1e-12, "Float statistics use the three finite raw values and population deviation");
                     Check(h.ExcludedCount == 3 && h.SampleCount == 6 && h.FiniteCount == 3 && h.Bins.Sum() == 3, "Non-finite accounting");
                 });
                 descriptor.Width = 2; descriptor.Stride = 8;
                 Across(Bytes(new[] { BitConverter.GetBytes(float.NaN), BitConverter.GetBytes(float.PositiveInfinity) }, order), descriptor, source =>
                 {
                     var h = source.GetHistogram();
-                    Check(h.FiniteCount == 0 && double.IsNaN(h.Minimum) && h.Bins.Sum() == 0, "All non-finite input");
+                    Check(h.FiniteCount == 0 && double.IsNaN(h.Minimum) && double.IsNaN(h.Mean) && double.IsNaN(h.StandardDeviation) && h.Bins.Sum() == 0, "All non-finite input");
                 });
                 Across(Bytes(new[] { BitConverter.GetBytes(-7.25f), BitConverter.GetBytes(-7.25f) }, order), descriptor, source =>
                 {
                     var h = source.GetHistogram();
-                    Check(h.LowerBound == -7.25 && h.UpperBound == -7.25 && h.Bins[0] == 2, "Constant negative input");
+                    Check(h.LowerBound == -7.25 && h.UpperBound == -7.25 && h.Bins[0] == 2 && h.Mean == -7.25 && h.StandardDeviation == 0, "Constant negative input");
                 });
             }
         }
@@ -152,6 +154,7 @@ namespace RawBufferVisualizer.Tests
                     var h = source.GetHistogram();
                     var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
                     Check(h.SampleCount == 65536 && h.TotalPixels == 100000000 && h.Bins[12] == 1 && h.Bins[255] == 1, "Large file endpoint sampling");
+                    Check(double.IsNaN(h.Mean) == false && double.IsNaN(h.StandardDeviation) == false, "Large-file statistics are finite");
                     Check(allocated < 2 * 1024 * 1024, "Histogram allocated a frame-sized buffer: " + allocated);
                     using (var cancellation = new CancellationTokenSource())
                     {
