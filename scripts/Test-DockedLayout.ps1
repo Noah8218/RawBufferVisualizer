@@ -39,6 +39,15 @@ function Assert-InBounds($element, $parent, [string]$case) {
     }
 }
 function Click-Button($button) { $button.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Primitives.ButtonBase]::ClickEvent, $button)) }
+function Find-TemplatePresenter($root, $template) {
+    $pending=[Collections.Generic.Queue[Windows.DependencyObject]]::new(); $pending.Enqueue($root)
+    while ($pending.Count -gt 0) {
+        $node=$pending.Dequeue()
+        if ($node -is [Windows.Controls.ContentPresenter] -and $node.ContentTemplate -eq $template) { return $node }
+        for ($i=0;$i -lt [Windows.Media.VisualTreeHelper]::GetChildrenCount($node);$i++) { $pending.Enqueue([Windows.Media.VisualTreeHelper]::GetChild($node,$i)) }
+    }
+    throw 'Actual data-template presenter was not instantiated'
+}
 $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl
 $flags = [Reflection.BindingFlags]'Instance,NonPublic'
 $cases = @(); $sections = @(); $formats = @()
@@ -378,6 +387,26 @@ try {
             if ($format -in @('BGRA32','Float32','Int32') -and $width -in @(320,760) -and $height -eq 260) {
                 Save-Render $control $width $height "values-$format-$width-$height-strip-$strip.png"
             }
+            $list=$control.FindName('ImageList')
+            $container=$list.ItemContainerGenerator.ContainerFromIndex($list.SelectedIndex)
+            $cardPresenter=Find-TemplatePresenter $container $list.ItemTemplate
+            $stateBadge=$list.ItemTemplate.FindName('StripStateText',$cardPresenter)
+            if ($strip) {
+                if ($stateBadge.Visibility -ne 'Visible' -or $stateBadge.ActualWidth -ne 12 -or $stateBadge.ActualHeight -ne 12 -or $stateBadge.Child.ContentTemplate -ne $control.Resources['ImageStateIconTemplate']) { throw 'Thumbnail strip lost the approved state shape badge' }
+                $thumbnail=$list.ItemTemplate.FindName('CardThumbnail',$cardPresenter)
+                Assert-InBounds $stateBadge $thumbnail "Strip state badge in thumbnail at $width x $height"
+                $viewport=$stateBadge
+                while ($viewport -ne $null -and $viewport -isnot [Windows.Controls.ScrollContentPresenter]) { $viewport=[Windows.Media.VisualTreeHelper]::GetParent($viewport) }
+                if ($null -eq $viewport) { throw 'Thumbnail scroll viewport is unavailable' }
+                # Verify the appended document through the list's real scrolling path.
+                $scrollOwner=$viewport
+                while ($scrollOwner -ne $null -and $scrollOwner -isnot [Windows.Controls.ScrollViewer]) { $scrollOwner=[Windows.Media.VisualTreeHelper]::GetParent($scrollOwner) }
+                $scrollOwner.ScrollToBottom(); Arrange-Control $control $width $height
+                Assert-InBounds $stateBadge $viewport "Strip state badge in scroll viewport at $width x $height"
+                if ($container.Margin.Bottom -ne 4) { throw 'Thumbnail strip gap differs from the approved 4px' }
+                if ($width -in @(320,640) -and $height -eq 260) { Save-Render $control $width $height "strip-scrolled-$format-$width-$height.png" }
+                if ([string]$stateBadge.ToolTip -ne $list.SelectedItem.StateName) { throw 'State shape lost its existing state label' }
+            } elseif ($stateBadge.Visibility -ne 'Collapsed') { throw 'Strip state shape remains visible in the expanded image list' }
             $formats += [pscustomobject]@{ Format=$format; Width=$width; Height=$height; ImageStrip=$strip; Value=$control.FindName('PixelValueText').Text }
         } } }
     }
@@ -474,13 +503,11 @@ try {
     }
     Save-Render $imageMenu $menuWidth $menuHeight 'image-context-menu.png'
     $list=$control.FindName('ImageList');$container=$list.ItemContainerGenerator.ContainerFromIndex($list.SelectedIndex)
-    $pending=[Collections.Generic.Queue[Windows.DependencyObject]]::new();$pending.Enqueue($container);$cardPresenter=$null
-    while ($pending.Count -gt 0) {
-        $node=$pending.Dequeue()
-        if ($node -is [Windows.Controls.ContentPresenter] -and $node.ContentTemplate -eq $list.ItemTemplate) { $cardPresenter=$node;break }
-        for ($childIndex=0;$childIndex -lt [Windows.Media.VisualTreeHelper]::GetChildrenCount($node);$childIndex++) { $pending.Enqueue([Windows.Media.VisualTreeHelper]::GetChild($node,$childIndex)) }
-    }
-    if ($cardPresenter -eq $null) { throw 'Actual image-card template was not instantiated' }
+    $cardPresenter=Find-TemplatePresenter $container $list.ItemTemplate
+    $metadata=$list.ItemTemplate.FindName('CardMetadataText',$cardPresenter)
+    if ($metadata.Foreground.Color.ToString() -ne '#FFF1F1F1' -or $metadata.Opacity -ne 0.85 -or $metadata.LineHeight -ne 13) { throw 'Selected image metadata differs from the approved color/line height' }
+    $summary=$list.ItemTemplate.FindName('CardSummary',$cardPresenter)
+    if ($summary.Children[0].LineHeight -ne 15) { throw 'Image title line height differs from the approved 15px' }
     $cardMore=$list.ItemTemplate.FindName('CardMoreButton',$cardPresenter)
     if ($cardMore.ActualWidth -ne 22 -or $cardMore.ActualHeight -ne 22 -or $cardMore.Visibility -ne 'Visible') { throw 'Image-card More action lost its approved bounds or availability' }
     Assert-InBounds $cardMore $container 'Image-card More action'
@@ -493,6 +520,27 @@ try {
     Arrange-Control $control $control.Width $control.Height
     if (@($control.FindName('PixelVisualization').DataContext.Cells | Where-Object { $_.Value -eq '—' }).Count -ne 16) { throw 'Corner neighborhood lost the required out-of-image cells' }
     Save-Render $control $control.Width $control.Height 'pixel-corner-neighborhood.png'
+
+    # Exercise the reusable actual View template with isolated StateName rows, not fake live documents.
+    $stateRows=[System.Data.DataTable]::new(); $stateRows.Columns.Add('StateName',[string]) | Out-Null
+    $iconCases=@()
+    $stateColors=@{ LIVE='#FF89D185'; CAPTURED='#FF75BEFF'; PREVIEW='#FFE2C08D'; MAP='#FFE2C08D'; FAILED='#FFF48771' }
+    foreach ($state in @('LIVE','CAPTURED','PREVIEW','MAP','FAILED')) {
+        $stateRows.Rows.Add($state) | Out-Null
+        $iconHost=[Windows.Controls.ContentControl]::new(); $iconHost.Content=$stateRows.DefaultView[$stateRows.Rows.Count-1]; $iconHost.ContentTemplate=$control.Resources['ImageStateIconTemplate']
+        $iconBadge=[Windows.Controls.Border]::new(); $iconBadge.Width=12; $iconBadge.Height=12; $iconBadge.CornerRadius=[Windows.CornerRadius]::new(2); $iconBadge.Background=$control.Resources['InputBrush']; $iconBadge.Child=$iconHost
+        $iconHost.HorizontalAlignment='Center'; $iconHost.VerticalAlignment='Center'; $iconBadge.Resources=$control.Resources
+        Arrange-Control $iconBadge 12 12
+        $iconPresenter=Find-TemplatePresenter $iconHost $iconHost.ContentTemplate
+        $shape=$iconHost.ContentTemplate.FindName('StateShape',$iconPresenter); $ring=$iconHost.ContentTemplate.FindName('PreviewRing',$iconPresenter)
+        $color=if ($state -eq 'FAILED') { $shape.Stroke.Color.ToString() } else { $shape.Fill.Color.ToString() }
+        if ($color -ne $stateColors[$state] -or $shape.Data.Bounds.IsEmpty) { throw "State shape lost its approved color/geometry: $state" }
+        if (($ring.Visibility -eq 'Visible') -ne ($state -eq 'PREVIEW')) { throw 'Preview half-circle outline disagrees with state' }
+        if ($state -eq 'LIVE' -and $shape.Data -isnot [Windows.Media.EllipseGeometry]) { throw 'Live state does not use its circle' }
+        if ($state -eq 'FAILED' -and ($shape.Fill -ne $null -or $shape.StrokeThickness -ne 1.6)) { throw 'Failed state does not use its stroked cross' }
+        Save-Render $iconBadge 12 12 "state-icon-$state.png"
+        $iconCases+=[pscustomobject]@{State=$state;Color=$color;Geometry=[string]$shape.Data;Ring=[string]$ring.Visibility;Scope='synthetic row bound to the actual View template'}
+    }
 
     # Reproduce a fixed-width RGB -> Float32 document switch through the real binding path.
     $sourceDescriptor=[RawBufferVisualizer.Core.RawImageDescriptor]::new()
@@ -540,7 +588,7 @@ try {
     $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
     if ($null -ne $headerOperation.GetValue($control)) { throw 'Disposed view accepted a new header refresh' }
 
-    [pscustomobject]@{ SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    [pscustomobject]@{ StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"
