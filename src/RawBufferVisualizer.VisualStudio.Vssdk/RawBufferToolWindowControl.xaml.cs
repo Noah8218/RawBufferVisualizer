@@ -3828,6 +3828,27 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
         }
 
+        private void PopupMenu_Opened(object sender, EventArgs e)
+        {
+            ((System.Windows.Controls.Primitives.Popup)sender).Child?.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+        }
+
+        private void PopupMenu_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key == Key.Escape)
+            {
+                AddImageButton.IsChecked = SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
+                e.Handled = true;
+                return;
+            }
+
+            var direction = e.Key == Key.Down ? FocusNavigationDirection.Next : e.Key == Key.Up ? FocusNavigationDirection.Previous
+                : e.Key == Key.Home ? FocusNavigationDirection.First : e.Key == Key.End ? FocusNavigationDirection.Last : (FocusNavigationDirection?)null;
+            if (direction == null) return;
+            var target = e.Key == Key.Home || e.Key == Key.End ? (UIElement)sender : Keyboard.FocusedElement as UIElement;
+            e.Handled = target?.MoveFocus(new TraversalRequest(direction.Value)) == true;
+        }
+
         private void PinPixel_Click(object sender, RoutedEventArgs e)
         {
             if (_pinnedInspectorX >= 0) ClearMarker_Click(sender, e);
@@ -5022,6 +5043,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void InspectorHost_Unloaded(object sender, RoutedEventArgs e)
         {
             InspectorOverlayPopup.IsOpen = false;
+            AddImageButton.IsChecked = SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
             ReleaseAnnouncementPopup.IsOpen = false;
             _histogram.SetVisible(false);
         }

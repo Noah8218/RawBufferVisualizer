@@ -390,6 +390,42 @@
         </Style>
         <GeometryGroup x:Key="IconPlayGeometry"><PathGeometry Figures="M5 3l8 5-8 5z"/></GeometryGroup>
         <GeometryGroup x:Key="IconStopGeometry"><RectangleGeometry Rect="4,4,8,8" RadiusX=".5" RadiusY=".5"/></GeometryGroup>
+        <GeometryGroup x:Key="IconCheckGeometry"><PathGeometry Figures="M3 8l3.1 3.1L13 4.2"/></GeometryGroup>
+        <Style x:Key="PopupMenu" TargetType="Border">
+            <Setter Property="MinWidth" Value="196"/><Setter Property="MaxWidth" Value="280"/><Setter Property="Padding" Value="0,4"/><Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Background" Value="{DynamicResource ToolbarBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="TextElement.FontFamily" Value="Segoe UI"/><Setter Property="TextElement.FontSize" Value="12"/>
+        </Style>
+        <Style x:Key="PopupMenuButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Height" Value="26"/><Setter Property="MinHeight" Value="26"/><Setter Property="MinWidth" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+                <Border x:Name="MenuItemBackground" Background="{TemplateBinding Background}"><ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Stretch" VerticalAlignment="Center" RecognizesAccessKey="True"/></Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="MenuItemBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="MenuItemBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="MenuItemBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}"/><Setter Property="Opacity" Value="1"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="PopupMenuToggle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+            <Setter Property="Height" Value="26"/><Setter Property="MinHeight" Value="26"/><Setter Property="MinWidth" Value="0"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="12,0"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+                <Border x:Name="MenuItemBackground" Background="{TemplateBinding Background}"><ContentPresenter Margin="{TemplateBinding Padding}" HorizontalAlignment="Stretch" VerticalAlignment="Center" RecognizesAccessKey="True"/></Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="MenuItemBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="MenuItemBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="MenuItemBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}"/><Setter Property="Opacity" Value="1"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="PopupMenuSeparator" TargetType="Separator">
+            <Setter Property="Height" Value="1"/><Setter Property="Margin" Value="0,4"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Separator"><Border Background="{DynamicResource BorderBrush}"/></ControlTemplate></Setter.Value></Setter>
+        </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -562,11 +598,15 @@
     <Button Style="{StaticResource ImageIconButton}" Command="{Binding ToggleImageListCommand}" ToolTip="Expand image list" AutomationProperties.Name="Expand image list" AutomationProperties.AutomationId="ExpandImagesButton"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconChevronsRightGeometry}"/></Canvas></Viewbox></Button>
     <Button Style="{StaticResource ImageIconButton}" IsEnabled="{Binding IsEnabled, ElementName=ScanNowButton}" Margin="0,2,0,0" ToolTip="Scan now" AutomationProperties.Name="Scan now" Click="ScanNow_Click"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconRefreshGeometry}"/></Canvas></Viewbox></Button>
 </StackPanel>
-<Popup x:Name="AddImagePopup" PlacementTarget="{Binding ElementName=AddImageButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=AddImageButton, Mode=TwoWay}">
-    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="AddImageMenu_Click">
+<Popup x:Name="AddImagePopup" PlacementTarget="{Binding ElementName=AddImageButton}" Placement="Bottom" Opened="PopupMenu_Opened" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=AddImageButton, Mode=TwoWay}">
+    <Border Style="{StaticResource PopupMenu}"><StackPanel KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.DirectionalNavigation="Cycle" PreviewKeyDown="PopupMenu_PreviewKeyDown" ButtonBase.Click="AddImageMenu_Click"><StackPanel.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource PopupMenuButton}"/>
+        <Style TargetType="ToggleButton" BasedOn="{StaticResource PopupMenuToggle}"/>
+        <Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
+    </StackPanel.Resources>
         <Button Content="Open snapshot file…" Click="Open_Click"/>
         <Button Content="Open variable…" Click="OpenVariable_Click"/>
-        <Button Content="Connect your buffer…" Click="MapThisType_Click"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=MapThisTypeMenuItem}" Value="Collapsed"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+        <Button Content="Connect your buffer…" Click="MapThisType_Click"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource PopupMenuButton}"><Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=MapThisTypeMenuItem}" Value="Collapsed"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
     </StackPanel></Border>
 </Popup>
 
@@ -730,18 +770,24 @@
                     </Border>
                     <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="32" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                     <Border x:Name="ViewerToolbarSeparator" Visibility="Collapsed"/>
-                    <Popup x:Name="SavePopup" PlacementTarget="{Binding ElementName=SaveMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=SaveMenuButton, Mode=TwoWay}">
-                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button x:Name="SaveVisiblePngButton" ToolTip="Save visible PNG" AutomationProperties.Name="Save visible PNG" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
+                    <Popup x:Name="SavePopup" PlacementTarget="{Binding ElementName=SaveMenuButton}" Placement="Bottom" Opened="PopupMenu_Opened" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=SaveMenuButton, Mode=TwoWay}">
+                        <Border Style="{StaticResource PopupMenu}"><StackPanel KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.DirectionalNavigation="Cycle" PreviewKeyDown="PopupMenu_PreviewKeyDown" ButtonBase.Click="ViewerMenu_Click"><StackPanel.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource PopupMenuButton}"/>
+        <Style TargetType="ToggleButton" BasedOn="{StaticResource PopupMenuToggle}"/>
+        <Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
+    </StackPanel.Resources><Button x:Name="SaveVisiblePngButton" ToolTip="Save visible PNG" AutomationProperties.Name="Save visible PNG" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
                         <StackPanel Orientation="Horizontal">
-                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSaveGeometry}"/></Canvas></Viewbox>
                             <TextBlock x:Name="SaveButtonText" Text="Save visible PNG"/>
                         </StackPanel>
                     </Button><Button Content="Save raw snapshot…" Click="SaveSnapshot_Click" AutomationProperties.AutomationId="SaveRawSnapshotButton"/></StackPanel></Border>
                     </Popup>
-                    <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=MoreMenuButton, Mode=TwoWay}">
-                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button x:Name="OpenButton" ToolTip="Open snapshot file…" AutomationProperties.Name="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click">
+                    <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreMenuButton}" Placement="Bottom" Opened="PopupMenu_Opened" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=MoreMenuButton, Mode=TwoWay}">
+                        <Border Style="{StaticResource PopupMenu}"><StackPanel KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.DirectionalNavigation="Cycle" PreviewKeyDown="PopupMenu_PreviewKeyDown" ButtonBase.Click="ViewerMenu_Click"><StackPanel.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource PopupMenuButton}"/>
+        <Style TargetType="ToggleButton" BasedOn="{StaticResource PopupMenuToggle}"/>
+        <Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
+    </StackPanel.Resources><Button x:Name="OpenButton" ToolTip="Open snapshot file…" AutomationProperties.Name="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click">
                         <StackPanel Orientation="Horizontal">
-                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox>
                             <TextBlock x:Name="OpenButtonText" Text="Open snapshot file…"/>
                         </StackPanel>
                     </Button><ToggleButton x:Name="EnvironmentCheckButton"
@@ -750,7 +796,6 @@
                                   AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
                                   Click="EnvironmentCheck_Click">
                         <StackPanel Orientation="Horizontal">
-                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPulseGeometry}"/></Canvas></Viewbox>
                             <TextBlock Text="Environment check"/>
                         </StackPanel>
                     </ToggleButton><ToggleButton x:Name="WhatsNewButton"
@@ -758,14 +803,15 @@
                                   AutomationProperties.Name="Toggle release highlights"
                                   AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
                                   Click="WhatsNew_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconHelpGeometry}"/></Canvas></Viewbox>
-                            <TextBlock Text="What's new in 2.2.3"/>
-                        </StackPanel>
+                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock Text="What's new in 2.2.3"/><Ellipse Grid.Column="1" Width="7" Height="7" Margin="8,0,0,0" Fill="{DynamicResource InfoTextBrush}" Visibility="{Binding Visibility, ElementName=MoreUnreadBadge}" VerticalAlignment="Center"/></Grid>
                     </ToggleButton><Separator/><Button Content="Release notes" Click="ViewReleaseNotes_Click"/></StackPanel></Border>
                     </Popup>
-                    <Popup x:Name="ZoomPopup" PlacementTarget="{Binding ElementName=ZoomMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=ZoomMenuButton, Mode=TwoWay}">
-                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button Content="25%" Tag="0.25" Click="ZoomPreset_Click"/><Button Content="50%" Tag="0.5" Click="ZoomPreset_Click"/><Button Content="100%" Tag="1" Click="ZoomPreset_Click"/><Button Content="200%" Tag="2" Click="ZoomPreset_Click"/><Button Content="400%" Tag="4" Click="ZoomPreset_Click"/><Button Content="800%" Tag="8" Click="ZoomPreset_Click"/><Button Content="1600%" Tag="16" Click="ZoomPreset_Click"/><Button Content="3200%" Tag="32" Click="ZoomPreset_Click"/></StackPanel></Border>
+                    <Popup x:Name="ZoomPopup" PlacementTarget="{Binding ElementName=ZoomMenuButton}" Placement="Bottom" Opened="PopupMenu_Opened" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=ZoomMenuButton, Mode=TwoWay}">
+                        <Border Style="{StaticResource PopupMenu}"><StackPanel KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.DirectionalNavigation="Cycle" PreviewKeyDown="PopupMenu_PreviewKeyDown" ButtonBase.Click="ViewerMenu_Click"><StackPanel.Resources>
+        <Style TargetType="Button" BasedOn="{StaticResource PopupMenuButton}"/>
+        <Style TargetType="ToggleButton" BasedOn="{StaticResource PopupMenuToggle}"/>
+        <Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
+    </StackPanel.Resources><Button Tag=".25" AutomationProperties.Name="25%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value=".25"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="25%"/></StackPanel></Button><Button Tag=".5" AutomationProperties.Name="50%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value=".5"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="50%"/></StackPanel></Button><Button Tag="1" AutomationProperties.Name="100%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="1"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="100%"/></StackPanel></Button><Button Tag="2" AutomationProperties.Name="200%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="2"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="200%"/></StackPanel></Button><Button Tag="4" AutomationProperties.Name="400%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="4"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="400%"/></StackPanel></Button><Button Tag="8" AutomationProperties.Name="800%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="8"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="800%"/></StackPanel></Button><Button Tag="16" AutomationProperties.Name="1600%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="16"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="1600%"/></StackPanel></Button><Button Tag="32" AutomationProperties.Name="3200%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="32"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="3200%"/></StackPanel></Button></StackPanel></Border>
                     </Popup>
 <Grid x:Name="CanvasArea" Grid.Row="2" Grid.Column="1">
                 <Border Background="#111111" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,1,0">
