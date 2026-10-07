@@ -1033,7 +1033,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void AutomaticHelp_Click(object sender, RoutedEventArgs e)
         {
-            AutomaticHelpTip.PlacementTarget = AutomaticHelpButton;
+            AutomaticHelpTip.PlacementTarget = AutomaticInspectionActions;
             AutomaticHelpTip.IsOpen = !AutomaticHelpTip.IsOpen;
         }
 
@@ -1102,11 +1102,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ReleaseAnnouncementTitleText.Text =
                 "New in Raw Buffer Visualizer " + ReleaseAnnouncementCatalog.CurrentVersion;
             ReleaseAnnouncementHighlightOneText.Text =
-                "- " + ReleaseAnnouncementCatalog.HighlightEnvironmentCheck;
+                ReleaseAnnouncementCatalog.HighlightEnvironmentCheck;
             ReleaseAnnouncementHighlightTwoText.Text =
-                "- " + ReleaseAnnouncementCatalog.HighlightColdPreview;
+                ReleaseAnnouncementCatalog.HighlightColdPreview;
             ReleaseAnnouncementHighlightThreeText.Text =
-                "- " + ReleaseAnnouncementCatalog.HighlightPanelToggles;
+                ReleaseAnnouncementCatalog.HighlightPanelToggles;
 
             _releaseAnnouncementPreferences = _releaseAnnouncementPreferencesStore.Load();
             var shouldShow = ReleaseAnnouncementCatalog.ShouldShow(
@@ -3679,6 +3679,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void UpdateReleaseAnnouncementPopup()
         {
             ReleaseAnnouncementPopup.IsOpen = IsLoaded && IsVisible && ReleaseAnnouncementBanner.Visibility == Visibility.Visible;
+        }
+
+        private void CanvasArea_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (ErrorCard == null || ReleaseAnnouncementBanner == null) return;
+            var narrow = CanvasArea.ActualWidth < 240;
+            ErrorCard.Margin = new Thickness(narrow ? 8 : 16);
+            ErrorCard.Padding = new Thickness(narrow ? 8 : 16);
+            CopyErrorReportButton.Padding = OpenErrorLogsButton.Padding = new Thickness(narrow ? 4 : 10, 0, narrow ? 4 : 10, 0);
+            CopyErrorReportButton.Margin = new Thickness(0, 0, narrow ? 0 : 8, 8);
+            ReleaseAnnouncementBanner.Padding = narrow ? new Thickness(8) : new Thickness(12, 10, 12, 10);
         }
 
         private void ViewerGrid_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateViewerToolbarLayout();

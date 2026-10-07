@@ -280,12 +280,10 @@
         <Style x:Key="AutoScanSwitch" TargetType="CheckBox">
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
-                <DockPanel><Border x:Name="SwitchTrack" DockPanel.Dock="Left" Width="28" Height="16" CornerRadius="8" Margin="0,0,7,0" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource FaintTextBrush}" BorderThickness="1" VerticalAlignment="Center"><Ellipse x:Name="SwitchThumb" Width="10" Height="10" Fill="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Left" Margin="2"/></Border><ContentPresenter VerticalAlignment="Center"/></DockPanel>
+                <Grid><DockPanel><Border x:Name="SwitchTrack" DockPanel.Dock="Left" Width="28" Height="16" CornerRadius="8" Margin="0,0,7,0" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource FaintTextBrush}" BorderThickness="1" VerticalAlignment="Center"><Ellipse x:Name="SwitchThumb" Width="10" Height="10" Fill="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Left" Margin="2"/></Border><ContentPresenter VerticalAlignment="Center"/></DockPanel><Border x:Name="SwitchFocus" Width="34" Height="22" HorizontalAlignment="Left" Margin="-3,0,0,0" BorderBrush="{DynamicResource LinkBrush}" BorderThickness="2" CornerRadius="10" Visibility="Collapsed" IsHitTestVisible="False"/></Grid>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsChecked" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="SwitchThumb" Property="Fill" Value="{DynamicResource TextBrush}"/></Trigger>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SwitchTrack" Property="Opacity" Value="0.8"/></Trigger>
-                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
-                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{DynamicResource TextBrush}"/><Setter TargetName="SwitchTrack" Property="BorderThickness" Value="1"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SwitchFocus" Property="Visibility" Value="Visible"/></Trigger>
                     <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
@@ -482,7 +480,7 @@
     <Button x:Name="CollapseImagesButton" Grid.Column="5" Style="{StaticResource ImageIconButton}" Command="{Binding ToggleImageListCommand}" ToolTip="Collapse to thumbnails" AutomationProperties.Name="Collapse to thumbnails" AutomationProperties.AutomationId="CollapseImagesButton"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconChevronsLeftGeometry}"/></Canvas></Viewbox></Button>
 </Grid>
     <Border x:Name="ClearAllConfirmation" Visibility="Collapsed" Margin="8,6,8,0" Padding="8" CornerRadius="3" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource ErrorTextBrush}" BorderThickness="1">
-        <StackPanel><TextBlock x:Name="ClearAllConfirmationText" TextWrapping="Wrap" FontSize="12"/>
+        <StackPanel><TextBlock x:Name="ClearAllConfirmationText" TextWrapping="Wrap" FontSize="12" LineHeight="16.8"/>
             <WrapPanel Margin="0,8,0,0"><Button x:Name="ConfirmClearAllButton" Background="{DynamicResource DangerBrush}" Margin="0,0,6,0" Content="Clear all" Click="Clear_Click" AutomationProperties.AutomationId="ConfirmClearAllButton"/><Button x:Name="CancelClearAllButton" Content="Cancel" Click="CancelClearAll_Click" AutomationProperties.AutomationId="CancelClearAllButton"/></WrapPanel>
         </StackPanel>
     </Border>
@@ -498,7 +496,7 @@
                                       IsChecked="True"
                                       Foreground="{DynamicResource TextBrush}"
                                       VerticalAlignment="Center"
-                                      ToolTip="Refresh image-like locals and arguments when the debugger pauses. This choice is saved."
+                                      ToolTip="Refreshes image-like locals and arguments when the debugger pauses. This choice is saved."
                                       AutomationProperties.Name="Automatic Vision Inspector"
                                       AutomationProperties.AutomationId="AutomaticVisionAutoInspectCheckBox"
                                       Checked="AutoInspectBox_Changed"
@@ -512,16 +510,14 @@
                                     Click="AutomaticHelp_Click" PreviewKeyDown="AutomaticHelp_PreviewKeyDown">
                                 <Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconHelpGeometry}"/></Canvas></Viewbox>
                                 <Button.ToolTip>
-                                    <ToolTip x:Name="AutomaticHelpTip" StaysOpen="False" MaxWidth="340"
-                                             Background="{DynamicResource PanelBrush}" Foreground="{DynamicResource TextBrush}">
+                                    <ToolTip x:Name="AutomaticHelpTip" StaysOpen="False" MaxWidth="340" Width="{Binding ActualWidth, ElementName=AutomaticInspectionBar}" Placement="Relative" VerticalOffset="26"
+                                             Background="{StaticResource ToolbarBrush}" Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="10" FontFamily="Segoe UI" FontSize="11.5">
+                                        <ToolTip.Template><ControlTemplate TargetType="ToolTip"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border></ControlTemplate></ToolTip.Template>
                                         <StackPanel>
-                                            <TextBlock Text="Automatic inspection" FontWeight="SemiBold"/>
-                                            <TextBlock Text="Refresh image-like locals and arguments when the debugger pauses. This choice is saved. Scan Now works while paused, even with Auto Inspect off."
-                                                       Margin="0,5,0,0" TextWrapping="Wrap"/>
-                                            <TextBlock x:Name="AutomaticFrameText" Text="{Binding Frame}" Margin="0,8,0,0"
-                                                       FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="Wrap"/>
-                                            <TextBlock x:Name="AutomaticScanStatusText" Text="{Binding Details}" Margin="0,5,0,0"
-                                                       FontSize="11" TextWrapping="Wrap"/>
+                                            <TextBlock Text="Automatic inspection" FontSize="12" FontWeight="SemiBold"/>
+                                            <TextBlock Text="Refreshes image-like locals and arguments when the debugger pauses. This choice is saved. Scan now works while paused, even with Auto scan off." Margin="0,4,0,0" FontSize="11.5" LineHeight="16.675" TextWrapping="Wrap"/>
+                                            <TextBlock x:Name="AutomaticFrameText" Text="{Binding Frame}" Visibility="Collapsed"/>
+                                            <TextBlock x:Name="AutomaticScanStatusText" Text="{Binding Details}" Visibility="Collapsed"/>
                                         </StackPanel>
                                     </ToolTip>
                                 </Button.ToolTip>
@@ -821,14 +817,14 @@
         <Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
     </StackPanel.Resources><Button Tag=".25" AutomationProperties.Name="25%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value=".25"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="25%"/></StackPanel></Button><Button Tag=".5" AutomationProperties.Name="50%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value=".5"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="50%"/></StackPanel></Button><Button Tag="1" AutomationProperties.Name="100%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="1"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="100%"/></StackPanel></Button><Button Tag="2" AutomationProperties.Name="200%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="2"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="200%"/></StackPanel></Button><Button Tag="4" AutomationProperties.Name="400%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="4"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="400%"/></StackPanel></Button><Button Tag="8" AutomationProperties.Name="800%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="8"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="800%"/></StackPanel></Button><Button Tag="16" AutomationProperties.Name="1600%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="16"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="1600%"/></StackPanel></Button><Button Tag="32" AutomationProperties.Name="3200%" Click="ZoomPreset_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="14" Height="14" Margin="0,0,8,0"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Opacity" Value="0"/><Style.Triggers><DataTrigger Binding="{Binding Value, ElementName=ZoomSlider}" Value="32"><Setter Property="Opacity" Value="1"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCheckGeometry}"/></Canvas></Viewbox><TextBlock Text="3200%"/></StackPanel></Button></StackPanel></Border>
                     </Popup>
-<Grid x:Name="CanvasArea" Grid.Row="2" Grid.Column="1">
+<Grid x:Name="CanvasArea" Grid.Row="2" Grid.Column="1" SizeChanged="CanvasArea_SizeChanged">
                 <Border Background="#111111" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,1,0">
                     <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
                 </Border>
                 <Border x:Name="EmptyViewerPanel" Panel.ZIndex="1" Background="{DynamicResource CanvasBrush}" AutomationProperties.AutomationId="EmptyViewerPanel">
                     <ScrollViewer x:Name="EmptyViewerScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                         <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="420" Margin="16">
-                            <Viewbox Width="32" Height="32" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Data="{StaticResource IconImageGeometry}" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1.5"/></Canvas></Viewbox>
+                            <Viewbox Width="40" Height="40" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Data="{StaticResource IconImageGeometry}" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1.2" StrokeLineJoin="Round"/></Canvas></Viewbox>
                             <TextBlock Text="No image selected" FontSize="14" FontWeight="SemiBold" TextAlignment="Center" Margin="0,10,0,0"/>
                             <TextBlock x:Name="EmptyViewerGuidanceText" Text="Pause at a breakpoint and select Scan now, or open an image variable's magnifier menu and choose Raw Buffer Visualizer." Margin="0,10,0,0" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" LineHeight="18" TextAlignment="Center" TextWrapping="Wrap"/>
                             <WrapPanel HorizontalAlignment="Center" Margin="0,14,0,0">
@@ -838,79 +834,48 @@
                         </StackPanel>
                     </ScrollViewer>
                 </Border>
-                <Border x:Name="ErrorPanel"
-                        Visibility="Collapsed"
-                        Panel.ZIndex="2"
-                        MaxWidth="560"
-                        Margin="12"
-                        Padding="16"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        Background="#252526"
-                        BorderBrush="#C94B4B"
-                        BorderThickness="1">
-                    <StackPanel>
-                        <TextBlock Text="Image could not be visualized" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ErrorIdText" Margin="0,5,0,0" Foreground="#F48771" FontFamily="Cascadia Mono, Consolas" FontSize="11"/>
-                        <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
-                        <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
-                        <WrapPanel Margin="0,12,0,0">
-                            <Button x:Name="CopyErrorReportButton" AutomationProperties.Name="Copy report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click">
-                                <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox><TextBlock Text="Copy Report"/></StackPanel>
-                            </Button>
-                            <Button x:Name="OpenErrorLogsButton" AutomationProperties.Name="Open logs" AutomationProperties.AutomationId="OpenErrorLogsButton" Click="OpenSupportLogs_Click">
-                                <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox><TextBlock Text="Open Logs"/></StackPanel>
-                            </Button>
-                        </WrapPanel>
-                    </StackPanel>
+                <Border x:Name="ErrorPanel" Visibility="Collapsed" Panel.ZIndex="2" Background="{DynamicResource CanvasBrush}">
+                    <ScrollViewer x:Name="ErrorScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <Border x:Name="ErrorCard" MaxWidth="520" Margin="16" Padding="16" CornerRadius="3" VerticalAlignment="Center"
+                                Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource ErrorTextBrush}" BorderThickness="1">
+                            <StackPanel>
+                                <TextBlock Text="Image could not be visualized" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ErrorIdText" Margin="0,8,0,0" Foreground="{DynamicResource ErrorTextBrush}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/>
+                                <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{DynamicResource TextBrush}" FontSize="12" LineHeight="18" TextWrapping="Wrap"/>
+                                <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" LineHeight="18" TextWrapping="Wrap"/>
+                                <WrapPanel x:Name="ErrorActionRow" Margin="0,12,0,-8">
+                                    <Button x:Name="CopyErrorReportButton" Height="Auto" MinWidth="0" MaxWidth="{Binding ActualWidth, ElementName=ErrorActionRow}" Margin="0,0,8,8" AutomationProperties.Name="Copy report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click"><TextBlock Text="Copy report" TextWrapping="Wrap" LineHeight="16"/></Button>
+                                    <Button x:Name="OpenErrorLogsButton" Height="Auto" MinWidth="0" MaxWidth="{Binding ActualWidth, ElementName=ErrorActionRow}" Margin="0,0,0,8" AutomationProperties.Name="Open logs" AutomationProperties.AutomationId="OpenErrorLogsButton" Click="OpenSupportLogs_Click"><TextBlock Text="Open logs" TextWrapping="Wrap" LineHeight="16"/></Button>
+                                </WrapPanel>
+                            </StackPanel>
+                        </Border>
+                    </ScrollViewer>
                 </Border>
-            <Popup x:Name="ReleaseAnnouncementPopup" PlacementTarget="{Binding ElementName=CanvasArea}" Placement="Relative" AllowsTransparency="True" StaysOpen="True" Width="{Binding ActualWidth, ElementName=CanvasArea}" MaxHeight="{Binding ActualHeight, ElementName=CanvasArea}"><Border x:Name="ReleaseAnnouncementBanner" VerticalAlignment="Top" Panel.ZIndex="3"
-                    Visibility="Collapsed"
-                    Background="#17384A"
-                    BorderBrush="#2B88B8"
-                    BorderThickness="0,0,0,1"
-                    Padding="10,8"
-                    AutomationProperties.Name="Raw Buffer Visualizer release highlights"
-                    AutomationProperties.AutomationId="ReleaseAnnouncementBanner">
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Top"
-                                Margin="12,0,0,0">
-                        <Button Content="View release notes"
-                                ToolTip="Open the complete release notes in your browser"
-                                AutomationProperties.Name="View release notes"
-                                AutomationProperties.AutomationId="ReleaseAnnouncementNotesButton"
-                                Click="ViewReleaseNotes_Click"/>
-                        <Button Content="Dismiss"
-                                Margin="0"
-                                ToolTip="Hide these highlights for this version"
-                                AutomationProperties.Name="Dismiss release highlights"
-                                AutomationProperties.AutomationId="ReleaseAnnouncementDismissButton"
-                                Click="DismissReleaseAnnouncement_Click"/>
-                    </StackPanel>
-                    <StackPanel>
-                        <TextBlock x:Name="ReleaseAnnouncementTitleText"
-                                   AutomationProperties.AutomationId="ReleaseAnnouncementTitle"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFFFFF"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReleaseAnnouncementHighlightOneText"
-                                   Margin="0,4,0,0"
-                                   Foreground="#D8EEF8"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReleaseAnnouncementHighlightTwoText"
-                                   Margin="0,2,0,0"
-                                   Foreground="#D8EEF8"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReleaseAnnouncementHighlightThreeText"
-                                   Margin="0,2,0,0"
-                                   Foreground="#D8EEF8"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
-                </DockPanel>
-            </Border></Popup>
+            <Popup x:Name="ReleaseAnnouncementPopup" PlacementTarget="{Binding ElementName=CanvasArea}" Placement="Relative" AllowsTransparency="True" StaysOpen="True" Width="{Binding ActualWidth, ElementName=CanvasArea}" MaxHeight="{Binding ActualHeight, ElementName=CanvasArea}">
+                <ScrollViewer x:Name="ReleaseAnnouncementScroller" Margin="8" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                    <Border x:Name="ReleaseAnnouncementBanner" VerticalAlignment="Top" Panel.ZIndex="3" Visibility="Collapsed" Background="#17384A" BorderBrush="#2B88B8" BorderThickness="1" CornerRadius="3" Padding="12,10"
+                            AutomationProperties.Name="Raw Buffer Visualizer release highlights" AutomationProperties.AutomationId="ReleaseAnnouncementBanner">
+                        <StackPanel>
+                            <TextBlock x:Name="ReleaseAnnouncementTitleText" AutomationProperties.AutomationId="ReleaseAnnouncementTitle" FontSize="12.5" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                            <Grid Margin="0,4,0,8"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                <Ellipse Width="4" Height="4" Fill="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,7,0,0"/>
+                                <TextBlock x:Name="ReleaseAnnouncementHighlightOneText" Grid.Column="1" FontSize="12" LineHeight="18" TextWrapping="Wrap"/>
+                                <Ellipse Grid.Row="1" Width="4" Height="4" Fill="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,7,0,0"/>
+                                <TextBlock x:Name="ReleaseAnnouncementHighlightTwoText" Grid.Row="1" Grid.Column="1" FontSize="12" LineHeight="18" TextWrapping="Wrap"/>
+                                <Ellipse Grid.Row="2" Width="4" Height="4" Fill="{DynamicResource TextBrush}" HorizontalAlignment="Center" VerticalAlignment="Top" Margin="0,7,0,0"/>
+                                <TextBlock x:Name="ReleaseAnnouncementHighlightThreeText" Grid.Row="2" Grid.Column="1" FontSize="12" LineHeight="18" TextWrapping="Wrap"/>
+                            </Grid>
+                            <WrapPanel x:Name="NewsActionRow" Margin="0,0,0,-8">
+                                <Button x:Name="ReleaseNotesButton" Style="{StaticResource ViewerButton}" Height="Auto" MaxWidth="{Binding ActualWidth, ElementName=NewsActionRow}" MinHeight="20" MinWidth="0" Padding="0" Foreground="{DynamicResource LinkBrush}" Margin="0,0,12,8" ToolTip="Open the complete release notes in your browser"
+                                        AutomationProperties.Name="View release notes" AutomationProperties.AutomationId="ReleaseAnnouncementNotesButton" Click="ViewReleaseNotes_Click"><TextBlock Text="View release notes" TextDecorations="Underline" TextWrapping="Wrap" LineHeight="16"/></Button>
+                                <Button x:Name="DismissNewsButton" Content="Dismiss" MaxWidth="{Binding ActualWidth, ElementName=NewsActionRow}" Height="20" MinHeight="20" Padding="7,0" FontSize="11" Margin="0,0,0,8" ToolTip="Hide these highlights for this version"
+                                        AutomationProperties.Name="Dismiss release highlights" AutomationProperties.AutomationId="ReleaseAnnouncementDismissButton" Click="DismissReleaseAnnouncement_Click"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Border>
+                </ScrollViewer>
+            </Popup>
             </Grid>
                 </Grid>
             </Grid>

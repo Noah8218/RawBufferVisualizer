@@ -369,6 +369,51 @@ try {
     Arrange-Control $control 320 260
     Assert-InBounds $control.FindName('PixelValueText') $bar 'Scalar restored after measurement'
     Save-Render $control 320 260 'scalar-measure-recovery-320.png'
+    $invalid=Join-Path $output 'invalid.rbuf.json'; [IO.File]::WriteAllText($invalid,'{"descriptor":')
+    $control.OpenPath($invalid)
+    $errorDocument=$control.GetType().GetProperty('_activeDocument',$flags).GetValue($control,$null)
+    if (-not $errorDocument.IsError -or $control.FindName('ErrorPanel').Visibility -ne 'Visible' -or $control.FindName('ErrorMessageText').Text -ne $errorDocument.ErrorMessage) { throw 'Malformed input did not render the actual error document' }
+    foreach ($overlayCase in @(@(320,260),@(640,440),@(1000,720))) {
+        $overlayWidth=$overlayCase[0];$overlayHeight=$overlayCase[1];$control.Width=$overlayWidth;$control.Height=$overlayHeight
+        Arrange-Control $control $overlayWidth $overlayHeight
+        $errorScroll=$control.FindName('ErrorScroller');$errorCard=$control.FindName('ErrorCard')
+        if ($errorCard.BorderBrush.Color.ToString() -ne '#FFF48771' -or $errorCard.CornerRadius.TopLeft -ne 3 -or $errorCard.Child.Children[0].FontSize -ne 14) { throw 'Error card differs from the approved style' }
+        if ($control.FindName('ErrorMessageText').MaxHeight -ne [double]::PositiveInfinity) { throw 'Error message is still limited to a clipped fixed height' }
+        Save-Render $control $overlayWidth $overlayHeight "error-top-$overlayWidth-$overlayHeight.png"
+        foreach ($name in @('CopyErrorReportButton','OpenErrorLogsButton')) {
+            $action=$control.FindName($name);$action.BringIntoView();Arrange-Control $control $overlayWidth $overlayHeight
+            Assert-InBounds $action $errorScroll "Error action $name at $overlayWidth x $overlayHeight"
+            if ($action.Content -isnot [Windows.Controls.TextBlock] -or $action.Content.TextWrapping -ne 'Wrap') { throw 'Error caption cannot wrap at very narrow widths' }
+            Assert-InBounds $action.Content $action "Error caption $name"
+        }
+        Save-Render $control $overlayWidth $overlayHeight "error-actions-$overlayWidth-$overlayHeight.png"
+        $popup=$control.FindName('ReleaseAnnouncementPopup');$newsScroll=$popup.Child;$popup.Child=$null
+        $newsRoot=[Windows.Controls.Grid]::new();$newsRoot.Resources=$control.Resources
+        [Windows.Documents.TextElement]::SetForeground($newsRoot,$control.Resources['TextBrush'])
+        [Windows.NameScope]::SetNameScope($newsRoot,[Windows.NameScope]::GetNameScope($control))
+        try {
+            $control.FindName('ReleaseAnnouncementBanner').Visibility='Visible'
+            $newsRoot.Children.Add($newsScroll) | Out-Null
+            $newsWidth=$control.FindName('CanvasArea').ActualWidth;$newsHeight=$control.FindName('CanvasArea').ActualHeight
+            Arrange-Control $newsRoot $newsWidth $newsHeight
+            $banner=$control.FindName('ReleaseAnnouncementBanner')
+            if ($banner.Background.Color.ToString() -ne '#FF17384A' -or $banner.BorderBrush.Color.ToString() -ne '#FF2B88B8' -or $banner.BorderThickness.Left -ne 1 -or $banner.CornerRadius.TopLeft -ne 3 -or $control.FindName('ReleaseAnnouncementTitleText').FontSize -ne 12.5) { throw 'Release banner differs from the approved style' }
+            foreach ($name in @('ReleaseNotesButton','DismissNewsButton')) {
+                $action=$control.FindName($name);$action.BringIntoView();Arrange-Control $newsRoot $newsWidth $newsHeight
+                Assert-InBounds $action $newsScroll "Release action $name at $overlayWidth x $overlayHeight"
+                if ($name -eq 'ReleaseNotesButton') { Assert-InBounds $action.Content $action 'Release link caption' }
+            }
+            Save-Render $newsRoot ([int]$newsWidth) ([int]$newsHeight) "news-$overlayWidth-$overlayHeight.png"
+        } finally { $newsRoot.Children.Clear();$popup.Child=$newsScroll;$control.FindName('ReleaseAnnouncementBanner').Visibility='Collapsed' }
+    }
+    $control.OpenPath($fixture);Arrange-Control $control 1000 720
+    if ($control.FindName('ErrorPanel').Visibility -ne 'Collapsed' -or -not $control.FindName('SaveMenuButton').IsEnabled -or $control.FindName('ErrorMessageText').Text -ne '') { throw 'Valid reopen after malformed input did not recover the view' }
+    $tip=$control.FindName('AutomaticHelpTip');$tip.PlacementTarget=$control.FindName('AutomaticInspectionActions')
+    if ($tip.Background.Color.ToString() -ne '#FF2D2D30' -or $tip.FontSize -ne 11.5 -or $tip.Content.Children[1].Text -ne 'Refreshes image-like locals and arguments when the debugger pauses. This choice is saved. Scan now works while paused, even with Auto scan off.') { throw "Automatic help differs from the approved copy/style: background=$($tip.Background), font=$($tip.FontSize), text=$($tip.Content.Children[1].Text)" }
+    $tip.ApplyTemplate() | Out-Null
+    $tip.Measure([Windows.Size]::new(340,[double]::PositiveInfinity));$helpWidth=[int][Math]::Ceiling($tip.DesiredSize.Width);$helpHeight=[int][Math]::Ceiling($tip.DesiredSize.Height)
+    Arrange-Control $tip $helpWidth $helpHeight;Save-Render $tip $helpWidth $helpHeight 'automatic-help-content.png'
+    Assert-InBounds $tip.Content.Children[1] $tip 'Automatic help rendered explanation'
     [pscustomobject]@{ Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
