@@ -50,6 +50,19 @@ $releaseAnnouncementPreferenceBackupPath = Join-Path $outputRoot ("ReleaseAnnoun
 $packageLogPath = Join-Path ([IO.Path]::GetTempPath()) "RawBufferVisualizer\VisualStudio\package.log"
 Remove-Item -LiteralPath $sessionPath, $resultPath, $failureScreenshotPath, $activityLogPath -ErrorAction SilentlyContinue
 
+function Show-InspectorSection([IntPtr]$MainHandle, [string]$Section) {
+    $rail = Wait-Until "Inspector $Section rail button" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) ("Inspector" + $Section + "Button")
+    } 30
+    $pattern = $null
+    if (-not $rail.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$pattern)) {
+        throw "Inspector $Section rail button does not support TogglePattern."
+    }
+    if (([System.Windows.Automation.TogglePattern]$pattern).Current.ToggleState -ne [System.Windows.Automation.ToggleState]::On) {
+        ([System.Windows.Automation.TogglePattern]$pattern).Toggle()
+    }
+}
+
 function Assert-InteractiveDesktop {
     $sessionId = [Diagnostics.Process]::GetCurrentProcess().SessionId
     $lockScreen = Get-Process -Name LogonUI -ErrorAction SilentlyContinue |
@@ -1159,13 +1172,13 @@ function Invoke-BufferDoctorScenario(
         @(Get-ImageListItems $toolRoot).Count -gt 0
     } 30 | Out-Null
 
-    $inspectorToggle = Find-ElementByAutomationId $toolRoot "InspectorToggleButton"
+    $inspectorToggle = Find-ElementByAutomationId $toolRoot "InspectorFormatButton"
     if ($inspectorToggle -and -not [bool]$inspectorToggle.Current.IsOffscreen) {
         $togglePattern = $null
         if (-not $inspectorToggle.TryGetCurrentPattern(
             [System.Windows.Automation.TogglePattern]::Pattern,
             [ref]$togglePattern)) {
-            throw "Compact Inspector button does not support TogglePattern."
+            throw "Inspector rail button does not support TogglePattern."
         }
         if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
             [System.Windows.Automation.ToggleState]::On) {
@@ -1173,20 +1186,12 @@ function Invoke-BufferDoctorScenario(
         }
     }
 
-    # Prefer the compact inspector Interpret tab when the tool window is narrow.
-    $interpretTab = Wait-Until "Interpret tab" {
-        Get-ElementsByControlType $toolRoot ([System.Windows.Automation.ControlType]::TabItem) |
-            Where-Object { [string]$_.Current.Name -eq "Interpret" } |
-            Select-Object -First 1
-    } 30
-    if ($interpretTab) {
-        Select-AutomationItem $interpretTab
-        Start-Sleep -Milliseconds 300
-    }
+    # The same Format section is available at every window width.
+    Show-InspectorSection $MainHandle "Format"
 
     $diagnoseButton = Wait-Until "Diagnose Buffer button" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
-        $byId = Find-ElementByAutomationId $toolRoot "CompactDiagnoseBufferButton"
+        $byId = Find-ElementByAutomationId $toolRoot "DiagnoseBufferButton"
         if ($byId) { return $byId }
         $byId = Find-ElementByAutomationId $toolRoot "DiagnoseBufferButton"
         if ($byId) { return $byId }
@@ -1218,7 +1223,7 @@ function Invoke-BufferDoctorScenario(
 
     $candidateList = Wait-Until "Diagnosis candidate list" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
-        $byId = Find-ElementByAutomationId $toolRoot "CompactDiagnosisCandidateList"
+        $byId = Find-ElementByAutomationId $toolRoot "DiagnosisCandidateList"
         if ($byId) { return $byId }
         Find-ElementByAutomationId $toolRoot "DiagnosisCandidateList"
     } 30
@@ -1412,14 +1417,7 @@ function Invoke-IndustrialMarketplaceScenario(
     Start-Sleep -Milliseconds 350
     Capture-IndustrialWindow $automaticPath -Cursor
 
-    $diagnosticsTab = Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
-        Where-Object { [string]$_.Current.Name -eq "Diagnostics" -and -not [bool]$_.Current.IsOffscreen } |
-        Select-Object -First 1
-    if ($diagnosticsTab) {
-        Select-AutomationItem $diagnosticsTab
-        Start-Sleep -Milliseconds 300
-        Capture-IndustrialWindow $diagnosticsPath
-    }
+    Show-InspectorSection $MainHandle "Diagnostics"
 
     $clearButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ClearButton"
     $clearPattern = $null
@@ -1453,13 +1451,13 @@ function Invoke-IndustrialMarketplaceScenario(
     } 60
     Capture-IndustrialWindow $badStridePath
 
-    $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+    $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorFormatButton"
     if ($inspectorToggle -and -not [bool]$inspectorToggle.Current.IsOffscreen) {
         $togglePattern = $null
         if (-not $inspectorToggle.TryGetCurrentPattern(
             [System.Windows.Automation.TogglePattern]::Pattern,
             [ref]$togglePattern)) {
-            throw "Compact Inspector button does not support TogglePattern."
+            throw "Inspector rail button does not support TogglePattern."
         }
         if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
             [System.Windows.Automation.ToggleState]::On) {
@@ -1468,16 +1466,11 @@ function Invoke-IndustrialMarketplaceScenario(
         }
     }
 
-    $interpretTab = Wait-Until "visible industrial Interpret tab" {
-        Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
-            Where-Object { [string]$_.Current.Name -eq "Interpret" -and -not [bool]$_.Current.IsOffscreen } |
-            Select-Object -First 1
-    } 30
-    Select-AutomationItem $interpretTab
+    Show-InspectorSection $MainHandle "Format"
     Start-Sleep -Milliseconds 250
     $diagnoseButton = Wait-Until "industrial Diagnose Buffer button" {
         $root = Get-AutomationRoot $MainHandle
-        $button = Find-ElementByAutomationId $root "CompactDiagnoseBufferButton"
+        $button = Find-ElementByAutomationId $root "DiagnoseBufferButton"
         if ($button -and -not [bool]$button.Current.IsOffscreen) { return $button }
         $button = Find-ElementByAutomationId $root "DiagnoseBufferButton"
         if ($button -and -not [bool]$button.Current.IsOffscreen) { return $button }
@@ -1492,7 +1485,7 @@ function Invoke-IndustrialMarketplaceScenario(
     ([System.Windows.Automation.InvokePattern]$diagnosePattern).Invoke()
     $candidateList = Wait-Until "industrial Buffer Doctor candidates" {
         $root = Get-AutomationRoot $MainHandle
-        $list = Find-ElementByAutomationId $root "CompactDiagnosisCandidateList"
+        $list = Find-ElementByAutomationId $root "DiagnosisCandidateList"
         if (-not $list -or [bool]$list.Current.IsOffscreen) {
             $list = Find-ElementByAutomationId $root "DiagnosisCandidateList"
         }
@@ -1716,13 +1709,13 @@ function Invoke-Int32IndustrialScenario(
         if ($matches.Count -ge 1 -and [int]$state.errorCount -eq 0) { $state } else { $null }
     } 60
 
-    $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+    $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorFormatButton"
     if ($inspectorToggle -and -not [bool]$inspectorToggle.Current.IsOffscreen) {
         $togglePattern = $null
         if (-not $inspectorToggle.TryGetCurrentPattern(
             [System.Windows.Automation.TogglePattern]::Pattern,
             [ref]$togglePattern)) {
-            throw "Compact Inspector button does not support TogglePattern."
+            throw "Inspector rail button does not support TogglePattern."
         }
         if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
             [System.Windows.Automation.ToggleState]::On) {
@@ -1730,17 +1723,11 @@ function Invoke-Int32IndustrialScenario(
         }
     }
 
-    $interpretTab = Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
-        Where-Object { [string]$_.Current.Name -eq "Interpret" -and -not [bool]$_.Current.IsOffscreen } |
-        Select-Object -First 1
-    if ($interpretTab) {
-        Select-AutomationItem $interpretTab
-        Start-Sleep -Milliseconds 250
-    }
+    Show-InspectorSection $MainHandle "Format"
 
     $formatBox = @(
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InterpretPixelFormatBox"
-        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "CompactInterpretPixelFormatBox"
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InterpretPixelFormatBox"
     ) | Where-Object { $_ -and -not [bool]$_.Current.IsOffscreen } | Select-Object -First 1
     if (-not $formatBox -or (Get-SelectedComboBoxItemName $formatBox) -ne "Int32") {
         throw "The installed viewer did not select Int32 for CV_32SC1."
@@ -1831,7 +1818,7 @@ function Invoke-Int32IndustrialScenario(
         if ($state -and
             [string]$state.activeTitle -like "*paddedInt32Frame*" -and
             (([string]$state.interpretFormat -eq "Int32" -and [string]$state.interpretStride -eq "5184") -or
-             ([string]$state.compactInterpretFormat -eq "Int32" -and [string]$state.compactInterpretStride -eq "5184"))) {
+             ([string]$state.InterpretFormat -eq "Int32" -and [string]$state.InterpretStride -eq "5184"))) {
             $state
         }
         else {
@@ -1934,7 +1921,7 @@ function Invoke-Int32IndustrialAutomaticScenario(
         if ($state -and
             [string]$state.activeTitle -like "*paddedInt32Frame*" -and
             (([string]$state.interpretFormat -eq "Int32" -and [string]$state.interpretStride -eq "5184") -or
-             ([string]$state.compactInterpretFormat -eq "Int32" -and [string]$state.compactInterpretStride -eq "5184"))) {
+             ([string]$state.InterpretFormat -eq "Int32" -and [string]$state.InterpretStride -eq "5184"))) {
             $state
         }
         else {
@@ -2246,31 +2233,23 @@ function Invoke-SmartTypeMapperPersistedScenario(
     } | Out-Null
     Start-Sleep -Milliseconds 500
 
-    $inspectorToggle = Wait-Until "Compact Inspector toggle" {
-        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+    $inspectorToggle = Wait-Until "Inspector rail toggle" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorFormatButton"
         if ($button -and -not [bool]$button.Current.IsOffscreen) { $button } else { $null }
     } 30
     $togglePattern = $null
     if (-not $inspectorToggle.TryGetCurrentPattern([System.Windows.Automation.TogglePattern]::Pattern, [ref]$togglePattern)) {
-        throw "Compact Inspector button does not support TogglePattern."
+        throw "Inspector rail button does not support TogglePattern."
     }
     if (([System.Windows.Automation.TogglePattern]$togglePattern).Current.ToggleState -ne
         [System.Windows.Automation.ToggleState]::On) {
         ([System.Windows.Automation.TogglePattern]$togglePattern).Toggle()
     }
 
-    $interpretTab = Wait-Until "Compact Interpret tab" {
-        Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
-            Where-Object {
-                [string]$_.Current.Name -eq "Interpret" -and
-                -not [bool]$_.Current.IsOffscreen
-            } |
-            Select-Object -First 1
-    } 30
-    Select-AutomationItem $interpretTab
+    Show-InspectorSection $MainHandle "Format"
 
-    $editMappingButton = Wait-Until "Compact Edit Mapping button for persisted automatic image" {
-        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "CompactEditAutomaticVisionMappingButton"
+    $editMappingButton = Wait-Until "Edit Mapping button for persisted automatic image" {
+        $button = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "EditAutomaticVisionMappingButton"
         if ($button -and -not [bool]$button.Current.IsOffscreen) { $button } else { $null }
     } 30
     $compactEntryPath = Join-Path $outputRoot "connect-your-buffer-compact-edit-entry.png"
@@ -3095,7 +3074,7 @@ function Invoke-AutomaticCollectionsScenario(
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
             if ([string]$state.activeTitle -eq $validTitle -and
                 [bool]$state.interpretEnabled -and
-                [bool]$state.compactInterpretEnabled -and
+                [bool]$state.InterpretEnabled -and
                 -not [string]::IsNullOrWhiteSpace([string]$state.interpretFormat) -and
                 -not [string]::IsNullOrWhiteSpace([string]$state.interpretWidth) -and
                 -not [string]::IsNullOrWhiteSpace([string]$state.interpretHeight) -and
@@ -3114,8 +3093,8 @@ function Invoke-AutomaticCollectionsScenario(
     } 15
 
     if (-not [bool]$loadedState.inspectorVisible -and
-        -not [bool]$loadedState.compactInspectorVisible) {
-        $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorToggleButton"
+        -not [bool]$loadedState.InspectorVisible) {
+        $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorFormatButton"
         if (-not $inspectorToggle -or [bool]$inspectorToggle.Current.IsOffscreen) {
             throw "The narrow installed Tool Window hid the Inspector without exposing its toggle."
         }
@@ -3123,7 +3102,7 @@ function Invoke-AutomaticCollectionsScenario(
         if (-not $inspectorToggle.TryGetCurrentPattern(
             [System.Windows.Automation.TogglePattern]::Pattern,
             [ref]$inspectorTogglePattern)) {
-            throw "Compact Inspector button does not support TogglePattern."
+            throw "Inspector rail button does not support TogglePattern."
         }
         if (([System.Windows.Automation.TogglePattern]$inspectorTogglePattern).Current.ToggleState -ne
             [System.Windows.Automation.ToggleState]::On) {
@@ -3143,11 +3122,11 @@ function Invoke-AutomaticCollectionsScenario(
         Select-AutomationItem $imageItems[$alternateValidIndex]
         Start-Sleep -Milliseconds 150
         Select-AutomationItem $imageItems[$firstValidIndex]
-        $loadedState = Wait-Until "opened Compact Inspector state" {
+        $loadedState = Wait-Until "opened Inspector rail state" {
             try {
                 $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
                 if ([string]$state.activeTitle -eq $validTitle -and
-                    [bool]$state.compactInspectorVisible) {
+                    [bool]$state.InspectorVisible) {
                     $state
                 }
                 else {
@@ -3160,21 +3139,10 @@ function Invoke-AutomaticCollectionsScenario(
         } 15
     }
 
-    if ([bool]$loadedState.compactInspectorVisible) {
-        $interpretTab = Wait-Until "visible Interpret tab for Clear contract" {
-            Get-ElementsByControlType (Get-AutomationRoot $MainHandle) ([System.Windows.Automation.ControlType]::TabItem) |
-                Where-Object {
-                    [string]$_.Current.Name -eq "Interpret" -and
-                    -not [bool]$_.Current.IsOffscreen
-                } |
-                Select-Object -First 1
-        } 15
-        Select-AutomationItem $interpretTab
-        Start-Sleep -Milliseconds 250
-    }
+    Show-InspectorSection $MainHandle "Format"
 
-    $diagnoseButtonId = if ([bool]$loadedState.compactInspectorVisible) {
-        "CompactDiagnoseBufferButton"
+    $diagnoseButtonId = if ([bool]$loadedState.InspectorVisible) {
+        "DiagnoseBufferButton"
     }
     else {
         "DiagnoseBufferButton"
@@ -3193,8 +3161,8 @@ function Invoke-AutomaticCollectionsScenario(
         throw "Diagnose Buffer button does not support InvokePattern."
     }
     ([System.Windows.Automation.InvokePattern]$diagnosePattern).Invoke()
-    $diagnosisCandidateListId = if ([bool]$loadedState.compactInspectorVisible) {
-        "CompactDiagnosisCandidateList"
+    $diagnosisCandidateListId = if ([bool]$loadedState.InspectorVisible) {
+        "DiagnosisCandidateList"
     }
     else {
         "DiagnosisCandidateList"
@@ -3241,34 +3209,34 @@ function Invoke-AutomaticCollectionsScenario(
                 [string]$state.interpretBits,
                 [string]$state.interpretEndian)
             $compactFields = @(
-                [string]$state.compactInterpretFormat,
-                [string]$state.compactInterpretWidth,
-                [string]$state.compactInterpretHeight,
-                [string]$state.compactInterpretStride,
-                [string]$state.compactInterpretBits,
-                [string]$state.compactInterpretEndian)
+                [string]$state.InterpretFormat,
+                [string]$state.InterpretWidth,
+                [string]$state.InterpretHeight,
+                [string]$state.InterpretStride,
+                [string]$state.InterpretBits,
+                [string]$state.InterpretEndian)
             if ([int]$state.documentCount -eq 0 -and
                 [string]::IsNullOrEmpty([string]$state.activeTitle) -and
                 [string]$state.status -eq "0 images" -and
                 -not [bool]$state.imageViewVisible -and
                 [bool]$state.emptyViewerVisible -and
                 -not [bool]$state.interpretEnabled -and
-                -not [bool]$state.compactInterpretEnabled -and
+                -not [bool]$state.InterpretEnabled -and
                 @($wideFields | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count -eq 0 -and
                 @($compactFields | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count -eq 0 -and
                 -not [bool]$state.diagnosisVisible -and
                 [string]::IsNullOrEmpty([string]$state.diagnosisStatus) -and
                 [int]$state.diagnosisCandidateCount -eq 0 -and
-                -not [bool]$state.compactDiagnosisVisible -and
-                [string]::IsNullOrEmpty([string]$state.compactDiagnosisStatus) -and
-                [int]$state.compactDiagnosisCandidateCount -eq 0 -and
+                -not [bool]$state.DiagnosisVisible -and
+                [string]::IsNullOrEmpty([string]$state.DiagnosisStatus) -and
+                [int]$state.DiagnosisCandidateCount -eq 0 -and
                 [string]::IsNullOrEmpty([string]$state.pixelText) -and
-                [string]::IsNullOrEmpty([string]$state.compactPixelText) -and
+                [string]::IsNullOrEmpty([string]$state.PixelText) -and
                 [string]::IsNullOrEmpty([string]$state.markerText) -and
-                [string]::IsNullOrEmpty([string]$state.compactMarkerText) -and
+                [string]::IsNullOrEmpty([string]$state.MarkerText) -and
                 [string]$state.comparisonText -match '^A: -\r?\nB: -$' -and
                 [bool]$state.inspectorVisible -eq [bool]$loadedState.inspectorVisible -and
-                [bool]$state.compactInspectorVisible -eq [bool]$loadedState.compactInspectorVisible) {
+                [bool]$state.InspectorVisible -eq [bool]$loadedState.InspectorVisible) {
                 $state
             }
             else {
@@ -3354,7 +3322,7 @@ function Invoke-AutomaticCollectionsScenario(
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
             if ([string]$state.activeTitle -eq $validTitle -and
                 [bool]$state.interpretEnabled -and
-                [bool]$state.compactInterpretEnabled -and
+                [bool]$state.InterpretEnabled -and
                 [string]$state.interpretFormat -eq [string]$loadedState.interpretFormat -and
                 [string]$state.interpretWidth -eq [string]$loadedState.interpretWidth -and
                 [string]$state.interpretHeight -eq [string]$loadedState.interpretHeight -and

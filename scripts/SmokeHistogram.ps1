@@ -246,18 +246,18 @@ for($i=0;$i -lt 320*240;$i++) { $value=($i%320)*12; $bytes[$i*2]=($value -band 2
     $path="$OutputDir\sample.rbuf.json";[RawBufferVisualizer.Sdk.RawBufferSnapshot]::Save($path,$bytes,$descriptor)|Out-Null
 $control=[RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl]::new();$window=[Windows.Window]::new();$window.Content=$control;$window.Width=1160;$window.Height=920;Place $window
 try { Modal $window {
-    Pump;$control.OpenPath($path);$view=$control.FindName('HistogramPanel');$vm=$view.DataContext;Done $vm;$view.BringIntoView();Pump
+    Pump;$control.FindName('InspectorRail').DataContext.Show('Histogram');$control.OpenPath($path);$view=$control.FindName('HistogramPanel');$vm=$view.DataContext;Done $vm;$view.BringIntoView();Pump
     Check ($vm.Result.SampleCount -eq 61440 -and $vm.Result.TotalPixels -eq 76800 -and $vm.SourceDescription -like 'Raw values / Mono16*') 'Docked OpenPath uses raw bounded histogram'
     Capture $window 'after-docked-wide'
     Exercise $window $view $vm 'docked'
-    $control.OpenPath($path);Done $vm;$window.Width=540;Pump;$control.FindName('InspectorToggleButton').IsChecked=$true;Pump
-    $compact=$control.FindName('CompactHistogramPanel');$compact.BringIntoView();Pump
-    Check ([object]::ReferenceEquals($compact.DataContext,$vm) -and $compact.IsVisible) 'Compact and wide inspectors share one histogram state'
+    $control.OpenPath($path);Done $vm;$window.Width=540;Pump;$control.FindName('InspectorHistogramButton').IsChecked=$true;Pump
+    $compact=$control.FindName('HistogramPanel');$compact.BringIntoView();Pump
+    Check ([object]::ReferenceEquals($compact.DataContext,$vm) -and $compact.IsVisible) 'Docked and overlay placements use the same histogram instance'
     BoundResult $compact $vm; Capture $window 'after-docked-compact'
-    $scroll=$control.FindName('CompactInspectorTabs').Items[0].Content;$scroll.ScrollToTop();Capture $window 'after-docked-compact-top';$scroll.ScrollToBottom();Capture $window 'after-docked-compact-bottom'
-    $hidden=[HistogramProbe]::new(66);SetSource $vm $hidden;Until {$hidden.Entered.IsSet};$control.FindName('InspectorToggleButton').IsChecked=$false;Done $vm
+    $scroll=$control.FindName('InspectorPanel');$scroll.ScrollToTop();Capture $window 'after-docked-compact-top';$scroll.ScrollToBottom();Capture $window 'after-docked-compact-bottom'
+    $hidden=[HistogramProbe]::new(66);SetSource $vm $hidden;Until {$hidden.Entered.IsSet};$control.FindName('InspectorHistogramButton').IsChecked=$false;Done $vm
     Check (-not $vm.IsRunning -and $vm.Result -eq $null -and -not $compact.IsVisible) 'Inspector hide cancels current histogram'
-    $hidden.Gate.Set();$control.FindName('InspectorToggleButton').IsChecked=$true;Done $vm
+    $hidden.Gate.Set();$control.FindName('InspectorHistogramButton').IsChecked=$true;Done $vm
     Check ($vm.Result.Minimum -eq 66 -and $hidden.Calls -eq 2) 'Inspector reopen starts the current source once'
     $hidden.Dispose()
     $cleared=[HistogramProbe]::new(67);$cleared.IgnoreCancellation=$true;SetSource $vm $cleared;Until {$cleared.Entered.IsSet}

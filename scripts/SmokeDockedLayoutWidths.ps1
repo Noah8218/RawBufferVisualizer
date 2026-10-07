@@ -247,23 +247,23 @@ foreach ($layoutWidth in $Widths) {
     $emptyViewerPanel = $control.FindName("EmptyViewerPanel")
     $emptyViewerGuidance = $control.FindName("EmptyViewerGuidanceText")
     $interpretControls = $control.FindName("InterpretControls")
-    $compactInterpretControls = $control.FindName("CompactInterpretControls")
+    $compactInterpretControls = $control.FindName("InterpretControls")
     $interpretTextBoxes = @(
         $control.FindName("InterpretWidthTextBox")
         $control.FindName("InterpretHeightTextBox")
         $control.FindName("InterpretStrideTextBox")
         $control.FindName("InterpretValidBitsTextBox"))
     $compactInterpretTextBoxes = @(
-        $control.FindName("CompactInterpretWidthTextBox")
-        $control.FindName("CompactInterpretHeightTextBox")
-        $control.FindName("CompactInterpretStrideTextBox")
-        $control.FindName("CompactInterpretValidBitsTextBox"))
+        $control.FindName("InterpretWidthTextBox")
+        $control.FindName("InterpretHeightTextBox")
+        $control.FindName("InterpretStrideTextBox")
+        $control.FindName("InterpretValidBitsTextBox"))
     $interpretComboBoxes = @(
         $control.FindName("InterpretPixelFormatBox")
         $control.FindName("InterpretByteOrderBox"))
     $compactInterpretComboBoxes = @(
-        $control.FindName("CompactInterpretPixelFormatBox")
-        $control.FindName("CompactInterpretByteOrderBox"))
+        $control.FindName("InterpretPixelFormatBox")
+        $control.FindName("InterpretByteOrderBox"))
     $int32FormatAvailable = @($interpretComboBoxes[0].Items | ForEach-Object { [string]$_ }) -contains "Int32" -and
         @($compactInterpretComboBoxes[0].Items | ForEach-Object { [string]$_ }) -contains "Int32"
     $collectionOption = $control.FindName("IncludeImageCollectionsBox")
@@ -385,96 +385,37 @@ foreach ($layoutWidth in $Widths) {
     $mainContentGrid = $control.FindName("MainContentGrid")
     $imagesColumn = $control.FindName("ImagesColumn")
     $inspectorColumn = $control.FindName("InspectorColumn")
-    $compactInspectorRow = $control.FindName("CompactInspectorRow")
-    $inspectorToggle = $control.FindName("InspectorToggleButton")
+    $navigation = $control.FindName("InspectorRail").DataContext
     $originalImagesWidth = $imagesColumn.Width
-    $originalInspectorWidth = $inspectorColumn.Width
-    $originalCompactHeight = $compactInspectorRow.Height
-    $originalInspectorToggle = $inspectorToggle.IsChecked
-    $splitCases = New-Object System.Collections.Generic.List[object]
-
-    $fixedRightWidth = if ($layoutWidth -ge 1040) { $inspectorColumn.ActualWidth + 10 } else { 5 }
-    $maximumImagesWidth = [Math]::Max(
-        160,
-        [Math]::Min(480, $mainContentGrid.ActualWidth - $fixedRightWidth - 140))
-    $imageSplitTargets = @(160, [Math]::Min(320, $maximumImagesWidth), $maximumImagesWidth) |
-        Select-Object -Unique
-    foreach ($targetWidth in $imageSplitTargets) {
-        $imagesColumn.Width = [System.Windows.GridLength]::new([double]$targetWidth)
-        $control.UpdateLayout()
-        Wait-Dispatcher 40
-        $viewerColumnWidth = $mainContentGrid.ColumnDefinitions[2].ActualWidth
-        if ($viewerColumnWidth -lt 139.5) {
-            throw "The image-list splitter reduced the viewer below 140 px at window width $layoutWidth."
-        }
-        $clearOrigin = $clearButton.TranslatePoint([System.Windows.Point]::new(0, 0), $imageListHeader)
-        $headingOrigin = $imagesHeadingText.TranslatePoint([System.Windows.Point]::new(0, 0), $imageListHeader)
-        if ($clearOrigin.X -lt -0.5 -or
-            $clearOrigin.Y -lt -0.5 -or
-            ($clearOrigin.X + $clearButton.ActualWidth) -gt ($imageListHeader.ActualWidth + 0.5) -or
-            ($clearOrigin.Y + $clearButton.ActualHeight) -gt ($imageListHeader.ActualHeight + 0.5) -or
-            $clearButtonText.ActualWidth -le 0 -or
-            $headingOrigin.X -lt -0.5 -or
-            ($headingOrigin.X + $imagesHeadingText.ActualWidth) -gt ($imageListHeader.ActualWidth + 0.5) -or
-            $imagesHeadingText.ActualWidth -lt 49.5) {
-            throw "Clear all was clipped at image-list width $targetWidth and window width $layoutWidth."
-        }
-        $splitCases.Add([pscustomobject]@{
-            Axis = "Images"
-            Requested = [Math]::Round($targetWidth, 1)
-            Actual = [Math]::Round($imagesColumn.ActualWidth, 1)
-            Viewer = [Math]::Round($viewerColumnWidth, 1)
-        })
-    }
-    $imagesColumn.Width = $originalImagesWidth
-    $control.UpdateLayout()
-
-    if ($layoutWidth -ge 1040) {
-        $maximumInspectorWidth = [Math]::Max(
-            180,
-            [Math]::Min(420, $mainContentGrid.ActualWidth - $imagesColumn.ActualWidth - 10 - 140))
-        $inspectorSplitTargets = @(180, [Math]::Min(300, $maximumInspectorWidth), $maximumInspectorWidth) |
-            Select-Object -Unique
-        foreach ($targetWidth in $inspectorSplitTargets) {
-            $inspectorColumn.Width = [System.Windows.GridLength]::new([double]$targetWidth)
+    $imageSplitCases = New-Object System.Collections.Generic.List[object]
+    if ($layoutWidth -ge 760) {
+        foreach ($targetWidth in @(180, [Math]::Min(320, $imagesColumn.MaxWidth), $imagesColumn.MaxWidth) | Select-Object -Unique) {
+            $imagesColumn.Width = [System.Windows.GridLength]::new([double]$targetWidth)
             $control.UpdateLayout()
             Wait-Dispatcher 40
             $viewerColumnWidth = $mainContentGrid.ColumnDefinitions[2].ActualWidth
-            if ($viewerColumnWidth -lt 139.5) {
-                throw "The Inspector splitter reduced the viewer below 140 px at window width $layoutWidth."
-            }
-            $splitCases.Add([pscustomobject]@{
-                Axis = "Inspector"
-                Requested = [Math]::Round($targetWidth, 1)
-                Actual = [Math]::Round($inspectorColumn.ActualWidth, 1)
-                Viewer = [Math]::Round($viewerColumnWidth, 1)
-            })
+            if ($viewerColumnWidth -lt 139.5) { throw "The image-list splitter reduced the viewer below 140 px at width $layoutWidth." }
+            $imageSplitCases.Add([pscustomobject]@{ Axis = "Images"; Requested = $targetWidth; Actual = $imagesColumn.ActualWidth; Viewer = $viewerColumnWidth })
         }
-        $inspectorColumn.Width = $originalInspectorWidth
+        $imagesColumn.Width = $originalImagesWidth
+        $control.UpdateLayout()
     }
-    else {
-        if ($layoutWidth -lt 760) {
-            $inspectorToggle.IsChecked = $true
-            Wait-Dispatcher 80
+    $originalSection = $navigation.Section
+    $originalOpen = $navigation.IsOpen
+    $splitCases = New-Object System.Collections.Generic.List[object]
+    foreach ($case in $imageSplitCases) { $splitCases.Add($case) }
+    foreach ($section in @("Pixel", "Histogram", "Format", "Compare", "Diagnostics")) {
+        $navigation.Show($section)
+        $control.UpdateLayout()
+        Wait-Dispatcher 40
+        if (-not $navigation.IsOpen -or $navigation.Section -ne $section -or
+            ($layoutWidth -ge 760 -and [Math]::Abs($inspectorColumn.ActualWidth - 300) -gt 1.5)) {
+            throw "Inspector section $section is unavailable at width $layoutWidth."
         }
-        foreach ($targetHeight in @(120, 168, 300)) {
-            $compactInspectorRow.Height = [System.Windows.GridLength]::new([double]$targetHeight)
-            $control.UpdateLayout()
-            Wait-Dispatcher 40
-            $mainRowHeight = $control.FindName("MainContentGrid").ActualHeight
-            if ($mainRowHeight -lt 99.5) {
-                throw "The compact Inspector splitter reduced the main content below 100 px at window width $layoutWidth."
-            }
-            $splitCases.Add([pscustomobject]@{
-                Axis = "CompactInspector"
-                Requested = $targetHeight
-                Actual = [Math]::Round($compactInspectorRow.ActualHeight, 1)
-                MainContent = [Math]::Round($mainRowHeight, 1)
-            })
-        }
-        $compactInspectorRow.Height = $originalCompactHeight
-        $inspectorToggle.IsChecked = $originalInspectorToggle
+        $splitCases.Add([pscustomobject]@{ Axis = "Inspector"; Section = $section; Overlay = $navigation.IsNarrow; Width = $inspectorColumn.ActualWidth })
     }
+    $navigation.Show($originalSection)
+    if (-not $originalOpen) { $navigation.Close() }
     $control.UpdateLayout()
     Wait-Dispatcher 80
 
@@ -506,7 +447,7 @@ foreach ($layoutWidth in $Widths) {
     }
 
     $inspector = $control.FindName("InspectorPanel")
-    $compact = $control.FindName("CompactInspectorPanel")
+    $compact = $control.FindName("InspectorContainer")
     $imageView = $control.FindName("OpenGlImageView")
     $viewState = $imageView.GetViewState()
     $viewAspect = $viewState.Width / $viewState.Height
@@ -632,9 +573,9 @@ foreach ($layoutWidth in $Widths) {
 
     $imageView.PinMarkerAtImagePixel(100, 100) | Out-Null
     Wait-Dispatcher 50
-    $pixelText = $control.FindName("CompactPixelText")
-    $neighborhoodText = $control.FindName("CompactPixelNeighborhoodText")
-    $statsText = $control.FindName("CompactRoiStatsText")
+    $pixelText = $control.FindName("PixelText")
+    $neighborhoodText = $control.FindName("PixelNeighborhoodText")
+    $statsText = $control.FindName("RoiStatsText")
     $statusText = $control.FindName("StatusText")
     $pinnedPixel = $pixelText.Text
     $pinnedNeighborhood = $neighborhoodText.Text
@@ -648,7 +589,7 @@ foreach ($layoutWidth in $Widths) {
         ($neighborhoodText.Text -eq $pinnedNeighborhood) -and
         ($statsText.Text -eq $pinnedStats) -and
         ($statusText.Text -eq $pinnedStatus) -and
-        ($control.FindName("CompactPixelHeadingText").Text -eq "Pinned")
+        ($control.FindName("PixelHeadingText").Text -eq "Pinned Pixel")
     if (-not $pinFrozen) {
         throw "Pinned inspector changed after hover at width $layoutWidth."
     }
@@ -658,7 +599,7 @@ foreach ($layoutWidth in $Widths) {
     $null = $raiseHover.Invoke($imageView, [object[]]@($resumedHoverPoint, $false))
     Wait-Dispatcher 100
     $hoverResumed = ($pixelText.Text -ne $pinnedPixel) -and
-        ($control.FindName("CompactPixelHeadingText").Text -eq "Current")
+        ($control.FindName("PixelHeadingText").Text -eq "Pixel")
     if (-not $hoverResumed) {
         throw "Inspector did not resume hover updates after clearing the pin at width $layoutWidth."
     }
@@ -810,7 +751,7 @@ foreach ($layoutWidth in $Widths) {
     Capture-Window $helper.Handle $twentyImageCapturePath
 
     $diagnoseButton = if ($compact.Visibility -eq [System.Windows.Visibility]::Visible) {
-        $control.FindName("CompactDiagnoseBufferButton")
+        $control.FindName("DiagnoseBufferButton")
     }
     else {
         $control.FindName("DiagnoseBufferButton")
@@ -824,8 +765,8 @@ foreach ($layoutWidth in $Widths) {
     }
     $diagnosisPrepared = $null -ne $control.FindName("DiagnosisCandidateList").ItemsSource -and
         $control.FindName("DiagnosisCandidateList").Items.Count -gt 0 -and
-        $null -ne $control.FindName("CompactDiagnosisCandidateList").ItemsSource -and
-        $control.FindName("CompactDiagnosisCandidateList").Items.Count -gt 0
+        $null -ne $control.FindName("DiagnosisCandidateList").ItemsSource -and
+        $control.FindName("DiagnosisCandidateList").Items.Count -gt 0
     if (-not $diagnosisPrepared) {
         throw "Buffer Doctor did not prepare candidates before Clear at width $layoutWidth."
     }
@@ -921,15 +862,15 @@ foreach ($layoutWidth in $Widths) {
         @($interpretTextBoxes + $compactInterpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
         @($interpretComboBoxes + $compactInterpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
     $clearDiagnosisStateValid = $control.FindName("DiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
-        $control.FindName("CompactDiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
+        $control.FindName("DiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
         $null -eq $control.FindName("DiagnosisCandidateList").ItemsSource -and
-        $null -eq $control.FindName("CompactDiagnosisCandidateList").ItemsSource -and
+        $null -eq $control.FindName("DiagnosisCandidateList").ItemsSource -and
         [string]::IsNullOrEmpty($control.FindName("DiagnosisStatusText").Text) -and
-        [string]::IsNullOrEmpty($control.FindName("CompactDiagnosisStatusText").Text)
+        [string]::IsNullOrEmpty($control.FindName("DiagnosisStatusText").Text)
     $clearInspectorStateValid = [string]::IsNullOrEmpty($control.FindName("MarkerText").Text) -and
-        [string]::IsNullOrEmpty($control.FindName("CompactMarkerText").Text) -and
+        [string]::IsNullOrEmpty($control.FindName("MarkerText").Text) -and
         $control.FindName("PixelHeadingText").Text -eq "Pixel" -and
-        $control.FindName("CompactPixelHeadingText").Text -eq "Current"
+        $control.FindName("PixelHeadingText").Text -eq "Pixel"
     $clearLayoutStateValid = $inspector.Visibility -eq $inspectorVisibilityBeforeClear -and
         $compact.Visibility -eq $compactInspectorVisibilityBeforeClear
     $clearDocumentStateValid = $imageList.Items.Count -eq 0 -and
@@ -966,7 +907,7 @@ foreach ($layoutWidth in $Widths) {
         }
     }
     if (-not $clearReopenStateValid) {
-        throw "Interpret controls did not restore after reopening an image at width $layoutWidth. Interpret=$($interpretControls.IsEnabled) Compact=$($compactInterpretControls.IsEnabled) Width='$($interpretTextBoxes[0].Text)' CompactWidth='$($compactInterpretTextBoxes[0].Text)' Clear=$($clearButton.IsEnabled) Items=$($imageList.Items.Count)."
+        throw "Interpret controls did not restore after reopening an image at width $layoutWidth. Interpret=$($interpretControls.IsEnabled) Compact=$($compactInterpretControls.IsEnabled) Width='$($interpretTextBoxes[0].Text)' Width='$($compactInterpretTextBoxes[0].Text)' Clear=$($clearButton.IsEnabled) Items=$($imageList.Items.Count)."
     }
 
     $liveBuffer = [byte[]]$buffer.Clone()
@@ -1198,7 +1139,7 @@ foreach ($layoutWidth in $Widths) {
         LoadedCommandStateValid = $loadedCommandStateValid
         EmptyGuidanceVisible = $emptyGuidanceBoundsValid
         InspectorVisible = $inspector.Visibility.ToString()
-        CompactInspectorVisible = $compact.Visibility.ToString()
+        InspectorContainerVisible = $compact.Visibility.ToString()
         ImageViewWidth = [Math]::Round($imageView.ActualWidth, 1)
         ImageViewHeight = [Math]::Round($imageView.ActualHeight, 1)
         RelativeAspectError = [Math]::Round($aspectError, 8)
