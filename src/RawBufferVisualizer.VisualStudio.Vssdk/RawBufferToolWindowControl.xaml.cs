@@ -157,6 +157,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             InitializeComponent();
             InspectorContainer.DataContext = _inspector;
             InspectorRail.DataContext = _inspector;
+            ImageList.DataContext = ImageListHeader.DataContext = ImageStripHeader.DataContext = _inspector;
             _inspector.PropertyChanged += InspectorNavigation_PropertyChanged;
             Loaded += InspectorHost_Loaded;
             Unloaded += InspectorHost_Unloaded;
@@ -910,7 +911,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     _automaticHiddenCount);
             }
 
-            AutomaticBatchSummaryText.Text = summary;
+            SetAutomaticBatchSummaryText(summary);
             AutomaticBatchSummaryText.Visibility = scan.Inspections.Count == 0
                 ? Visibility.Collapsed
                 : Visibility.Visible;
@@ -1005,6 +1006,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void LoadAllAutomaticBatch_Click(object sender, RoutedEventArgs e)
         {
             _ = ContinueAutomaticBatchAsync(true);
+        }
+
+        private void SetAutomaticBatchSummaryText(string summary)
+        {
+            AutomaticBatchSummaryText.Inlines.Clear();
+            int offset = 0;
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(summary, @"\d+ (?:failed|need mapping)"))
+            {
+                AutomaticBatchSummaryText.Inlines.Add(new System.Windows.Documents.Run(summary.Substring(offset, match.Index - offset)));
+                AutomaticBatchSummaryText.Inlines.Add(new System.Windows.Documents.Run(match.Value) { Foreground = new SolidColorBrush(match.Value.EndsWith("failed", StringComparison.Ordinal) ? Color.FromRgb(244, 135, 113) : Color.FromRgb(226, 192, 141)) });
+                offset = match.Index + match.Length;
+            }
+            AutomaticBatchSummaryText.Inlines.Add(new System.Windows.Documents.Run(summary.Substring(offset)));
         }
 
         private void SetAutomaticScanStatus(string text, string? alert = null)
@@ -1553,12 +1567,23 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
+        private void ReviewClear_Click(object sender, RoutedEventArgs e)
+        {
+            ClearAllConfirmationText.Text = string.Format(CultureInfo.InvariantCulture, "Remove all {0} images from the list? Debuggee data is not changed.", _documents.Count);
+            ClearAllConfirmation.Visibility = Visibility.Visible;
+        }
+
+        private void CancelClearAll_Click(object sender, RoutedEventArgs e) => ClearAllConfirmation.Visibility = Visibility.Collapsed;
+
+        private void AddImageMenu_Click(object sender, RoutedEventArgs e) => AddImageButton.IsChecked = false;
+
         private void Clear_Click(object sender, RoutedEventArgs e)
         {
 #pragma warning disable VSTHRD010
             CancelAutomaticInspectionWork(true);
 #pragma warning restore VSTHRD010
             SetAutomaticScanBusy(false, string.Empty);
+            ClearAllConfirmation.Visibility = Visibility.Collapsed;
             _syncingDocumentSelection = true;
             try
             {
@@ -1602,7 +1627,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _inspector.PropertyChanged -= InspectorNavigation_PropertyChanged;
-            SavePopup.IsOpen = MorePopup.IsOpen = ZoomPopup.IsOpen = ReleaseAnnouncementPopup.IsOpen = false;
+            SavePopup.IsOpen = MorePopup.IsOpen = ZoomPopup.IsOpen = AddImagePopup.IsOpen = ReleaseAnnouncementPopup.IsOpen = false;
             Loaded -= InspectorHost_Loaded;
             Unloaded -= InspectorHost_Unloaded;
             InspectorOverlayPopup.IsOpen = false;
@@ -4882,15 +4907,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 if (width <= 0) width = ActualWidth;
                 _inspector.SetWidth(width);
                 var nextMode = width < 760 ? LayoutMode.Narrow : width < 1200 ? LayoutMode.Medium : LayoutMode.Wide;
-                if (nextMode != _layoutMode)
-                {
-                    ImagesColumn.MinWidth = _inspector.IsNarrow ? 64 : 180;
-                    ImagesColumn.MaxWidth = _inspector.IsNarrow ? 64 : 420;
-                    ImagesColumn.Width = new GridLength(_inspector.IsNarrow ? 64 : nextMode == LayoutMode.Wide ? 300 : 236);
-                }
-                ImagesColumn.MaxWidth = _inspector.IsNarrow ? 64 : Math.Max(180, Math.Min(420, width - 44 - (_inspector.IsOpen ? 300 : 0) - 5 - 140));
-                ImagesGridSplitter.Visibility = _inspector.IsNarrow ? Visibility.Collapsed : Visibility.Visible;
-                MainContentGrid.ColumnDefinitions[1].Width = new GridLength(_inspector.IsNarrow ? 0 : 5);
+                var strip = _inspector.IsImageStrip;
+                var wasStrip = ImagesColumn.MinWidth == 64;
+                var maxImages = Math.Max(0, Math.Min(420, width - 44 - (_inspector.IsOpen && !_inspector.IsNarrow ? 300 : 0) - 5 - 140));
+                ImagesColumn.MinWidth = strip ? 64 : Math.Min(180, maxImages);
+                ImagesColumn.MaxWidth = strip ? 64 : maxImages;
+                if (strip) ImagesColumn.Width = new GridLength(64);
+                else if (nextMode != _layoutMode || wasStrip) ImagesColumn.Width = new GridLength(nextMode == LayoutMode.Wide ? 300 : 236);
+                ImageList.Margin = strip ? new Thickness(2, 0, 2, 4) : new Thickness(4, 0, 4, 4);
+                ImagePanelTop.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
+                ImageStripHeader.Visibility = strip ? Visibility.Visible : Visibility.Collapsed;
+                ImagesGridSplitter.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
+                MainContentGrid.ColumnDefinitions[1].Width = new GridLength(strip ? 0 : 5);
                 InspectorGridSplitter.Visibility = Visibility.Collapsed;
                 InspectorSplitterColumn.Width = new GridLength(0);
                 InspectorColumn.Width = new GridLength(!_inspector.IsNarrow && _inspector.IsOpen ? 300 : 0);
@@ -4968,7 +4996,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ImageInfoBar.DataContext = null;
             ImageInfoBar.DataContext = _activeDocument;
             ZoomOutButton.IsEnabled = ZoomInButton.IsEnabled = ZoomMenuButton.IsEnabled = SaveMenuButton.IsEnabled = PinPixelButton.IsEnabled = hasActiveImage;
-            ClearButton.IsEnabled = _documents.Count > 0;
+            ImageCountText.Text = _documents.Count.ToString(CultureInfo.InvariantCulture);
+            if (ClearAllConfirmation.Visibility == Visibility.Visible) ClearAllConfirmationText.Text = string.Format(CultureInfo.InvariantCulture, "Remove all {0} images from the list? Debuggee data is not changed.", _documents.Count);
+            ClearButton.IsEnabled = ConfirmClearAllButton.IsEnabled = _documents.Count > 0;
             SaveVisiblePngButton.IsEnabled = hasActiveImage;
             FitButton.IsEnabled = hasActiveImage;
             ActualSizeButton.IsEnabled = hasActiveImage;
@@ -5817,7 +5847,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string SizeText => string.Format(CultureInfo.InvariantCulture, "{0}×{1}", Descriptor.Width, Descriptor.Height);
             public string FormatText => Descriptor.PixelFormat.ToString();
             public string StrideText => "stride " + Descriptor.Stride.ToString(CultureInfo.InvariantCulture);
-            public string StateChipText => IsError || IsSourceUnavailable ? "× FAILED" : AutomaticMappingRequired ? "◆ MAP" : IsPreview ? "◐ PREVIEW" : Source.IsLiveProcessBacked ? "● LIVE" : "■ CAPTURED";
+            public string StateName => AutomaticMappingRequired ? "MAP" : IsError || IsSourceUnavailable ? "FAILED" : IsPreview ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
+            public string StateChipText => (StateName == "MAP" ? "◆ " : StateName == "FAILED" ? "× " : StateName == "PREVIEW" ? "◐ " : StateName == "LIVE" ? "● " : "■ ") + StateName;
+            public string MetaText => IsError ? SourceType : SizeText + " · " + FormatText + " · " + SourceType;
             public RawImageSource Source { get; private set; }
             public RawImageDescriptor Descriptor { get; private set; }
             public RawOpenGlViewState? ViewState { get; set; }

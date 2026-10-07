@@ -50,6 +50,13 @@ $releaseAnnouncementPreferenceBackupPath = Join-Path $outputRoot ("ReleaseAnnoun
 $packageLogPath = Join-Path ([IO.Path]::GetTempPath()) "RawBufferVisualizer\VisualStudio\package.log"
 Remove-Item -LiteralPath $sessionPath, $resultPath, $failureScreenshotPath, $activityLogPath -ErrorAction SilentlyContinue
 
+function Confirm-ClearImages([IntPtr]$MainHandle) {
+    $button = Wait-Until "Clear all inline confirmation" {
+        Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "ConfirmClearAllButton"
+    } 15
+    Click-AutomationElement $button
+}
+
 function Show-InspectorSection([IntPtr]$MainHandle, [string]$Section) {
     $rail = Wait-Until "Inspector $Section rail button" {
         Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) ("Inspector" + $Section + "Button")
@@ -1427,6 +1434,7 @@ function Invoke-IndustrialMarketplaceScenario(
         throw "Clear button was not available before the isolated industrial Buffer Doctor capture."
     }
     ([System.Windows.Automation.InvokePattern]$clearPattern).Invoke()
+    Confirm-ClearImages $MainHandle
     Wait-Until "empty industrial session before Buffer Doctor" {
         $state = Get-IndustrialSessionState
         if ($state -and [int]$state.documentCount -eq 0) { $state } else { $null }
@@ -1763,6 +1771,7 @@ function Invoke-Int32IndustrialScenario(
         if ($button -and [bool]$button.Current.IsEnabled) { $button } else { $null }
     } 15
     Click-AutomationElement $clearButton
+    Confirm-ClearImages $MainHandle
     Wait-Until "empty CV_32SC1 document list before automatic scan" {
         $state = Get-Int32SessionState
         if ($state -and [int]$state.documentCount -eq 0) { $true } else { $null }
@@ -3193,6 +3202,7 @@ function Invoke-AutomaticCollectionsScenario(
 
     $beforeClearStamp = (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc
     ([System.Windows.Automation.InvokePattern]$clearPattern).Invoke()
+    Confirm-ClearImages $MainHandle
     $clearedState = Wait-Until "complete Clear presentation reset" {
         if (-not (Test-Path -LiteralPath $sessionPath) -or
             (Get-Item -LiteralPath $sessionPath).LastWriteTimeUtc -le $beforeClearStamp) {

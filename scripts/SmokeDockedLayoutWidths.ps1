@@ -290,9 +290,9 @@ foreach ($layoutWidth in $Widths) {
         -not [string]::IsNullOrWhiteSpace([string]$_.ToolTip)
     }).Count -eq $primaryButtons.Count
     $clearDiscoverabilityValid = $clearButtonText.Text -eq "Clear all" -and
-        $clearButtonText.Visibility -eq [System.Windows.Visibility]::Visible -and
+        $clearButtonText.Visibility -eq [System.Windows.Visibility]::Collapsed -and
         [System.Windows.Automation.AutomationProperties]::GetName($clearButton) -eq "Clear all images" -and
-        [string]$clearButton.ToolTip -eq "Remove all loaded images and reset the viewer. Debuggee data is unchanged."
+        [string]$clearButton.ToolTip -eq "Clear all images"
     $primaryLabelStateValid = $toolbarLabels[0].Visibility -eq [System.Windows.Visibility]::Visible -and
         $toolbarLabels[1].Visibility -eq [System.Windows.Visibility]::Visible -and
         $toolbarLabels[2].Visibility -eq $(if ($control.FindName("ViewerGrid").ActualWidth -lt 560 -or $control.ActualHeight -lt 560) { [System.Windows.Visibility]::Collapsed } else { [System.Windows.Visibility]::Visible }) -and
