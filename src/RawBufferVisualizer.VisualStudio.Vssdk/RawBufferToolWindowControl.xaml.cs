@@ -4843,7 +4843,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var stats = document.Source.GetStatistics(left, top, Math.Min(document.Descriptor.Width, x + 3) - left, Math.Min(document.Descriptor.Height, y + 3) - top);
             var statisticsFormat = document.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "5×5 μ {0:0.0000} σ {1:0.0000}" : "5×5 μ {0:0.0} σ {1:0.0}";
             PixelNeighborhoodStatsText.Text = string.Format(CultureInfo.InvariantCulture, statisticsFormat, stats.Mean, stats.StandardDeviation);
-            PixelPositionText.Text = string.Format(CultureInfo.InvariantCulture, "X {0}  Y {1}", x, y);
+            PixelPositionText.Text = string.Format(CultureInfo.InvariantCulture, "X {0,4}  Y {1,4}", x, y);
             PixelColorText.Text = BuildPixelColorStatus(document.Descriptor, description);
             PixelRawText.Text = BuildPixelByteStatus(description);
             UpdatePixelChannelStatus(document.Descriptor, description);
@@ -4883,17 +4883,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 PixelSwatch.Background = new SolidColorBrush(GetPixelStatusColor(descriptor, description));
                 double gv = descriptor.PixelFormat == RawPixelFormat.BGRA32 ? (r + g + b) / 3.0 : (r + g + b) / 3;
                 if (TryReadDoubleToken(description, "GV=", out var sourceGv)) gv = (int)sourceGv;
-                PixelGvText.Text = "GV " + gv.ToString("0.###", CultureInfo.InvariantCulture);
-                PixelRText.Text = "R " + r.ToString(CultureInfo.InvariantCulture);
-                PixelGText.Text = "G " + g.ToString(CultureInfo.InvariantCulture);
-                PixelBText.Text = "B " + b.ToString(CultureInfo.InvariantCulture);
+                PixelGvText.Text = "GV " + gv.ToString("0.###", CultureInfo.InvariantCulture).PadLeft(3);
+                PixelRText.Text = "R " + r.ToString(CultureInfo.InvariantCulture).PadLeft(3);
+                PixelGText.Text = "G " + g.ToString(CultureInfo.InvariantCulture).PadLeft(3);
+                PixelBText.Text = "B " + b.ToString(CultureInfo.InvariantCulture).PadLeft(3);
                 PixelRSwatch.Background = new SolidColorBrush(Color.FromRgb(ToByte(r), 0, 0));
                 PixelGSwatch.Background = new SolidColorBrush(Color.FromRgb(0, ToByte(g), 0));
                 PixelBSwatch.Background = new SolidColorBrush(Color.FromRgb(0, 0, ToByte(b)));
 
                 if (PixelAChip.Visibility == Visibility.Visible)
                 {
-                    PixelAText.Text = "A " + a.ToString(CultureInfo.InvariantCulture);
+                    PixelAText.Text = "A " + a.ToString(CultureInfo.InvariantCulture).PadLeft(3);
                     PixelASwatch.Background = new SolidColorBrush(Color.FromRgb(ToByte(a), ToByte(a), ToByte(a)));
                 }
 

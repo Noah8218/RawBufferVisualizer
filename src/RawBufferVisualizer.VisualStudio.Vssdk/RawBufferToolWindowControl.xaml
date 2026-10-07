@@ -800,40 +800,40 @@
                             <Grid x:Name="PixelReadoutHost" Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBlock x:Name="PixelEmptyText" Text="Move the pointer over the image to read pixel values." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                 <WrapPanel x:Name="PixelReadoutWrap" TextElement.FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Center">
-<TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+<TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,14,0"/>
                                     <Grid x:Name="PixelChannelGroup" VerticalAlignment="Center">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="PixelSwatch" Width="12" Height="12" CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center" Background="#1E1E1E" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
                                         <Grid Grid.Column="1"><Border x:Name="PixelValueChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1">
                             <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     </Border><WrapPanel x:Name="PixelChannelsPanel" Orientation="Horizontal" Visibility="Collapsed">
-                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
+                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,14,0">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelRSwatch" Width="0" Height="12" Margin="0" Background="#550000" BorderBrush="#AAAAAA" BorderThickness="0"/>
                                 <TextBlock x:Name="PixelRText" TextWrapping="Wrap" Text="R -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
+                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,14,0">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelGSwatch" Width="0" Height="12" Margin="0" Background="#005500" BorderBrush="#AAAAAA" BorderThickness="0"/>
                                 <TextBlock x:Name="PixelGText" TextWrapping="Wrap" Text="G -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
+                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,14,0">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelBSwatch" Width="0" Height="12" Margin="0" Background="#000055" BorderBrush="#AAAAAA" BorderThickness="0"/>
                                 <TextBlock x:Name="PixelBText" TextWrapping="Wrap" Text="B -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
-                        <Border x:Name="PixelAChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0" Visibility="Collapsed">
+                        <Border x:Name="PixelAChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,14,0" Visibility="Collapsed">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelASwatch" Width="0" Height="12" Margin="0" Background="#555555" BorderBrush="#AAAAAA" BorderThickness="0"/>
                                 <TextBlock x:Name="PixelAText" TextWrapping="Wrap" Text="A -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
                     <TextBlock x:Name="PixelGvText" TextWrapping="Wrap" FontSize="13" VerticalAlignment="Center"/></WrapPanel></Grid>
-                                    </Grid><TextBlock x:Name="PixelColorText" Text="RGB -" Visibility="Collapsed"/><TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                    <TextBlock x:Name="PixelOffsetText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                                    <TextBlock x:Name="PixelNeighborhoodStatsText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    </Grid><TextBlock x:Name="PixelColorText" Text="RGB -" Visibility="Collapsed"/><TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" Margin="14,0,0,0"/>
+                                    <TextBlock x:Name="PixelOffsetText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="14,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PixelNeighborhoodStatsText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="14,0,0,0" VerticalAlignment="Center"/>
 
                                 </WrapPanel>
                                 <Button x:Name="PixelBarPinButton" Content="Pin" Click="PinPixel_Click" Style="{StaticResource PixelBarAction}" Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center" IsEnabled="{Binding IsEnabled, ElementName=PinPixelButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)"/>
