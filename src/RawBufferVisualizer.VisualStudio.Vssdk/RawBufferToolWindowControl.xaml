@@ -591,10 +591,10 @@
                                 </Button.ToolTip>
                             </Button>
                         </Grid>
-                        <Button x:Name="ScanNowButton" Grid.Column="1" HorizontalAlignment="Right"
+                        <Button x:Name="ScanNowButton" Grid.Row="1" Grid.ColumnSpan="2" HorizontalAlignment="Right"
                                 IsEnabled="{Binding CanScan}"
                                 Content="Scan now"
-                                Margin="6,0,0,0"
+                                Margin="0,6,0,0"
                                 ToolTip="Scan the current stack frame without waiting for another break"
                                 AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
                                 Click="ScanNow_Click"/>
@@ -750,7 +750,7 @@
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <Grid x:Name="ImageHeaderNames" VerticalAlignment="Center" Margin="0,0,10,0">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <Grid.ColumnDefinitions><ColumnDefinition><ColumnDefinition.Style><Style TargetType="ColumnDefinition"><Setter Property="Width" Value="*"/><Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=ImageTypeText}" Value="Visible"><Setter Property="Width" Value="Auto"/></DataTrigger></Style.Triggers></Style></ColumnDefinition.Style></ColumnDefinition><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                             <TextBlock x:Name="ImageNameText" Text="{Binding ObjectName, NotifyOnTargetUpdated=True, FallbackValue=No image selected, TargetNullValue=No image selected}" ToolTip="{Binding ObjectName}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
                             <TextBlock x:Name="ImageTypeText" Grid.Column="1" Text="{Binding SourceType, NotifyOnTargetUpdated=True}" ToolTip="{Binding SourceType}" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" Margin="8,0,0,0" VerticalAlignment="Center"/>
                         </Grid>
