@@ -17,6 +17,8 @@ namespace RawBufferVisualizer.Core
         public bool UsesRawValues { get; }
         public double Minimum { get; }
         public double Maximum { get; }
+        public double Mean { get; }
+        public double StandardDeviation { get; }
         public double LowerBound { get; }
         public double UpperBound { get; }
 
@@ -28,16 +30,24 @@ namespace RawBufferVisualizer.Core
             var minimum = double.PositiveInfinity;
             var maximum = double.NegativeInfinity;
             var excluded = 0;
+            var finite = 0;
+            var mean = 0.0;
+            var sumSquaredDelta = 0.0;
             foreach (var value in values)
             {
                 if (double.IsNaN(value) || double.IsInfinity(value)) { excluded++; continue; }
                 minimum = Math.Min(minimum, value);
                 maximum = Math.Max(maximum, value);
+                var delta = value - mean;
+                mean += delta / ++finite;
+                sumSquaredDelta += delta * (value - mean);
             }
             cancellationToken.ThrowIfCancellationRequested();
             ExcludedCount = excluded;
             Minimum = FiniteCount == 0 ? double.NaN : minimum;
             Maximum = FiniteCount == 0 ? double.NaN : maximum;
+            Mean = finite == 0 ? double.NaN : mean;
+            StandardDeviation = finite == 0 ? double.NaN : Math.Sqrt(Math.Max(0, sumSquaredDelta / finite));
             var numericRange = usesRawValues && (descriptor.PixelFormat == RawPixelFormat.Float32 || descriptor.PixelFormat == RawPixelFormat.Int32);
             LowerBound = numericRange && FiniteCount > 0 ? minimum : 0;
             var nominalMaximum = !usesRawValues ? 255 : descriptor.PixelFormat == RawPixelFormat.Mono16

@@ -610,7 +610,7 @@ try {
         $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory([byte[]]@(9,30,90,9,30,90,9,30,90),$hDescriptor)
         $histogram.SetSource($histogramSource); $histogram.SetVisible($true); Wait-HistogramResult $histogram
         Arrange-Control $histogramView 300 360
-        if ($histogramView.FindName('HistogramFrequencyScale').Text -ne 'Count · linear · max 3' -or $histogramView.FindName('HistogramCoverage').Text -ne 'Coverage: full image · 3 px' -or $histogramView.FindName('HistogramValueRange').Text -ne 'min 43 · max 43') { throw 'Docked histogram captions disagree with the three RGB samples' }
+        if ($histogramView.FindName('HistogramFrequencyScale').Text -ne 'Count · linear · max 3' -or $histogramView.FindName('HistogramCoverage').Text -ne 'Coverage: full image · 3 px' -or $histogramView.FindName('HistogramValueRange').Text -ne 'min 43 · max 43 · mean 43.0 · std 0.0') { throw 'Docked histogram captions disagree with the three RGB samples' }
         if ($histogramView.FindName('HistogramFrequencyScale').LineHeight -ne 16.675 -or $histogramView.FindName('HistogramCoverage').LineHeight -ne 18 -or $histogramView.FindName('HistogramCoverage').Foreground.Color.ToString() -ne '#FFF1F1F1') { throw 'Docked histogram result typography differs from approved captions' }
         $histogramAction=$histogramView.FindName('HistogramAction')
         if ($histogramAction.Content -ne 'Refresh' -or $histogramAction.ContentTemplate -ne $histogramView.Resources['DockedHistogramActionTemplate']) { throw 'Docked histogram action lost the Refresh icon template or caption' }
@@ -633,7 +633,7 @@ try {
         Save-Render $standaloneHistogram 420 360 'histogram-standalone-full.png'
         $histogramCases+=[pscustomobject]@{Case='RGB full';Docked=$histogram.DockedCoverage;Standalone=$histogram.Coverage;Range=$histogram.DockedValueRange}
         $histogram.SetVisible($true); $histogramView.FindName('HistogramChannel').SelectedIndex=2; Wait-HistogramResult $histogram
-        if ($histogram.SelectedChannelIndex -ne 2 -or $histogram.DockedValueRange -ne 'min 30 · max 30' -or $standaloneHistogram.FindName('HistogramChannel').SelectedIndex -ne 2) { throw 'Shared histogram channel binding lost its two-way contract' }
+        if ($histogram.SelectedChannelIndex -ne 2 -or $histogram.DockedValueRange -ne 'min 30 · max 30 · mean 30.0 · std 0.0' -or $standaloneHistogram.FindName('HistogramChannel').SelectedIndex -ne 2) { throw 'Shared histogram channel binding lost its two-way contract' }
         $histogramCases+=[pscustomobject]@{Case='G selection';Range=$histogram.DockedValueRange}
         $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
         $hDescriptor.Width=2; $hDescriptor.Stride=8; $hDescriptor.PixelFormat='Float32'; $hDescriptor.ValidBits=32
@@ -641,13 +641,14 @@ try {
         $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory($hBytes,$hDescriptor)
         $histogram.SetSource($histogramSource); Wait-HistogramResult $histogram
         Arrange-Control $histogramView 300 360
-        if ($histogram.DockedValueRange -ne 'min 0.250 · max 1.000' -or $histogram.ValueRange -ne 'Range: 0.25 to 1') { throw 'Float histogram formatting changed data or standalone output' }
+        if ($histogram.DockedValueRange -ne 'min 0.250 · max 1.000 · mean 0.625 · std 0.375' -or $histogram.ValueRange -ne 'Range: 0.25 to 1') { throw 'Float histogram formatting changed data or standalone output' }
+        if ($histogramView.FindName('HistogramLowerLabel').Text -ne '0.250' -or $histogramView.FindName('HistogramUpperLabel').Text -ne '1.000' -or $histogram.DockedMiddleLabel -ne '0.625') { throw 'Docked Float histogram axis lost the approved three-decimal format' }
         $histogramCases+=[pscustomobject]@{Case='Float32';Docked=$histogram.DockedValueRange;Standalone=$histogram.ValueRange}
         $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
         $hDescriptor.Width=1; $hDescriptor.Stride=4
         $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory([BitConverter]::GetBytes([single]::MaxValue),$hDescriptor)
         $histogram.SetVisible($true); $histogram.SetSource($histogramSource); Wait-HistogramResult $histogram
-        if ($histogram.DockedValueRange -ne 'min 3.40282347E+38 · max 3.40282347E+38') { throw 'Large Float32 histogram lost its bounded scientific display' }
+        if ($histogram.DockedValueRange -ne 'min 3.40282347E+38 · max 3.40282347E+38 · mean 3.40282347E+38 · std 0.000') { throw 'Large Float32 histogram lost its bounded scientific display' }
         $histogramCases+=[pscustomobject]@{Case='Float32 maximum';Docked=$histogram.DockedValueRange}
         $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
         $hDescriptor.Width=257; $hDescriptor.Height=257; $hDescriptor.Stride=257; $hDescriptor.PixelFormat='Mono8'; $hDescriptor.ValidBits=8
