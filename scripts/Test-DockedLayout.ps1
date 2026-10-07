@@ -184,6 +184,13 @@ try {
             }
             if ($section -eq 'Compare') {
                 $slotA=$control.FindName('CompareASlot'); $slotB=$control.FindName('CompareBSlot'); $compare=$control.FindName('CompareSection')
+                $setActions=$control.FindName('CompareSetActions'); $viewActions=$control.FindName('CompareViewActions'); $caption=$control.FindName('CompareCaptionText')
+                foreach ($pair in @(@($slotB,$setActions),@($setActions,$viewActions),@($viewActions,$caption))) {
+                    $before=$pair[0].TranslatePoint([Windows.Point]::new(0,0),$compare); $after=$pair[1].TranslatePoint([Windows.Point]::new(0,0),$compare)
+                    if ([Math]::Abs($after.Y-$before.Y-$pair[0].ActualHeight-12) -gt 0.5) { throw 'Compare action rows lost the approved 12px section gap' }
+                }
+                if ([Windows.Media.TextOptions]::GetTextFormattingMode($caption) -ne 'Ideal' -or $caption.LineStackingStrategy -ne 'BlockLineHeight') { throw 'Compare caption lost the approved fractional text metrics' }
+                if ($caption.ActualWidth -ge 270 -and [Math]::Abs($caption.ActualHeight-33.35) -gt 0.5) { throw 'Compare caption does not wrap into the approved two lines at the full panel width' }
                 if ($slotB.TranslatePoint([Windows.Point]::new(0,0),$compare).Y -lt $slotA.ActualHeight) { throw 'Compare A/B slots are not stacked vertically' }
                 foreach ($slot in @($slotA,$slotB)) {
                     $thumbnail=$slot.Child.Children[0]
