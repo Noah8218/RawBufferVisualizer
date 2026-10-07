@@ -127,9 +127,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ProfileB = IsColor ? Plot(line, sample => sample.B) : Geometry.Empty;
             var levels = options ?? source.CreateRenderOptions();
             ProfileValue = IsColor ? Geometry.Empty : Plot(line, sample => (sample.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
-            ProfileLowLabel = _isFloat ? Format(levels.BlackLevel) : "0";
-            ProfileMiddleLabel = _isFloat ? Format((levels.BlackLevel + levels.WhiteLevel) / 2) : "128";
-            ProfileHighLabel = _isFloat ? Format(levels.WhiteLevel) : "255";
+            ProfileLowLabel = _isFloat ? Format(levels.BlackLevel, 2) : "0";
+            ProfileMiddleLabel = _isFloat ? Format((levels.BlackLevel + levels.WhiteLevel) / 2, 2) : "128";
+            ProfileHighLabel = _isFloat ? Format(levels.WhiteLevel, 2) : "255";
             ProfileRMarker = IsColor ? Marker(current.R) : Geometry.Empty;
             ProfileGMarker = IsColor ? Marker(current.G) : Geometry.Empty;
             ProfileBMarker = IsColor ? Marker(current.B) : Geometry.Empty;
@@ -187,8 +187,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         }
 
         private double Value(Sample sample) => _selectedChannel == "R" ? sample.R : _selectedChannel == "G" ? sample.G : _selectedChannel == "B" ? sample.B : sample.Value;
-        private string Format(double value) => value.ToString(_isFloat ? "G5" : "0.###", CultureInfo.InvariantCulture);
-        private string FormatStatistic(double value, int decimals) => value.ToString("F" + (_isFloat ? 3 : decimals), CultureInfo.InvariantCulture);
+        private string Format(double value, int decimals = 3)
+        {
+            if (!_isFloat) return value.ToString("0.###", CultureInfo.InvariantCulture);
+            return value.ToString(Math.Abs(value) >= 1e21 ? "G9" : "F" + decimals, CultureInfo.InvariantCulture);
+        }
+        private string FormatStatistic(double value, int decimals) => value.ToString(_isFloat && Math.Abs(value) >= 1e21 ? "G9" : "F" + (_isFloat ? 3 : decimals), CultureInfo.InvariantCulture);
         private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
 
         private static Geometry Marker(double value)
@@ -282,7 +286,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var foreground = new SolidColorBrush(name == "R" ? Color.FromRgb(224, 108, 117) : name == "G" ? Color.FromRgb(152, 195, 121) : name == "B" ? Color.FromRgb(97, 175, 239) : Color.FromRgb(163, 167, 174));
                 foreground.Freeze();
                 Foreground = foreground;
-                Decimal = value.ToString(floating ? "G5" : "0.###", CultureInfo.InvariantCulture);
+                var format = floating ? "F5" : "0.###";
+                if (floating && Math.Abs(value) >= 1e21) format = "G9";
+                Decimal = (floating ? (double)(float)value : value).ToString(format, CultureInfo.InvariantCulture);
                 Hex = hex ?? (floating || double.IsNaN(value) || double.IsInfinity(value) ? "—" : "0x" + (name == "Value" && value < 0 ? unchecked((uint)(int)value).ToString("X8", CultureInfo.InvariantCulture) : ((long)value).ToString("X2", CultureInfo.InvariantCulture)));
             }
         }

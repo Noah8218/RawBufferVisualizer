@@ -20,7 +20,7 @@ foreach ($name in @('Microsoft.VisualStudio.Imaging.dll', 'Microsoft.VisualStudi
 function Arrange-Control($element, [double]$width, [double]$height) {
     $element.Measure([Windows.Size]::new($width, $height))
     $element.Arrange([Windows.Rect]::new(0, 0, $width, $height))
-    [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [Windows.Threading.DispatcherPriority]::DataBind)
+    [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{}, [Windows.Threading.DispatcherPriority]::Loaded)
     $element.UpdateLayout()
 }
 function Save-Render($element, [int]$width, [int]$height, [string]$name) {
@@ -494,7 +494,53 @@ try {
     if (@($control.FindName('PixelVisualization').DataContext.Cells | Where-Object { $_.Value -eq '—' }).Count -ne 16) { throw 'Corner neighborhood lost the required out-of-image cells' }
     Save-Render $control $control.Width $control.Height 'pixel-corner-neighborhood.png'
 
-    [pscustomobject]@{ Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    # Reproduce a fixed-width RGB -> Float32 document switch through the real binding path.
+    $sourceDescriptor=[RawBufferVisualizer.Core.RawImageDescriptor]::new()
+    $sourceDescriptor.Width=640; $sourceDescriptor.Height=480; $sourceDescriptor.Stride=2560
+    $sourceDescriptor.PixelFormat='Float32'; $sourceDescriptor.ValidBits=32
+    $sourceValues=New-Object single[] (640*480); $sourceValues[0]=0.75
+    $sourceBytes=New-Object byte[] (640*480*4); [Buffer]::BlockCopy($sourceValues,0,$sourceBytes,0,$sourceBytes.Length)
+    $sourcePath=Join-Path $output 'depthMapF32.rbuf.json'
+    [RawBufferVisualizer.Sdk.RawBufferSnapshot]::Save($sourcePath,$sourceBytes,$sourceDescriptor) | Out-Null
+    $control.Width=1000; $control.Height=698; Arrange-Control $control 1000 698
+    $control.GetType().GetMethod('OpenPath',$flags).Invoke($control,[object[]]@([string]$sourcePath.PSObject.BaseObject,'depthMapF32','OpenCvSharp.Mat',$null,$false,0,[long]0,[long]0,$null)) | Out-Null
+    $hover.Invoke($control,[object[]]@($null,[RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0,0))) | Out-Null
+    Arrange-Control $control 1000 698
+    $imageName=$control.FindName('ImageNameText')
+    if ($imageName.Text -ne 'depthMapF32' -or $imageName.ActualWidth -lt 84 -or $control.FindName('ImageTypeText').Visibility -ne 'Collapsed') { throw 'Document switch still reserves SourceType while clipping the required image name' }
+    if ($control.FindName('PixelValueText').Text -ne '0.75000' -or $control.FindName('PixelNeighborhoodStatsText').Text -ne '5×5 μ 0.0833 σ 0.2357') { throw 'Float pixel bar differs from the approved precision or the fixture statistics' }
+    $sourceDocument=$control.GetType().GetProperty('_activeDocument',$flags).GetValue($control,$null)
+    $inventory=[Collections.Generic.List[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]]::new()
+    $member=[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]::new(); $member.Name='DataPointer'; $inventory.Add($member)
+    $sourceCases=@()
+    foreach ($validation in @('', 'Fixture validation warning')) {
+        $sourceDocument.SetAutomaticInspection(100,'Data → DataPointer · Width → Cols · Height → Rows · Stride → Step() · Format → Type()',$validation,$inventory,'',0,$false,$null)
+        $control.GetType().GetMethod('UpdateAutomaticInspectionPanel',$flags).Invoke($control,[object[]]@($sourceDocument)) | Out-Null
+        $nav.Show('Format'); Arrange-Control $control 1000 698
+        $confidence=$control.FindName('AutomaticInspectionConfidenceText'); $validationText=$control.FindName('AutomaticInspectionValidationText')
+        if ($confidence.Text -ne 'Automatic Vision Inspector · Confidence 100%' -or $confidence.FontSize -ne 12 -or $confidence.LineHeight -ne 18 -or $confidence.Foreground.Color.ToString() -ne '#FFF1F1F1') { throw 'Source caption differs from the approved text/typography' }
+        if (($validationText.Visibility -eq 'Visible') -ne (-not [string]::IsNullOrEmpty($validation)) -or $validationText.Text -ne $validation) { throw 'Source validation text was hidden or left an empty row' }
+        if ($control.FindName('EditAutomaticMappingButton').Visibility -ne 'Visible') { throw 'Source styling changed the existing member-inventory mapping contract' }
+        $sourceCases+=[pscustomobject]@{ Validation=$validation; Visibility=[string]$validationText.Visibility; Confidence=$confidence.Text; ImageNameWidth=$imageName.ActualWidth }
+        Save-Render $control 1000 698 $(if ($validation) { 'source-validation.png' } else { 'source-clean.png' })
+    }
+    $sourceDocument.SetAutomaticInspection(100,'','',[Collections.Generic.List[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]]::new(),'',0,$false,$null)
+    $control.GetType().GetMethod('UpdateAutomaticInspectionPanel',$flags).Invoke($control,[object[]]@($sourceDocument)) | Out-Null
+    if ($control.FindName('EditAutomaticMappingButton').Visibility -ne 'Collapsed') { throw 'Source styling enabled mapping without member inventory' }
+    $targetUpdated=$control.GetType().GetMethod('ImageInfoBar_TargetUpdated',$flags)
+    $headerOperation=$control.GetType().GetField('_imageHeaderUpdate',$flags)
+    foreach ($cleanup in @('InspectorHost_Unloaded','Dispose')) {
+        $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
+        $pendingHeader=$headerOperation.GetValue($control)
+        if ($null -eq $pendingHeader -or $pendingHeader.Status -ne 'Pending') { throw 'Header refresh was not deferred' }
+        if ($cleanup -eq 'Dispose') { $control.Dispose() }
+        else { $control.GetType().GetMethod($cleanup,$flags).Invoke($control,[object[]]@($null,[Windows.RoutedEventArgs]::new())) | Out-Null }
+        if ($null -ne $headerOperation.GetValue($control) -or $pendingHeader.Status -ne 'Aborted') { throw "Header refresh survived its lifetime owner: $cleanup" }
+    }
+    $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
+    if ($null -ne $headerOperation.GetValue($control)) { throw 'Disposed view accepted a new header refresh' }
+
+    [pscustomobject]@{ SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"

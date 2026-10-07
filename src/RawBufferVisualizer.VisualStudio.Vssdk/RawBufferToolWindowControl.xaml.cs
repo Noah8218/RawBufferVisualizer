@@ -65,6 +65,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private readonly InspectorNavigationViewModel _inspector = new InspectorNavigationViewModel();
         private bool _applyingInspectorLayout;
         private bool _applyingImageHeaderLayout;
+        private DispatcherOperation? _imageHeaderUpdate;
         private readonly AutomaticInspectionStatusViewModel _inspectionStatus = new AutomaticInspectionStatusViewModel();
         private readonly PixelMeasurementViewModel _measurement = new PixelMeasurementViewModel();
         private bool _savingSnapshot;
@@ -1632,6 +1633,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             CancelAutomaticInspectionWork(true);
 #pragma warning restore VSTHRD010
             _disposed = true;
+            _imageHeaderUpdate?.Abort();
+            _imageHeaderUpdate = null;
             _snapshotExport.Dispose();
             _histogram.Dispose();
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
@@ -3039,9 +3042,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             AutomaticInspectionPanel.Visibility = Visibility.Visible;
-            AutomaticInspectionConfidenceText.Text = document.AutomaticConfidenceText;
+            AutomaticInspectionConfidenceText.Text = "Automatic Vision Inspector · " + document.AutomaticConfidenceText;
             AutomaticInspectionMembersText.Text = document.AutomaticMembersSummary;
             AutomaticInspectionValidationText.Text = document.AutomaticValidationSummary;
+            AutomaticInspectionValidationText.Visibility = string.IsNullOrWhiteSpace(document.AutomaticValidationSummary) ? Visibility.Collapsed : Visibility.Visible;
             EditAutomaticMappingButton.Visibility = (document.HasMemberInventory
                     || document.SuggestedMappingMembers != null)
                 && (!document.IsError || document.AutomaticMappingRequired)
@@ -3773,7 +3777,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateImageHeaderLayout();
         }
 
-        private void ImageInfoBar_TargetUpdated(object sender, DataTransferEventArgs e) => UpdateImageHeaderLayout();
+        private void ImageInfoBar_TargetUpdated(object sender, DataTransferEventArgs e)
+        {
+            if (_disposed || _imageHeaderUpdate != null) return;
+            // TargetUpdated already runs on the View dispatcher; defer measurement until binding/render completes.
+#pragma warning disable VSTHRD001
+            _imageHeaderUpdate = Dispatcher.BeginInvoke(DispatcherPriority.Loaded, new Action(() =>
+            {
+                _imageHeaderUpdate = null;
+                if (!_disposed) UpdateImageHeaderLayout();
+            }));
+#pragma warning restore VSTHRD001
+        }
 
         private void UpdateImageHeaderLayout()
         {
@@ -4834,14 +4849,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var left = Math.Max(0, x - 2);
             var top = Math.Max(0, y - 2);
             var stats = document.Source.GetStatistics(left, top, Math.Min(document.Descriptor.Width, x + 3) - left, Math.Min(document.Descriptor.Height, y + 3) - top);
-            PixelNeighborhoodStatsText.Text = string.Format(CultureInfo.InvariantCulture, "5×5 μ {0:0.0} σ {1:0.0}", stats.Mean, stats.StandardDeviation);
+            var statisticsFormat = document.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "5×5 μ {0:0.0000} σ {1:0.0000}" : "5×5 μ {0:0.0} σ {1:0.0}";
+            PixelNeighborhoodStatsText.Text = string.Format(CultureInfo.InvariantCulture, statisticsFormat, stats.Mean, stats.StandardDeviation);
             PixelPositionText.Text = string.Format(CultureInfo.InvariantCulture, "X {0}  Y {1}", x, y);
             PixelColorText.Text = BuildPixelColorStatus(document.Descriptor, description);
             PixelRawText.Text = BuildPixelByteStatus(description);
             UpdatePixelChannelStatus(document.Descriptor, description);
             StylePixelReadout(PixelPositionText, "X", "Y");
             foreach (var text in new[] { PixelValueText, PixelRText, PixelGText, PixelBText, PixelAText, PixelGvText, PixelRawText, PixelOffsetText, PixelNeighborhoodStatsText })
-                StylePixelReadout(text, "GV", "R", "G", "B", "A", "Raw", "Offset", "5×5", "μ", "σ");
+                StylePixelReadout(text, "Value", "GV", "R", "G", "B", "A", "Raw", "Offset", "5×5", "μ", "σ");
             RefreshPixelBadge();
             ApplyPixelBarLayout();
         }
@@ -4896,7 +4912,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelChannelsPanel.Visibility = Visibility.Collapsed;
             PixelAChip.Visibility = Visibility.Collapsed;
 
-            PixelValueText.Text = BuildPixelColorStatus(descriptor, description);
+            PixelValueText.Text = descriptor.PixelFormat == RawPixelFormat.Float32 && TryReadDoubleToken(description, "Value=", out var floatingValue)
+                ? ((double)(float)floatingValue).ToString(Math.Abs(floatingValue) >= 1e21 ? "G9" : "F5", CultureInfo.InvariantCulture)
+                : BuildPixelColorStatus(descriptor, description);
             PixelSwatch.Background = new SolidColorBrush(GetPixelStatusColor(descriptor, description));
         }
 
@@ -5102,6 +5120,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void InspectorHost_Unloaded(object sender, RoutedEventArgs e)
         {
+            _imageHeaderUpdate?.Abort();
+            _imageHeaderUpdate = null;
             InspectorOverlayPopup.IsOpen = false;
             ImageList.ContextMenu.IsOpen = AutomaticHelpTip.IsOpen = false;
             InterpretPixelFormatBox.IsDropDownOpen = InterpretByteOrderBox.IsDropDownOpen = false;
