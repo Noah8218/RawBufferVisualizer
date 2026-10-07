@@ -134,10 +134,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ProfileGMarker = IsColor ? Marker(current.G) : Geometry.Empty;
             ProfileBMarker = IsColor ? Marker(current.B) : Geometry.Empty;
             ProfileValueMarker = IsColor ? Geometry.Empty : Marker((current.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
-            ProfileStart = Math.Max(0, x - 8).ToString(CultureInfo.InvariantCulture);
+            ProfileStart = x >= 8 ? (x - 8).ToString(CultureInfo.InvariantCulture) : string.Empty;
             ProfileCenter = x.ToString(CultureInfo.InvariantCulture);
-            ProfileEnd = Math.Min(descriptor.Width - 1, x + 8).ToString(CultureInfo.InvariantCulture);
-            ProfileCaption = string.Format(CultureInfo.InvariantCulture, "Row {0} · x {1}–{2}", y, ProfileStart, ProfileEnd);
+            ProfileEnd = x + 8 < descriptor.Width ? (x + 8).ToString(CultureInfo.InvariantCulture) : string.Empty;
+            ProfileCaption = string.Format(CultureInfo.InvariantCulture, "Row {0} · x {1}–{2}", y, Math.Max(0, x - 8), Math.Min(descriptor.Width - 1, x + 8));
             Notify();
         }
 
@@ -194,7 +194,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private static Geometry Marker(double value)
         {
             if (double.IsNaN(value) || double.IsInfinity(value)) return Geometry.Empty;
-            var marker = new EllipseGeometry(new Point(120, 90 - Math.Max(0, Math.Min(255, value)) * 90 / 255), 3, 3);
+            var marker = new EllipseGeometry(new Point(149, 80 - Math.Max(0, Math.Min(255, value)) * 72 / 255), 3, 3);
             marker.Freeze();
             return marker;
         }
@@ -209,7 +209,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 {
                     double number = value(line[i]);
                     if (!line[i].IsAvailable || double.IsNaN(number) || double.IsInfinity(number)) { started = false; continue; }
-                    var point = new Point(i * 240.0 / 16, 90 - Math.Max(0, Math.Min(255, number)) * 90 / 255);
+                    var point = new Point(30 + i * 238.0 / 16, 80 - Math.Max(0, Math.Min(255, number)) * 72 / 255);
                     if (!started) context.BeginFigure(point, false, false);
                     else context.LineTo(point, true, false);
                     started = true;

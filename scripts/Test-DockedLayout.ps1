@@ -123,10 +123,24 @@ try {
                 $button.Template.FindName('RailBackground', $button).Background.Color.A -ne 0) { throw "Selected rail chrome differs from the mockup: $section" }
             if ($nav.IsNarrow) {
                 if ($control.FindName('InspectorOverlayPopup').Child -ne $panel -or $panel.Width -gt $width - 44) { throw "Overlay ownership/bounds failed at $width x $height" }
-                # Arrange the same popup content without opening a native window.
-                Arrange-Control $panel $panel.Width $height
+                # A closed PopupRoot can remeasure its child to zero. Arrange identical content in-process.
+                $probePopup=$control.FindName('InspectorOverlayPopup'); $probePopup.Child=$null
+                $probeRoot=[Windows.Controls.Grid]::new(); $probeRoot.Resources=$control.Resources
+                [Windows.Documents.TextElement]::SetForeground($probeRoot,$control.Foreground)
+                [Windows.Documents.TextElement]::SetFontFamily($probeRoot,$control.FontFamily)
+                [Windows.Documents.TextElement]::SetFontSize($probeRoot,$control.FontSize)
+                [Windows.NameScope]::SetNameScope($probeRoot,[Windows.NameScope]::GetNameScope($control))
+                $probeRoot.Children.Add($panel) | Out-Null
+                try { Arrange-Control $probeRoot $panel.Width $height }
+                finally { $probeRoot.Children.Clear(); $probePopup.Child=$panel }
             } elseif ($control.FindName('DockedInspectorHost').Content -ne $panel -or [Math]::Abs($panel.ActualWidth - 300) -gt 0.5) { throw 'Docked panel did not reuse the inspector' }
             if ($section -eq 'Pixel' -and $control.FindName('RowProfileGraph').ActualWidth -le 0) { throw 'Row profile is unavailable' }
+            if ($section -eq 'Pixel') {
+                $graph=$control.FindName('RowProfileGraph')
+                if ([Math]::Abs($graph.ActualHeight-$graph.ActualWidth*96/276) -gt 0.5) { throw 'Row profile no longer uses the approved SVG aspect ratio' }
+                $stats=$control.FindName('PixelStatisticsCards')
+                if ([Math]::Abs($stats.ActualHeight-39.8) -gt 1) { throw 'Statistics card typography differs from the approved row heights' }
+            }
             if ($section -eq 'Pixel') {
                 $cells = $control.FindName('PixelNeighborhoodGrid')
                 $center = $cells.ItemContainerGenerator.ContainerFromIndex(12)
