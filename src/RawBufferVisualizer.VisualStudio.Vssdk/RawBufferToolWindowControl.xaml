@@ -1096,19 +1096,22 @@
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         <TextBlock Grid.Row="0" Grid.Column="0" Text="Pixel format" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" Style="{StaticResource LayoutChoice}" AutomationProperties.AutomationId="InterpretPixelFormatBox" Margin="0,0,0,6"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" SelectedItem="{Binding PixelFormat, Mode=TwoWay}" x:Name="InterpretPixelFormatBox" Style="{StaticResource LayoutChoice}" AutomationProperties.AutomationId="InterpretPixelFormatBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretWidthTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" Text="{Binding Width, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretWidthTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretHeightTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" Text="{Binding Height, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretHeightTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretStrideTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" Text="{Binding Stride, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretStrideTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="4" Grid.Column="0" Text="Valid bits" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Text="{Binding ValidBits, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
                         <TextBlock Grid.Row="5" Grid.Column="0" Text="Byte order" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="InterpretByteOrderBox" Style="{StaticResource LayoutChoice}" AutomationProperties.AutomationId="InterpretByteOrderBox" Margin="0,0,0,6"/>
-                        <StackPanel Grid.Row="6" Grid.ColumnSpan="2"><TextBlock x:Name="LayoutDerivedText" FontFamily="Cascadia Mono, Consolas" FontSize="11.5" LineHeight="16.675" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,8"/><WrapPanel>
-                            <Button x:Name="ApplyInterpretationButton" Content="Apply" Background="{DynamicResource StatusAccentBrush}" BorderBrush="{DynamicResource StatusAccentBrush}" AutomationProperties.AutomationId="ApplyInterpretationButton" Click="ApplyInterpretation_Click"/>
+                        <ComboBox Grid.Row="5" Grid.Column="1" SelectedItem="{Binding ByteOrder, Mode=TwoWay}" x:Name="InterpretByteOrderBox" Style="{StaticResource LayoutChoice}" AutomationProperties.AutomationId="InterpretByteOrderBox" Margin="0,0,0,6"/>
+                        <StackPanel Grid.Row="6" Grid.ColumnSpan="2"><TextBlock x:Name="LayoutDerivedText" Text="{Binding Derived}" FontFamily="Cascadia Mono, Consolas" FontSize="11.5" LineHeight="16.675" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,8"/>
+                            <TextBlock x:Name="LayoutErrorText" Text="{Binding Error}" Foreground="{DynamicResource ErrorTextBrush}" FontSize="11.5" TextWrapping="Wrap" Margin="0,0,0,8"><TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><Trigger Property="Text" Value=""><Setter Property="Visibility" Value="Collapsed"/></Trigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                            <WrapPanel>
+                            <Button x:Name="ApplyInterpretationButton" Content="Apply" Background="{DynamicResource StatusAccentBrush}" BorderBrush="{DynamicResource StatusAccentBrush}" AutomationProperties.AutomationId="ApplyInterpretationButton" Command="{Binding ApplyCommand}"/>
+                            <Button x:Name="ResetInterpretationButton" Content="Reset" Command="{Binding ResetCommand}" Margin="0" AutomationProperties.Name="Reset buffer layout"/>
 </WrapPanel></StackPanel></Grid>
 
                     <Border Style="{StaticResource InspectorCard}" Margin="0,12,0,0"><StackPanel>
@@ -1163,6 +1166,7 @@
                 </Border>
                     </StackPanel>
                     <StackPanel x:Name="CompareSection" Visibility="{Binding IsCompareSelected, Converter={StaticResource BooleanVisibility}}">
+                        <Grid x:Name="CompareSlots" Margin="0,0,0,12"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="6"/><ColumnDefinition Width="28"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <Border x:Name="CompareASlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0,0,0,6">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2"><Grid>
@@ -1175,7 +1179,7 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
-                        <Border x:Name="CompareBSlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0,0,0,12">
+                        <Border Grid.Row="1" x:Name="CompareBSlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2"><Grid>
                                     <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
@@ -1187,9 +1191,12 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
+                        <Button x:Name="SwapCompareButton" Grid.Column="2" Grid.RowSpan="2" Width="28" Height="28" MinWidth="0" Padding="0" Margin="0" VerticalAlignment="Center" Command="{Binding SwapCommand}" ToolTip="Swap A and B" AutomationProperties.Name="Swap A and B">
+                            <Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="M2.5 5.5H12.5 M10 3L12.5 5.5L10 8 M13.5 10.5H3.5 M6 8L3.5 10.5L6 13"/></Canvas></Viewbox>
+                        </Button></Grid>
                         <WrapPanel x:Name="CompareSetActions" Margin="0,0,0,12">
-                            <Button Content="Set current as A" Click="SetCompareA_Click"/>
-                            <Button Content="Set current as B" Click="SetCompareB_Click" Margin="0"/>
+                            <Button x:Name="SetCompareAButton" Content="Set current as A" Click="SetCompareA_Click"/>
+                            <Button x:Name="SetCompareBButton" Content="Set current as B" Click="SetCompareB_Click" Margin="0"/>
                         </WrapPanel>
                         <WrapPanel x:Name="CompareViewActions" Margin="0,0,0,12">
                             <Button Click="ShowSplit_Click" AutomationProperties.Name="Split"><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSplitGeometry}"/></Canvas></Viewbox><TextBlock Text="Split"/></StackPanel></Button>

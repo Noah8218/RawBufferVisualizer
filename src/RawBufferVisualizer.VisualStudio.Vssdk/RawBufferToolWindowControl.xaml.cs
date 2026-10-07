@@ -90,8 +90,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private int _automaticFailedCount;
         private int _automaticHiddenCount;
         private RawOpenGlViewState? _linkedViewState;
-        private ImageDocument? _compareA;
-        private ImageDocument? _compareB;
+        private readonly CompareSelectionViewModel<ImageDocument> _comparison = new CompareSelectionViewModel<ImageDocument>();
+        private readonly BufferLayoutViewModel _layout = new BufferLayoutViewModel();
+        private ImageDocument? _compareA { get => _comparison.A; set => _comparison.A = value; }
+        private ImageDocument? _compareB { get => _comparison.B; set => _comparison.B = value; }
         private readonly DispatcherTimer _blinkTimer;
         private bool _blinkShowingA;
         private double _lastZoomStatus = double.NaN;
@@ -175,6 +177,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ClearMeasurementButton.DataContext = _measurement;
             _measurement.PropertyChanged += Measurement_PropertyChanged;
             HistogramPanel.DataContext = _histogram;
+            InterpretControls.DataContext = _layout;
+            SwapCompareButton.DataContext = _comparison;
+            _layout.Applied += ApplyInterpretationDescriptor;
+            _layout.Failed += Layout_Failed;
+            _comparison.PropertyChanged += CompareSelection_PropertyChanged;
             ApplyVisualStudioTheme();
             VSColorTheme.ThemeChanged += VSColorTheme_ThemeChanged;
             LoadAutomaticInspectionPreferences();
@@ -1637,6 +1644,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _imageHeaderUpdate = null;
             _snapshotExport.Dispose();
             _histogram.Dispose();
+            _layout.Applied -= ApplyInterpretationDescriptor;
+            _layout.Failed -= Layout_Failed;
+            _comparison.PropertyChanged -= CompareSelection_PropertyChanged;
+            _layout.Clear();
+            _comparison.A = _comparison.B = null;
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _inspector.PropertyChanged -= InspectorNavigation_PropertyChanged;
@@ -3922,28 +3934,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ApplyInterpretation_Click(object sender, RoutedEventArgs e)
         {
-            if (_activeDocument == null)
-            {
-                return;
-            }
-
-
-            try
-            {
-                var descriptor = _activeDocument.Descriptor.Clone();
-                descriptor.PixelFormat = (RawPixelFormat)(InterpretPixelFormatBox.SelectedItem);
-                descriptor.ByteOrder = (RawByteOrder)(InterpretByteOrderBox.SelectedItem);
-                descriptor.Width = ParsePositiveInt(InterpretWidthTextBox.Text, "Width");
-                descriptor.Height = ParsePositiveInt(InterpretHeightTextBox.Text, "Height");
-                descriptor.Stride = ParsePositiveInt(InterpretStrideTextBox.Text, "Stride");
-                descriptor.ValidBits = ParsePositiveInt(InterpretValidBitsTextBox.Text, "Valid bits");
-                ApplyInterpretationDescriptor(descriptor);
-            }
-            catch (Exception ex)
-            {
-                DiagnosticsList.Items.Add("Error: reinterpret failed. " + ex.Message);
-            }
+            var command = ApplyInterpretationButton.Command;
+            if (command?.CanExecute(ApplyInterpretationButton.CommandParameter) == true) command.Execute(ApplyInterpretationButton.CommandParameter);
         }
+
+        private void Layout_Failed(string message) => DiagnosticsList.Items.Add("Error: reinterpret failed. " + message);
 
         private void ApplyInterpretationDescriptor(RawImageDescriptor descriptor)
         {
@@ -4489,28 +4484,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UpdateInterpretationControls(RawImageDescriptor descriptor)
         {
-            LayoutDerivedText.Text = string.Format(CultureInfo.InvariantCulture, "Row bytes {0:N0} · padding {1:N0} B/row · buffer {2:N0} B", descriptor.GetMinimumStride(), Math.Max(0, descriptor.Stride - descriptor.GetMinimumStride()), descriptor.GetRequiredByteCount());
+            if (_activeDocument == null) return;
+            _layout.SetSource(descriptor, _activeDocument.DeclaredDescriptor, _activeDocument.Source.Length);
             InterpretControls.IsEnabled = true;
-            InterpretPixelFormatBox.SelectedItem = descriptor.PixelFormat;
-            InterpretByteOrderBox.SelectedItem = descriptor.ByteOrder;
-            InterpretWidthTextBox.Text = descriptor.Width.ToString(CultureInfo.InvariantCulture);
-            InterpretHeightTextBox.Text = descriptor.Height.ToString(CultureInfo.InvariantCulture);
-            InterpretStrideTextBox.Text = descriptor.Stride.ToString(CultureInfo.InvariantCulture);
-            InterpretValidBitsTextBox.Text = descriptor.ValidBits.ToString(CultureInfo.InvariantCulture);
-
         }
 
         private void ClearInterpretationControls()
         {
-            InterpretPixelFormatBox.SelectedItem = null;
-            InterpretByteOrderBox.SelectedItem = null;
-            InterpretWidthTextBox.Text = string.Empty;
-            InterpretHeightTextBox.Text = string.Empty;
-            InterpretStrideTextBox.Text = string.Empty;
-            InterpretValidBitsTextBox.Text = string.Empty;
-
-
-            LayoutDerivedText.Text = string.Empty;
+            _layout.Clear();
             InterpretControls.IsEnabled = false;
         }
 
@@ -4538,6 +4519,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateStatus();
         }
 
+        private void CompareSelection_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e) => UpdateCompareText();
+
         private void UpdateCompareText(string? message = null)
         {
             if (CompareText == null)
@@ -4545,6 +4528,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            SetCompareAButton.IsEnabled = SetCompareBButton.IsEnabled = _activeDocument != null && !_activeDocument.IsError && !_activeDocument.IsSourceUnavailable;
             CompareASlot.DataContext = _compareA;
             CompareBSlot.DataContext = _compareB;
             CompareText.Text = message ?? string.Empty;
@@ -6062,6 +6046,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string MetaText => IsError ? SourceType : SizeText + " · " + FormatText + " · " + SourceType;
             public RawImageSource Source { get; private set; }
             public RawImageDescriptor Descriptor { get; private set; }
+            public RawImageDescriptor DeclaredDescriptor { get; private set; }
             public RawOpenGlViewState? ViewState { get; set; }
             public BitmapSource? Thumbnail { get; private set; }
             public string ErrorMessage { get; private set; }
@@ -6448,6 +6433,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Source = source ?? throw new ArgumentNullException("source");
                 Descriptor = descriptor == null ? throw new ArgumentNullException("descriptor") : descriptor.Clone();
+                DeclaredDescriptor = Descriptor.Clone();
                 try
                 {
                     Thumbnail = CreateThumbnailSource(Source, Descriptor);
@@ -6515,6 +6501,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     ValidBits = 8,
                     ByteOrder = RawByteOrder.LittleEndian
                 };
+                DeclaredDescriptor = Descriptor.Clone();
                 Source = RawImageSource.FromMemory(new byte[] { 0 }, Descriptor);
                 Thumbnail = CreateErrorThumbnailSource();
                 ErrorMessage = NormalizeErrorMessage(errorMessage);
@@ -6634,6 +6621,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             public void ReplaceSource(RawImageSource source, RawImageDescriptor descriptor)
             {
+                var declaredDescriptor = DeclaredDescriptor;
                 ReplaceSource(
                     DisplayPath,
                     source,
@@ -6646,6 +6634,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     DataAddress,
                     SourcePointerAddress,
                     SourcePointerLabel);
+                DeclaredDescriptor = declaredDescriptor;
             }
 
             public void ReplaceSource(
@@ -6703,6 +6692,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SourceType = string.IsNullOrWhiteSpace(sourceType) ? "Unknown" : sourceType;
                 Source = source;
                 Descriptor = nextDescriptor;
+                DeclaredDescriptor = nextDescriptor.Clone();
                 Thumbnail = nextThumbnail;
                 ViewState = null;
                 IsPreview = isPreview;
