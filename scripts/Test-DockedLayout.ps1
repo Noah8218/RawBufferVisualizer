@@ -414,6 +414,60 @@ try {
     $tip.Measure([Windows.Size]::new(340,[double]::PositiveInfinity));$helpWidth=[int][Math]::Ceiling($tip.DesiredSize.Width);$helpHeight=[int][Math]::Ceiling($tip.DesiredSize.Height)
     Arrange-Control $tip $helpWidth $helpHeight;Save-Render $tip $helpWidth $helpHeight 'automatic-help-content.png'
     Assert-InBounds $tip.Content.Children[1] $tip 'Automatic help rendered explanation'
+    if ([Math]::Abs($tip.Width-[Math]::Min(340,$control.FindName('AutomaticInspectionBar').ActualWidth+4)) -gt 0.5) { throw 'Automatic help width does not follow the image-panel content width' }
+    $nav.Show('Format');Arrange-Control $control $control.Width $control.Height
+    foreach ($name in @('InterpretPixelFormatBox','InterpretByteOrderBox')) {
+        $choice=$control.FindName($name);$choice.ApplyTemplate() | Out-Null
+        if ($choice.ActualHeight -ne 24 -or $choice.Template.FindName('ChoiceToggle',$choice) -eq $null) { throw "Layout choice lost the approved input template: $name" }
+        $choiceContent=$choice.Template.FindName('ChoiceContent',$choice)
+        Assert-InBounds $choiceContent $choice "Selected layout choice $name"
+        $drop=$choice.Template.FindName('PART_Popup',$choice);$dropContent=$drop.Child;$drop.Child=$null
+        $dropRoot=[Windows.Controls.Grid]::new();$dropRoot.Resources=$control.Resources
+        try {
+            $dropRoot.Children.Add($dropContent) | Out-Null
+            $dropContent.Measure([Windows.Size]::new($choice.ActualWidth,260))
+            $dropHeight=[int][Math]::Ceiling($dropContent.DesiredSize.Height)
+            Arrange-Control $dropRoot $choice.ActualWidth $dropHeight
+            if ($dropContent.Background.Color.ToString() -ne '#FF1E1E1E' -or $dropContent.BorderBrush.Color.ToString() -ne '#FF3F3F46') { throw "Layout dropdown has a platform color leak: $name" }
+            if ($dropHeight -le 2) { throw "Layout dropdown did not render its actual items: $name" }
+            Save-Render $dropRoot ([int]$choice.ActualWidth) $dropHeight "dropdown-$name.png"
+        } finally { $dropRoot.Children.Clear();$drop.Child=$dropContent }
+    }
+    $imageMenu=$control.FindName('ImageList').ContextMenu
+    $control.GetType().GetMethod('ImageListContextMenu_Opening',$flags).Invoke($control,[object[]]@($control.FindName('ImageList'),[Windows.RoutedEventArgs]::new())) | Out-Null
+    $imageMenu.ApplyTemplate() | Out-Null;$imageMenu.Measure([Windows.Size]::new(280,[double]::PositiveInfinity))
+    $menuWidth=[int][Math]::Ceiling($imageMenu.DesiredSize.Width);$menuHeight=[int][Math]::Ceiling($imageMenu.DesiredSize.Height)
+    Arrange-Control $imageMenu $menuWidth $menuHeight
+    if ($imageMenu.Background.Color.ToString() -ne '#FF2D2D30' -or $menuWidth -ne 196) { throw 'Image context menu differs from the approved menu width/palette' }
+    foreach ($item in $imageMenu.Items) {
+        if ($item -is [Windows.Controls.MenuItem] -and $item.Visibility -eq 'Visible') {
+            if ($item.ActualHeight -ne 26) { throw 'Image context-menu row differs from 26px' }
+            Assert-InBounds $item $imageMenu 'Existing image context-menu action'
+            if (-not $item.IsEnabled -and $item.Foreground.Color.ToString() -ne '#FF6E737B') { throw 'Unavailable image menu action is not visibly disabled' }
+        }
+    }
+    Save-Render $imageMenu $menuWidth $menuHeight 'image-context-menu.png'
+    $list=$control.FindName('ImageList');$container=$list.ItemContainerGenerator.ContainerFromIndex($list.SelectedIndex)
+    $pending=[Collections.Generic.Queue[Windows.DependencyObject]]::new();$pending.Enqueue($container);$cardPresenter=$null
+    while ($pending.Count -gt 0) {
+        $node=$pending.Dequeue()
+        if ($node -is [Windows.Controls.ContentPresenter] -and $node.ContentTemplate -eq $list.ItemTemplate) { $cardPresenter=$node;break }
+        for ($childIndex=0;$childIndex -lt [Windows.Media.VisualTreeHelper]::GetChildrenCount($node);$childIndex++) { $pending.Enqueue([Windows.Media.VisualTreeHelper]::GetChild($node,$childIndex)) }
+    }
+    if ($cardPresenter -eq $null) { throw 'Actual image-card template was not instantiated' }
+    $cardMore=$list.ItemTemplate.FindName('CardMoreButton',$cardPresenter)
+    if ($cardMore.ActualWidth -ne 22 -or $cardMore.ActualHeight -ne 22 -or $cardMore.Visibility -ne 'Visible') { throw 'Image-card More action lost its approved bounds or availability' }
+    Assert-InBounds $cardMore $container 'Image-card More action'
+    if ([Windows.Automation.AutomationProperties]::GetName($cardMore) -ne ('More actions for '+$list.SelectedItem.ObjectName)) { throw 'Image-card More accessibility lost its target image name' }
+    if ($nav.IsImageStrip) { throw 'Card action test requires the expanded image list' }
+    $nav.ToggleImageListCommand.Execute($null);Arrange-Control $control $control.Width $control.Height
+    if ($cardMore.Visibility -ne 'Collapsed') { throw 'Image-card More action remains visible in the thumbnail strip' }
+    $nav.ToggleImageListCommand.Execute($null);$nav.Show('Pixel');Arrange-Control $control $control.Width $control.Height
+    $hover.Invoke($control,[object[]]@($null,[RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0,0))) | Out-Null
+    Arrange-Control $control $control.Width $control.Height
+    if (@($control.FindName('PixelVisualization').DataContext.Cells | Where-Object { $_.Value -eq '—' }).Count -ne 16) { throw 'Corner neighborhood lost the required out-of-image cells' }
+    Save-Render $control $control.Width $control.Height 'pixel-corner-neighborhood.png'
+
     [pscustomobject]@{ Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."

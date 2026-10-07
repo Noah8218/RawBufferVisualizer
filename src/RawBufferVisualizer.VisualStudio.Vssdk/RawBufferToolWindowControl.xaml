@@ -350,13 +350,12 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/><Setter Property="SelectionBrush" Value="{DynamicResource StatusAccentBrush}"/>
             <Setter Property="MinHeight" Value="26"/><Setter Property="Padding" Value="6,3"/>
-            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
-                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="InputBorder" Property="BorderThickness" Value="2"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="InputBorder" Property="BorderThickness" Value="1"/></Trigger>
                     <Trigger Property="IsReadOnly" Value="True"><Setter Property="Opacity" Value="0.7"/></Trigger>
                     <Trigger Property="Validation.HasError" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="#F48771"/></Trigger>
-                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
@@ -378,7 +377,52 @@
                 <DataTrigger Binding="{Binding}" Value="BigEndian"><Setter Property="Text" Value="Big-endian"/></DataTrigger>
             </Style.Triggers>
         </Style>
-        <Style x:Key="LayoutChoice" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+        <GeometryGroup x:Key="IconErrorGeometry"><EllipseGeometry Center="8,8" RadiusX="6" RadiusY="6"/><PathGeometry Figures="M5.8 5.8l4.4 4.4M10.2 5.8l-4.4 4.4"/></GeometryGroup>
+        <Style x:Key="ImageContextItem" TargetType="MenuItem">
+            <Setter Property="Height" Value="26"/><Setter Property="Padding" Value="12,0"/><Setter Property="FontSize" Value="12"/><Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="Background" Value="Transparent"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="MenuItem"><Border x:Name="MenuRow" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="2"><ContentPresenter ContentSource="Header" VerticalAlignment="Center" RecognizesAccessKey="True"/></Border>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsHighlighted" Value="True"><Setter TargetName="MenuRow" Property="Background" Value="{StaticResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="MenuRow" Property="Background" Value="{StaticResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{StaticResource FaintTextBrush}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="ImageContextMenu" TargetType="ContextMenu">
+            <Setter Property="MinWidth" Value="196"/><Setter Property="MaxWidth" Value="280"/><Setter Property="Padding" Value="0,4"/>
+            <Setter Property="Background" Value="{StaticResource ToolbarBrush}"/><Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{StaticResource TextBrush}"/><Setter Property="FontFamily" Value="Segoe UI"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ContextMenu"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}"><StackPanel IsItemsHost="True" KeyboardNavigation.DirectionalNavigation="Cycle"/></Border></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="CardMoreAction" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="Width" Value="22"/><Setter Property="Height" Value="22"/><Setter Property="MinHeight" Value="22"/><Setter Property="MinWidth" Value="22"/><Setter Property="Padding" Value="0"/>
+            <Setter Property="Margin" Value="0,-1,-1,0"/><Setter Property="HorizontalAlignment" Value="Right"/><Setter Property="VerticalAlignment" Value="Top"/><Setter Property="Opacity" Value="0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding IsMouseOver, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"><Setter Property="Opacity" Value="1"/></DataTrigger>
+                <DataTrigger Binding="{Binding IsKeyboardFocusWithin, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"><Setter Property="Opacity" Value="1"/></DataTrigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="Opacity" Value="1"/></Trigger>
+            </Style.Triggers>
+        </Style>
+        <ControlTemplate x:Key="DockedLayoutChoiceTemplate" TargetType="ComboBox">
+            <Grid>
+                <ToggleButton x:Name="ChoiceToggle" IsChecked="{Binding IsDropDownOpen, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" Focusable="False" Margin="0" Padding="0" MinWidth="0" MinHeight="0" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1">
+                    <ToggleButton.Template><ControlTemplate TargetType="ToggleButton"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2"/></ControlTemplate></ToggleButton.Template>
+                </ToggleButton>
+                <ContentPresenter x:Name="ChoiceContent" Margin="6,0,24,0" Content="{TemplateBinding SelectionBoxItem}" ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}" ContentTemplateSelector="{TemplateBinding ItemTemplateSelector}" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                <Viewbox Width="16" Height="16" Margin="0,0,4,0" HorizontalAlignment="Right" IsHitTestVisible="False"><Canvas Width="16" Height="16"><Path Data="{StaticResource IconChevronDownGeometry}" Stroke="{StaticResource TextBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Canvas></Viewbox>
+                <Popup x:Name="PART_Popup" Placement="Bottom" AllowsTransparency="True" IsOpen="{TemplateBinding IsDropDownOpen}" Focusable="False" PopupAnimation="None">
+                    <Border x:Name="ChoicePopupBorder" MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}" MaxHeight="{TemplateBinding MaxDropDownHeight}" Background="{StaticResource InputBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" CornerRadius="2" TextElement.Foreground="{StaticResource TextBrush}" TextElement.FontFamily="Segoe UI" TextElement.FontSize="12">
+                        <ScrollViewer CanContentScroll="True" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto"><ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/></ScrollViewer>
+                    </Border>
+                </Popup>
+            </Grid>
+            <ControlTemplate.Triggers>
+                <Trigger Property="IsKeyboardFocusWithin" Value="True"><Setter TargetName="ChoiceToggle" Property="BorderBrush" Value="{StaticResource StatusAccentBrush}"/></Trigger>
+                <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+        </ControlTemplate>
+        <Style x:Key="LayoutChoice" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}"><Setter Property="Template" Value="{StaticResource DockedLayoutChoiceTemplate}"/>
             <Setter Property="Height" Value="24"/><Setter Property="MinHeight" Value="24"/><Setter Property="Padding" Value="6,0"/><Setter Property="FontSize" Value="12"/>
             <Setter Property="ItemTemplate"><Setter.Value><DataTemplate><TextBlock Style="{StaticResource LayoutSelectionText}"/></DataTemplate></Setter.Value></Setter>
         </Style>
@@ -510,7 +554,7 @@
                                     Click="AutomaticHelp_Click" PreviewKeyDown="AutomaticHelp_PreviewKeyDown">
                                 <Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconHelpGeometry}"/></Canvas></Viewbox>
                                 <Button.ToolTip>
-                                    <ToolTip x:Name="AutomaticHelpTip" StaysOpen="False" MaxWidth="340" Width="{Binding ActualWidth, ElementName=AutomaticInspectionBar}" Placement="Relative" VerticalOffset="26"
+                                    <ToolTip x:Name="AutomaticHelpTip" StaysOpen="False" MaxWidth="340" Placement="Relative" VerticalOffset="26"
                                              Background="{StaticResource ToolbarBrush}" Foreground="{StaticResource TextBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" Padding="10" FontFamily="Segoe UI" FontSize="11.5">
                                         <ToolTip.Template><ControlTemplate TargetType="ToolTip"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="3" Padding="{TemplateBinding Padding}"><ContentPresenter/></Border></ControlTemplate></ToolTip.Template>
                                         <StackPanel>
@@ -612,9 +656,11 @@
 
                     <ListBox Grid.Row="1" Margin="4,0,4,4" x:Name="ImageList" Background="{DynamicResource PanelBrush}" BorderThickness="0" Padding="0" ItemContainerStyle="{StaticResource ImageCardStyle}" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
                         <ListBox.ContextMenu>
-                            <ContextMenu>
+                            <ContextMenu Style="{StaticResource ImageContextMenu}" Opened="ImageListContextMenu_Opening"><ContextMenu.Resources>
+                                <Style TargetType="MenuItem" BasedOn="{StaticResource ImageContextItem}"/><Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
+                            </ContextMenu.Resources>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
-                                <MenuItem Header="Save raw snapshot" Click="SaveSnapshot_Click"/>
+                                <MenuItem Header="Save raw snapshot…" Click="SaveSnapshot_Click"/>
                                 <MenuItem x:Name="CopyPointerAddressMenuItem"
                                           Header="Copy pointer address"
                                           IsEnabled="False"
@@ -628,8 +674,8 @@
                                           AutomationProperties.AutomationId="CopyDataAddressMenuItem"
                                           Click="CopyDataAddress_Click"/>
                                 <Separator/>
-                                <MenuItem x:Name="OpenVariableMenuItem" Header="Open Variable..." AutomationProperties.AutomationId="OpenVariableMenuItem" Click="OpenVariable_Click"/>
-                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Connect Your Buffer" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
+                                <MenuItem x:Name="OpenVariableMenuItem" Header="Open variable…" AutomationProperties.AutomationId="OpenVariableMenuItem" Click="OpenVariable_Click"/>
+                                <MenuItem x:Name="MapThisTypeMenuItem" Header="Connect your buffer…" AutomationProperties.AutomationId="MapThisTypeMenuItem" Visibility="Collapsed" Click="MapThisType_Click"/>
                             </ContextMenu>
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
@@ -637,12 +683,13 @@
                                 <Grid x:Name="ImageCardContent" Margin="6" ToolTip="{Binding AccessibilityText}" AutomationProperties.Name="{Binding AccessibilityText}" AutomationProperties.HelpText="{Binding SourceAddressToolTip}">
                                     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="CardThumbnailColumn" Width="56"/><ColumnDefinition x:Name="CardTextColumn" Width="*"/></Grid.ColumnDefinitions>
-                                    <Border x:Name="CardThumbnail" Width="56" Height="42" CornerRadius="2" Background="{DynamicResource CanvasBrush}" VerticalAlignment="Top"><Grid><Image Source="{Binding Thumbnail}" Stretch="Uniform"/><TextBlock x:Name="StripStateText" Text="{Binding StateName}" Style="{StaticResource ImageStateText}" Background="{DynamicResource InputBrush}" FontSize="8.5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Visibility="Collapsed"/></Grid></Border>
+                                    <Border x:Name="CardThumbnail" Width="56" Height="42" CornerRadius="2" Background="{DynamicResource CanvasBrush}" VerticalAlignment="Top"><Grid><Image x:Name="CardDataImage" Source="{Binding Thumbnail}" Stretch="Uniform"/><Viewbox x:Name="CardPlaceholderIcon" Width="18" Height="18" Visibility="Collapsed"><Canvas Width="16" Height="16"><Path x:Name="CardPlaceholderPath" Data="{StaticResource IconErrorGeometry}" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Canvas></Viewbox><TextBlock x:Name="StripStateText" Text="{Binding StateName}" Style="{StaticResource ImageStateText}" Background="{DynamicResource InputBrush}" FontSize="8.5" HorizontalAlignment="Right" VerticalAlignment="Bottom" Visibility="Collapsed"/></Grid></Border>
                                     <StackPanel x:Name="CardSummary" Grid.Column="1" Margin="8,0,0,0">
                                         <TextBlock Text="{Binding ObjectName}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
                                         <TextBlock Text="{Binding MetaText}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" Margin="0,1,0,0"/>
                                         <WrapPanel Margin="0,1,0,0" HorizontalAlignment="Right"><Border Height="15" Padding="4,0,6,0" CornerRadius="2" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"><TextBlock Text="{Binding StateChipText}" Style="{StaticResource ImageStateText}" FontWeight="SemiBold" VerticalAlignment="Center"/></Border><Button Content="Map" Padding="4,0" MinWidth="28" Margin="6,0,0,0" Visibility="{Binding MappingActionVisibility}" ToolTip="Confirm only the unresolved member or pixel-format mapping" AutomationProperties.Name="Map this detected image type" Click="MapCandidate_Click"/></WrapPanel>
                                     </StackPanel>
+                                    <Button x:Name="CardMoreButton" Grid.ColumnSpan="2" Style="{StaticResource CardMoreAction}" ToolTip="More actions" AutomationProperties.Name="{Binding ObjectName, StringFormat=More actions for {0}}" Click="ImageCardMore_Click"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Data="{StaticResource IconMoreGeometry}" Fill="{DynamicResource TextBrush}" StrokeThickness="0"/></Canvas></Viewbox></Button>
                                     <StackPanel x:Name="CardDetails" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,1" Visibility="Collapsed">
                                         <DockPanel Visibility="{Binding SourcePointerVisibility}"><Button DockPanel.Dock="Right" Style="{StaticResource ImageIconButton}" MinWidth="20" Width="20" Height="20" Padding="0" Margin="4,0,0,0" ToolTip="Copy pointer address" AutomationProperties.Name="Copy pointer address" Click="CopyPointerAddress_Click"><Viewbox Width="12" Height="12"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox></Button><TextBlock Text="{Binding SourcePointerText}" FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
                                         <DockPanel Visibility="{Binding SourceAddressVisibility}" Margin="0,2,0,0"><Button DockPanel.Dock="Right" Style="{StaticResource ImageIconButton}" MinWidth="20" Width="20" Height="20" Padding="0" Margin="4,0,0,0" ToolTip="Copy pixel address" AutomationProperties.Name="Copy pixel address" Click="CopyDataAddress_Click"><Viewbox Width="12" Height="12"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox></Button><TextBlock Text="{Binding SourceAddressText}" FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
@@ -651,9 +698,11 @@
                                     </StackPanel>
                                 </Grid>
                                 <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsError}" Value="True"><Setter TargetName="CardDataImage" Property="Visibility" Value="Collapsed"/><Setter TargetName="CardPlaceholderIcon" Property="Visibility" Value="Visible"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding StateName}" Value="MAP"><Setter TargetName="CardDataImage" Property="Visibility" Value="Collapsed"/><Setter TargetName="CardPlaceholderIcon" Property="Visibility" Value="Visible"/><Setter TargetName="CardPlaceholderPath" Property="Data" Value="{StaticResource IconImageGeometry}"/></DataTrigger>
                                     <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"><Setter TargetName="CardDetails" Property="Visibility" Value="Visible"/></DataTrigger>
                                     <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding HasSourcePointerAddress}" Value="False"/><Condition Binding="{Binding HasDataAddress}" Value="False"/><Condition Binding="{Binding AutomaticConfidenceText}" Value=""/></MultiDataTrigger.Conditions><Setter TargetName="CardDetails" Property="Visibility" Value="Collapsed"/></MultiDataTrigger>
-                                    <DataTrigger Binding="{Binding DataContext.IsImageStrip, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True"><Setter TargetName="CardSummary" Property="Visibility" Value="Collapsed"/><Setter TargetName="CardDetails" Property="Visibility" Value="Collapsed"/><Setter TargetName="StripStateText" Property="Visibility" Value="Visible"/><Setter TargetName="CardTextColumn" Property="Width" Value="0"/><Setter TargetName="CardThumbnailColumn" Property="Width" Value="48"/><Setter TargetName="CardThumbnail" Property="Width" Value="48"/><Setter TargetName="CardThumbnail" Property="Height" Value="36"/><Setter TargetName="ImageCardContent" Property="Margin" Value="4"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding DataContext.IsImageStrip, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True"><Setter TargetName="CardMoreButton" Property="Visibility" Value="Collapsed"/><Setter TargetName="CardSummary" Property="Visibility" Value="Collapsed"/><Setter TargetName="CardDetails" Property="Visibility" Value="Collapsed"/><Setter TargetName="StripStateText" Property="Visibility" Value="Visible"/><Setter TargetName="CardTextColumn" Property="Width" Value="0"/><Setter TargetName="CardThumbnailColumn" Property="Width" Value="48"/><Setter TargetName="CardThumbnail" Property="Width" Value="48"/><Setter TargetName="CardThumbnail" Property="Height" Value="36"/><Setter TargetName="ImageCardContent" Property="Margin" Value="4"/></DataTrigger>
                                 </DataTemplate.Triggers>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
@@ -710,7 +759,7 @@
 
 </WrapPanel>
                         </ScrollViewer>
-                        <StackPanel x:Name="TrailingToolbarCommands" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><Border x:Name="TrailingGroupSeparator" Width="20" Height="1" Background="{DynamicResource BorderBrush}" Margin="0,4,0,6" Visibility="Collapsed"/><ToggleButton x:Name="SaveMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Save the active image" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveMenuButton" ><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSaveGeometry}"/></Canvas></Viewbox><TextBlock x:Name="SaveMenuButtonText" Text="Save" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton><ToggleButton x:Name="MoreMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="More commands" AutomationProperties.Name="More commands" AutomationProperties.AutomationId="MoreMenuButton" ><Grid><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconMoreGeometry}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Control}}}" StrokeThickness="0"/></Canvas></Viewbox><Ellipse x:Name="MoreUnreadBadge" Width="7" Height="7" Margin="0,-4,-4,0" Fill="{DynamicResource InfoTextBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"/></Grid></ToggleButton></StackPanel>
+                        <StackPanel x:Name="TrailingToolbarCommands" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0"><Border x:Name="TrailingGroupSeparator" Width="20" Height="1" Background="{DynamicResource BorderBrush}" Margin="0,4,0,6" Visibility="Collapsed"/><ToggleButton x:Name="SaveMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Save the active image" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveMenuButton" ><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSaveGeometry}"/></Canvas></Viewbox><TextBlock x:Name="SaveMenuButtonText" Text="Save" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton><ToggleButton x:Name="MoreMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="More commands" AutomationProperties.Name="More commands" AutomationProperties.AutomationId="MoreMenuButton" ><Grid><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconMoreGeometry}" Fill="{DynamicResource TextBrush}" StrokeThickness="0"/></Canvas></Viewbox><Ellipse x:Name="MoreUnreadBadge" Width="7" Height="7" Margin="0,-4,-4,0" Fill="{DynamicResource InfoTextBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"/></Grid></ToggleButton></StackPanel>
                         </Grid>
                     </Border>
 
@@ -921,8 +970,8 @@
         </Grid>
         <ItemsControl x:Name="PixelNeighborhoodGrid" Width="228" Height="228" HorizontalAlignment="Center" ItemsSource="{Binding Cells}" AutomationProperties.Name="{Binding Text, ElementName=PixelNeighborhoodText}">
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5" Rows="5" Margin="-1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate><DataTemplate><Grid Margin="1"><Border x:Name="NeighborhoodCellBorder" Background="{Binding Background}" CornerRadius="2"/><TextBlock Text="{Binding Value}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="2"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="FontSize" Value="11"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.IsFloat, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="True"><Setter Property="FontSize" Value="10"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock><Border x:Name="NeighborhoodCenterBorder" CornerRadius="2" BorderThickness="2" BorderBrush="#00B8FF" Visibility="Collapsed" IsHitTestVisible="False"/></Grid>
-                <DataTemplate.Triggers><DataTrigger Binding="{Binding IsCenter}" Value="True"><Setter TargetName="NeighborhoodCenterBorder" Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding Value}" Value="—"><Setter TargetName="NeighborhoodCellBorder" Property="Background" Value="{DynamicResource InputBrush}"/><Setter TargetName="NeighborhoodCellBorder" Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter TargetName="NeighborhoodCellBorder" Property="BorderThickness" Value="1"/></DataTrigger></DataTemplate.Triggers>
+            <ItemsControl.ItemTemplate><DataTemplate><Grid Margin="1"><Border x:Name="NeighborhoodCellBorder" Background="{Binding Background}" CornerRadius="2"/><Path x:Name="NeighborhoodOutLine" Data="M0,44 L44,0" Stretch="Fill" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1" Visibility="Collapsed" IsHitTestVisible="False"/><Rectangle x:Name="NeighborhoodOutBorder" RadiusX="2" RadiusY="2" Stroke="{DynamicResource BorderBrush}" StrokeThickness="1" StrokeDashArray="2,2" Visibility="Collapsed" IsHitTestVisible="False"/><TextBlock x:Name="NeighborhoodCellValue" Text="{Binding Value}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="2"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="FontSize" Value="11"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.IsFloat, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="True"><Setter Property="FontSize" Value="10"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock><Border x:Name="NeighborhoodCenterBorder" CornerRadius="2" BorderThickness="2" BorderBrush="#00B8FF" Visibility="Collapsed" IsHitTestVisible="False"/></Grid>
+                <DataTemplate.Triggers><DataTrigger Binding="{Binding IsCenter}" Value="True"><Setter TargetName="NeighborhoodCenterBorder" Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding Value}" Value="—"><Setter TargetName="NeighborhoodCellBorder" Property="Background" Value="{DynamicResource InputBrush}"/><Setter TargetName="NeighborhoodCellValue" Property="Visibility" Value="Collapsed"/><Setter TargetName="NeighborhoodOutLine" Property="Visibility" Value="Visible"/><Setter TargetName="NeighborhoodOutBorder" Property="Visibility" Value="Visible"/></DataTrigger></DataTemplate.Triggers>
             </DataTemplate></ItemsControl.ItemTemplate>
         </ItemsControl>
         <TextBlock x:Name="PixelStatsHeadingText" Text="5×5 STATISTICS" Style="{StaticResource InspectorBlockHeading}" Margin="0,12,0,6"/>
