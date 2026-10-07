@@ -5,7 +5,8 @@
              xmlns:imaging="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.Imaging"
              xmlns:presentation="clr-namespace:RawBufferVisualizer.Presentation"
              xmlns:catalog="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.ImageCatalog"
-             MinWidth="320"
+             FontFamily="Segoe UI" FontSize="12" Foreground="{DynamicResource TextBrush}"
+             TextOptions.TextFormattingMode="Display" MinWidth="320"
              MinHeight="260"
              SizeChanged="Root_SizeChanged" PreviewKeyDown="Root_PreviewKeyDown">
     <UserControl.Resources>
@@ -14,107 +15,115 @@
         <BooleanToVisibilityConverter x:Key="BooleanVisibility"/>
         <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
         <SolidColorBrush x:Key="InputBrush" Color="#1E1E1E"/>
-        <SolidColorBrush x:Key="BorderBrush" Color="#3C3C3C"/>
+        <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>
         <SolidColorBrush x:Key="CommandBrush" Color="#333337"/>
         <SolidColorBrush x:Key="CommandHoverBrush" Color="#3E3E42"/>
         <SolidColorBrush x:Key="CommandPressedBrush" Color="#094771"/>
         <SolidColorBrush x:Key="TextBrush" Color="#F1F1F1"/>
-        <SolidColorBrush x:Key="MutedTextBrush" Color="#9CDCFE"/>
+        <SolidColorBrush x:Key="MutedTextBrush" Color="#A3A7AE"/>
         <SolidColorBrush x:Key="SecondaryTextBrush" Color="#A3A7AE"/>
         <SolidColorBrush x:Key="StatusBarBrush" Color="#252526"/>
         <SolidColorBrush x:Key="StatusAccentBrush" Color="#007ACC"/>
-        <SolidColorBrush x:Key="StatusTextBrush" Color="#CCCCCC"/>
-        <SolidColorBrush x:Key="ChannelChipBrush" Color="#303033"/>
-        <SolidColorBrush x:Key="SplitterBrush" Color="#3C3C3C"/>
+        <SolidColorBrush x:Key="StatusTextBrush" Color="#A3A7AE"/>
+        <SolidColorBrush x:Key="ChannelChipBrush" Color="#333337"/>
+        <SolidColorBrush x:Key="SplitterBrush" Color="#1E1E1E"/>
         <SolidColorBrush x:Key="SplitterHoverBrush" Color="#007ACC"/>
-        <SolidColorBrush x:Key="SuccessTextBrush" Color="#B5CEA8"/>
-        <SolidColorBrush x:Key="AttentionTextBrush" Color="#D7BA7D"/>
+        <SolidColorBrush x:Key="SuccessTextBrush" Color="#89D185"/>
+        <SolidColorBrush x:Key="AttentionTextBrush" Color="#E2C08D"/>
+        <SolidColorBrush x:Key="ToolbarBrush" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="FaintTextBrush" Color="#6E737B"/>
+        <SolidColorBrush x:Key="LinkBrush" Color="#3794FF"/>
+        <SolidColorBrush x:Key="CanvasBrush" Color="#141414"/>
+        <SolidColorBrush x:Key="InfoTextBrush" Color="#75BEFF"/>
+        <SolidColorBrush x:Key="ErrorTextBrush" Color="#F48771"/>
+        <SolidColorBrush x:Key="DangerBrush" Color="#C42B1C"/>
+        <SolidColorBrush x:Key="RbvInputBrush" Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="RbvInputHoverBrush" Color="#3E3E42"/>
+        <SolidColorBrush x:Key="RbvBorderBrush" Color="#3F3F46"/>
+        <SolidColorBrush x:Key="RbvMutedTextBrush" Color="#A3A7AE"/>
+        <SolidColorBrush x:Key="RbvAttentionTextBrush" Color="#E2C08D"/>
+        <SolidColorBrush x:Key="RbvAccentHoverBrush" Color="#3794FF"/>
+        <GeometryGroup x:Key="IconBarChartGeometry"><PathGeometry Figures="M2.5 13.5h11M4.5 13.5V8M8 13.5V3.5M11.5 13.5V6"/></GeometryGroup>
+        <GeometryGroup x:Key="IconBoxGeometry"><RectangleGeometry Rect="2.5,2.5,11,11" RadiusX="1" RadiusY="1"/></GeometryGroup>
+        <GeometryGroup x:Key="IconCopyGeometry"><RectangleGeometry Rect="5.5,5.5,8,8" RadiusX="1.2" RadiusY="1.2"/><PathGeometry Figures="M10.5 5.5v-2a1.2 1.2 0 0 0-1.2-1.2H3.7a1.2 1.2 0 0 0-1.2 1.2v5.6a1.2 1.2 0 0 0 1.2 1.2h1.8"/></GeometryGroup>
+        <GeometryGroup x:Key="IconCrosshairGeometry"><EllipseGeometry Center="8,8" RadiusX="3.6" RadiusY="3.6"/><PathGeometry Figures="M8 1.8v3M8 11.2v3M1.8 8h3M11.2 8h3"/></GeometryGroup>
+        <GeometryGroup x:Key="IconFitGeometry"><PathGeometry Figures="M2 5.5v-2A1.5 1.5 0 0 1 3.5 2h2M10.5 2h2A1.5 1.5 0 0 1 14 3.5v2M14 10.5v2a1.5 1.5 0 0 1-1.5 1.5h-2M5.5 14h-2A1.5 1.5 0 0 1 2 12.5v-2"/><RectangleGeometry Rect="5.2,5.2,5.6,5.6" RadiusX=".8" RadiusY=".8"/></GeometryGroup>
+        <GeometryGroup x:Key="IconFolderGeometry"><PathGeometry Figures="M2 4.5A1.2 1.2 0 0 1 3.2 3.3h2.9l1.4 1.5h5.3A1.2 1.2 0 0 1 14 6v6a1.2 1.2 0 0 1-1.2 1.2H3.2A1.2 1.2 0 0 1 2 12z"/></GeometryGroup>
+        <GeometryGroup x:Key="IconHelpGeometry"><EllipseGeometry Center="8,8" RadiusX="6" RadiusY="6"/><PathGeometry Figures="M6.2 6.4a1.9 1.9 0 1 1 2.8 1.7c-.7.4-1 .8-1 1.6M8 11.7v.05"/></GeometryGroup>
+        <GeometryGroup x:Key="IconImageGeometry"><RectangleGeometry Rect="2,3,12,10" RadiusX="1" RadiusY="1"/><EllipseGeometry Center="5.6,6.4" RadiusX="1" RadiusY="1"/><PathGeometry Figures="M2.4 12l3.6-3.6 2.4 2.4 2-2 3.2 3.2"/></GeometryGroup>
+        <GeometryGroup x:Key="IconLinkGeometry"><PathGeometry Figures="M6.6 9.4a2.6 2.6 0 0 0 3.7 0l2.4-2.4a2.6 2.6 0 0 0-3.7-3.7l-.7.7M9.4 6.6a2.6 2.6 0 0 0-3.7 0L3.3 9a2.6 2.6 0 0 0 3.7 3.7l.7-.7"/></GeometryGroup>
+        <GeometryGroup x:Key="IconMoreGeometry"><EllipseGeometry Center="3.5,8" RadiusX="1.15" RadiusY="1.15"/><EllipseGeometry Center="8,8" RadiusX="1.15" RadiusY="1.15"/><EllipseGeometry Center="12.5,8" RadiusX="1.15" RadiusY="1.15"/></GeometryGroup>
+        <GeometryGroup x:Key="IconPinGeometry"><PathGeometry Figures="M5.2 2.5h5.6M6.4 2.5v4.2L4.6 9.2h6.8L9.6 6.7V2.5M8 9.2v4.6"/></GeometryGroup>
+        <GeometryGroup x:Key="IconPulseGeometry"><PathGeometry Figures="M1.5 8.2h3l1.7-4.7 3.1 9 1.7-4.3h3.5"/></GeometryGroup>
+        <GeometryGroup x:Key="IconRulerGeometry"><PathGeometry Figures="M2.2 10.8l8.6-8.6 3 3-8.6 8.6zM4.35 8.65l1.3 1.3M6.5 6.5l2 2M8.65 4.35l1.3 1.3"/></GeometryGroup>
+        <GeometryGroup x:Key="IconSaveGeometry"><PathGeometry Figures="M3.2 2.5h7.6l2.7 2.7v7.3a1 1 0 0 1-1 1H3.2a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1zM5 2.5v3.3h5.2V2.5M4.8 13.5V9.4h6.4v4.1"/></GeometryGroup>
+        <GeometryGroup x:Key="IconSlidersGeometry"><PathGeometry Figures="M2 4.5h6M11.5 4.5H14M2 11.5h2.5M8 11.5h6"/><EllipseGeometry Center="9.8,4.5" RadiusX="1.6" RadiusY="1.6"/><EllipseGeometry Center="6.2,11.5" RadiusX="1.6" RadiusY="1.6"/></GeometryGroup>
+        <GeometryGroup x:Key="IconSplitGeometry"><RectangleGeometry Rect="2,3,12,10" RadiusX="1" RadiusY="1"/><PathGeometry Figures="M8 3v10"/></GeometryGroup>
+        <GeometryGroup x:Key="IconTrashGeometry"><PathGeometry Figures="M2.8 4.3h10.4M6 4.3V2.8h4v1.5M4.3 4.3l.6 8.7a.8.8 0 0 0 .8.7h4.6a.8.8 0 0 0 .8-.7l.6-8.7M6.8 7v4.2M9.2 7v4.2"/></GeometryGroup>
+        <GeometryGroup x:Key="IconZoomInGeometry"><EllipseGeometry Center="7,7" RadiusX="4.6" RadiusY="4.6"/><PathGeometry Figures="M10.4 10.4L14 14M5 7h4M7 5v4"/></GeometryGroup>
+        <GeometryGroup x:Key="IconZoomOutGeometry"><EllipseGeometry Center="7,7" RadiusX="4.6" RadiusY="4.6"/><PathGeometry Figures="M10.4 10.4L14 14M5 7h4"/></GeometryGroup>
+        <Style x:Key="PrototypeIcon" TargetType="Path">
+            <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Control}}}"/>
+            <Setter Property="StrokeThickness" Value="1.5"/><Setter Property="StrokeStartLineCap" Value="Round"/><Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/><Setter Property="IsHitTestVisible" Value="False"/>
+        </Style>
         <Style TargetType="{x:Type TextBlock}">
-            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Control}}}"/>
         </Style>
         <Style TargetType="{x:Type Button}">
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="Padding" Value="10,3"/>
-            <Setter Property="MinWidth" Value="44"/>
-            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Padding" Value="10,0"/>
+            <Setter Property="MinWidth" Value="44"/><Setter Property="MinHeight" Value="24"/>
             <Setter Property="Background" Value="{DynamicResource CommandBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Button}">
-                        <Border x:Name="ButtonBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              Margin="{TemplateBinding Padding}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.45"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="{x:Type Button}">
+                <Grid>
+                    <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
+                    </Border>
+
+                    <Border x:Name="ButtonFocusBorder" BorderBrush="{DynamicResource LinkBrush}" BorderThickness="2" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+
+                    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/><Condition Binding="{Binding Background.Color, RelativeSource={RelativeSource Self}}" Value="#FF007ACC"/></MultiDataTrigger.Conditions><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource LinkBrush}"/></MultiDataTrigger>
+                    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/><Condition Binding="{Binding Background.Color, RelativeSource={RelativeSource Self}}" Value="#FFC42B1C"/></MultiDataTrigger.Conditions><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource ErrorTextBrush}"/></MultiDataTrigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonFocusBorder" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style TargetType="{x:Type ToggleButton}">
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="Padding" Value="10,3"/>
-            <Setter Property="MinWidth" Value="64"/>
-            <Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Padding" Value="10,0"/>
+            <Setter Property="MinWidth" Value="44"/><Setter Property="MinHeight" Value="24"/>
             <Setter Property="Background" Value="{DynamicResource CommandBrush}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-            <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-            <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type ToggleButton}">
-                        <Border x:Name="ButtonBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}">
-                            <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center"
-                                              Margin="{TemplateBinding Padding}"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource BorderBrush}"/>
-                            </Trigger>
-                            <Trigger Property="IsChecked" Value="True">
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="{x:Type ToggleButton}">
+                <Grid>
+                    <Border x:Name="ButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" Margin="{TemplateBinding Padding}" RecognizesAccessKey="True"/>
+                    </Border>
+                    <Border x:Name="CheckedBorder" BorderBrush="{DynamicResource StatusAccentBrush}" BorderThickness="1" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>
+                    <Border x:Name="ButtonFocusBorder" BorderBrush="{DynamicResource LinkBrush}" BorderThickness="2" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/>
+                                <Setter TargetName="CheckedBorder" Property="Visibility" Value="Visible"/>
                             </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/>
-                                <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.45"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+                    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/><Condition Binding="{Binding Background.Color, RelativeSource={RelativeSource Self}}" Value="#FF007ACC"/></MultiDataTrigger.Conditions><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource LinkBrush}"/></MultiDataTrigger>
+                    <MultiDataTrigger><MultiDataTrigger.Conditions><Condition Binding="{Binding IsMouseOver, RelativeSource={RelativeSource Self}}" Value="True"/><Condition Binding="{Binding Background.Color, RelativeSource={RelativeSource Self}}" Value="#FFC42B1C"/></MultiDataTrigger.Conditions><Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource ErrorTextBrush}"/></MultiDataTrigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="ButtonFocusBorder" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style TargetType="{x:Type TabControl}">
             <Setter Property="Background" Value="{DynamicResource PanelBrush}"/>
@@ -202,55 +211,65 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
         <Style x:Key="InspectorRailButtonStyle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-            <Setter Property="MinWidth" Value="44"/><Setter Property="Height" Value="50"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/>
-            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="2,0,0,0"/><Setter Property="BorderBrush" Value="Transparent"/>
-            <Style.Triggers><Trigger Property="IsChecked" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger></Style.Triggers>
+            <Setter Property="Width" Value="44"/><Setter Property="MinWidth" Value="44"/><Setter Property="Height" Value="48"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ToggleButton">
+                <Grid x:Name="RailBackground" Background="{TemplateBinding Background}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border x:Name="RailActiveLine" Width="2" HorizontalAlignment="Left" Margin="0,8" Background="{DynamicResource StatusAccentBrush}" Visibility="Collapsed" IsHitTestVisible="False"/>
+                    <Border x:Name="RailFocusBorder" BorderBrush="{DynamicResource LinkBrush}" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="RailBackground" Property="Background" Value="{DynamicResource CommandHoverBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="RailActiveLine" Property="Visibility" Value="Visible"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="RailFocusBorder" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
         </Style>
 
         <Style x:Key="ViewerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
-            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
-            <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
+            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Padding" Value="6,0"/><Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="1"/><Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}"/></Trigger></Style.Triggers>
         </Style>
         <Style x:Key="ViewerToggle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
-            <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
+            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Padding" Value="6,0"/><Setter Property="Margin" Value="0,0,2,0"/>
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+            <Style.Triggers><Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="1"/><Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}"/></Trigger></Style.Triggers>
         </Style>
         <Style x:Key="MeasurementViewerToggle" TargetType="ToggleButton" BasedOn="{StaticResource ViewerToggle}">
             <Setter Property="ToolTip" Value="{Binding MeasurementToolTip}"/>
             <Style.Triggers><DataTrigger Binding="{Binding CanMeasure}" Value="True"><Setter Property="ToolTip" Value="Click two image pixels to measure their horizontal and vertical distance (M)"/></DataTrigger></Style.Triggers>
         </Style>
         <Style x:Key="ViewerCheck" TargetType="CheckBox">
-            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
-            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
-            <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
-            <Setter Property="Template">
-                <Setter.Value><ControlTemplate TargetType="CheckBox">
-                    <Border x:Name="CheckBorder" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0" Padding="{TemplateBinding Padding}">
-                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <ControlTemplate.Triggers>
-                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
-                        <Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/><Setter TargetName="CheckBorder" Property="BorderThickness" Value="1"/><Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
-                        <Trigger Property="IsPressed" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
-                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="CheckBorder" Property="BorderThickness" Value="2"/><Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
-                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
-                    </ControlTemplate.Triggers>
-                </ControlTemplate></Setter.Value>
-            </Setter>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/><Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="24"/>
+            <Setter Property="Padding" Value="6,0"/><Setter Property="Margin" Value="0,0,2,0"/><Setter Property="Cursor" Value="Hand"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+                <Grid><Border x:Name="CheckBorder" Background="Transparent" CornerRadius="2" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                    <Border x:Name="CheckSelectionBorder" BorderBrush="{DynamicResource StatusAccentBrush}" BorderThickness="1" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>
+                    <Border x:Name="CheckFocusBorder" BorderBrush="{DynamicResource LinkBrush}" BorderThickness="2" CornerRadius="2" Visibility="Collapsed" IsHitTestVisible="False"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/><Setter TargetName="CheckSelectionBorder" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="CheckFocusBorder" Property="Visibility" Value="Visible"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Foreground" Value="{DynamicResource FaintTextBrush}"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
         </Style>
         <Style x:Key="InfoChip" TargetType="Border">
-            <Setter Property="Background" Value="{DynamicResource ChannelChipBrush}"/><Setter Property="Padding" Value="4,2"/>
-            <Setter Property="Margin" Value="4,0,0,0"/><Setter Property="CornerRadius" Value="3"/>
+            <Setter Property="Background" Value="{DynamicResource CommandBrush}"/><Setter Property="Padding" Value="7,0"/><Setter Property="Height" Value="22"/>
+            <Setter Property="Margin" Value="6,0,0,0"/><Setter Property="CornerRadius" Value="2"/>
         </Style>
 
         <Style x:Key="AutoScanSwitch" TargetType="CheckBox">
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
-                <DockPanel><Border x:Name="SwitchTrack" DockPanel.Dock="Left" Width="26" Height="14" CornerRadius="7" Margin="0,0,6,0" Background="{DynamicResource BorderBrush}" VerticalAlignment="Center"><Ellipse x:Name="SwitchThumb" Width="10" Height="10" Fill="{DynamicResource TextBrush}" HorizontalAlignment="Left" Margin="2"/></Border><ContentPresenter VerticalAlignment="Center"/></DockPanel>
+                <DockPanel><Border x:Name="SwitchTrack" DockPanel.Dock="Left" Width="28" Height="16" CornerRadius="8" Margin="0,0,7,0" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource FaintTextBrush}" BorderThickness="1" VerticalAlignment="Center"><Ellipse x:Name="SwitchThumb" Width="10" Height="10" Fill="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Left" Margin="2"/></Border><ContentPresenter VerticalAlignment="Center"/></DockPanel>
                 <ControlTemplate.Triggers>
-                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/></Trigger>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/><Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="SwitchThumb" Property="Fill" Value="{DynamicResource TextBrush}"/></Trigger>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SwitchTrack" Property="Opacity" Value="0.8"/></Trigger>
                     <Trigger Property="IsPressed" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
                     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{DynamicResource TextBrush}"/><Setter TargetName="SwitchTrack" Property="BorderThickness" Value="1"/></Trigger>
@@ -347,7 +366,7 @@
                                 AutomationProperties.AutomationId="ClearButton"
                                 Click="ReviewClear_Click">
                             <StackPanel Orientation="Horizontal">
-                                <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" />
+                                <Viewbox Width="16" Height="16" ><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconTrashGeometry}"/></Canvas></Viewbox>
                                 <TextBlock x:Name="ClearButtonText" Text="Clear all" Visibility="Collapsed"/>
                             </StackPanel>
                         </Button>
@@ -382,7 +401,7 @@
                                     AutomationProperties.AutomationId="AutomaticVisionHelpButton"
                                     ToolTipService.InitialShowDelay="250"
                                     Click="AutomaticHelp_Click" PreviewKeyDown="AutomaticHelp_PreviewKeyDown">
-                                <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.StatusHelp}" Width="16" Height="16"/>
+                                <Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconHelpGeometry}"/></Canvas></Viewbox>
                                 <Button.ToolTip>
                                     <ToolTip x:Name="AutomaticHelpTip" StaysOpen="False" MaxWidth="340"
                                              Background="{DynamicResource PanelBrush}" Foreground="{DynamicResource TextBrush}">
@@ -391,7 +410,7 @@
                                             <TextBlock Text="Refresh image-like locals and arguments when the debugger pauses. This choice is saved. Scan Now works while paused, even with Auto Inspect off."
                                                        Margin="0,5,0,0" TextWrapping="Wrap"/>
                                             <TextBlock x:Name="AutomaticFrameText" Text="{Binding Frame}" Margin="0,8,0,0"
-                                                       FontFamily="Consolas" FontSize="11" TextWrapping="Wrap"/>
+                                                       FontFamily="Cascadia Mono, Consolas" FontSize="11" TextWrapping="Wrap"/>
                                             <TextBlock x:Name="AutomaticScanStatusText" Text="{Binding Details}" Margin="0,5,0,0"
                                                        FontSize="11" TextWrapping="Wrap"/>
                                         </StackPanel>
@@ -516,8 +535,8 @@
                                         <WrapPanel Margin="0,3,0,0"><TextBlock Text="{Binding StateChipText}" Style="{StaticResource ImageStateText}" VerticalAlignment="Center"/><Button Content="Map" Padding="4,0" MinWidth="28" Margin="6,0,0,0" Visibility="{Binding MappingActionVisibility}" ToolTip="Confirm only the unresolved member or pixel-format mapping" AutomationProperties.Name="Map this detected image type" Click="MapCandidate_Click"/></WrapPanel>
                                     </StackPanel>
                                     <StackPanel x:Name="CardDetails" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0" Visibility="Collapsed">
-                                        <DockPanel Visibility="{Binding SourcePointerVisibility}"><Button DockPanel.Dock="Right" MinWidth="24" Width="24" Padding="2" Margin="4,0,0,0" ToolTip="Copy pointer address" AutomationProperties.Name="Copy pointer address" Click="CopyPointerAddress_Click"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="12" Height="12"/></Button><TextBlock Text="{Binding SourcePointerText}" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
-                                        <DockPanel Visibility="{Binding SourceAddressVisibility}" Margin="0,2,0,0"><Button DockPanel.Dock="Right" MinWidth="24" Width="24" Padding="2" Margin="4,0,0,0" ToolTip="Copy pixel address" AutomationProperties.Name="Copy pixel address" Click="CopyDataAddress_Click"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="12" Height="12"/></Button><TextBlock Text="{Binding SourceAddressText}" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
+                                        <DockPanel Visibility="{Binding SourcePointerVisibility}"><Button DockPanel.Dock="Right" MinWidth="24" Width="24" Padding="2" Margin="4,0,0,0" ToolTip="Copy pointer address" AutomationProperties.Name="Copy pointer address" Click="CopyPointerAddress_Click"><Viewbox Width="12" Height="12"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox></Button><TextBlock Text="{Binding SourcePointerText}" FontFamily="Cascadia Mono, Consolas" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
+                                        <DockPanel Visibility="{Binding SourceAddressVisibility}" Margin="0,2,0,0"><Button DockPanel.Dock="Right" MinWidth="24" Width="24" Padding="2" Margin="4,0,0,0" ToolTip="Copy pixel address" AutomationProperties.Name="Copy pixel address" Click="CopyDataAddress_Click"><Viewbox Width="12" Height="12"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox></Button><TextBlock Text="{Binding SourceAddressText}" FontFamily="Cascadia Mono, Consolas" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
                                         <TextBlock Text="{Binding SourceStateText}" Visibility="{Binding SourceStateVisibility}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                         <TextBlock Text="{Binding AutomaticConfidenceText}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
                                     </StackPanel>
@@ -544,7 +563,7 @@
 
             <Grid x:Name="ViewerGrid" Grid.Column="2" SizeChanged="ViewerGrid_SizeChanged">
                 <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                <Border x:Name="ImageInfoBar" Grid.Row="0" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,0">
+                <Border x:Name="ImageInfoBar" Grid.Row="0" Background="{DynamicResource ToolbarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,0">
                     <Grid>
                         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <StackPanel VerticalAlignment="Center">
@@ -563,19 +582,19 @@
                     <Grid.RowDefinitions><RowDefinition x:Name="ViewerToolbarRow" Height="32"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="ViewerToolbarSideColumn" Width="0"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
 
-                    <Border x:Name="ToolbarBorder" Grid.Row="0" Grid.Column="1" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                    <Border x:Name="ToolbarBorder" Grid.Row="0" Grid.Column="1" Background="{DynamicResource ToolbarBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
                         <ScrollViewer x:Name="ToolbarScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarScroller_PreviewMouseWheel">
-                            <WrapPanel x:Name="ToolbarCommandsPanel" VerticalAlignment="Center"><Button x:Name="FitButton" Style="{StaticResource ViewerButton}" ToolTip="Fit the image to the viewer (double-click the image)" AutomationProperties.Name="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.FitToScreen}" Width="16" Height="16"/><TextBlock x:Name="FitButtonText" Text="Fit" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+                            <WrapPanel x:Name="ToolbarCommandsPanel" VerticalAlignment="Center"><Button x:Name="FitButton" Style="{StaticResource ViewerButton}" ToolTip="Fit the image to the viewer (double-click the image)" AutomationProperties.Name="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFitGeometry}"/></Canvas></Viewbox><TextBlock x:Name="FitButtonText" Text="Fit" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
 <Button x:Name="ActualSizeButton" Style="{StaticResource ViewerButton}" ToolTip="Show the image at 100%" AutomationProperties.Name="1:1" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage x:Name="ActualSizeIcon" Moniker="{x:Static catalog:KnownMonikers.ZoomOriginalSize}" Width="16" Height="16"/><TextBlock x:Name="ActualSizeButtonText" Text="1:1" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
-<Button x:Name="ZoomOutButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom out (−)" AutomationProperties.Name="Zoom out (−)" AutomationProperties.AutomationId="ZoomOutButton" Tag="0.5" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomOut}" Width="16" Height="16"/></StackPanel></Button>
-<ToggleButton x:Name="ZoomMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Zoom level" AutomationProperties.Name="Zoom level" AutomationProperties.AutomationId="ZoomMenuButton"><Viewbox StretchDirection="DownOnly" Stretch="Uniform"><TextBlock x:Name="ZoomText" FontFamily="Consolas" FontSize="11" TextAlignment="Center"/></Viewbox></ToggleButton>
-<Button x:Name="ZoomInButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom in (+)" AutomationProperties.Name="Zoom in (+)" AutomationProperties.AutomationId="ZoomInButton" Tag="2" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomIn}" Width="16" Height="16"/></StackPanel></Button>
-<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource MeasurementViewerToggle}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ruler}" Width="16" Height="16"/><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton></StackPanel>
-<Button x:Name="PinPixelButton" Style="{StaticResource ViewerButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)" AutomationProperties.Name="Pin" AutomationProperties.AutomationId="PinPixelButton" Click="PinPixel_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Pin}" Width="16" Height="16"/><TextBlock x:Name="PinPixelButtonText" Text="Pin" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
-<CheckBox x:Name="LinkViewsBox" Style="{StaticResource ViewerCheck}" ToolTip="Keep zoom and position when switching images" AutomationProperties.Name="Link views" AutomationProperties.AutomationId="LinkViewsBox" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Link}" Width="16" Height="16"/><TextBlock x:Name="LinkViewsText" Text="Link views" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
-<CheckBox x:Name="SelectionOverlayBox" Style="{StaticResource ViewerCheck}" ToolTip="Outline the 5×5 neighborhood around the hovered or pinned pixel" AutomationProperties.Name="5×5 box" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.SelectAll}" Width="16" Height="16"/><TextBlock x:Name="SelectionOverlayText" Text="5×5 box" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
-<ToggleButton x:Name="SaveMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Save the active image" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveMenuButton" ><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16"/><TextBlock x:Name="SaveMenuButtonText" Text="Save" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton>
-<ToggleButton x:Name="MoreMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="More commands" AutomationProperties.Name="More commands" AutomationProperties.AutomationId="MoreMenuButton" ><Grid><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ellipsis}" Width="16" Height="16"/><Ellipse x:Name="MoreUnreadBadge" Width="6" Height="6" Fill="{DynamicResource StatusAccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"/></Grid></ToggleButton></WrapPanel>
+<Button x:Name="ZoomOutButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom out (−)" AutomationProperties.Name="Zoom out (−)" AutomationProperties.AutomationId="ZoomOutButton" Tag="0.5" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconZoomOutGeometry}"/></Canvas></Viewbox></StackPanel></Button>
+<ToggleButton x:Name="ZoomMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Zoom level" AutomationProperties.Name="Zoom level" AutomationProperties.AutomationId="ZoomMenuButton"><Viewbox StretchDirection="DownOnly" Stretch="Uniform"><TextBlock x:Name="ZoomText" FontFamily="Cascadia Mono, Consolas" FontSize="11" TextAlignment="Center"/></Viewbox></ToggleButton>
+<Button x:Name="ZoomInButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom in (+)" AutomationProperties.Name="Zoom in (+)" AutomationProperties.AutomationId="ZoomInButton" Tag="2" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconZoomInGeometry}"/></Canvas></Viewbox></StackPanel></Button>
+<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource MeasurementViewerToggle}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconRulerGeometry}"/></Canvas></Viewbox><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton></StackPanel>
+<Button x:Name="PinPixelButton" Style="{StaticResource ViewerButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)" AutomationProperties.Name="Pin" AutomationProperties.AutomationId="PinPixelButton" Click="PinPixel_Click"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPinGeometry}"/></Canvas></Viewbox><TextBlock x:Name="PinPixelButtonText" Text="Pin" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+<CheckBox x:Name="LinkViewsBox" Style="{StaticResource ViewerCheck}" ToolTip="Keep zoom and position when switching images" AutomationProperties.Name="Link views" AutomationProperties.AutomationId="LinkViewsBox" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconLinkGeometry}"/></Canvas></Viewbox><TextBlock x:Name="LinkViewsText" Text="Link views" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
+<CheckBox x:Name="SelectionOverlayBox" Style="{StaticResource ViewerCheck}" ToolTip="Outline the 5×5 neighborhood around the hovered or pinned pixel" AutomationProperties.Name="5×5 box" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconBoxGeometry}" StrokeDashArray="1.466667,1.333333"/></Canvas></Viewbox><TextBlock x:Name="SelectionOverlayText" Text="5×5 box" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
+<ToggleButton x:Name="SaveMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Save the active image" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveMenuButton" ><StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSaveGeometry}"/></Canvas></Viewbox><TextBlock x:Name="SaveMenuButtonText" Text="Save" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton>
+<ToggleButton x:Name="MoreMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="More commands" AutomationProperties.Name="More commands" AutomationProperties.AutomationId="MoreMenuButton" ><Grid><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconMoreGeometry}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Control}}}" StrokeThickness="0"/></Canvas></Viewbox><Ellipse x:Name="MoreUnreadBadge" Width="6" Height="6" Fill="{DynamicResource StatusAccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"/></Grid></ToggleButton></WrapPanel>
                         </ScrollViewer>
                     </Border>
 
@@ -588,7 +607,7 @@
                             </Border>
                             <Grid x:Name="PixelReadoutHost" Grid.Column="1">
                                 <TextBlock x:Name="PixelEmptyText" Text="Move the pointer over the image to read pixel values." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
-                                <WrapPanel x:Name="PixelReadoutWrap" TextElement.FontFamily="Consolas" VerticalAlignment="Center">
+                                <WrapPanel x:Name="PixelReadoutWrap" TextElement.FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Center">
 <TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <Grid x:Name="PixelChannelGroup" VerticalAlignment="Center">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="PixelSwatch" Width="13" Height="13" Margin="0,0,6,0" Background="#1E1E1E" BorderBrush="#AAAAAA" BorderThickness="1"/>
@@ -638,7 +657,7 @@
                     <Popup x:Name="SavePopup" PlacementTarget="{Binding ElementName=SaveMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=SaveMenuButton, Mode=TwoWay}">
                         <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button x:Name="SaveVisiblePngButton" ToolTip="Save visible PNG" AutomationProperties.Name="Save visible PNG" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
                         <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSaveGeometry}"/></Canvas></Viewbox>
                             <TextBlock x:Name="SaveButtonText" Text="Save visible PNG"/>
                         </StackPanel>
                     </Button><Button Content="Save raw snapshot…" Click="SaveSnapshot_Click" AutomationProperties.AutomationId="SaveRawSnapshotButton"/></StackPanel></Border>
@@ -646,7 +665,7 @@
                     <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=MoreMenuButton, Mode=TwoWay}">
                         <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button x:Name="OpenButton" ToolTip="Open snapshot file…" AutomationProperties.Name="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click">
                         <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFile}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox>
                             <TextBlock x:Name="OpenButtonText" Text="Open snapshot file…"/>
                         </StackPanel>
                     </Button><ToggleButton x:Name="EnvironmentCheckButton"
@@ -655,7 +674,7 @@
                                   AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
                                   Click="EnvironmentCheck_Click">
                         <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Environment}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPulseGeometry}"/></Canvas></Viewbox>
                             <TextBlock Text="Environment check"/>
                         </StackPanel>
                     </ToggleButton><ToggleButton x:Name="WhatsNewButton"
@@ -664,7 +683,7 @@
                                   AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
                                   Click="WhatsNew_Click">
                         <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.New}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconHelpGeometry}"/></Canvas></Viewbox>
                             <TextBlock Text="What's new in 2.2.3"/>
                         </StackPanel>
                     </ToggleButton><Separator/><Button Content="Release notes" Click="ViewReleaseNotes_Click"/></StackPanel></Border>
@@ -681,7 +700,7 @@
                         IsHitTestVisible="False"
                         AutomationProperties.AutomationId="EmptyViewerPanel">
                     <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="320" Margin="12">
-                        <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Image}" Width="32" Height="32" HorizontalAlignment="Center"/>
+                        <Viewbox Width="32" Height="32" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconImageGeometry}"/></Canvas></Viewbox>
                         <TextBlock x:Name="EmptyViewerGuidanceText"
                                    Text="Break at an image variable or select Open."
                                    Margin="0,10,0,0"
@@ -703,15 +722,15 @@
                         BorderThickness="1">
                     <StackPanel>
                         <TextBlock Text="Image could not be visualized" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ErrorIdText" Margin="0,5,0,0" Foreground="#F48771" FontFamily="Consolas" FontSize="11"/>
+                        <TextBlock x:Name="ErrorIdText" Margin="0,5,0,0" Foreground="#F48771" FontFamily="Cascadia Mono, Consolas" FontSize="11"/>
                         <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
                         <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                         <WrapPanel Margin="0,12,0,0">
                             <Button x:Name="CopyErrorReportButton" AutomationProperties.Name="Copy report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click">
-                                <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Copy Report"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox><TextBlock Text="Copy Report"/></StackPanel>
                             </Button>
                             <Button x:Name="OpenErrorLogsButton" AutomationProperties.Name="Open logs" AutomationProperties.AutomationId="OpenErrorLogsButton" Click="OpenSupportLogs_Click">
-                                <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFolder}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Open Logs"/></StackPanel>
+                                <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox><TextBlock Text="Open Logs"/></StackPanel>
                             </Button>
                         </WrapPanel>
                     </StackPanel>
@@ -791,19 +810,19 @@
                             <StackPanel Margin="12,8">
                     <StackPanel x:Name="PixelSection" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}">
     <StackPanel x:Name="PixelVisualization">
-        <DockPanel Margin="0,0,0,8"><Border DockPanel.Dock="Right" Width="22" Height="22" Background="{Binding Swatch}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/><TextBlock x:Name="InspectorPixelPositionText" Text="{Binding Position}" AutomationProperties.Name="{Binding Text, ElementName=PixelText}" FontFamily="Consolas" FontSize="16"/></DockPanel>
-        <ItemsControl ItemsSource="{Binding ChannelValues}" Foreground="{DynamicResource TextBrush}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Foreground="{Binding Foreground}" FontFamily="Consolas"/><TextBlock Grid.Column="1" Foreground="{DynamicResource TextBrush}" Text="{Binding Decimal}" FontFamily="Consolas" TextWrapping="Wrap"/><TextBlock Grid.Column="2" Text="{Binding Hex}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Consolas" TextWrapping="Wrap"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-        <TextBlock Text="Raw bytes" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" Margin="0,10,0,2"/><TextBlock Text="{Binding RawBytes}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
-        <TextBlock Text="Byte offset" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" Margin="0,6,0,2"/><TextBlock Text="{Binding ByteOffset}" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap"/>
+        <DockPanel Margin="0,0,0,8"><Border DockPanel.Dock="Right" Width="22" Height="22" Background="{Binding Swatch}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/><TextBlock x:Name="InspectorPixelPositionText" Text="{Binding Position}" AutomationProperties.Name="{Binding Text, ElementName=PixelText}" FontFamily="Cascadia Mono, Consolas" FontSize="16"/></DockPanel>
+        <ItemsControl ItemsSource="{Binding ChannelValues}" Foreground="{DynamicResource TextBrush}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas"/><TextBlock Grid.Column="1" Foreground="{DynamicResource TextBrush}" Text="{Binding Decimal}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/><TextBlock Grid.Column="2" Text="{Binding Hex}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        <TextBlock Text="Raw bytes" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" Margin="0,10,0,2"/><TextBlock Text="{Binding RawBytes}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/>
+        <TextBlock Text="Byte offset" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" Margin="0,6,0,2"/><TextBlock Text="{Binding ByteOffset}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/>
         <TextBlock x:Name="PixelNeighborhoodHeadingText" Text="5×5 NEIGHBORHOOD" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,6"/>
         <ComboBox x:Name="NeighborhoodChannelBox" ItemsSource="{Binding ChannelOptions}" SelectedItem="{Binding SelectedChannel, Mode=TwoWay}" IsEnabled="{Binding IsColor}" Width="70" HorizontalAlignment="Left" Margin="0,0,0,6" AutomationProperties.Name="Neighborhood channel"/>
         <ItemsControl x:Name="PixelNeighborhoodGrid" ItemsSource="{Binding Cells}" AutomationProperties.Name="{Binding Text, ElementName=PixelNeighborhoodText}">
             <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5" Rows="5"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate><DataTemplate><Border Background="{Binding Background}" Margin="1" MinHeight="30" Padding="2" BorderThickness="2"><Border.Style><Style TargetType="Border"><Setter Property="BorderBrush" Value="Transparent"/><Style.Triggers><DataTrigger Binding="{Binding IsCenter}" Value="True"><Setter Property="BorderBrush" Value="#00B8FF"/></DataTrigger></Style.Triggers></Style></Border.Style><Viewbox StretchDirection="DownOnly"><TextBlock Text="{Binding Value}" Foreground="{Binding Foreground}" FontFamily="Consolas" FontSize="11"/></Viewbox></Border></DataTemplate></ItemsControl.ItemTemplate>
+            <ItemsControl.ItemTemplate><DataTemplate><Border Background="{Binding Background}" Margin="1" MinHeight="30" Padding="2" BorderThickness="2"><Border.Style><Style TargetType="Border"><Setter Property="BorderBrush" Value="Transparent"/><Style.Triggers><DataTrigger Binding="{Binding IsCenter}" Value="True"><Setter Property="BorderBrush" Value="#00B8FF"/></DataTrigger></Style.Triggers></Style></Border.Style><Viewbox StretchDirection="DownOnly"><TextBlock Text="{Binding Value}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas" FontSize="11"/></Viewbox></Border></DataTemplate></ItemsControl.ItemTemplate>
         </ItemsControl>
         <TextBlock x:Name="PixelStatsHeadingText" Text="5×5 STATISTICS" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,6"/>
-        <UniformGrid Columns="3"><StackPanel><TextBlock Text="n" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Count}" FontFamily="Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="min" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Minimum}" FontFamily="Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="max" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Maximum}" FontFamily="Consolas" TextWrapping="Wrap"/></StackPanel></UniformGrid>
-        <UniformGrid Columns="2" Margin="0,6,0,0"><StackPanel><TextBlock Text="mean" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Mean}" FontFamily="Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="std" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding StandardDeviation}" FontFamily="Consolas" TextWrapping="Wrap"/></StackPanel></UniformGrid>
+        <UniformGrid Columns="3"><StackPanel><TextBlock Text="n" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Count}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="min" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Minimum}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="max" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Maximum}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel></UniformGrid>
+        <UniformGrid Columns="2" Margin="0,6,0,0"><StackPanel><TextBlock Text="mean" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Mean}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="std" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding StandardDeviation}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel></UniformGrid>
         <TextBlock Text="ROW PROFILE" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,4"/><TextBlock Text="{Binding ProfileCaption}" FontSize="11" Margin="0,0,0,6"/>
         <Grid x:Name="RowProfileGraph" Height="110" ToolTip="{Binding Text, ElementName=LineProfileText}" AutomationProperties.Name="{Binding Text, ElementName=LineProfileText}">
             <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
@@ -819,7 +838,7 @@
         <Button Click="PinPixel_Click" HorizontalAlignment="Left" ToolTip="Freeze values at the hovered pixel (right-click the image)"><TextBlock x:Name="InspectorPinButtonText" Text="Pin hovered pixel"/></Button>
         <TextBlock Text="Right-click the image to pin. Esc unpins." FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
     </StackPanel>
-<TextBlock x:Name="PixelHeadingText" Text="Pixel" FontSize="16" FontWeight="SemiBold" Visibility="Collapsed"/><TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/><TextBlock x:Name="PixelNeighborhoodText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="RoiStatsText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="LineProfileText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/></StackPanel>
+<TextBlock x:Name="PixelHeadingText" Text="Pixel" FontSize="16" FontWeight="SemiBold" Visibility="Collapsed"/><TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/><TextBlock x:Name="PixelNeighborhoodText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="RoiStatsText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="LineProfileText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/></StackPanel>
                     <StackPanel x:Name="HistogramSection" Visibility="{Binding IsHistogramSelected, Converter={StaticResource BooleanVisibility}}">
 <presentation:HistogramView x:Name="HistogramPanel" Margin="0,14,0,0" Background="{DynamicResource InputBrush}"/>
 
@@ -861,7 +880,7 @@
                             <TextBlock x:Name="AutomaticInspectionMembersText"
                                        Margin="0,5,0,0"
                                        Foreground="{DynamicResource SecondaryTextBrush}"
-                                       FontFamily="Consolas"
+                                       FontFamily="Cascadia Mono, Consolas"
                                        FontSize="11"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="AutomaticInspectionValidationText"
@@ -1022,10 +1041,10 @@
 <TextBlock Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
                     <WrapPanel Margin="0,0,0,6">
                         <Button ToolTip="Copy diagnostics and environment details without image data" AutomationProperties.Name="Copy report" Click="CopySupportReport_Click">
-                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Copy Report"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox><TextBlock Text="Copy Report"/></StackPanel>
                         </Button>
                         <Button ToolTip="Write the current report and open its log folder" AutomationProperties.Name="Open logs" Click="OpenSupportLogs_Click">
-                            <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFolder}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Open Logs"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox><TextBlock Text="Open Logs"/></StackPanel>
                         </Button>
                     </WrapPanel>
                     <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
@@ -1045,26 +1064,26 @@
                     </Grid>
                 </Border>
             </ContentControl>
-            <StackPanel x:Name="InspectorRail" Grid.Column="5" Background="{DynamicResource PanelBrush}">
+            <StackPanel x:Name="InspectorRail" Grid.Column="5" Background="{DynamicResource ToolbarBrush}">
                 <ToggleButton x:Name="InspectorPixelButton" IsChecked="{Binding IsPixelSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Pixel" AutomationProperties.Name="Pixel" AutomationProperties.AutomationId="InspectorPixelButton">
-                    <StackPanel><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Inspect}" Width="18" Height="18" HorizontalAlignment="Center"/><TextBlock Text="Pixel" FontSize="10" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
+                    <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCrosshairGeometry}"/></Canvas></Viewbox><TextBlock Text="Pixel" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
                 <ToggleButton x:Name="InspectorHistogramButton" IsChecked="{Binding IsHistogramSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Histogram" AutomationProperties.Name="Histogram" AutomationProperties.AutomationId="InspectorHistogramButton">
-                    <StackPanel><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.HistogramVisualizer}" Width="18" Height="18" HorizontalAlignment="Center"/><TextBlock Text="Histo" FontSize="10" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
+                    <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconBarChartGeometry}"/></Canvas></Viewbox><TextBlock Text="Histo" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
                 <ToggleButton x:Name="InspectorFormatButton" IsChecked="{Binding IsFormatSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Buffer format" AutomationProperties.Name="Buffer format" AutomationProperties.AutomationId="InspectorFormatButton">
-                    <StackPanel><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Property}" Width="18" Height="18" HorizontalAlignment="Center"/><TextBlock Text="Format" FontSize="10" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
+                    <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSlidersGeometry}"/></Canvas></Viewbox><TextBlock Text="Format" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
                 <ToggleButton x:Name="InspectorCompareButton" IsChecked="{Binding IsCompareSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Compare" AutomationProperties.Name="Compare" AutomationProperties.AutomationId="InspectorCompareButton">
-                    <StackPanel><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.CompareFiles}" Width="18" Height="18" HorizontalAlignment="Center"/><TextBlock Text="Compare" FontSize="10" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
+                    <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSplitGeometry}"/></Canvas></Viewbox><TextBlock Text="Compare" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
                 <ToggleButton x:Name="InspectorDiagnosticsButton" IsChecked="{Binding IsDiagnosticsSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Diagnostics" AutomationProperties.Name="Diagnostics" AutomationProperties.AutomationId="InspectorDiagnosticsButton">
-                    <StackPanel><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.StartGraphicDiagnostics}" Width="18" Height="18" HorizontalAlignment="Center"/><TextBlock Text="Diag" FontSize="10" Margin="0,4,0,0" HorizontalAlignment="Center"/></StackPanel>
+                    <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPulseGeometry}"/></Canvas></Viewbox><TextBlock Text="Diag" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
             </StackPanel>
             <Popup x:Name="InspectorOverlayPopup" PlacementTarget="{Binding ElementName=InspectorRail}" Placement="Left" AllowsTransparency="True" StaysOpen="True"/>

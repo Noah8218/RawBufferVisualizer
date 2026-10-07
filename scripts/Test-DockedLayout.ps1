@@ -43,6 +43,9 @@ $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindow
 $flags = [Reflection.BindingFlags]'Instance,NonPublic'
 $cases = @(); $sections = @(); $formats = @()
 try {
+    if ($control.FontFamily.Source -ne 'Segoe UI' -or $control.FontSize -ne 12) { throw 'View typography differs from the approved mockup' }
+    $palette = @{ PanelBrush='#FF252526'; InputBrush='#FF1E1E1E'; ToolbarBrush='#FF2D2D30'; BorderBrush='#FF3F3F46'; TextBrush='#FFF1F1F1'; SecondaryTextBrush='#FFA3A7AE'; FaintTextBrush='#FF6E737B'; LinkBrush='#FF3794FF' }
+    foreach ($key in $palette.Keys) { if ($control.Resources[$key].Color.ToString() -ne $palette[$key]) { throw "Mockup palette mismatch: $key" } }
     $descriptor = [RawBufferVisualizer.Core.RawImageDescriptor]::new()
     $descriptor.Width = 17; $descriptor.Height = 5; $descriptor.Stride = 56; $descriptor.PixelFormat = 'Bgr24'; $descriptor.ValidBits = 8
     $bytes = New-Object byte[] 280
@@ -63,6 +66,10 @@ try {
         if ([string]$control.FindName('MeasureButton').ToolTip -ne 'Click two image pixels to measure their horizontal and vertical distance (M)') { throw 'Full-image measurement tooltip differs from the approved mockup' }
         $orientation = if ($height -lt 560) { 'Vertical' } else { 'Horizontal' }
         if ([string]$control.FindName('ToolbarCommandsPanel').Orientation -ne $orientation) { throw "Wrong toolbar orientation at $width x $height" }
+        foreach ($name in @('FitButton','ZoomOutButton','ZoomInButton','PinPixelButton','SaveMenuButton','MoreMenuButton')) {
+            $icon = $control.FindName($name).Content.Children[0]
+            if ($icon -isnot [Windows.Controls.Viewbox] -or $icon.Child.Children[0].Data.Bounds.IsEmpty) { throw "Prototype vector icon unavailable: $name" }
+        }
         foreach ($name in @('SaveVisiblePngButton', 'OpenButton', 'WhatsNewButton', 'EnvironmentCheckButton', 'ZoomText', 'DescriptorText')) {
             if ($null -eq $control.FindName($name)) { throw "NameScope contract lost: $name" }
         }
@@ -83,6 +90,8 @@ try {
             Assert-InBounds $button $control.FindName('InspectorRail') "Rail $section at $width x $height"
             Assert-InBounds $button $control "Rail viewport $section at $width x $height"
             Assert-InBounds $button.Content.Children[1] $button "Rail caption $section at $width x $height"
+            if ($button.ActualHeight -ne 48 -or $button.Template.FindName('RailActiveLine', $button).Visibility -ne 'Visible' -or
+                $button.Template.FindName('RailBackground', $button).Background.Color.A -ne 0) { throw "Selected rail chrome differs from the mockup: $section" }
             if ($nav.IsNarrow) {
                 if ($control.FindName('InspectorOverlayPopup').Child -ne $panel -or $panel.Width -gt $width - 44) { throw "Overlay ownership/bounds failed at $width x $height" }
                 # Arrange the same popup content without opening a native window.
