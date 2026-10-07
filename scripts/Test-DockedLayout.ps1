@@ -84,6 +84,16 @@ try {
         foreach ($name in @('PixelRText', 'PixelGText', 'PixelBText', 'PixelGvText')) { Assert-InBounds $control.FindName($name) $bar "$name at $width x $height" }
         if ($control.FindName('PixelOffsetText').Text -ne 'Offset 136' -or $control.FindName('PixelRawText').Text -ne 'Raw A4 A5 9B' -or $control.FindName('PixelGvText').Text -ne 'GV 161') { throw 'Padded BGR readout disagrees with fixture bytes' }
         if ($control.FindName('ImageInfoBar').DataContext.FormatText -ne 'BGR24') { throw 'Header does not describe the active image' }
+        if ($width -eq 1440 -and $height -eq 720 -and $bar.ActualHeight -ne 30) { throw 'Wide pixel bar does not match the approved 30px row' }
+        $pinAction=$control.FindName('PixelBarPinButton')
+        if ($pinAction.Visibility -eq 'Visible') {
+            $right=$pinAction.TranslatePoint([Windows.Point]::new($pinAction.ActualWidth,0),$bar).X
+            if ([Math]::Abs($right-($bar.ActualWidth-8)) -gt 0.5) { throw 'Pixel Pin action is not aligned with the right edge' }
+        }
+        foreach ($name in @('PixelRText','PixelGText','PixelBText','PixelGvText')) {
+            $runs=@($control.FindName($name).Inlines)
+            if ($runs[0].Foreground.Color.ToString() -ne '#FFA3A7AE' -or $runs[-1].Foreground.Color.ToString() -ne '#FFF1F1F1') { throw "Pixel label/value contrast differs from the approved colors: $name" }
+        }
         $nav.Show('Pixel')
         Arrange-Control $control $width $height
         $image = "layout-$width-$height.png"
@@ -284,6 +294,7 @@ try {
     $canvas.SelectPixelAtImagePixel(1, 0) | Out-Null; $canvas.SelectPixelAtImagePixel(4, 2) | Out-Null
     Arrange-Control $control $control.Width $control.Height
     if ($control.FindName('MeasurementStatusText').Text -ne 'Width 3 px · Height 2 px') { throw 'Measurement binding did not update' }
+    if ($control.FindName('InspectorPixelStateBadge').Visibility -ne 'Collapsed') { throw 'Pixel inspector badge is displayed during measurement' }
     $clear = $control.FindName('ClearMeasurementButton')
     if (-not $clear.Command.CanExecute($null)) { throw 'Clear measurement is unavailable' }
     $clear.Command.Execute($null)
@@ -293,6 +304,7 @@ try {
     $canvas.PinMarkerAtImagePixel(8, 2) | Out-Null
     $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0, 0))) | Out-Null
     if ($control.FindName('PixelPositionText').Text -ne 'X 8  Y 2' -or $control.FindName('PixelBadgeText').Text -ne 'PINNED') { throw 'Pinned values changed on hover' }
+    if ($control.FindName('PixelBadgeText').Foreground.Color.ToString() -ne '#FF1B1203' -or $control.FindName('PixelBadgePath').Data -ne $control.Resources['IconPinGeometry']) { throw 'Pinned badge lost its approved foreground or vector icon' }
     $canvas.ClearPinnedMarker()
     $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(-1, -1))) | Out-Null
     if ($control.FindName('PixelPositionText').Text -ne 'X 4  Y 2' -or $control.FindName('PixelBadgeText').Text -ne 'SELECTED') { throw 'Hover leave did not restore selection' }
@@ -304,6 +316,18 @@ try {
     if ($control.FindName('ImageList').Items.Count -ne 0 -or $control.FindName('SaveMenuButton').IsEnabled) { throw 'Confirmed clear did not reset presentation' }
     $status = $control.FindName('StatusText')
     if ($status.Text -ne $status.DataContext.Status -or -not $status.DataContext.StatusDetails.Contains('0 images')) { throw 'Clear lost the debugger-status binding or image-count detail' }
+    foreach ($emptyCase in @(@(320,260),@(1000,720),@(1440,440))) {
+        $emptyWidth=$emptyCase[0];$emptyHeight=$emptyCase[1];$control.Width=$emptyWidth;$control.Height=$emptyHeight
+        Arrange-Control $control $emptyWidth $emptyHeight
+        if ($control.FindName('PixelEmptyText').Text -ne 'No image selected.' -or $control.FindName('InspectorPixelStateBadge').Visibility -ne 'Collapsed') { throw 'No-image state retained pixel data or an inspector badge' }
+        if ($control.FindName('EmptyViewerScanButton').IsEnabled -ne $control.FindName('ScanNowButton').IsEnabled) { throw 'Empty Scan action disagrees with the existing scan availability binding' }
+        $emptyScroll=$control.FindName('EmptyViewerScroller')
+        foreach ($name in @('EmptyViewerScanButton','EmptyViewerOpenButton')) {
+            $action=$control.FindName($name);$action.BringIntoView();Arrange-Control $control $emptyWidth $emptyHeight
+            Assert-InBounds $action $emptyScroll "Empty viewer action $name at $emptyWidth x $emptyHeight"
+        }
+        Save-Render $control $emptyWidth $emptyHeight "empty-$emptyWidth-$emptyHeight.png"
+    }
     $control.OpenPath($fixture)
     if ($control.FindName('ImageList').Items.Count -ne 1 -or -not $control.FindName('SaveMenuButton').IsEnabled) { throw 'Reopen did not recover' }
     foreach ($format in @('BGRA32', 'Mono16', 'Float32', 'Int32')) {
