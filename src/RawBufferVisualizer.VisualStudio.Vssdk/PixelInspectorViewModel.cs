@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -24,8 +24,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public string[] ChannelOptions { get; } = { "GV", "R", "G", "B" };
         public string Position { get; private set; } = "X —  Y —";
         public string RawBytes { get; private set; } = "—";
+        public string RawByteNote { get; private set; } = string.Empty;
         public string ByteOffset { get; private set; } = "—";
         public bool IsColor { get; private set; }
+        public bool IsFloat => _isFloat;
+        public bool HasPixelData => ChannelValues.Count > 0;
         public string Count { get; private set; } = "—";
         public string Minimum { get; private set; } = "—";
         public string Maximum { get; private set; } = "—";
@@ -35,10 +38,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public string ProfileStart { get; private set; } = string.Empty;
         public string ProfileCenter { get; private set; } = string.Empty;
         public string ProfileEnd { get; private set; } = string.Empty;
+        public string ProfileLowLabel { get; private set; } = string.Empty;
+        public string ProfileMiddleLabel { get; private set; } = string.Empty;
+        public string ProfileHighLabel { get; private set; } = string.Empty;
         public Geometry ProfileR { get; private set; } = Geometry.Empty;
         public Geometry ProfileG { get; private set; } = Geometry.Empty;
         public Geometry ProfileB { get; private set; } = Geometry.Empty;
         public Geometry ProfileValue { get; private set; } = Geometry.Empty;
+        public Geometry ProfileRMarker { get; private set; } = Geometry.Empty;
+        public Geometry ProfileGMarker { get; private set; } = Geometry.Empty;
+        public Geometry ProfileBMarker { get; private set; } = Geometry.Empty;
+        public Geometry ProfileValueMarker { get; private set; } = Geometry.Empty;
         public int ProfileSampleCount { get; private set; }
         public string SelectedChannel
         {
@@ -62,6 +72,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var description = source.DescribePixel(x, y);
             var rawIndex = description.IndexOf("Raw=", StringComparison.Ordinal);
             RawBytes = rawIndex < 0 ? "—" : description.Substring(rawIndex + 4);
+            RawByteNote = descriptor.PixelFormat == RawPixelFormat.BGR24 ? " (B G R)" : _isFloat
+                ? descriptor.ByteOrder == RawByteOrder.LittleEndian ? " (float32, little-endian)" : " (float32, big-endian)" : string.Empty;
             int bits = descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
             long offset = (long)y * descriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * descriptor.GetBytesPerPixel());
             ByteOffset = string.Format(CultureInfo.InvariantCulture, "{0:N0} (0x{0:X})", offset);
@@ -115,6 +127,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ProfileB = IsColor ? Plot(line, sample => sample.B) : Geometry.Empty;
             var levels = options ?? source.CreateRenderOptions();
             ProfileValue = IsColor ? Geometry.Empty : Plot(line, sample => (sample.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
+            ProfileLowLabel = _isFloat ? Format(levels.BlackLevel) : "0";
+            ProfileMiddleLabel = _isFloat ? Format((levels.BlackLevel + levels.WhiteLevel) / 2) : "128";
+            ProfileHighLabel = _isFloat ? Format(levels.WhiteLevel) : "255";
+            ProfileRMarker = IsColor ? Marker(current.R) : Geometry.Empty;
+            ProfileGMarker = IsColor ? Marker(current.G) : Geometry.Empty;
+            ProfileBMarker = IsColor ? Marker(current.B) : Geometry.Empty;
+            ProfileValueMarker = IsColor ? Geometry.Empty : Marker((current.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
             ProfileStart = Math.Max(0, x - 8).ToString(CultureInfo.InvariantCulture);
             ProfileCenter = x.ToString(CultureInfo.InvariantCulture);
             ProfileEnd = Math.Min(descriptor.Width - 1, x + 8).ToString(CultureInfo.InvariantCulture);
@@ -130,8 +149,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             Cells.Clear();
             Position = "X —  Y —";
             RawBytes = ByteOffset = Count = Minimum = Maximum = Mean = StandardDeviation = "—";
+            RawByteNote = string.Empty;
             ProfileCaption = ProfileStart = ProfileCenter = ProfileEnd = string.Empty;
             ProfileR = ProfileG = ProfileB = ProfileValue = Geometry.Empty;
+            ProfileRMarker = ProfileGMarker = ProfileBMarker = ProfileValueMarker = Geometry.Empty;
+            ProfileLowLabel = ProfileMiddleLabel = ProfileHighLabel = string.Empty;
             ProfileSampleCount = 0;
             Notify();
         }
@@ -150,8 +172,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Count = _statistics.Count.ToString(CultureInfo.InvariantCulture);
                 Minimum = Format(_statistics.Minimum);
                 Maximum = Format(_statistics.Maximum);
-                Mean = Format(_statistics.Mean);
-                StandardDeviation = Format(_statistics.StandardDeviation);
+                Mean = FormatStatistic(_statistics.Mean, 2);
+                StandardDeviation = FormatStatistic(_statistics.StandardDeviation, 3);
                 return;
             }
             var values = _neighborhood.Where(sample => sample.IsAvailable).Select(Value).Where(value => !double.IsNaN(value) && !double.IsInfinity(value)).ToArray();
@@ -160,13 +182,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             double mean = values.Average();
             Minimum = Format(values.Min());
             Maximum = Format(values.Max());
-            Mean = Format(mean);
-            StandardDeviation = Format(Math.Sqrt(values.Average(value => (value - mean) * (value - mean))));
+            Mean = FormatStatistic(mean, 2);
+            StandardDeviation = FormatStatistic(Math.Sqrt(values.Average(value => (value - mean) * (value - mean))), 3);
         }
 
         private double Value(Sample sample) => _selectedChannel == "R" ? sample.R : _selectedChannel == "G" ? sample.G : _selectedChannel == "B" ? sample.B : sample.Value;
         private string Format(double value) => value.ToString(_isFloat ? "G5" : "0.###", CultureInfo.InvariantCulture);
+        private string FormatStatistic(double value, int decimals) => value.ToString("F" + (_isFloat ? 3 : decimals), CultureInfo.InvariantCulture);
         private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+
+        private static Geometry Marker(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value)) return Geometry.Empty;
+            var marker = new EllipseGeometry(new Point(120, 90 - Math.Max(0, Math.Min(255, value)) * 90 / 255), 3, 3);
+            marker.Freeze();
+            return marker;
+        }
 
         private static Geometry Plot(IReadOnlyList<Sample> line, Func<Sample, double> value)
         {
@@ -228,8 +259,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var background = new SolidColorBrush(color);
                 background.Freeze();
                 Background = background;
-                Foreground = color.R * 0.2126 + color.G * 0.7152 + color.B * 0.0722 > 140 ? Brushes.Black : Brushes.White;
+                Foreground = Luminance(color.R) * 0.2126 + Luminance(color.G) * 0.7152 + Luminance(color.B) * 0.0722 > 0.179 ? Brushes.Black : Brushes.White;
                 IsCenter = center;
+            }
+
+            private static double Luminance(byte channel)
+            {
+                double value = channel / 255.0;
+                return value <= 0.03928 ? value / 12.92 : Math.Pow((value + 0.055) / 1.055, 2.4);
             }
         }
 

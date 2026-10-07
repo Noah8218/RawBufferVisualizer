@@ -4,6 +4,7 @@
              xmlns:gl="clr-namespace:RawBufferVisualizer.OpenGlCanvas;assembly=RawBufferVisualizer.OpenGlCanvas"
              xmlns:imaging="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.Imaging"
              xmlns:presentation="clr-namespace:RawBufferVisualizer.Presentation"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              xmlns:catalog="clr-namespace:Microsoft.VisualStudio.Imaging;assembly=Microsoft.VisualStudio.ImageCatalog"
              FontFamily="Segoe UI" FontSize="12" Foreground="{DynamicResource TextBrush}"
              TextOptions.TextFormattingMode="Display" MinWidth="320"
@@ -13,6 +14,8 @@
         <ResourceDictionary>
         <ResourceDictionary.MergedDictionaries><ResourceDictionary Source="Themes/RawBufferVisualizerDark.xaml"/></ResourceDictionary.MergedDictionaries>
         <BooleanToVisibilityConverter x:Key="BooleanVisibility"/>
+        <sys:Double x:Key="{x:Static SystemParameters.VerticalScrollBarWidthKey}">8</sys:Double>
+        <sys:Double x:Key="{x:Static SystemParameters.HorizontalScrollBarHeightKey}">8</sys:Double>
         <SolidColorBrush x:Key="PanelBrush" Color="#252526"/>
         <SolidColorBrush x:Key="InputBrush" Color="#1E1E1E"/>
         <SolidColorBrush x:Key="BorderBrush" Color="#3F3F46"/>
@@ -71,9 +74,6 @@
             <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Control}}}"/>
             <Setter Property="StrokeThickness" Value="1.5"/><Setter Property="StrokeStartLineCap" Value="Round"/><Setter Property="StrokeEndLineCap" Value="Round"/>
             <Setter Property="StrokeLineJoin" Value="Round"/><Setter Property="IsHitTestVisible" Value="False"/>
-        </Style>
-        <Style TargetType="{x:Type TextBlock}">
-            <Setter Property="Foreground" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType={x:Type Control}}}"/>
         </Style>
         <Style TargetType="{x:Type Button}">
             <Setter Property="Margin" Value="0,0,6,0"/><Setter Property="Padding" Value="10,0"/>
@@ -312,6 +312,36 @@
             </ControlTemplate></Setter.Value></Setter>
         </Style>
 
+        <Style x:Key="InspectorBlockHeading" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11.5"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/><Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="InspectorStatCard" TargetType="Border">
+            <Setter Property="Padding" Value="6,4"/><Setter Property="CornerRadius" Value="2"/><Setter Property="Background" Value="{DynamicResource InputBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style x:Key="ChannelSegments" TargetType="ComboBox">
+            <Setter Property="Height" Value="24"/><Setter Property="IsTabStop" Value="False"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
+                <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Background="{DynamicResource InputBrush}">
+                    <ListBox x:Name="SegmentList" ItemsSource="{TemplateBinding ItemsSource}" SelectedItem="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" BorderThickness="0" Padding="0" Background="Transparent" AlternationCount="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                        <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                            <Setter Property="MinWidth" Value="32"/><Setter Property="Height" Value="22"/><Setter Property="Padding" Value="8,0"/><Setter Property="FontSize" Value="11.5"/><Setter Property="Cursor" Value="Hand"/>
+                            <Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/><Setter Property="BorderThickness" Value="1,0,0,0"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+                                <Grid><Border x:Name="SegmentBackground" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}"><ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/></Border><Border x:Name="SegmentFocus" BorderBrush="{DynamicResource LinkBrush}" BorderThickness="2" Visibility="Collapsed" IsHitTestVisible="False"/></Grid>
+                                <ControlTemplate.Triggers>
+                                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SegmentBackground" Property="Background" Value="{DynamicResource CommandHoverBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Trigger>
+                                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="SegmentBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/></Trigger>
+                                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SegmentFocus" Property="Visibility" Value="Visible"/></Trigger>
+                                </ControlTemplate.Triggers>
+                            </ControlTemplate></Setter.Value></Setter>
+                            <Style.Triggers><Trigger Property="ItemsControl.AlternationIndex" Value="0"><Setter Property="BorderThickness" Value="0"/></Trigger></Style.Triggers>
+                        </Style></ListBox.ItemContainerStyle>
+                    </ListBox>
+                </Border>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
         <Style TargetType="ComboBox" BasedOn="{StaticResource RbvComboBoxStyle}"/>
         <Style TargetType="ComboBoxItem" BasedOn="{StaticResource RbvComboBoxItemStyle}"/>
         <Style TargetType="ScrollBar" BasedOn="{StaticResource RbvScrollBarStyle}"/>
@@ -812,48 +842,60 @@
                           ResizeBehavior="PreviousAndNext"/>
 
             <ContentControl x:Name="DockedInspectorHost" Grid.Column="4" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
-                <Border x:Name="InspectorContainer" Width="300" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0"
+                <Border x:Name="InspectorContainer" Width="300" TextElement.Foreground="{DynamicResource TextBrush}" TextElement.FontFamily="Segoe UI" TextElement.FontSize="12" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,0,0"
                         Visibility="{Binding IsOpen, Converter={StaticResource BooleanVisibility}}">
                     <Grid>
                         <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                        <DockPanel Margin="12,0,6,0">
-                            <Button DockPanel.Dock="Right" Content="»" MinWidth="28" Margin="0" Padding="4,0" Background="Transparent" BorderThickness="0"
-                                    Command="{Binding CloseCommand}" ToolTip="Collapse inspector" AutomationProperties.Name="Collapse inspector" AutomationProperties.AutomationId="CollapseInspectorButton"/>
-                            <TextBlock x:Name="InspectorPixelStateText" DockPanel.Dock="Right" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}" Text="HOVER" FontSize="10" VerticalAlignment="Center" Margin="8,0"/>
-                            <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                        </DockPanel>
+                        <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"><DockPanel Margin="12,0,4,0">
+                            <Button DockPanel.Dock="Right" Style="{StaticResource ImageIconButton}"
+                                    Command="{Binding CloseCommand}" ToolTip="Collapse inspector" AutomationProperties.Name="Collapse inspector" AutomationProperties.AutomationId="CollapseInspectorButton"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconChevronsRightGeometry}"/></Canvas></Viewbox></Button>
+                            <Border DockPanel.Dock="Right" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}" Background="{Binding Background, ElementName=PixelStateBadge}" Height="17" Padding="5,0" CornerRadius="2" VerticalAlignment="Center" Margin="8,0"><TextBlock x:Name="InspectorPixelStateText" Text="HOVER" Foreground="{Binding Foreground, ElementName=PixelBadgeText}" FontSize="9.5" VerticalAlignment="Center"/></Border>
+                            <TextBlock x:Name="InspectorTitleText" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                        </DockPanel></Border>
                         <ScrollViewer x:Name="InspectorPanel" AutomationProperties.AutomationId="InspectorPanel" Grid.Row="1"
                                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <StackPanel Margin="12,8">
+                            <StackPanel Margin="12">
                     <StackPanel x:Name="PixelSection" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}">
-    <StackPanel x:Name="PixelVisualization">
-        <DockPanel Margin="0,0,0,8"><Border DockPanel.Dock="Right" Width="22" Height="22" Background="{Binding Swatch}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/><TextBlock x:Name="InspectorPixelPositionText" Text="{Binding Position}" AutomationProperties.Name="{Binding Text, ElementName=PixelText}" FontFamily="Cascadia Mono, Consolas" FontSize="16"/></DockPanel>
-        <ItemsControl ItemsSource="{Binding ChannelValues}" Foreground="{DynamicResource TextBrush}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,2"><Grid.ColumnDefinitions><ColumnDefinition Width="48"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas"/><TextBlock Grid.Column="1" Foreground="{DynamicResource TextBrush}" Text="{Binding Decimal}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/><TextBlock Grid.Column="2" Text="{Binding Hex}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-        <TextBlock Text="Raw bytes" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" Margin="0,10,0,2"/><TextBlock Text="{Binding RawBytes}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/>
-        <TextBlock Text="Byte offset" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11" Margin="0,6,0,2"/><TextBlock Text="{Binding ByteOffset}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/>
-        <TextBlock x:Name="PixelNeighborhoodHeadingText" Text="5×5 NEIGHBORHOOD" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,6"/>
-        <ComboBox x:Name="NeighborhoodChannelBox" ItemsSource="{Binding ChannelOptions}" SelectedItem="{Binding SelectedChannel, Mode=TwoWay}" IsEnabled="{Binding IsColor}" Width="70" HorizontalAlignment="Left" Margin="0,0,0,6" AutomationProperties.Name="Neighborhood channel"/>
-        <ItemsControl x:Name="PixelNeighborhoodGrid" ItemsSource="{Binding Cells}" AutomationProperties.Name="{Binding Text, ElementName=PixelNeighborhoodText}">
-            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5" Rows="5"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-            <ItemsControl.ItemTemplate><DataTemplate><Border Background="{Binding Background}" Margin="1" MinHeight="30" Padding="2" BorderThickness="2"><Border.Style><Style TargetType="Border"><Setter Property="BorderBrush" Value="Transparent"/><Style.Triggers><DataTrigger Binding="{Binding IsCenter}" Value="True"><Setter Property="BorderBrush" Value="#00B8FF"/></DataTrigger></Style.Triggers></Style></Border.Style><Viewbox StretchDirection="DownOnly"><TextBlock Text="{Binding Value}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas" FontSize="11"/></Viewbox></Border></DataTemplate></ItemsControl.ItemTemplate>
+    <TextBlock x:Name="InspectorPixelEmptyText" Text="{Binding Text, ElementName=PixelEmptyText}" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" TextAlignment="Center" Margin="6,18">
+        <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=PixelVisualization}" Value="Visible"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
+    </TextBlock>
+    <StackPanel x:Name="PixelVisualization" Visibility="{Binding HasPixelData, Converter={StaticResource BooleanVisibility}}">
+        <DockPanel Margin="0,0,0,6"><Border DockPanel.Dock="Right" Width="22" Height="22" CornerRadius="2" Background="{Binding Swatch}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/><TextBlock x:Name="InspectorPixelPositionText" Text="{Binding Position}" AutomationProperties.Name="{Binding Text, ElementName=PixelText}" FontFamily="Cascadia Mono, Consolas" FontSize="16" FontWeight="Medium"/></DockPanel>
+        <ItemsControl ItemsSource="{Binding ChannelValues}" Foreground="{DynamicResource TextBrush}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,1" MinHeight="18"><Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Cascadia Mono, Consolas"/><TextBlock Grid.Column="1" Foreground="{DynamicResource TextBrush}" Text="{Binding Decimal}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Right" Margin="0,0,14,0"/><TextBlock Grid.Column="2" Text="{Binding Hex}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Right"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+            <TextBlock Text="Raw bytes" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,0,10,2"/><TextBlock Grid.Column="1" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"><Run Text="{Binding RawBytes}"/><Run Text="{Binding RawByteNote}"/></TextBlock>
+            <TextBlock Grid.Row="1" Text="Byte offset" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,0,10,0"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ByteOffset}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/>
+        </Grid>
+        <Grid Margin="0,12,0,6" MinHeight="24"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+            <TextBlock x:Name="PixelNeighborhoodHeadingText" Text="5×5 NEIGHBORHOOD" Style="{StaticResource InspectorBlockHeading}" TextWrapping="Wrap" Margin="0,0,8,0"/>
+            <ComboBox Grid.Column="1" x:Name="NeighborhoodChannelBox" Style="{StaticResource ChannelSegments}" ItemsSource="{Binding ChannelOptions}" SelectedItem="{Binding SelectedChannel, Mode=TwoWay}" IsEnabled="{Binding IsColor}" Visibility="{Binding IsColor, Converter={StaticResource BooleanVisibility}}" AutomationProperties.Name="Neighborhood channel"/>
+        </Grid>
+        <ItemsControl x:Name="PixelNeighborhoodGrid" Width="228" Height="228" HorizontalAlignment="Center" ItemsSource="{Binding Cells}" AutomationProperties.Name="{Binding Text, ElementName=PixelNeighborhoodText}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="5" Rows="5" Margin="-1"/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate><DataTemplate><Grid Margin="1"><Border x:Name="NeighborhoodCellBorder" Background="{Binding Background}" CornerRadius="2"/><TextBlock Text="{Binding Value}" Foreground="{Binding Foreground}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="2"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="FontSize" Value="11"/><Style.Triggers><DataTrigger Binding="{Binding DataContext.IsFloat, RelativeSource={RelativeSource AncestorType=ItemsControl}}" Value="True"><Setter Property="FontSize" Value="10"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock><Border x:Name="NeighborhoodCenterBorder" CornerRadius="2" BorderThickness="2" BorderBrush="#00B8FF" Visibility="Collapsed" IsHitTestVisible="False"/></Grid>
+                <DataTemplate.Triggers><DataTrigger Binding="{Binding IsCenter}" Value="True"><Setter TargetName="NeighborhoodCenterBorder" Property="Visibility" Value="Visible"/></DataTrigger><DataTrigger Binding="{Binding Value}" Value="—"><Setter TargetName="NeighborhoodCellBorder" Property="Background" Value="{DynamicResource InputBrush}"/><Setter TargetName="NeighborhoodCellBorder" Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter TargetName="NeighborhoodCellBorder" Property="BorderThickness" Value="1"/></DataTrigger></DataTemplate.Triggers>
+            </DataTemplate></ItemsControl.ItemTemplate>
         </ItemsControl>
-        <TextBlock x:Name="PixelStatsHeadingText" Text="5×5 STATISTICS" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,6"/>
-        <UniformGrid Columns="3"><StackPanel><TextBlock Text="n" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Count}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="min" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Minimum}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="max" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Maximum}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel></UniformGrid>
-        <UniformGrid Columns="2" Margin="0,6,0,0"><StackPanel><TextBlock Text="mean" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Mean}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel><StackPanel><TextBlock Text="std" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding StandardDeviation}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap"/></StackPanel></UniformGrid>
-        <TextBlock Text="ROW PROFILE" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,4"/><TextBlock Text="{Binding ProfileCaption}" FontSize="11" Margin="0,0,0,6"/>
-        <Grid x:Name="RowProfileGraph" Height="110" ToolTip="{Binding Text, ElementName=LineProfileText}" AutomationProperties.Name="{Binding Text, ElementName=LineProfileText}">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="28"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-            <TextBlock Text="255" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Top"/><TextBlock Text="128" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center"/><TextBlock Text="0" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Bottom"/>
-            <Viewbox Grid.Column="1" Stretch="Fill"><Canvas Width="240" Height="90" ClipToBounds="True">
-                <Line X1="0" X2="240" Y1="0" Y2="0" Stroke="{DynamicResource BorderBrush}"/><Line X1="0" X2="240" Y1="45" Y2="45" Stroke="{DynamicResource BorderBrush}"/><Line X1="0" X2="240" Y1="90" Y2="90" Stroke="{DynamicResource BorderBrush}"/>
-                <Line X1="120" X2="120" Y1="0" Y2="90" Stroke="#00B8FF" StrokeDashArray="2,3"/>
-                <Path Data="{Binding ProfileR}" Stroke="#E06C75" StrokeThickness="1.5"/><Path Data="{Binding ProfileG}" Stroke="#98C379" StrokeThickness="1.5"/><Path Data="{Binding ProfileB}" Stroke="#61AFEF" StrokeThickness="1.5"/><Path Data="{Binding ProfileValue}" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.5"/>
+        <TextBlock x:Name="PixelStatsHeadingText" Text="5×5 STATISTICS" Style="{StaticResource InspectorBlockHeading}" Margin="0,12,0,6"/>
+        <Grid x:Name="PixelStatisticsCards"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+<Border Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,4,0" Style="{StaticResource InspectorStatCard}"><StackPanel><TextBlock Text="n" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Count}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border><Border Grid.Column="2" Grid.ColumnSpan="2" Margin="0,0,4,0" Style="{StaticResource InspectorStatCard}"><StackPanel><TextBlock Text="min" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Minimum}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border><Border Grid.Column="4" Grid.ColumnSpan="2" Margin="0" Style="{StaticResource InspectorStatCard}"><StackPanel><TextBlock Text="max" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Maximum}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border>
+        </Grid>
+        <Grid Margin="0,4,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border Grid.Column="0" Grid.ColumnSpan="1" Margin="0,0,4,0" Style="{StaticResource InspectorStatCard}"><StackPanel><TextBlock Text="mean" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding Mean}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border><Border Grid.Column="1" Grid.ColumnSpan="1" Margin="0" Style="{StaticResource InspectorStatCard}"><StackPanel><TextBlock Text="std" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding StandardDeviation}" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"/></StackPanel></Border></Grid>
+        <Grid Margin="0,12,0,6" MinHeight="22"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="ROW PROFILE" Style="{StaticResource InspectorBlockHeading}"/><TextBlock Grid.Column="1" Text="{Binding ProfileCaption}" FontFamily="Cascadia Mono, Consolas" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Right" VerticalAlignment="Center" TextWrapping="Wrap" Margin="8,0,0,0"/></Grid>
+        <Grid x:Name="RowProfileGraph" Height="80" ToolTip="{Binding Text, ElementName=LineProfileText}" AutomationProperties.Name="{Binding Text, ElementName=LineProfileText}">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="30"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <TextBlock Text="{Binding ProfileHighLabel}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Top" HorizontalAlignment="Right" Margin="0,0,4,0"/><TextBlock Text="{Binding ProfileMiddleLabel}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="0,0,4,0"/><TextBlock Text="{Binding ProfileLowLabel}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Bottom" HorizontalAlignment="Right" Margin="0,0,4,0"/>
+            <Viewbox Grid.Column="1" Stretch="Fill" Margin="0,8,8,0"><Canvas Width="240" Height="90" ClipToBounds="True">
+                <Line X1="0" X2="240" Y1="0" Y2="0" Stroke="{DynamicResource BorderBrush}"/><Line X1="0" X2="240" Y1="45" Y2="45" Stroke="{DynamicResource BorderBrush}" StrokeDashArray="2,3"/><Line X1="0" X2="240" Y1="90" Y2="90" Stroke="{DynamicResource BorderBrush}"/>
+                <Line X1="120" X2="120" Y1="0" Y2="90" Stroke="{DynamicResource FaintTextBrush}" StrokeDashArray="3,3"/>
+                <Path Data="{Binding ProfileR}" Stroke="#E06C75" StrokeThickness="1.2"/><Path Data="{Binding ProfileG}" Stroke="#98C379" StrokeThickness="1.2"/><Path Data="{Binding ProfileB}" Stroke="#61AFEF" StrokeThickness="1.2"/><Path Data="{Binding ProfileValue}" Stroke="{DynamicResource TextBrush}" StrokeThickness="1.2"/>
+                <Path Data="{Binding ProfileRMarker}" Fill="#E06C75"/><Path Data="{Binding ProfileGMarker}" Fill="#98C379"/><Path Data="{Binding ProfileBMarker}" Fill="#61AFEF"/><Path Data="{Binding ProfileValueMarker}" Fill="{DynamicResource TextBrush}"/>
             </Canvas></Viewbox>
         </Grid>
-        <Grid Margin="28,4,0,0"><TextBlock Text="{Binding ProfileStart}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding ProfileCenter}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center"/><TextBlock Text="{Binding ProfileEnd}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Right"/></Grid>
-        <TextBlock Text="MARKER" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" Margin="0,16,0,6"/>
+        <Grid Margin="30,3,8,0"><TextBlock Text="{Binding ProfileStart}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}"/><TextBlock Text="{Binding ProfileCenter}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Center"/><TextBlock Text="{Binding ProfileEnd}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" HorizontalAlignment="Right"/></Grid>
+        <TextBlock Text="MARKER" Style="{StaticResource InspectorBlockHeading}" Margin="0,12,0,6"/>
         <Button Click="PinPixel_Click" HorizontalAlignment="Left" ToolTip="Freeze values at the hovered pixel (right-click the image)"><TextBlock x:Name="InspectorPinButtonText" Text="Pin hovered pixel"/></Button>
-        <TextBlock Text="Right-click the image to pin. Esc unpins." FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
+        <TextBlock x:Name="InspectorMarkerCaption" Text="Right-click the image to pin. Esc unpins." FontSize="11.5" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
     </StackPanel>
 <TextBlock x:Name="PixelHeadingText" Text="Pixel" FontSize="16" FontWeight="SemiBold" Visibility="Collapsed"/><TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/><TextBlock x:Name="PixelNeighborhoodText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="RoiStatsText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="LineProfileText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/></StackPanel>
                     <StackPanel x:Name="HistogramSection" Visibility="{Binding IsHistogramSelected, Converter={StaticResource BooleanVisibility}}">
