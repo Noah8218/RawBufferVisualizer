@@ -4404,11 +4404,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             if (_activeDocument == null)
             {
+                RenderingMetricsPanel.DataContext = null;
                 SetPerformanceText("Perf: no image");
                 return;
             }
 
             var stats = OpenGlImageView.GetRenderStatsSnapshot();
+            RenderingMetricsPanel.DataContext = stats;
             SetPerformanceText(string.Format(
                 CultureInfo.InvariantCulture,
                 "Perf: frames {0:N0}, max {1:0.0} ms, wheel {2:N0}/{3:0.0} ms, drag {4:N0}/{5:0.0} ms, upload {6:N0}/{7:0.0} ms",
@@ -4482,12 +4484,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             CompareASlot.DataContext = _compareA;
             CompareBSlot.DataContext = _compareB;
-            CompareText.Text = string.Format(
-                CultureInfo.InvariantCulture,
-                "A: {0}\nB: {1}{2}",
-                _compareA == null ? "-" : _compareA.Title,
-                _compareB == null ? "-" : _compareB.Title,
-                string.IsNullOrWhiteSpace(message) ? string.Empty : "\n" + message);
+            CompareText.Text = message ?? string.Empty;
+            CompareText.Visibility = string.IsNullOrWhiteSpace(message) ? Visibility.Collapsed : Visibility.Visible;
         }
 
         private static int ParsePositiveInt(string text, string name)
