@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -59,6 +59,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         }
         private readonly SnapshotExportOperation _snapshotExport = new SnapshotExportOperation();
         private readonly HistogramViewModel _histogram = new HistogramViewModel();
+        private readonly InspectorNavigationViewModel _inspector = new InspectorNavigationViewModel();
+        private bool _applyingInspectorLayout;
         private readonly AutomaticInspectionStatusViewModel _inspectionStatus = new AutomaticInspectionStatusViewModel();
         private readonly PixelMeasurementViewModel _measurement = new PixelMeasurementViewModel();
         private bool _savingSnapshot;
@@ -93,7 +95,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private int _lastHoverY = -1;
         private int _pinnedInspectorX = -1;
         private int _pinnedInspectorY = -1;
-        private double _lastCompactInspectorHeight = 168;
         private string _lastFramebufferCapturePath = string.Empty;
         private string _lastFramebufferCaptureError = string.Empty;
         private CancellationTokenSource? _diagnosisCancellation;
@@ -152,6 +153,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public RawBufferToolWindowControl()
         {
             InitializeComponent();
+            InspectorContainer.DataContext = _inspector;
+            InspectorRail.DataContext = _inspector;
+            _inspector.PropertyChanged += InspectorNavigation_PropertyChanged;
+            Loaded += InspectorHost_Loaded;
+            Unloaded += InspectorHost_Unloaded;
             AutomaticInspectionBar.DataContext = _inspectionStatus;
             AutomaticHelpTip.DataContext = _inspectionStatus;
             StatusText.DataContext = _inspectionStatus;
@@ -159,7 +165,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             MeasurementStatusText.DataContext = _measurement;
             _measurement.PropertyChanged += Measurement_PropertyChanged;
             HistogramPanel.DataContext = _histogram;
-            CompactHistogramPanel.DataContext = _histogram;
             ApplyVisualStudioTheme();
             VSColorTheme.ThemeChanged += VSColorTheme_ThemeChanged;
             LoadAutomaticInspectionPreferences();
@@ -173,8 +178,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
             InterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
             InterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
-            CompactInterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
-            CompactInterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
             _performanceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _performanceTimer.Tick += delegate { UpdatePerformanceText(); };
             _performanceTimer.Start();
@@ -1588,6 +1591,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _histogram.Dispose();
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
+            _inspector.PropertyChanged -= InspectorNavigation_PropertyChanged;
+            Loaded -= InspectorHost_Loaded;
+            Unloaded -= InspectorHost_Unloaded;
+            InspectorOverlayPopup.IsOpen = false;
             _performanceTimer.Stop();
             _blinkTimer.Stop();
             CancelDiagnosis();
@@ -3658,17 +3665,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            var useCompact = ReferenceEquals(sender, CompactApplyInterpretationButton);
 
             try
             {
                 var descriptor = _activeDocument.Descriptor.Clone();
-                descriptor.PixelFormat = (RawPixelFormat)(useCompact ? CompactInterpretPixelFormatBox.SelectedItem : InterpretPixelFormatBox.SelectedItem);
-                descriptor.ByteOrder = (RawByteOrder)(useCompact ? CompactInterpretByteOrderBox.SelectedItem : InterpretByteOrderBox.SelectedItem);
-                descriptor.Width = ParsePositiveInt(useCompact ? CompactInterpretWidthTextBox.Text : InterpretWidthTextBox.Text, "Width");
-                descriptor.Height = ParsePositiveInt(useCompact ? CompactInterpretHeightTextBox.Text : InterpretHeightTextBox.Text, "Height");
-                descriptor.Stride = ParsePositiveInt(useCompact ? CompactInterpretStrideTextBox.Text : InterpretStrideTextBox.Text, "Stride");
-                descriptor.ValidBits = ParsePositiveInt(useCompact ? CompactInterpretValidBitsTextBox.Text : InterpretValidBitsTextBox.Text, "Valid bits");
+                descriptor.PixelFormat = (RawPixelFormat)(InterpretPixelFormatBox.SelectedItem);
+                descriptor.ByteOrder = (RawByteOrder)(InterpretByteOrderBox.SelectedItem);
+                descriptor.Width = ParsePositiveInt(InterpretWidthTextBox.Text, "Width");
+                descriptor.Height = ParsePositiveInt(InterpretHeightTextBox.Text, "Height");
+                descriptor.Stride = ParsePositiveInt(InterpretStrideTextBox.Text, "Stride");
+                descriptor.ValidBits = ParsePositiveInt(InterpretValidBitsTextBox.Text, "Valid bits");
                 ApplyInterpretationDescriptor(descriptor);
             }
             catch (Exception ex)
@@ -3704,19 +3710,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var cancellation = new CancellationTokenSource();
             _diagnosisCancellation = cancellation;
 
-            var useCompact = ReferenceEquals(sender, CompactDiagnoseBufferButton);
-            if (useCompact)
-            {
-                CompactDiagnosisPanel.Visibility = Visibility.Visible;
-                CompactDiagnosisStatusText.Text = "Diagnosing buffer interpretations...";
-                CompactDiagnosisCandidateList.ItemsSource = null;
-            }
-            else
-            {
-                DiagnosisPanel.Visibility = Visibility.Visible;
-                DiagnosisStatusText.Text = "Diagnosing buffer interpretations...";
-                DiagnosisCandidateList.ItemsSource = null;
-            }
+            DiagnosisPanel.Visibility = Visibility.Visible;
+            DiagnosisStatusText.Text = "Diagnosing buffer interpretations...";
+            DiagnosisCandidateList.ItemsSource = null;
 
             var source = document.Source;
 #pragma warning disable VSTHRD110
@@ -3760,7 +3756,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var failure = task.Exception == null ? null : task.Exception.GetBaseException();
                 var failureText = "Diagnosis failed: " + (failure == null ? "unknown error." : failure.Message);
                 DiagnosisStatusText.Text = failureText;
-                CompactDiagnosisStatusText.Text = failureText;
                 return;
             }
 
@@ -3771,7 +3766,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var items = task.Result.Value;
 #pragma warning restore VSTHRD002
             DiagnosisCandidateList.ItemsSource = items;
-            CompactDiagnosisCandidateList.ItemsSource = items;
             var errorNotes = 0;
             for (var i = 0; i < result.Notes.Count; i++)
             {
@@ -3787,7 +3781,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 items.Count,
                 errorNotes > 0 ? " Buffer diagnostics report " + errorNotes + " error(s)." : string.Empty);
             DiagnosisStatusText.Text = statusText;
-            CompactDiagnosisStatusText.Text = statusText;
         }
 
         private void DiagnosisCandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -3818,11 +3811,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             CancelDiagnosis();
             DiagnosisPanel.Visibility = Visibility.Collapsed;
-            CompactDiagnosisPanel.Visibility = Visibility.Collapsed;
             DiagnosisStatusText.Text = string.Empty;
-            CompactDiagnosisStatusText.Text = string.Empty;
             DiagnosisCandidateList.ItemsSource = null;
-            CompactDiagnosisCandidateList.ItemsSource = null;
         }
 
         private void CancelDiagnosis()
@@ -3965,11 +3955,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
             }
-        }
-
-        private void InspectorToggleButton_Changed(object sender, RoutedEventArgs e)
-        {
-            ApplyResponsiveLayout(ActualWidth);
         }
 
         private void OpenGlImageView_ViewChanged(object? sender, EventArgs e)
@@ -4158,18 +4143,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private void ApplyCompactLevels_Click(object sender, RoutedEventArgs e)
-        {
-            try
-            {
-                ApplyLevels(CompactBlackLevelTextBox.Text, CompactWhiteLevelTextBox.Text);
-            }
-            catch (Exception ex)
-            {
-                DiagnosticsList.Items.Add("Error: levels failed. " + ex.Message);
-            }
-        }
-
         private void ApplyLevels(string blackText, string whiteText)
         {
             var black = ParseDouble(blackText, "Black");
@@ -4243,7 +4216,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void UpdateInterpretationControls(RawImageDescriptor descriptor)
         {
             InterpretControls.IsEnabled = true;
-            CompactInterpretControls.IsEnabled = true;
             InterpretPixelFormatBox.SelectedItem = descriptor.PixelFormat;
             InterpretByteOrderBox.SelectedItem = descriptor.ByteOrder;
             InterpretWidthTextBox.Text = descriptor.Width.ToString(CultureInfo.InvariantCulture);
@@ -4251,12 +4223,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             InterpretStrideTextBox.Text = descriptor.Stride.ToString(CultureInfo.InvariantCulture);
             InterpretValidBitsTextBox.Text = descriptor.ValidBits.ToString(CultureInfo.InvariantCulture);
 
-            CompactInterpretPixelFormatBox.SelectedItem = descriptor.PixelFormat;
-            CompactInterpretByteOrderBox.SelectedItem = descriptor.ByteOrder;
-            CompactInterpretWidthTextBox.Text = descriptor.Width.ToString(CultureInfo.InvariantCulture);
-            CompactInterpretHeightTextBox.Text = descriptor.Height.ToString(CultureInfo.InvariantCulture);
-            CompactInterpretStrideTextBox.Text = descriptor.Stride.ToString(CultureInfo.InvariantCulture);
-            CompactInterpretValidBitsTextBox.Text = descriptor.ValidBits.ToString(CultureInfo.InvariantCulture);
         }
 
         private void ClearInterpretationControls()
@@ -4268,15 +4234,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             InterpretStrideTextBox.Text = string.Empty;
             InterpretValidBitsTextBox.Text = string.Empty;
 
-            CompactInterpretPixelFormatBox.SelectedItem = null;
-            CompactInterpretByteOrderBox.SelectedItem = null;
-            CompactInterpretWidthTextBox.Text = string.Empty;
-            CompactInterpretHeightTextBox.Text = string.Empty;
-            CompactInterpretStrideTextBox.Text = string.Empty;
-            CompactInterpretValidBitsTextBox.Text = string.Empty;
 
             InterpretControls.IsEnabled = false;
-            CompactInterpretControls.IsEnabled = false;
         }
 
         private void ClearDocumentPresentation()
@@ -4347,8 +4306,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 BlackLevelTextBox.Text = string.Empty;
                 WhiteLevelTextBox.Text = string.Empty;
-                CompactBlackLevelTextBox.Text = string.Empty;
-                CompactWhiteLevelTextBox.Text = string.Empty;
                 return;
             }
 
@@ -4357,8 +4314,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var whiteText = options.WhiteLevel.ToString(format, CultureInfo.InvariantCulture);
             BlackLevelTextBox.Text = blackText;
             WhiteLevelTextBox.Text = whiteText;
-            CompactBlackLevelTextBox.Text = blackText;
-            CompactWhiteLevelTextBox.Text = whiteText;
         }
 
         private void SetPixelDetails(string pixel, string neighborhood, string roi, string line)
@@ -4367,9 +4322,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelNeighborhoodText.Text = neighborhood;
             RoiStatsText.Text = roi;
             LineProfileText.Text = line;
-            CompactPixelText.Text = pixel;
-            CompactPixelNeighborhoodText.Text = neighborhood;
-            CompactRoiStatsText.Text = roi;
         }
 
         private bool IsInspectorPinned
@@ -4393,21 +4345,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelHeadingText.Text = pinned ? "Pinned Pixel" : "Pixel";
             PixelNeighborhoodHeadingText.Text = pinned ? "Pinned 5x5 Values" : "Hover 5x5 Values";
             PixelStatsHeadingText.Text = pinned ? "Pinned 5x5 Stats" : "Hover 5x5 Stats";
-            CompactPixelHeadingText.Text = pinned ? "Pinned" : "Current";
-            CompactPixelNeighborhoodHeadingText.Text = pinned ? "Pinned 5x5 Values" : "Hover 5x5 Values";
-            CompactPixelStatsHeadingText.Text = pinned ? "Pinned 5x5 Stats" : "Hover 5x5 Stats";
         }
 
         private void SetMarkerText(string text)
         {
             MarkerText.Text = text;
-            CompactMarkerText.Text = text;
         }
 
         private void SetPerformanceText(string text)
         {
             PerformanceText.Text = text;
-            CompactPerformanceText.Text = text;
         }
 
         private static string BuildPixelNeighborhood(ImageDocument document, int centerX, int centerY, int radius)
@@ -4428,7 +4375,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         continue;
                     }
 
-                    builder.Append(CompactPixelValue(document.Source.DescribePixel(x, y)).PadLeft(5)).Append(' ');
+                    builder.Append(SummarizePixelValue(document.Source.DescribePixel(x, y)).PadLeft(5)).Append(' ');
                 }
 
                 builder.AppendLine();
@@ -4472,7 +4419,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     builder.Append(' ');
                 }
 
-                builder.Append(CompactPixelValue(document.Source.DescribePixel(x, y)));
+                builder.Append(SummarizePixelValue(document.Source.DescribePixel(x, y)));
             }
 
             return builder.ToString();
@@ -4731,7 +4678,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return value > 255 ? (byte)255 : (byte)value;
         }
 
-        private static string CompactPixelValue(string description)
+        private static string SummarizePixelValue(string description)
         {
             if (string.IsNullOrWhiteSpace(description))
             {
@@ -4760,165 +4707,66 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ApplyResponsiveLayout(e.NewSize.Width);
         }
 
+        private void InspectorNavigation_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            ApplyResponsiveLayout(ActualWidth);
+        }
+
+        private void InspectorHost_Loaded(object sender, RoutedEventArgs e) => ApplyResponsiveLayout(ActualWidth);
+
+        private void InspectorHost_Unloaded(object sender, RoutedEventArgs e)
+        {
+            InspectorOverlayPopup.IsOpen = false;
+            _histogram.SetVisible(false);
+        }
+
         private void ApplyResponsiveLayout(double width)
         {
-            if (ImagesColumn == null
-                || InspectorColumn == null
-                || InspectorSplitterColumn == null
-                || ImagesGridSplitter == null
-                || InspectorGridSplitter == null
-                || CompactInspectorGridSplitter == null
-                || CompactInspectorRow == null
-                || SelectionOverlayBox == null
-                || InspectorPanel == null
-                || CompactInspectorPanel == null
-                || StatusText == null
-                || TempUsageText == null)
+            if (InspectorContainer == null || _applyingInspectorLayout) return;
+            _applyingInspectorLayout = true;
+            try
             {
-                return;
-            }
-
-            if (width <= 0 || double.IsNaN(width))
-            {
-                width = ActualWidth;
-            }
-
-            var nextMode = width < 760
-                ? LayoutMode.Narrow
-                : width < 1040
-                    ? LayoutMode.Medium
-                    : LayoutMode.Wide;
-            var modeChanged = nextMode != _layoutMode;
-
-            var showPrimaryLabels = nextMode != LayoutMode.Narrow;
-            OpenButtonText.Visibility = showPrimaryLabels ? Visibility.Visible : Visibility.Collapsed;
-            SaveButtonText.Visibility = showPrimaryLabels ? Visibility.Visible : Visibility.Collapsed;
-            FitButtonText.Visibility = Visibility.Visible;
-            ActualSizeButtonText.Visibility = Visibility.Visible;
-
-            ImagesGridSplitter.Visibility = Visibility.Visible;
-
-            if (nextMode == LayoutMode.Narrow)
-            {
-                if (modeChanged)
+                if (width <= 0) width = ActualWidth;
+                _inspector.SetWidth(width);
+                var nextMode = width < 760 ? LayoutMode.Narrow : width < 1200 ? LayoutMode.Medium : LayoutMode.Wide;
+                if (nextMode != _layoutMode)
                 {
-                    ImagesColumn.Width = new GridLength(width < 420 ? 160 : width < 620 ? 180 : 220);
-                    InspectorColumn.Width = new GridLength(0);
+                    ImagesColumn.MinWidth = _inspector.IsNarrow ? 64 : 180;
+                    ImagesColumn.MaxWidth = _inspector.IsNarrow ? 64 : 420;
+                    ImagesColumn.Width = new GridLength(_inspector.IsNarrow ? 64 : nextMode == LayoutMode.Wide ? 300 : 236);
                 }
-
-                InspectorSplitterColumn.Width = new GridLength(0);
-                DescriptorPanel.Visibility = Visibility.Collapsed;
-                InspectorPanel.Visibility = Visibility.Collapsed;
+                ImagesColumn.MaxWidth = _inspector.IsNarrow ? 64 : Math.Max(180, Math.Min(420, width - 44 - (_inspector.IsOpen ? 300 : 0) - 5 - 140));
+                ImagesGridSplitter.Visibility = _inspector.IsNarrow ? Visibility.Collapsed : Visibility.Visible;
+                MainContentGrid.ColumnDefinitions[1].Width = new GridLength(_inspector.IsNarrow ? 0 : 5);
                 InspectorGridSplitter.Visibility = Visibility.Collapsed;
-                SetCompactInspectorVisible(InspectorToggleButton.IsChecked == true);
-                InspectorToggleButton.Visibility = Visibility.Visible;
-                LinkViewsBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
-                SelectionOverlayBox.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
-                ViewerToolbarSeparator.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
-                TempUsageText.Visibility = width < 620 ? Visibility.Collapsed : Visibility.Visible;
-                TempUsageText.Width = 82;
-                StatusText.Width = 95;
-            }
-            else if (nextMode == LayoutMode.Medium)
-            {
-                if (modeChanged)
-                {
-                    ImagesColumn.Width = new GridLength(width < 880 ? 260 : 300);
-                    InspectorColumn.Width = new GridLength(0);
-                }
-
                 InspectorSplitterColumn.Width = new GridLength(0);
-                DescriptorPanel.Visibility = Visibility.Collapsed;
-                InspectorPanel.Visibility = Visibility.Collapsed;
-                InspectorGridSplitter.Visibility = Visibility.Collapsed;
-                SetCompactInspectorVisible(true);
-                InspectorToggleButton.Visibility = Visibility.Collapsed;
-                LinkViewsBox.Visibility = Visibility.Visible;
-                SelectionOverlayBox.Visibility = Visibility.Visible;
-                ViewerToolbarSeparator.Visibility = Visibility.Visible;
-                TempUsageText.Visibility = Visibility.Visible;
-                TempUsageText.Width = 92;
-                StatusText.Width = 115;
-            }
-            else
-            {
-                if (modeChanged)
+                InspectorColumn.Width = new GridLength(!_inspector.IsNarrow && _inspector.IsOpen ? 300 : 0);
+                if (_inspector.IsNarrow)
                 {
-                    ImagesColumn.Width = new GridLength(320);
-                    InspectorColumn.Width = new GridLength(300);
+                    if (DockedInspectorHost.Content != null)
+                    {
+                        DockedInspectorHost.Content = null;
+                        InspectorOverlayPopup.Child = InspectorContainer;
+                    }
+                    InspectorContainer.Height = ResponsiveContentGrid.ActualHeight;
+                    if (InspectorContainer.Effect == null) InspectorContainer.Effect = new System.Windows.Media.Effects.DropShadowEffect { BlurRadius = 16, Opacity = 0.45, ShadowDepth = 4 };
+                    InspectorOverlayPopup.IsOpen = IsLoaded && IsVisible && _inspector.IsOpen;
                 }
-
-                InspectorSplitterColumn.Width = new GridLength(5);
-                DescriptorPanel.Visibility = Visibility.Visible;
-                InspectorPanel.Visibility = Visibility.Visible;
-                InspectorGridSplitter.Visibility = Visibility.Visible;
-                SetCompactInspectorVisible(false);
-                InspectorToggleButton.Visibility = Visibility.Collapsed;
-                LinkViewsBox.Visibility = Visibility.Visible;
-                SelectionOverlayBox.Visibility = Visibility.Visible;
-                ViewerToolbarSeparator.Visibility = Visibility.Visible;
-                TempUsageText.Visibility = Visibility.Visible;
-                TempUsageText.Width = 100;
-                StatusText.Width = 150;
-            }
-
-            UpdateCompactInspectorHeightLimit();
-            _histogram.SetVisible(InspectorPanel.Visibility == Visibility.Visible || CompactInspectorPanel.Visibility == Visibility.Visible);
-            _layoutMode = nextMode;
-        }
-
-        private void UpdateCompactInspectorHeightLimit()
-        {
-            if (ResponsiveContentGrid == null
-                || CompactInspectorRow == null
-                || CompactInspectorGridSplitter == null
-                || ResponsiveContentGrid.ActualHeight <= 0)
-            {
-                return;
-            }
-
-            const double minimumMainContentHeight = 100;
-            var splitterHeight = Math.Max(5, CompactInspectorGridSplitter.ActualHeight);
-            var maximumHeight = Math.Max(
-                96,
-                Math.Min(360, ResponsiveContentGrid.ActualHeight - minimumMainContentHeight - splitterHeight));
-            CompactInspectorRow.MaxHeight = maximumHeight;
-            if (CompactInspectorRow.Height.Value > maximumHeight)
-            {
-                CompactInspectorRow.Height = new GridLength(maximumHeight);
-            }
-        }
-
-        private void SetCompactInspectorVisible(bool visible)
-        {
-            if (CompactInspectorPanel == null || CompactInspectorGridSplitter == null || CompactInspectorRow == null)
-            {
-                return;
-            }
-
-            if (visible)
-            {
-                CompactInspectorPanel.Visibility = Visibility.Visible;
-                CompactInspectorGridSplitter.Visibility = Visibility.Visible;
-                if (CompactInspectorRow.Height.Value <= 0)
+                else
                 {
-                    CompactInspectorRow.Height = new GridLength(
-                        Math.Min(
-                            CompactInspectorRow.MaxHeight,
-                            Math.Max(96, _lastCompactInspectorHeight)));
+                    InspectorOverlayPopup.IsOpen = false;
+                    if (InspectorOverlayPopup.Child != null || DockedInspectorHost.Content == null)
+                    {
+                        InspectorOverlayPopup.Child = null;
+                        DockedInspectorHost.Content = InspectorContainer;
+                    }
+                    InspectorContainer.Height = double.NaN;
+                    InspectorContainer.Effect = null;
                 }
-
-                return;
+                _histogram.SetVisible(_inspector.IsHistogramSelected && IsVisible);
+                _layoutMode = nextMode;
             }
-
-            if (CompactInspectorRow.Height.Value > 0)
-            {
-                _lastCompactInspectorHeight = CompactInspectorRow.Height.Value;
-            }
-
-            CompactInspectorPanel.Visibility = Visibility.Collapsed;
-            CompactInspectorGridSplitter.Visibility = Visibility.Collapsed;
-            CompactInspectorRow.Height = new GridLength(0);
+            finally { _applyingInspectorLayout = false; }
         }
 
         private void UpdateStatus()
@@ -5114,8 +4962,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "supportReportAvailable", _activeDocument != null && _activeDocument.IsError, true);
                 AppendJsonProperty(builder, "imageViewVisible", OpenGlImageView.Visibility == Visibility.Visible, true);
                 AppendJsonProperty(builder, "emptyViewerVisible", EmptyViewerPanel.Visibility == Visibility.Visible, true);
-                AppendJsonProperty(builder, "inspectorVisible", InspectorPanel.Visibility == Visibility.Visible, true);
-                AppendJsonProperty(builder, "compactInspectorVisible", CompactInspectorPanel.Visibility == Visibility.Visible, true);
+                AppendJsonProperty(builder, "inspectorVisible", _inspector.IsOpen, true);
+                AppendJsonProperty(builder, "inspectorSection", _inspector.Section, true);
+                AppendJsonProperty(builder, "inspectorOverlay", _inspector.IsNarrow, true);
                 AppendJsonProperty(builder, "interpretEnabled", InterpretControls.IsEnabled, true);
                 AppendJsonProperty(builder, "interpretFormat", InterpretPixelFormatBox.SelectedItem == null ? string.Empty : InterpretPixelFormatBox.SelectedItem.ToString(), true);
                 AppendJsonProperty(builder, "interpretWidth", InterpretWidthTextBox.Text, true);
@@ -5123,23 +4972,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "interpretStride", InterpretStrideTextBox.Text, true);
                 AppendJsonProperty(builder, "interpretBits", InterpretValidBitsTextBox.Text, true);
                 AppendJsonProperty(builder, "interpretEndian", InterpretByteOrderBox.SelectedItem == null ? string.Empty : InterpretByteOrderBox.SelectedItem.ToString(), true);
-                AppendJsonProperty(builder, "compactInterpretEnabled", CompactInterpretControls.IsEnabled, true);
-                AppendJsonProperty(builder, "compactInterpretFormat", CompactInterpretPixelFormatBox.SelectedItem == null ? string.Empty : CompactInterpretPixelFormatBox.SelectedItem.ToString(), true);
-                AppendJsonProperty(builder, "compactInterpretWidth", CompactInterpretWidthTextBox.Text, true);
-                AppendJsonProperty(builder, "compactInterpretHeight", CompactInterpretHeightTextBox.Text, true);
-                AppendJsonProperty(builder, "compactInterpretStride", CompactInterpretStrideTextBox.Text, true);
-                AppendJsonProperty(builder, "compactInterpretBits", CompactInterpretValidBitsTextBox.Text, true);
-                AppendJsonProperty(builder, "compactInterpretEndian", CompactInterpretByteOrderBox.SelectedItem == null ? string.Empty : CompactInterpretByteOrderBox.SelectedItem.ToString(), true);
                 AppendJsonProperty(builder, "diagnosisVisible", DiagnosisPanel.Visibility == Visibility.Visible, true);
                 AppendJsonProperty(builder, "diagnosisStatus", DiagnosisStatusText.Text, true);
                 AppendJsonProperty(builder, "diagnosisCandidateCount", DiagnosisCandidateList.Items.Count, true);
-                AppendJsonProperty(builder, "compactDiagnosisVisible", CompactDiagnosisPanel.Visibility == Visibility.Visible, true);
-                AppendJsonProperty(builder, "compactDiagnosisStatus", CompactDiagnosisStatusText.Text, true);
-                AppendJsonProperty(builder, "compactDiagnosisCandidateCount", CompactDiagnosisCandidateList.Items.Count, true);
                 AppendJsonProperty(builder, "pixelText", PixelText.Text, true);
-                AppendJsonProperty(builder, "compactPixelText", CompactPixelText.Text, true);
                 AppendJsonProperty(builder, "markerText", MarkerText.Text, true);
-                AppendJsonProperty(builder, "compactMarkerText", CompactMarkerText.Text, true);
                 AppendJsonProperty(builder, "comparisonText", CompareText.Text, true);
                 AppendJsonProperty(builder, "autoInspectEnabled", IsAutoInspectEnabled, true);
                 AppendJsonProperty(
@@ -5521,8 +5358,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "toolWindowActualHeight", ActualHeight, true);
                 AppendJsonProperty(builder, "imageViewActualWidth", OpenGlImageView.ActualWidth, true);
                 AppendJsonProperty(builder, "imageViewActualHeight", OpenGlImageView.ActualHeight, true);
-                AppendJsonProperty(builder, "inspectorVisible", InspectorPanel.Visibility == Visibility.Visible, true);
-                AppendJsonProperty(builder, "compactInspectorVisible", CompactInspectorPanel.Visibility == Visibility.Visible, true);
+                AppendJsonProperty(builder, "inspectorVisible", _inspector.IsOpen, true);
+                AppendJsonProperty(builder, "inspectorSection", _inspector.Section, true);
+                AppendJsonProperty(builder, "inspectorOverlay", _inspector.IsNarrow, true);
                 AppendJsonProperty(builder, "vssdkAssembly", typeof(RawBufferToolWindowControl).Assembly.Location, true);
                 AppendJsonProperty(builder, "openGlCanvasAssembly", typeof(RawOpenGlImageCanvas).Assembly.Location, true);
                 AppendJsonProperty(builder, "framebufferCapturePath", _lastFramebufferCapturePath, true);

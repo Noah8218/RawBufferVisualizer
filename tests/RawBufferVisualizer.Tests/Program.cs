@@ -30,6 +30,11 @@ namespace RawBufferVisualizer.Tests
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--docked-layout")
+                {
+                    InspectorNavigationTests.RunAll();
+                    return 0;
+                }
                 if (args.Length == 1 && args[0] == "--pixel-measurement")
                 {
                     PixelMeasurementTests.RunAll();
@@ -143,6 +148,7 @@ namespace RawBufferVisualizer.Tests
                 }
 
                 DebuggerRoutingTests.RunAll();
+                InspectorNavigationTests.RunAll();
                 MappingSaveTests.RunAll();
                 PixelCorrectnessTests.RunAll();
                 HistogramTests.RunAll();
