@@ -1633,6 +1633,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _inspector.PropertyChanged -= InspectorNavigation_PropertyChanged;
             SavePopup.IsOpen = MorePopup.IsOpen = ZoomPopup.IsOpen = AddImagePopup.IsOpen = ReleaseAnnouncementPopup.IsOpen = false;
+            ImageList.ContextMenu.IsOpen = AutomaticHelpTip.IsOpen = false;
+            InterpretPixelFormatBox.IsDropDownOpen = InterpretByteOrderBox.IsDropDownOpen = false;
             Loaded -= InspectorHost_Loaded;
             Unloaded -= InspectorHost_Unloaded;
             InspectorOverlayPopup.IsOpen = false;
@@ -1678,8 +1680,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
+        private void ImageCardMore_Click(object sender, RoutedEventArgs e)
+        {
+            var button = sender as FrameworkElement;
+            var item = button == null ? null : ItemsControl.ContainerFromElement(ImageList, button) as ListBoxItem;
+            if (item == null) return;
+            item.IsSelected = true;
+            var menu = ImageList.ContextMenu;
+            menu.PlacementTarget = button;
+            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
+            menu.IsOpen = true;
+            e.Handled = true;
+        }
+
         private void ImageListContextMenu_Opening(object sender, RoutedEventArgs e)
         {
+            foreach (var item in ImageList.ContextMenu.Items.OfType<MenuItem>().Take(2)) item.IsEnabled = SaveMenuButton.IsEnabled;
             UpdateMapThisTypeMenuItem();
             UpdateCopyAddressMenuItems();
         }
@@ -3806,6 +3822,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void AutomaticInspectionBar_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             if (ScanNowButton == null || AutomaticInspectionSwitchGroup == null) return;
+            AutomaticHelpTip.PlacementTarget = AutomaticInspectionActions;
+            AutomaticHelpTip.Width = Math.Max(40, Math.Min(340, AutomaticInspectionBar.ActualWidth + 4));
             var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
             AutomaticInspectionSwitchGroup.Measure(infinite);
             ScanNowButton.Measure(infinite);
@@ -5080,6 +5098,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void InspectorHost_Unloaded(object sender, RoutedEventArgs e)
         {
             InspectorOverlayPopup.IsOpen = false;
+            ImageList.ContextMenu.IsOpen = AutomaticHelpTip.IsOpen = false;
+            InterpretPixelFormatBox.IsDropDownOpen = InterpretByteOrderBox.IsDropDownOpen = false;
             AddImageButton.IsChecked = SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
             ReleaseAnnouncementPopup.IsOpen = false;
             _histogram.SetVisible(false);
