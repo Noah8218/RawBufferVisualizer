@@ -1369,7 +1369,7 @@ function Invoke-IndustrialMarketplaceScenario(
             $redText -match "^R \d+$" -and
             $greenText -match "^G \d+$" -and
             $blueText -match "^B \d+$" -and
-            $rawText -match "^Bytes(?: \d+){3,4}$") {
+            $rawText -match "^Raw(?: [0-9A-F]{2}){3,4}$") {
             $pixelText = "$positionText | $redText | $greenText | $blueText | $rawText"
             break
         }
@@ -1746,7 +1746,7 @@ function Invoke-Int32IndustrialScenario(
     $pixelPositionText = [string](Find-ElementByAutomationId $toolRoot "PixelPositionText").Current.Name
     $pixelValueText = [string](Find-ElementByAutomationId $toolRoot "PixelValueText").Current.Name
     $pixelRawText = [string](Find-ElementByAutomationId $toolRoot "PixelRawText").Current.Name
-    $rawByteValues = @([regex]::Matches($pixelRawText, "\d+") | ForEach-Object { [int]$_.Value })
+    $rawByteValues = @([regex]::Matches($pixelRawText.Substring(4), "[0-9A-F]{2}") | ForEach-Object { [Convert]::ToInt32($_.Value, 16) })
     $hasFourRawBytes = $rawByteValues.Count -eq 4 -and
         @($rawByteValues | Where-Object { $_ -lt 0 -or $_ -gt 255 }).Count -eq 0
     if ($pixelPositionText -notmatch "^X \d+  Y \d+$" -or

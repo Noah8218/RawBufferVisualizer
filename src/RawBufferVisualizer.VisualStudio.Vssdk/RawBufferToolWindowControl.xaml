@@ -243,7 +243,6 @@
     <Grid Background="{StaticResource InputBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
 
@@ -344,6 +343,18 @@
                                 AutomationProperties.AutomationId="AutomaticVisionStopButton"
                                 Click="StopAutomaticScan_Click"/>
                     </WrapPanel>
+                    <TextBlock x:Name="StatusText"
+                           Text="{Binding Status}" ToolTip="{Binding StatusDetails}"
+                           AutomationProperties.LiveSetting="Polite"
+                           AutomationProperties.AutomationId="StatusText"
+
+
+                           Margin="0,6,0,0"
+                           VerticalAlignment="Center"
+
+                           Foreground="{StaticResource StatusTextBrush}"
+                           FontSize="11.5"
+                           TextWrapping="Wrap"/>
                     <TextBlock x:Name="AutomaticBatchSummaryText"
                                Visibility="Collapsed"
                                Margin="0,4,0,0"
@@ -504,14 +515,70 @@
 <Button x:Name="ZoomOutButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom out (−)" AutomationProperties.Name="Zoom out (−)" AutomationProperties.AutomationId="ZoomOutButton" Tag="0.5" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomOut}" Width="16" Height="16"/></StackPanel></Button>
 <ToggleButton x:Name="ZoomMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Zoom level" AutomationProperties.Name="Zoom level" AutomationProperties.AutomationId="ZoomMenuButton"><Viewbox StretchDirection="DownOnly" Stretch="Uniform"><TextBlock x:Name="ZoomText" FontFamily="Consolas" FontSize="11" TextAlignment="Center"/></Viewbox></ToggleButton>
 <Button x:Name="ZoomInButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom in (+)" AutomationProperties.Name="Zoom in (+)" AutomationProperties.AutomationId="ZoomInButton" Tag="2" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomIn}" Width="16" Height="16"/></StackPanel></Button>
-<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource ViewerToggle}" ToolTip="{Binding MeasurementToolTip}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ruler}" Width="16" Height="16"/><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton><Button x:Name="ClearMeasurementButton" Style="{StaticResource ViewerButton}" Width="36" MinWidth="28" FontSize="10" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}" Content="Clear" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
-                                AutomationProperties.Name="Clear measurement" AutomationProperties.AutomationId="ClearMeasurementButton"/></StackPanel>
+<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource ViewerToggle}" ToolTip="{Binding MeasurementToolTip}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ruler}" Width="16" Height="16"/><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton></StackPanel>
 <Button x:Name="PinPixelButton" Style="{StaticResource ViewerButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)" AutomationProperties.Name="Pin" AutomationProperties.AutomationId="PinPixelButton" Click="PinPixel_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Pin}" Width="16" Height="16"/><TextBlock x:Name="PinPixelButtonText" Text="Pin" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
 <CheckBox x:Name="LinkViewsBox" Style="{StaticResource ViewerCheck}" ToolTip="Keep zoom and position when switching images" AutomationProperties.Name="Link views" AutomationProperties.AutomationId="LinkViewsBox" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Link}" Width="16" Height="16"/><TextBlock x:Name="LinkViewsText" Text="Link views" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
 <CheckBox x:Name="SelectionOverlayBox" Style="{StaticResource ViewerCheck}" ToolTip="Outline the 5×5 neighborhood around the hovered or pinned pixel" AutomationProperties.Name="5×5 box" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.SelectAll}" Width="16" Height="16"/><TextBlock x:Name="SelectionOverlayText" Text="5×5 box" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
 <ToggleButton x:Name="SaveMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Save the active image" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveMenuButton" ><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16"/><TextBlock x:Name="SaveMenuButtonText" Text="Save" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton>
 <ToggleButton x:Name="MoreMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="More commands" AutomationProperties.Name="More commands" AutomationProperties.AutomationId="MoreMenuButton" ><Grid><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ellipsis}" Width="16" Height="16"/><Ellipse x:Name="MoreUnreadBadge" Width="6" Height="6" Fill="{DynamicResource StatusAccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"/></Grid></ToggleButton></WrapPanel>
                         </ScrollViewer>
+                    </Border>
+
+                    <Border x:Name="PixelBar" Grid.Row="1" Grid.ColumnSpan="2" MinHeight="30" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,4" SizeChanged="PixelBar_SizeChanged">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                            <Border x:Name="PixelStateBadge" CornerRadius="3" Background="{DynamicResource ChannelChipBrush}" Padding="4,1" Margin="0,0,8,0" VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="PixelBadgeGlyph" Text="●" FontSize="11"/><TextBlock x:Name="PixelBadgeText" Text="HOVER" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+                            </Border>
+                            <Grid Grid.Column="1">
+                                <TextBlock x:Name="PixelEmptyText" Text="Move the pointer over the image to read pixel values." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                                <WrapPanel x:Name="PixelReadoutWrap" TextElement.FontFamily="Consolas" VerticalAlignment="Center">
+<TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                                    <Grid x:Name="PixelChannelGroup" VerticalAlignment="Center">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="PixelSwatch" Width="13" Height="13" Margin="0,0,6,0" Background="#1E1E1E" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                                        <Grid Grid.Column="1"><Border x:Name="PixelValueChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+
+                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="13" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </Border><WrapPanel x:Name="PixelChannelsPanel" Orientation="Horizontal" Visibility="Collapsed">
+                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelRSwatch" Width="0" Height="12" Margin="0" Background="#550000" BorderBrush="#AAAAAA" BorderThickness="0"/>
+                                <TextBlock x:Name="PixelRText" Text="R -" FontSize="13" Foreground="#E06C75"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelGSwatch" Width="0" Height="12" Margin="0" Background="#005500" BorderBrush="#AAAAAA" BorderThickness="0"/>
+                                <TextBlock x:Name="PixelGText" Text="G -" FontSize="13" Foreground="#98C379"/>
+                            </StackPanel>
+                        </Border>
+                        <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelBSwatch" Width="0" Height="12" Margin="0" Background="#000055" BorderBrush="#AAAAAA" BorderThickness="0"/>
+                                <TextBlock x:Name="PixelBText" Text="B -" FontSize="13" Foreground="#61AFEF"/>
+                            </StackPanel>
+                        </Border>
+                        <Border x:Name="PixelAChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <Border x:Name="PixelASwatch" Width="0" Height="12" Margin="0" Background="#555555" BorderBrush="#AAAAAA" BorderThickness="0"/>
+                                <TextBlock x:Name="PixelAText" Text="A -" FontSize="13" Foreground="#A3A7AE"/>
+                            </StackPanel>
+                        </Border>
+                    <TextBlock x:Name="PixelGvText" FontSize="13" VerticalAlignment="Center"/></WrapPanel></Grid>
+                                    </Grid><TextBlock x:Name="PixelColorText" Text="RGB -" Visibility="Collapsed"/><TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="13" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                    <TextBlock x:Name="PixelOffsetText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    <TextBlock x:Name="PixelNeighborhoodStatsText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                    <Button x:Name="PixelBarPinButton" Content="Pin" Click="PinPixel_Click" Style="{StaticResource ViewerButton}" Margin="10,0,0,0" ToolTip="Freeze values at the hovered pixel (right-click the image)"/>
+                                </WrapPanel>
+                                <Grid x:Name="MeasurementReadout" Visibility="Collapsed">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="MeasurementStatusText" Text="{Binding Status}" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}"
+                           TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13" Foreground="{StaticResource StatusTextBrush}"
+                           AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="MeasurementStatusText"/><Button x:Name="ClearMeasurementButton" Grid.Column="1" Style="{StaticResource ViewerButton}" MinWidth="28" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}" Content="Clear" Margin="4,0,0,0" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
+                                AutomationProperties.Name="Clear measurement" AutomationProperties.AutomationId="ClearMeasurementButton"/></Grid>
+                            </Grid>
+                        </Grid>
                     </Border>
                     <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="32" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
                     <Border x:Name="ViewerToolbarSeparator" Visibility="Collapsed"/>
@@ -663,6 +730,7 @@
                         <DockPanel Margin="12,0,6,0">
                             <Button DockPanel.Dock="Right" Content="»" MinWidth="28" Margin="0" Padding="4,0" Background="Transparent" BorderThickness="0"
                                     Command="{Binding CloseCommand}" ToolTip="Collapse inspector" AutomationProperties.Name="Collapse inspector" AutomationProperties.AutomationId="CollapseInspectorButton"/>
+                            <TextBlock x:Name="InspectorPixelStateText" DockPanel.Dock="Right" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}" Text="HOVER" FontSize="10" VerticalAlignment="Center" Margin="8,0"/>
                             <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </DockPanel>
                         <ScrollViewer x:Name="InspectorPanel" AutomationProperties.AutomationId="InspectorPanel" Grid.Row="1"
@@ -896,7 +964,16 @@
                     </WrapPanel>
                     <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                     <ListBox x:Name="DiagnosticsList" Height="110"/>
-                    </StackPanel>
+                    <TextBlock x:Name="TempUsageText"
+
+
+                           Margin="0,8,0,0"
+                           VerticalAlignment="Center"
+
+                           Foreground="{StaticResource StatusTextBrush}"
+                           FontSize="11"
+                           TextWrapping="Wrap"
+                           AutomationProperties.AutomationId="TempUsageText"/></StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>
@@ -932,87 +1009,5 @@
 
         </Grid>
 
-        <Border Grid.Row="1" MinHeight="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
-            <DockPanel LastChildFill="True">
-                <TextBlock x:Name="StatusText"
-                           Text="{Binding Status}" ToolTip="{Binding StatusDetails}"
-                           AutomationProperties.LiveSetting="Polite"
-                           AutomationProperties.AutomationId="StatusText"
-                           DockPanel.Dock="Right"
-                           Width="220"
-                           Margin="10,0,0,0"
-                           VerticalAlignment="Center"
-                           TextAlignment="Right"
-                           Foreground="{StaticResource StatusTextBrush}"
-                           FontSize="11"
-                           TextTrimming="CharacterEllipsis"/>
-                <TextBlock x:Name="TempUsageText"
-                           DockPanel.Dock="Right"
-                           Width="92"
-                           Margin="10,0,0,0"
-                           VerticalAlignment="Center"
-                           TextAlignment="Right"
-                           Foreground="{StaticResource StatusTextBrush}"
-                           FontSize="11"
-                           TextTrimming="CharacterEllipsis"
-                           AutomationProperties.AutomationId="TempUsageText"/>
-                <Grid>
-                <TextBlock x:Name="MeasurementStatusText" Text="{Binding Status}" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}"
-                           TextWrapping="Wrap" VerticalAlignment="Center" FontSize="11" Foreground="{StaticResource StatusTextBrush}"
-                           AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="MeasurementStatusText"/>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <StackPanel.Style>
-                        <Style TargetType="StackPanel">
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding IsChecked, ElementName=MeasureButton}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </StackPanel.Style>
-                    <TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MinWidth="76"/>
-                    <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>
-
-                    <Border x:Name="PixelValueChip" Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Border x:Name="PixelSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#1E1E1E" BorderBrush="#AAAAAA" BorderThickness="1"/>
-                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
-                    </Border>
-
-                    <StackPanel x:Name="PixelChannelsPanel" Orientation="Horizontal" Visibility="Collapsed">
-                        <Border Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Border x:Name="PixelRSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#550000" BorderBrush="#AAAAAA" BorderThickness="1"/>
-                                <TextBlock x:Name="PixelRText" Text="R -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Border x:Name="PixelGSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#005500" BorderBrush="#AAAAAA" BorderThickness="1"/>
-                                <TextBlock x:Name="PixelGText" Text="G -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Border x:Name="PixelBSwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#000055" BorderBrush="#AAAAAA" BorderThickness="1"/>
-                                <TextBlock x:Name="PixelBText" Text="B -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border x:Name="PixelAChip" Background="{StaticResource ChannelChipBrush}" BorderBrush="#444444" BorderThickness="1" Padding="4,1" Margin="0,0,4,0" Visibility="Collapsed">
-                            <StackPanel Orientation="Horizontal">
-                                <Border x:Name="PixelASwatch" Width="12" Height="12" Margin="0,0,4,0" Background="#555555" BorderBrush="#AAAAAA" BorderThickness="1"/>
-                                <TextBlock x:Name="PixelAText" Text="A -" FontSize="11" Foreground="{StaticResource StatusTextBrush}"/>
-                            </StackPanel>
-                        </Border>
-                    </StackPanel>
-
-                    <TextBlock x:Name="PixelColorText" Text="RGB -" Visibility="Collapsed"/>
-                    <TextBlock Text="|" FontSize="11" Foreground="#5A5A5A" Margin="8,0"/>
-                    <TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="11" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center" MaxWidth="170" TextTrimming="CharacterEllipsis"/>
-                </StackPanel>
-                </Grid>
-            </DockPanel>
-        </Border>
     </Grid>
 </UserControl>
