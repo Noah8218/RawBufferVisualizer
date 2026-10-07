@@ -4554,7 +4554,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelStateBadge.Background = state == "PINNED" ? new SolidColorBrush(Color.FromRgb(242, 163, 58)) : state == "MEASURE" ? (Brush)Resources["StatusAccentBrush"] : (Brush)Resources["ChannelChipBrush"];
             PixelBadgeText.Foreground = PixelBadgeGlyph.Foreground = state == "PINNED" ? Brushes.Black : (Brush)Resources["TextBrush"];
             PixelStateBadge.Visibility = _measurement.IsEnabled || PixelReadoutWrap.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
-            InspectorPinButtonText.Text = IsInspectorPinned ? "Unpin pixel" : "Pin hovered pixel";
+            InspectorPinButtonText.Text = IsInspectorPinned ? "Unpin" : "Pin hovered pixel";
+            InspectorMarkerCaption.Text = IsInspectorPinned
+                ? string.Format(CultureInfo.InvariantCulture, "Pinned at X {0} Y {1} · values frozen", _pinnedInspectorX, _pinnedInspectorY)
+                : "Right-click the image to pin. Esc unpins.";
             PinPixelButtonText.Text = (string)(PixelBarPinButton.Content = IsInspectorPinned ? "Unpin" : "Pin");
         }
 

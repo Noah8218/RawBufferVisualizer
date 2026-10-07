@@ -106,6 +106,15 @@ try {
                 Arrange-Control $panel $panel.Width $height
             } elseif ($control.FindName('DockedInspectorHost').Content -ne $panel -or [Math]::Abs($panel.ActualWidth - 300) -gt 0.5) { throw 'Docked panel did not reuse the inspector' }
             if ($section -eq 'Pixel' -and $control.FindName('RowProfileGraph').ActualWidth -le 0) { throw 'Row profile is unavailable' }
+            if ($section -eq 'Pixel') {
+                $cells = $control.FindName('PixelNeighborhoodGrid')
+                $center = $cells.ItemContainerGenerator.ContainerFromIndex(12)
+                $cell = [Windows.Media.VisualTreeHelper]::GetChild($center, 0)
+                if ([Math]::Abs($cell.ActualWidth - 44) -gt 0.1 -or [Math]::Abs($cell.ActualHeight - 44) -gt 0.1) { throw 'Neighborhood cells differ from the approved 44px square layout' }
+                $outline = $cells.ItemTemplate.FindName('NeighborhoodCenterBorder', $center)
+                if ($outline.Visibility -ne 'Visible') { throw 'Neighborhood center outline is missing' }
+                if ($width -ge 1000 -and $control.FindName('PixelNeighborhoodHeadingText').ActualHeight -gt 24) { throw 'Neighborhood heading wrapped despite the supported inspector width' }
+            }
             if ($section -eq 'Format' -and [string]::IsNullOrEmpty($control.FindName('DescriptorText').Text)) { throw 'Descriptor is unavailable' }
             if ($section -eq 'Compare' -and -not $control.FindName('BlinkButton').IsEnabled) { throw 'Compare is unavailable' }
             if ($width -in @(320,1000) -and $height -eq 720) {
@@ -122,6 +131,7 @@ try {
                         $renderRoot.Children.Add($panel) | Out-Null
                         Arrange-Control $renderRoot $panel.Width $height
                         if ($panel.Background -ne $control.Resources['PanelBrush']) { throw 'Detached popup capture lost the view resource scope' }
+                        if ($control.FindName('InspectorTitleText').Foreground.Color.ToString() -ne '#FFF1F1F1') { throw 'Popup title lost its foreground inheritance' }
                         Save-Render $renderRoot ([int]$panel.ActualWidth) $height "inspector-$section-$width.png"
                     } finally { $renderRoot.Children.Clear(); $popup.Child = $panel }
                 } else { Save-Render $panel ([int]$panel.ActualWidth) $height "inspector-$section-$width.png" }
@@ -163,12 +173,13 @@ try {
     Arrange-Control $control $control.Width $control.Height
     $model = $control.FindName('PixelVisualization').DataContext
     $selector = $control.FindName('NeighborhoodChannelBox')
-    $selector.SelectedItem = 'R'
+    $segments = $selector.Template.FindName('SegmentList', $selector)
+    $segments.SelectedItem = 'R'
     Arrange-Control $control $control.Width $control.Height
-    if ($model.SelectedChannel -ne 'R' -or $model.Cells[12].Value -ne '155' -or $model.Mean -ne '155') { throw 'Rendered selector did not update neighborhood/statistics' }
+    if ($selector.SelectedItem -ne 'R' -or $model.SelectedChannel -ne 'R' -or $model.Cells[12].Value -ne '155' -or $model.Mean -ne '155.00') { throw 'Rendered selector did not update neighborhood/statistics' }
     $model.SelectedChannel = 'B'
     Arrange-Control $control $control.Width $control.Height
-    if ($selector.SelectedItem -ne 'B' -or $model.Cells[12].Value -ne '164') { throw 'Model did not update rendered selector' }
+    if ($segments.SelectedItem -ne 'B' -or $selector.SelectedItem -ne 'B' -or $model.Cells[12].Value -ne '164') { throw 'Model did not update rendered selector' }
     $model.SelectedChannel = 'GV'
     if ($control.FindName('LayoutDerivedText').Text -ne 'Row bytes 51 · padding 5 B/row · buffer 275 B') { throw 'Derived layout disagrees with final-row extent contract' }
     foreach ($method in @('SetCompareA_Click', 'SetCompareB_Click')) { $control.GetType().GetMethod($method, $flags).Invoke($control, [object[]]@($null, [Windows.RoutedEventArgs]::new())) | Out-Null }
