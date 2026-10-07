@@ -45,11 +45,25 @@ namespace RawBufferVisualizer.Tests
                 using (var source = RawImageSource.FromMemory(data, floatDescriptor))
                 {
                     model.Update(source, floatDescriptor, 2, 0, source.CreateRenderOptions());
-                    Require(!model.IsColor && model.Count == "3" && model.Minimum == "-0.25" && model.Maximum == "0.75", "Float statistics exclude non-finite values in either byte order");
+                    Require(!model.IsColor && model.Count == "3" && model.Minimum == "-0.250" && model.Maximum == "0.750", "Float statistics exclude non-finite values in either byte order");
                     Require(model.Cells[12].Value == "Infinity" && !model.ProfileValue.IsEmpty(), "Non-finite grid value is explicit while finite graph segments remain");
                     Require(model.ChannelValues[0].Hex == "0x7F800000", "Float hex retains the IEEE-754 bits in either byte order");
                     Require(model.ProfileValueMarker.IsEmpty() && model.RawByteNote.Contains(order == RawByteOrder.LittleEndian ? "little-endian" : "big-endian"), "Non-finite current value has no misleading graph marker and byte-order note stays accurate");
+                    model.Update(source, floatDescriptor, 0, 0, source.CreateRenderOptions());
+                    Require(model.ChannelValues[0].Decimal == "0.00000" && model.ChannelValues[0].Hex == "0x3089705F" && model.Cells[12].Value == "0.000", "Tiny float uses approved visible precision while its exact IEEE-754 bits remain available");
+                    model.Update(source, floatDescriptor, 4, 0, source.CreateRenderOptions());
+                    Require(model.ChannelValues[0].Decimal == "0.75000" && model.Cells[12].Value == "0.750", "Finite float recovers after non-finite input with the approved point and cell precision");
+                    var range = source.CreateRenderOptions();
+                    range.BlackLevel = 0.5; range.WhiteLevel = 1.2;
+                    model.Update(source, floatDescriptor, 4, 0, range);
+                    Require(model.ProfileLowLabel == "0.50" && model.ProfileMiddleLabel == "0.85" && model.ProfileHighLabel == "1.20", "Float range labels use the approved two decimal places");
                 }
+            }
+            var largeFloatDescriptor = new RawImageDescriptor { Width = 1, Height = 1, Stride = 4, PixelFormat = RawPixelFormat.Float32, ValidBits = 32 };
+            using (var source = RawImageSource.FromMemory(BitConverter.GetBytes(float.MaxValue), largeFloatDescriptor))
+            {
+                model.Update(source, largeFloatDescriptor, 0, 0, source.CreateRenderOptions());
+                Require(model.ChannelValues[0].Decimal == "3.40282347E+38" && model.ChannelValues[0].Hex == "0x7F7FFFFF" && model.Cells[12].Value.Contains("E+38"), "Large finite float remains readable without changing its raw bits");
             }
             var integerDescriptor = new RawImageDescriptor { Width = 1, Height = 1, Stride = 4, PixelFormat = RawPixelFormat.Int32, ValidBits = 32 };
             using (var source = RawImageSource.FromMemory(BitConverter.GetBytes(-123456789), integerDescriptor))
