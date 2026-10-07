@@ -5148,7 +5148,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 else if (nextMode != _layoutMode || wasStrip || nextMode == LayoutMode.Wide &&
                     (ActualHeight < 560 && ImagesColumn.Width.Value == 280 || ActualHeight >= 560 && ImagesColumn.Width.Value == 260))
                     ImagesColumn.Width = new GridLength(nextMode == LayoutMode.Wide ? ActualHeight < 560 ? 260 : 280 : 236);
-                ImageList.Margin = strip ? new Thickness(4, 6, 4, 6) : new Thickness(4, 4, 4, 4);
+                ImageList.Margin = strip ? new Thickness(0, 6, 0, 6) : new Thickness(4, 4, 4, 4);
                 ImagePanelTop.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
                 ImageStripHeader.Visibility = strip ? Visibility.Visible : Visibility.Collapsed;
                 ImagesGridSplitter.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
