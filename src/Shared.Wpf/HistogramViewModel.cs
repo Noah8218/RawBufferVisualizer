@@ -200,6 +200,6 @@ namespace RawBufferVisualizer.Presentation
             _actionCommand.Refresh();
         }
 
-        private string Number(double value, bool docked = false) => value.ToString(_source?.Descriptor.PixelFormat == RawPixelFormat.Int32 ? "0" : docked && _source?.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "F3" : "G9", CultureInfo.CurrentCulture);
+        private string Number(double value, bool docked = false) => value.ToString(_source?.Descriptor.PixelFormat == RawPixelFormat.Int32 ? "0" : docked && _source?.Descriptor.PixelFormat == RawPixelFormat.Float32 && Math.Abs(value) < 1e21 ? "F3" : "G9", CultureInfo.CurrentCulture);
     }
 }

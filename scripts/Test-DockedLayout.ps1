@@ -117,6 +117,7 @@ try {
         $nav.Show('Pixel')
         Arrange-Control $control $width $height
         $headerName=$control.FindName('ImageNameText'); $headerType=$control.FindName('ImageTypeText')
+        if ($control.FindName('PixelPositionText').Text -ne 'X    8  Y    2') { throw 'Pixel coordinates lost the approved minimum four-character columns' }
         if ($headerType.Visibility -eq 'Visible') {
             $namePoint=$headerName.TranslatePoint([Windows.Point]::new(0,0),$control.FindName('ImageHeaderNames'))
             $typePoint=$headerType.TranslatePoint([Windows.Point]::new(0,0),$control.FindName('ImageHeaderNames'))
@@ -345,11 +346,11 @@ try {
     $measure.IsChecked = $false
     $canvas.PinMarkerAtImagePixel(8, 2) | Out-Null
     $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0, 0))) | Out-Null
-    if ($control.FindName('PixelPositionText').Text -ne 'X 8  Y 2' -or $control.FindName('PixelBadgeText').Text -ne 'PINNED') { throw 'Pinned values changed on hover' }
+    if ($control.FindName('PixelPositionText').Text -ne 'X    8  Y    2' -or $control.FindName('PixelBadgeText').Text -ne 'PINNED') { throw 'Pinned values changed on hover' }
     if ($control.FindName('PixelBadgeText').Foreground.Color.ToString() -ne '#FF1B1203' -or $control.FindName('PixelBadgePath').Data -ne $control.Resources['IconPinGeometry']) { throw 'Pinned badge lost its approved foreground or vector icon' }
     $canvas.ClearPinnedMarker()
     $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(-1, -1))) | Out-Null
-    if ($control.FindName('PixelPositionText').Text -ne 'X 4  Y 2' -or $control.FindName('PixelBadgeText').Text -ne 'SELECTED') { throw 'Hover leave did not restore selection' }
+    if ($control.FindName('PixelPositionText').Text -ne 'X    4  Y    2' -or $control.FindName('PixelBadgeText').Text -ne 'SELECTED') { throw 'Hover leave did not restore selection' }
     Click-Button $control.FindName('ClearButton')
     if ($control.FindName('ImageList').Items.Count -ne 1 -or $control.FindName('ClearAllConfirmation').Visibility -ne 'Visible') { throw 'Clear ran before confirmation' }
     Click-Button $control.FindName('CancelClearAllButton')
@@ -603,6 +604,12 @@ try {
         Arrange-Control $histogramView 300 360
         if ($histogram.DockedValueRange -ne 'min 0.250 · max 1.000' -or $histogram.ValueRange -ne 'Range: 0.25 to 1') { throw 'Float histogram formatting changed data or standalone output' }
         $histogramCases+=[pscustomobject]@{Case='Float32';Docked=$histogram.DockedValueRange;Standalone=$histogram.ValueRange}
+        $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
+        $hDescriptor.Width=1; $hDescriptor.Stride=4
+        $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory([BitConverter]::GetBytes([single]::MaxValue),$hDescriptor)
+        $histogram.SetVisible($true); $histogram.SetSource($histogramSource); Wait-HistogramResult $histogram
+        if ($histogram.DockedValueRange -ne 'min 3.40282347E+38 · max 3.40282347E+38') { throw 'Large Float32 histogram lost its bounded scientific display' }
+        $histogramCases+=[pscustomobject]@{Case='Float32 maximum';Docked=$histogram.DockedValueRange}
         $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
         $hDescriptor.Width=257; $hDescriptor.Height=257; $hDescriptor.Stride=257; $hDescriptor.PixelFormat='Mono8'; $hDescriptor.ValidBits=8
         $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory([byte[]]::new(66049),$hDescriptor)
