@@ -364,6 +364,16 @@
         <Style TargetType="ComboBox" BasedOn="{StaticResource RbvComboBoxStyle}"/>
         <Style TargetType="ComboBoxItem" BasedOn="{StaticResource RbvComboBoxItemStyle}"/>
         <Style TargetType="ScrollBar" BasedOn="{StaticResource RbvScrollBarStyle}"/>
+        <Style x:Key="InspectorScrollViewerStyle" TargetType="ScrollViewer">
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ScrollViewer"><Grid>
+                <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" CanContentScroll="{TemplateBinding CanContentScroll}" Margin="{TemplateBinding Padding}"/>
+                <ScrollBar x:Name="PART_VerticalScrollBar" Orientation="Vertical" HorizontalAlignment="Right" Width="10" Minimum="0" Maximum="{TemplateBinding ScrollableHeight}" ViewportSize="{TemplateBinding ViewportHeight}" Value="{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}" Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+            </Grid></ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="EnvironmentStatusIcon" TargetType="Path" BasedOn="{StaticResource PrototypeIcon}">
+            <Setter Property="Data" Value="M8 2L14 14H2ZM8 6V9M8 11V11.1"/><Setter Property="Stroke" Value="{DynamicResource AttentionTextBrush}"/>
+            <Style.Triggers><DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Grid}}" Value="Ready"><Setter Property="Data" Value="M3 8L6 11L13 4"/><Setter Property="Stroke" Value="{DynamicResource SuccessTextBrush}"/></DataTrigger></Style.Triggers>
+        </Style>
         <Style TargetType="ToolTip" BasedOn="{StaticResource RbvToolTipStyle}"/>
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="{DynamicResource InputBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -868,8 +878,8 @@
                             <TextBlock x:Name="OpenButtonText" Text="Open snapshot file…"/>
                         </StackPanel>
                     </Button><ToggleButton x:Name="EnvironmentCheckButton"
-                                  ToolTip="Show or hide runtime compatibility status"
-                                  AutomationProperties.Name="Toggle environment check"
+                                  ToolTip="Environment check"
+                                  AutomationProperties.Name="Environment check"
                                   AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
                                   Click="EnvironmentCheck_Click">
                         <StackPanel Orientation="Horizontal">
@@ -977,7 +987,7 @@
                                 <TextBlock x:Name="InspectorPixelStateText" Text="HOVER" Foreground="{Binding Foreground, ElementName=PixelBadgeText}" FontSize="10" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             </StackPanel></Border>
                         </DockPanel></Border>
-                        <ScrollViewer x:Name="InspectorPanel" AutomationProperties.AutomationId="InspectorPanel" Grid.Row="1"
+                        <ScrollViewer Style="{StaticResource InspectorScrollViewerStyle}" x:Name="InspectorPanel" AutomationProperties.AutomationId="InspectorPanel" Grid.Row="1"
                                       VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                             <StackPanel Margin="12">
                     <StackPanel x:Name="PixelSection" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}">
@@ -1057,7 +1067,7 @@
                             Style="{StaticResource InspectorCard}">
                         <StackPanel>
                             <TextBlock Text="SOURCE" Style="{StaticResource InspectorBlockHeading}"/>
-                            <TextBlock x:Name="AutomaticInspectionConfidenceText"
+                            <TextBlock x:Name="AutomaticInspectionConfidenceText" TextOptions.TextFormattingMode="Ideal"
                                        Margin="0,8,0,0"
                                        FontSize="12" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" LineHeight="18" LineStackingStrategy="BlockLineHeight"/>
                             <TextBlock x:Name="AutomaticInspectionMembersText"
@@ -1208,48 +1218,27 @@
                         <TextBlock x:Name="CompareText" Margin="0,0,0,12" Foreground="{DynamicResource ErrorTextBrush}" TextWrapping="Wrap" FontSize="11.5"/>
                         <TextBlock x:Name="CompareCaptionText" Text="Split and Diff add a new image to the list. Turn on Link views to keep zoom and position while switching." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" LineHeight="16.675" LineStackingStrategy="BlockLineHeight" TextOptions.TextFormattingMode="Ideal" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}"><Border x:Name="EnvironmentCheckPanel"
-                    Visibility="Collapsed"
-                    Margin="0,0,0,12"
-                    AutomationProperties.Name="Raw Buffer Visualizer environment check"
-                    AutomationProperties.AutomationId="EnvironmentCheckPanel">
-                <StackPanel>
-                    <StackPanel>
-                        <TextBlock Text="ENVIRONMENT"
-                                   Style="{StaticResource InspectorBlockHeading}"/>
-                        <TextBlock Text="Checks the Visual Studio host, extension registration, and temporary storage."
-                                   Margin="0,2,0,0"
-                                   Foreground="{DynamicResource MutedTextBrush}"
-                                   TextWrapping="Wrap"
-                                   FontSize="11"/>
-                    </StackPanel>
-
-                    <StackPanel Margin="0,8,0,0">
-                        <TextBlock x:Name="EnvironmentVisualStudioText"
-                                   AutomationProperties.AutomationId="EnvironmentVisualStudioStatus"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,3"/>
-                        <TextBlock x:Name="EnvironmentExtensionText"
-                                   AutomationProperties.AutomationId="EnvironmentExtensionStatus"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,3"/>
-                        <TextBlock x:Name="EnvironmentTempStorageText"
-                                   AutomationProperties.AutomationId="EnvironmentTempStorageStatus"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
-
-                    <WrapPanel Margin="0,8,0,0">
-                        <Button Content="Refresh"
-                                AutomationProperties.Name="Refresh environment check"
-                                AutomationProperties.AutomationId="EnvironmentCheckRefreshButton"
-                                Click="RefreshEnvironmentCheck_Click"/>
-                        <Button Content="Copy diagnostic report"
-                                AutomationProperties.Name="Copy environment diagnostic report"
-                                AutomationProperties.AutomationId="EnvironmentCheckCopyReportButton"
-                                Click="CopyEnvironmentReport_Click"/>
-                    </WrapPanel>
-                </StackPanel>
-            </Border>
+                    <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}"><Border x:Name="EnvironmentCheckPanel" Visibility="Visible" Margin="0,0,0,12"
+                            AutomationProperties.Name="Raw Buffer Visualizer environment check" AutomationProperties.AutomationId="EnvironmentCheckPanel">
+                        <StackPanel><TextBlock Text="ENVIRONMENT" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,8"/>
+                            <Grid Tag="{Binding Tag, ElementName=EnvironmentVisualStudioText}" Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Viewbox Width="16" Height="16" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
+                                <TextBlock Grid.Column="2" x:Name="EnvironmentVisualStudioText" AutomationProperties.AutomationId="EnvironmentVisualStudioStatus" Text="Visual Studio host" FontSize="12" LineHeight="17.4" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
+                            </Grid>
+                            <Grid Tag="{Binding Tag, ElementName=EnvironmentExtensionText}" Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Viewbox Width="16" Height="16" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
+                                <TextBlock Grid.Column="2" x:Name="EnvironmentExtensionText" AutomationProperties.AutomationId="EnvironmentExtensionStatus" Text="Raw Buffer Visualizer" FontSize="12" LineHeight="17.4" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
+                            </Grid>
+                            <Grid Tag="{Binding Tag, ElementName=EnvironmentTempStorageText}"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                <Viewbox Width="16" Height="16" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
+                                <StackPanel Grid.Column="2"><TextBlock x:Name="EnvironmentTempStorageText" AutomationProperties.AutomationId="EnvironmentTempStorageStatus" Text="Temp storage" FontSize="12" LineHeight="17.4" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="TempUsageText" Visibility="Collapsed" AutomationProperties.AutomationId="TempUsageText"/>
+                                </StackPanel>
+                                <Button Grid.Column="3" Content="Refresh" AutomationProperties.Name="Refresh environment check" AutomationProperties.AutomationId="EnvironmentCheckRefreshButton" Click="RefreshEnvironmentCheck_Click" Height="20" MinHeight="20" FontSize="11" Padding="6,0" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                            </Grid>
+                            <Button Content="Copy diagnostic report" Visibility="Collapsed" AutomationProperties.Name="Copy environment diagnostic report" AutomationProperties.AutomationId="EnvironmentCheckCopyReportButton" Click="CopyEnvironmentReport_Click"/>
+                        </StackPanel>
+                    </Border>
 <TextBlock Text="RENDERING" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,6"/>
                     <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="12"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext, ElementName=RenderingMetricsPanel}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
                     <Grid x:Name="RenderingMetricsPanel" Margin="0,0,0,12">
@@ -1270,7 +1259,7 @@
                     </Grid>
                     <TextBlock Text="LOG" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,6"/>
                     <ListBox x:Name="DiagnosticsList" MaxHeight="150" MinHeight="40" Padding="8,6" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" FontFamily="Cascadia Mono, Consolas" FontSize="11" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" LineHeight="16.5"/></DataTemplate></ListBox.ItemTemplate></ListBox>
-                    <TextBlock x:Name="TempUsageText" Margin="0,6,0,12" Foreground="{DynamicResource StatusTextBrush}" FontSize="11.5" TextWrapping="Wrap" AutomationProperties.AutomationId="TempUsageText"/>
+                    
                     <WrapPanel Margin="0,0,0,6">
                         <Button ToolTip="Copy diagnostics and environment details without image data" AutomationProperties.Name="Copy report" Click="CopySupportReport_Click">
                             <StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox><TextBlock Text="Copy report"/></StackPanel>

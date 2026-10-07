@@ -32,11 +32,11 @@ $control = Get-Content -LiteralPath $controlPath -Raw
 $service = Get-Content -LiteralPath $servicePath -Raw
 $tests = Get-Content -LiteralPath $testPath -Raw
 
-Assert-Contains $xaml 'x:Name="EnvironmentCheckPanel"[\s\S]*?Visibility="Collapsed"' 'Collapsed-by-default panel'
+Assert-Contains $xaml 'x:Name="EnvironmentCheckPanel"[^>]*Visibility="Visible"' 'Environment card visible by default'
 Assert-Contains $xaml '<ToggleButton x:Name="EnvironmentCheckButton"[\s\S]*?AutomationProperties\.AutomationId="EnvironmentCheckToggleButton"' 'Environment toggle control'
 Assert-Contains $xaml 'AutomationProperties\.AutomationId="EnvironmentCheckRefreshButton"' 'Environment refresh automation ID'
 Assert-Contains $xaml 'AutomationProperties\.AutomationId="EnvironmentCheckCopyReportButton"' 'Environment report automation ID'
-Assert-Contains $xaml '<WrapPanel Margin="0,8,0,0">[\s\S]*?AutomationProperties\.AutomationId="EnvironmentCheckRefreshButton"[\s\S]*?AutomationProperties\.AutomationId="EnvironmentCheckCopyReportButton"[\s\S]*?</WrapPanel>' 'Compact-safe environment action row'
+Assert-Contains $xaml '<Button Grid.Column="3"[^>]*AutomationProperties\.AutomationId="EnvironmentCheckRefreshButton"' 'Refresh beside temporary storage'
 foreach ($statusName in @(
     'EnvironmentVisualStudioText',
     'EnvironmentExtensionText',
@@ -54,9 +54,10 @@ if ([string]::IsNullOrWhiteSpace($openHandler)) {
 if ($openHandler -match 'ScanLocals|OpenPath|OpenHandoff|Process\.Start') {
     throw 'Environment Check open handler acquired a forbidden side effect.'
 }
-Assert-Contains $openHandler 'EnvironmentCheckButton\.IsChecked != true' 'Environment toggle close branch'
-Assert-Contains $openHandler 'EnvironmentCheckPanel\.Visibility = Visibility\.Collapsed' 'Environment toggle collapse behavior'
-Assert-Contains $openHandler 'EnvironmentCheckPanel\.Visibility = Visibility\.Visible' 'Environment toggle open behavior'
+
+
+Assert-Contains $openHandler '_inspector\.Show\("Diagnostics"\)' 'Environment action opens Diagnostics'
+Assert-Contains $openHandler 'EnvironmentCheckPanel\.Visibility = Visibility\.Visible' 'Environment card stays open'
 
 $refreshHandler = [regex]::Match(
     $control,
