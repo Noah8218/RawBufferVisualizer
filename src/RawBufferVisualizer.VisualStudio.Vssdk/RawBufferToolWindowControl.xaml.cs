@@ -1185,13 +1185,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void EnvironmentCheck_Click(object sender, RoutedEventArgs e)
         {
-            if (EnvironmentCheckButton.IsChecked != true)
-            {
-                EnvironmentCheckPanel.Visibility = Visibility.Collapsed;
-                SetTransientStatus("Environment check closed");
-                return;
-            }
-
+            EnvironmentCheckButton.IsChecked = true;
             _inspector.Show("Diagnostics");
             EnvironmentCheckPanel.Visibility = Visibility.Visible;
             RefreshEnvironmentCheck();
@@ -1202,7 +1196,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             RefreshEnvironmentCheck();
         }
 
-        private void RefreshEnvironmentCheck()
+        private void RefreshEnvironmentCheck() => RefreshEnvironmentPresentation(true);
+
+        private void RefreshEnvironmentPresentation(bool announce)
         {
             try
             {
@@ -1219,7 +1215,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SetEnvironmentItemText(
                     EnvironmentTempStorageText,
                     _environmentCheckResult.Required[2]);
-                SetTransientStatus("Environment check refreshed");
+                UpdateTempUsageStatus();
+                if (announce) SetTransientStatus("Environment check refreshed");
             }
             catch (Exception ex)
             {
@@ -1256,17 +1253,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             TextBlock textBlock,
             VisualizerEnvironmentCheckItem item)
         {
-            textBlock.Text = (item.State == VisualizerEnvironmentCheckState.Ready
-                    ? "[Ready] "
-                    : "[Attention] ")
-                + item.Name
-                + " - "
-                + item.Detail;
-            textBlock.SetResourceReference(
-                TextBlock.ForegroundProperty,
-                item.State == VisualizerEnvironmentCheckState.Ready
-                    ? "SuccessTextBrush"
-                    : "AttentionTextBrush");
+            textBlock.Text = (ReferenceEquals(textBlock, EnvironmentVisualStudioText) ? "Visual Studio" : item.Name) + " " + item.Detail.Replace(" - ", " — ");
+            textBlock.Tag = item.State.ToString();
+            textBlock.ToolTip = item.Name + " — " + item.Detail;
+            System.Windows.Automation.AutomationProperties.SetName(textBlock, item.Name + " — " + item.Detail);
+            textBlock.SetResourceReference(TextBlock.ForegroundProperty, item.State == VisualizerEnvironmentCheckState.Ready ? "TextBrush" : "AttentionTextBrush");
         }
 
         private void MarkCurrentReleaseSeen()
@@ -5090,6 +5081,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void InspectorNavigation_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             ApplyResponsiveLayout(ActualWidth);
+            if (_inspector.IsDiagnosticsSelected && _environmentCheckResult == null) RefreshEnvironmentPresentation(false);
         }
 
         private void InspectorHost_Loaded(object sender, RoutedEventArgs e) => ApplyResponsiveLayout(ActualWidth);
@@ -5279,9 +5271,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             long byteCount;
-            TempUsageText.Text = VisualStudioTempStore.TryGetRootByteCount(out byteCount)
-                ? "Temp " + FormatByteCount(byteCount)
-                : "Temp -";
+            var available = VisualStudioTempStore.TryGetRootByteCount(out byteCount);
+            TempUsageText.Text = available ? "Temp " + FormatByteCount(byteCount) : "Temp -";
+            if (_environmentCheckResult?.Required[2].State == VisualizerEnvironmentCheckState.Ready)
+                EnvironmentTempStorageText.Text = "Temp storage — " + (available ? FormatByteCount(byteCount) : "-") + " · %TEMP%\\RawBufferVisualizer";
         }
 
         private static string GetSourceMode(RawImageSource source)
