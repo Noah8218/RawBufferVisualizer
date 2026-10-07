@@ -1175,7 +1175,7 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
-                        <Border x:Name="CompareBSlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0,0,0,6">
+                        <Border x:Name="CompareBSlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0,0,0,12">
                             <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2"><Grid>
                                     <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
@@ -1187,19 +1187,19 @@
                                 </StackPanel>
                             </Grid>
                         </Border>
-                        <WrapPanel Margin="0,0,0,6">
+                        <WrapPanel x:Name="CompareSetActions" Margin="0,0,0,12">
                             <Button Content="Set current as A" Click="SetCompareA_Click"/>
                             <Button Content="Set current as B" Click="SetCompareB_Click" Margin="0"/>
                         </WrapPanel>
-                        <WrapPanel Margin="0,0,0,6">
+                        <WrapPanel x:Name="CompareViewActions" Margin="0,0,0,12">
                             <Button Click="ShowSplit_Click" AutomationProperties.Name="Split"><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSplitGeometry}"/></Canvas></Viewbox><TextBlock Text="Split"/></StackPanel></Button>
                             <Button Content="Diff" Click="ShowDiff_Click"/>
                             <Button x:Name="BlinkButton" Content="Blink" Click="Blink_Click" Margin="0">
                                 <Button.ContentTemplate><DataTemplate><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path x:Name="BlinkStateIcon" Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPlayGeometry}"/></Canvas></Viewbox><TextBlock x:Name="BlinkStateCaption" Text="{Binding}"/></StackPanel><DataTemplate.Triggers><DataTrigger Binding="{Binding}" Value="Stop"><Setter TargetName="BlinkStateIcon" Property="Data" Value="{StaticResource IconStopGeometry}"/><Setter TargetName="BlinkStateCaption" Property="Text" Value="Stop blink"/></DataTrigger></DataTemplate.Triggers></DataTemplate></Button.ContentTemplate>
                             </Button>
                         </WrapPanel>
-                        <TextBlock x:Name="CompareText" Margin="0,0,0,6" Foreground="{DynamicResource ErrorTextBrush}" TextWrapping="Wrap" FontSize="11.5"/>
-                        <TextBlock Text="Split and Diff add a new image to the list. Turn on Link views to keep zoom and position while switching." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" LineHeight="16.675" TextWrapping="Wrap"/>
+                        <TextBlock x:Name="CompareText" Margin="0,0,0,12" Foreground="{DynamicResource ErrorTextBrush}" TextWrapping="Wrap" FontSize="11.5"/>
+                        <TextBlock x:Name="CompareCaptionText" Text="Split and Diff add a new image to the list. Turn on Link views to keep zoom and position while switching." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" LineHeight="16.675" LineStackingStrategy="BlockLineHeight" TextOptions.TextFormattingMode="Ideal" TextWrapping="Wrap"/>
                     </StackPanel>
                     <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}"><Border x:Name="EnvironmentCheckPanel"
                     Visibility="Collapsed"
