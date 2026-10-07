@@ -14,11 +14,11 @@
     <SolidColorBrush x:Key="RbvErrorBrush" Color="#F48771"/>
 
     <Style x:Key="RbvTextBlockStyle" TargetType="{x:Type TextBlock}">
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
     </Style>
 
     <Style x:Key="RbvLabelStyle" TargetType="{x:Type Label}">
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
         <Setter Property="Padding" Value="0"/>
         <Setter Property="VerticalContentAlignment" Value="Center"/>
     </Style>
@@ -27,10 +27,10 @@
         <Setter Property="Margin" Value="0,0,6,6"/>
         <Setter Property="Padding" Value="10,4"/>
         <Setter Property="MinHeight" Value="26"/>
-        <Setter Property="Background" Value="{StaticResource RbvInputBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource RbvBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RbvInputBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RbvBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -47,15 +47,15 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource RbvInputHoverBrush}"/>
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource RbvInputHoverBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource RbvPressedBrush}"/>
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource RbvPressedBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentBrush}"/>
                             <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -71,10 +71,10 @@
         <Setter Property="Margin" Value="0,0,6,6"/>
         <Setter Property="Padding" Value="10,4"/>
         <Setter Property="MinHeight" Value="26"/>
-        <Setter Property="Background" Value="{StaticResource RbvInputBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource RbvBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RbvInputBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RbvBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
@@ -91,15 +91,15 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource RbvInputHoverBrush}"/>
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource RbvInputHoverBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="Background" Value="{StaticResource RbvPressedBrush}"/>
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource RbvPressedBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/>
+                            <Setter TargetName="ButtonBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentBrush}"/>
                             <Setter TargetName="ButtonBorder" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
@@ -113,7 +113,7 @@
 
     <Style x:Key="RbvComboBoxItemStyle" TargetType="{x:Type ComboBoxItem}">
         <Setter Property="Background" Value="Transparent"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
         <Setter Property="Padding" Value="8,4"/>
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -127,10 +127,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RbvPressedBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RbvPressedBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RbvAccentBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RbvAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -143,9 +143,9 @@
 
     <Style x:Key="RbvComboBoxStyle" TargetType="{x:Type ComboBox}">
         <Setter Property="MinHeight" Value="26"/>
-        <Setter Property="Background" Value="{StaticResource RbvInputBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource RbvBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RbvInputBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RbvBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="7,3"/>
         <Setter Property="MaxDropDownHeight" Value="260"/>
@@ -176,7 +176,7 @@
                                 <Border Grid.Column="1" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,0,0,0">
                                     <Path Width="8" Height="5" Stretch="Fill"
                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                          Fill="{StaticResource RbvTextBrush}"
+                                          Fill="{DynamicResource RbvTextBrush}"
                                           Data="M 0 0 L 8 0 L 4 5 Z"/>
                                 </Border>
                             </Grid>
@@ -200,8 +200,8 @@
                             <Border x:Name="PopupBorder"
                                     MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
                                     MaxHeight="{TemplateBinding MaxDropDownHeight}"
-                                    Background="{StaticResource RbvPanelBrush}"
-                                    BorderBrush="{StaticResource RbvAccentBrush}"
+                                    Background="{DynamicResource RbvPanelBrush}"
+                                    BorderBrush="{DynamicResource RbvAccentBrush}"
                                     BorderThickness="1">
                                 <ScrollViewer Margin="1" CanContentScroll="True">
                                     <ItemsPresenter/>
@@ -211,19 +211,19 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="InputBorder" Property="Background" Value="{StaticResource RbvInputHoverBrush}"/>
-                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="InputBorder" Property="Background" Value="{DynamicResource RbvInputHoverBrush}"/>
+                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/>
+                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentBrush}"/>
                             <Setter TargetName="InputBorder" Property="BorderThickness" Value="2"/>
                         </Trigger>
                         <Trigger Property="IsDropDownOpen" Value="True">
-                            <Setter TargetName="InputBorder" Property="Background" Value="{StaticResource RbvPressedBrush}"/>
-                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="InputBorder" Property="Background" Value="{DynamicResource RbvPressedBrush}"/>
+                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="Validation.HasError" Value="True">
-                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{StaticResource RbvErrorBrush}"/>
+                            <Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource RbvErrorBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -235,16 +235,16 @@
     </Style>
 
     <Style x:Key="RbvListBoxStyle" TargetType="{x:Type ListBox}">
-        <Setter Property="Background" Value="{StaticResource RbvWindowBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource RbvBorderBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RbvWindowBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RbvBorderBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Disabled"/>
         <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Style.Triggers>
             <Trigger Property="IsKeyboardFocusWithin" Value="True">
-                <Setter Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/>
+                <Setter Property="BorderBrush" Value="{DynamicResource RbvAccentBrush}"/>
             </Trigger>
             <Trigger Property="IsEnabled" Value="False">
                 <Setter Property="Opacity" Value="0.45"/>
@@ -254,7 +254,7 @@
 
     <Style x:Key="RbvListBoxItemStyle" TargetType="{x:Type ListBoxItem}">
         <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
         <Setter Property="Padding" Value="6,4"/>
         <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
@@ -269,15 +269,15 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RbvInputHoverBrush}"/>
-                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource RbvBorderBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RbvInputHoverBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource RbvBorderBrush}"/>
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="ItemBorder" Property="Background" Value="{StaticResource RbvPressedBrush}"/>
-                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource RbvPressedBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentBrush}"/>
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{StaticResource RbvAccentHoverBrush}"/>
+                            <Setter TargetName="ItemBorder" Property="BorderBrush" Value="{DynamicResource RbvAccentHoverBrush}"/>
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.45"/>
@@ -289,7 +289,7 @@
     </Style>
 
     <ControlTemplate x:Key="RbvVerticalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
-        <Grid Width="12" Background="{StaticResource RbvPanelBrush}">
+        <Grid Width="12" Background="{DynamicResource RbvPanelBrush}">
             <Track x:Name="PART_Track" IsDirectionReversed="True">
                 <Track.DecreaseRepeatButton>
                     <RepeatButton Command="ScrollBar.PageUpCommand" Focusable="False" Opacity="0"/>
@@ -298,13 +298,13 @@
                     <Thumb>
                         <Thumb.Template>
                             <ControlTemplate TargetType="{x:Type Thumb}">
-                                <Border x:Name="ThumbBorder" Margin="2" Background="{StaticResource RbvBorderBrush}" CornerRadius="4"/>
+                                <Border x:Name="ThumbBorder" Margin="2" Background="{DynamicResource RbvBorderBrush}" CornerRadius="4"/>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource RbvAccentHoverBrush}"/>
+                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource RbvAccentHoverBrush}"/>
                                     </Trigger>
                                     <Trigger Property="IsDragging" Value="True">
-                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource RbvAccentBrush}"/>
+                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource RbvAccentBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -319,7 +319,7 @@
     </ControlTemplate>
 
     <ControlTemplate x:Key="RbvHorizontalScrollBarTemplate" TargetType="{x:Type ScrollBar}">
-        <Grid Height="12" Background="{StaticResource RbvPanelBrush}">
+        <Grid Height="12" Background="{DynamicResource RbvPanelBrush}">
             <Track x:Name="PART_Track">
                 <Track.DecreaseRepeatButton>
                     <RepeatButton Command="ScrollBar.PageLeftCommand" Focusable="False" Opacity="0"/>
@@ -328,13 +328,13 @@
                     <Thumb>
                         <Thumb.Template>
                             <ControlTemplate TargetType="{x:Type Thumb}">
-                                <Border x:Name="ThumbBorder" Margin="2" Background="{StaticResource RbvBorderBrush}" CornerRadius="4"/>
+                                <Border x:Name="ThumbBorder" Margin="2" Background="{DynamicResource RbvBorderBrush}" CornerRadius="4"/>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsMouseOver" Value="True">
-                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource RbvAccentHoverBrush}"/>
+                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource RbvAccentHoverBrush}"/>
                                     </Trigger>
                                     <Trigger Property="IsDragging" Value="True">
-                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{StaticResource RbvAccentBrush}"/>
+                                        <Setter TargetName="ThumbBorder" Property="Background" Value="{DynamicResource RbvAccentBrush}"/>
                                     </Trigger>
                                 </ControlTemplate.Triggers>
                             </ControlTemplate>
@@ -358,9 +358,9 @@
     </Style>
 
     <Style x:Key="RbvToolTipStyle" TargetType="{x:Type ToolTip}">
-        <Setter Property="Background" Value="{StaticResource RbvPanelBrush}"/>
-        <Setter Property="Foreground" Value="{StaticResource RbvTextBrush}"/>
-        <Setter Property="BorderBrush" Value="{StaticResource RbvAccentBrush}"/>
+        <Setter Property="Background" Value="{DynamicResource RbvPanelBrush}"/>
+        <Setter Property="Foreground" Value="{DynamicResource RbvTextBrush}"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource RbvAccentBrush}"/>
         <Setter Property="BorderThickness" Value="1"/>
         <Setter Property="Padding" Value="7,5"/>
     </Style>
