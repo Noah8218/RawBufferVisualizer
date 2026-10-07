@@ -18,6 +18,7 @@
         <SolidColorBrush x:Key="CommandPressedBrush" Color="#094771"/>
         <SolidColorBrush x:Key="TextBrush" Color="#F1F1F1"/>
         <SolidColorBrush x:Key="MutedTextBrush" Color="#9CDCFE"/>
+        <SolidColorBrush x:Key="SecondaryTextBrush" Color="#A3A7AE"/>
         <SolidColorBrush x:Key="StatusBarBrush" Color="#252526"/>
         <SolidColorBrush x:Key="StatusAccentBrush" Color="#007ACC"/>
         <SolidColorBrush x:Key="StatusTextBrush" Color="#CCCCCC"/>
@@ -203,182 +204,53 @@
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="2,0,0,0"/><Setter Property="BorderBrush" Value="Transparent"/>
             <Style.Triggers><Trigger Property="IsChecked" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger></Style.Triggers>
         </Style>
+
+        <Style x:Key="ViewerButton" TargetType="Button" BasedOn="{StaticResource {x:Type Button}}">
+            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="ViewerToggle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
+            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
+            <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="ViewerCheck" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
+            <Setter Property="Template">
+                <Setter.Value><ControlTemplate TargetType="CheckBox">
+                    <Border x:Name="CheckBorder" Background="Transparent" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0" Padding="{TemplateBinding Padding}">
+                        <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+                        <Trigger Property="IsChecked" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/><Setter TargetName="CheckBorder" Property="BorderThickness" Value="1"/><Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
+                        <Trigger Property="IsPressed" Value="True"><Setter TargetName="CheckBorder" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="CheckBorder" Property="BorderThickness" Value="2"/><Setter TargetName="CheckBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
+                        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="InfoChip" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource ChannelChipBrush}"/><Setter Property="Padding" Value="4,2"/>
+            <Setter Property="Margin" Value="4,0,0,0"/><Setter Property="CornerRadius" Value="3"/>
+        </Style>
     </UserControl.Resources>
 
     <Grid Background="{StaticResource InputBrush}">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border x:Name="ToolbarBorder" Grid.Row="0" Background="{StaticResource CommandBrush}" BorderBrush="{StaticResource BorderBrush}" BorderThickness="0,0,0,1" Padding="6,4">
-            <DockPanel LastChildFill="True">
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="Zoom" Margin="0,0,6,0" Foreground="{StaticResource StatusTextBrush}" VerticalAlignment="Center"/>
-                    <TextBlock x:Name="ZoomText" Width="58" VerticalAlignment="Center" TextAlignment="Right" Foreground="{StaticResource MutedTextBrush}"/>
-                </StackPanel>
-                <WrapPanel x:Name="ToolbarCommandsPanel" VerticalAlignment="Center">
-                    <Button x:Name="OpenButton" ToolTip="Open a raw buffer metadata file" AutomationProperties.Name="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFile}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="OpenButtonText" Text="Open"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="SaveVisiblePngButton" ToolTip="Save the active image as a PNG" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="SaveButtonText" Text="Save"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="FitButton" ToolTip="Fit the active image to the viewer" AutomationProperties.Name="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.FitToScreen}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="FitButtonText" Text="Fit"/>
-                        </StackPanel>
-                    </Button>
-                    <Button x:Name="ActualSizeButton" ToolTip="Show the active image at 100%" AutomationProperties.Name="Actual size" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomOriginalSize}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock x:Name="ActualSizeButtonText" Text="1:1"/>
-                        </StackPanel>
-                    </Button>
-                    <StackPanel x:Name="MeasurementCommands" Orientation="Horizontal">
-                        <ToggleButton x:Name="MeasureButton" Content="{Binding ModeText}" IsChecked="{Binding IsEnabled, Mode=TwoWay}"
-                                      IsEnabled="{Binding CanMeasure}" ToolTip="{Binding MeasurementToolTip}" ToolTipService.ShowOnDisabled="True"
-                                      AutomationProperties.Name="Measure pixel distance" AutomationProperties.AutomationId="MeasureButton"/>
-                        <Button Content="Clear" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
-                                AutomationProperties.Name="Clear measurement" AutomationProperties.AutomationId="ClearMeasurementButton"/>
-                    </StackPanel>
-                    <Border Width="1" Height="20" Background="{StaticResource BorderBrush}" Margin="0,2,6,2"/>
-                    <CheckBox x:Name="LinkViewsBox" Content="Link Views" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="6,0,0,0" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"/>
-                    <CheckBox x:Name="SelectionOverlayBox" Content="Selection" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Foreground="{StaticResource TextBrush}" VerticalAlignment="Center" Margin="8,0,0,0" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"/>
-                    <Border x:Name="ViewerToolbarSeparator" Width="1" Height="20" Background="{StaticResource BorderBrush}" Margin="8,2,6,2"/>
 
-                    <ToggleButton x:Name="WhatsNewButton"
-                                  ToolTip="Show or hide the current Raw Buffer Visualizer release highlights"
-                                  AutomationProperties.Name="Toggle release highlights"
-                                  AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
-                                  Click="WhatsNew_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.New}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock Text="What's New"/>
-                        </StackPanel>
-                    </ToggleButton>
-                    <ToggleButton x:Name="EnvironmentCheckButton"
-                                  ToolTip="Show or hide runtime compatibility status"
-                                  AutomationProperties.Name="Toggle environment check"
-                                  AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
-                                  Click="EnvironmentCheck_Click">
-                        <StackPanel Orientation="Horizontal">
-                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Environment}" Width="16" Height="16" Margin="0,0,5,0"/>
-                            <TextBlock Text="Environment"/>
-                        </StackPanel>
-                    </ToggleButton>
-                    <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="16" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
-                </WrapPanel>
-            </DockPanel>
-        </Border>
 
-        <StackPanel Grid.Row="1">
-            <Border x:Name="ReleaseAnnouncementBanner"
-                    Visibility="Collapsed"
-                    Background="#17384A"
-                    BorderBrush="#2B88B8"
-                    BorderThickness="0,0,0,1"
-                    Padding="10,8"
-                    AutomationProperties.Name="Raw Buffer Visualizer release highlights"
-                    AutomationProperties.AutomationId="ReleaseAnnouncementBanner">
-                <DockPanel LastChildFill="True">
-                    <StackPanel DockPanel.Dock="Right"
-                                Orientation="Horizontal"
-                                VerticalAlignment="Top"
-                                Margin="12,0,0,0">
-                        <Button Content="View release notes"
-                                ToolTip="Open the complete release notes in your browser"
-                                AutomationProperties.Name="View release notes"
-                                AutomationProperties.AutomationId="ReleaseAnnouncementNotesButton"
-                                Click="ViewReleaseNotes_Click"/>
-                        <Button Content="Dismiss"
-                                Margin="0"
-                                ToolTip="Hide these highlights for this version"
-                                AutomationProperties.Name="Dismiss release highlights"
-                                AutomationProperties.AutomationId="ReleaseAnnouncementDismissButton"
-                                Click="DismissReleaseAnnouncement_Click"/>
-                    </StackPanel>
-                    <StackPanel>
-                        <TextBlock x:Name="ReleaseAnnouncementTitleText"
-                                   AutomationProperties.AutomationId="ReleaseAnnouncementTitle"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"
-                                   Foreground="#FFFFFF"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReleaseAnnouncementHighlightOneText"
-                                   Margin="0,4,0,0"
-                                   Foreground="#D8EEF8"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReleaseAnnouncementHighlightTwoText"
-                                   Margin="0,2,0,0"
-                                   Foreground="#D8EEF8"
-                                   TextWrapping="Wrap"/>
-                        <TextBlock x:Name="ReleaseAnnouncementHighlightThreeText"
-                                   Margin="0,2,0,0"
-                                   Foreground="#D8EEF8"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
-                </DockPanel>
-            </Border>
 
-            <Border x:Name="EnvironmentCheckPanel"
-                    Visibility="Collapsed"
-                    Background="{StaticResource PanelBrush}"
-                    BorderBrush="{StaticResource StatusAccentBrush}"
-                    BorderThickness="0,0,0,1"
-                    Padding="10,8"
-                    AutomationProperties.Name="Raw Buffer Visualizer environment check"
-                    AutomationProperties.AutomationId="EnvironmentCheckPanel">
-                <StackPanel>
-                    <StackPanel>
-                        <TextBlock Text="Environment Check"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"/>
-                        <TextBlock Text="Checks the Visual Studio host, extension registration, and temporary storage."
-                                   Margin="0,2,0,0"
-                                   Foreground="{StaticResource MutedTextBrush}"
-                                   TextWrapping="Wrap"
-                                   FontSize="11"/>
-                    </StackPanel>
 
-                    <StackPanel Margin="0,8,0,0">
-                        <TextBlock x:Name="EnvironmentVisualStudioText"
-                                   AutomationProperties.AutomationId="EnvironmentVisualStudioStatus"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,3"/>
-                        <TextBlock x:Name="EnvironmentExtensionText"
-                                   AutomationProperties.AutomationId="EnvironmentExtensionStatus"
-                                   TextWrapping="Wrap"
-                                   Margin="0,0,0,3"/>
-                        <TextBlock x:Name="EnvironmentTempStorageText"
-                                   AutomationProperties.AutomationId="EnvironmentTempStorageStatus"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
-
-                    <WrapPanel Margin="0,8,0,0">
-                        <Button Content="Refresh"
-                                AutomationProperties.Name="Refresh environment check"
-                                AutomationProperties.AutomationId="EnvironmentCheckRefreshButton"
-                                Click="RefreshEnvironmentCheck_Click"/>
-                        <Button Content="Copy diagnostic report"
-                                AutomationProperties.Name="Copy environment diagnostic report"
-                                AutomationProperties.AutomationId="EnvironmentCheckCopyReportButton"
-                                Click="CopyEnvironmentReport_Click"/>
-                    </WrapPanel>
-                </StackPanel>
-            </Border>
-        </StackPanel>
-
-        <Grid x:Name="ResponsiveContentGrid" Grid.Row="2">
+        <Grid x:Name="ResponsiveContentGrid" Grid.Row="0">
 
 
             <Grid x:Name="MainContentGrid" Grid.Row="0">
@@ -476,7 +348,7 @@
                                Visibility="Collapsed"
                                Margin="0,4,0,0"
                                FontSize="11"
-                               Foreground="{StaticResource MutedTextBrush}"
+                               Foreground="{StaticResource SecondaryTextBrush}"
                                TextWrapping="Wrap"
                                AutomationProperties.LiveSetting="Polite"
                                AutomationProperties.AutomationId="AutomaticVisionBatchSummary"/>
@@ -557,18 +429,18 @@
                                                TextWrapping="Wrap"
                                                FontFamily="Consolas"
                                                FontSize="10"
-                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                               Foreground="{StaticResource SecondaryTextBrush}"/>
                                     <TextBlock Text="{Binding SourceAddressText}"
                                                Visibility="{Binding SourceAddressVisibility}"
                                                TextWrapping="Wrap"
                                                FontFamily="Consolas"
                                                FontSize="10"
-                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                               Foreground="{StaticResource SecondaryTextBrush}"/>
                                     <TextBlock Text="{Binding SourceStateText}"
                                                Visibility="{Binding SourceStateVisibility}"
                                                TextWrapping="Wrap"
                                                FontSize="10"
-                                               Foreground="{StaticResource MutedTextBrush}"/>
+                                               Foreground="{StaticResource SecondaryTextBrush}"/>
                                     <StackPanel Margin="0,5,0,0">
                                         <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Top">
                                             <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
@@ -577,7 +449,7 @@
                                                    Margin="0,5,0,0"
                                                    TextWrapping="Wrap"
                                                    FontSize="11"
-                                                   Foreground="{StaticResource MutedTextBrush}"/>
+                                                   Foreground="{StaticResource SecondaryTextBrush}"/>
                                     </StackPanel>
                                     <Button
                                             Content="Map"
@@ -603,7 +475,84 @@
                           ResizeDirection="Columns"
                           ResizeBehavior="PreviousAndNext"/>
 
-            <Grid Grid.Column="2">
+
+            <Grid x:Name="ViewerGrid" Grid.Column="2" SizeChanged="ViewerGrid_SizeChanged">
+                <Grid.RowDefinitions><RowDefinition Height="34"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                <Border x:Name="ImageInfoBar" Grid.Row="0" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,0">
+                    <Grid>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel VerticalAlignment="Center">
+                            <TextBlock Text="{Binding ObjectName}" ToolTip="{Binding ObjectName}" FontSize="13" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                            <TextBlock x:Name="ImageTypeText" Text="{Binding SourceType}" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" TextTrimming="CharacterEllipsis"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="ImageSizeChip" Style="{StaticResource InfoChip}"><TextBlock Text="{Binding SizeText}" FontSize="11"/></Border>
+                            <Border x:Name="ImageFormatChip" Style="{StaticResource InfoChip}" ToolTip="{Binding Summary}"><TextBlock Text="{Binding FormatText}" FontSize="11"/></Border>
+                            <Border x:Name="ImageStrideChip" Style="{StaticResource InfoChip}" ToolTip="{Binding Summary}"><TextBlock Text="{Binding StrideText}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}"/></Border>
+                            <Border x:Name="ImageStateChip" Style="{StaticResource InfoChip}" ToolTip="{Binding SourceStateText}"><TextBlock Text="{Binding StateChipText}" FontSize="11"/></Border>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+                <Grid x:Name="ViewerSurfaceGrid" Grid.Row="1">
+                    <Grid.RowDefinitions><RowDefinition x:Name="ViewerToolbarRow" Height="32"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions><ColumnDefinition x:Name="ViewerToolbarSideColumn" Width="0"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+
+                    <Border x:Name="ToolbarBorder" Grid.Row="0" Grid.Column="1" Background="{DynamicResource CommandBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1">
+                        <ScrollViewer x:Name="ToolbarScroller" HorizontalScrollBarVisibility="Hidden" VerticalScrollBarVisibility="Disabled" PreviewMouseWheel="ToolbarScroller_PreviewMouseWheel">
+                            <WrapPanel x:Name="ToolbarCommandsPanel" VerticalAlignment="Center"><Button x:Name="FitButton" Style="{StaticResource ViewerButton}" ToolTip="Fit the image to the viewer (double-click the image)" AutomationProperties.Name="Fit" AutomationProperties.AutomationId="FitButton" Click="Fit_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.FitToScreen}" Width="16" Height="16"/><TextBlock x:Name="FitButtonText" Text="Fit" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+<Button x:Name="ActualSizeButton" Style="{StaticResource ViewerButton}" ToolTip="Show the image at 100%" AutomationProperties.Name="1:1" AutomationProperties.AutomationId="ActualSizeButton" Click="ActualSize_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage x:Name="ActualSizeIcon" Moniker="{x:Static catalog:KnownMonikers.ZoomOriginalSize}" Width="16" Height="16"/><TextBlock x:Name="ActualSizeButtonText" Text="1:1" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+<Button x:Name="ZoomOutButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom out (−)" AutomationProperties.Name="Zoom out (−)" AutomationProperties.AutomationId="ZoomOutButton" Tag="0.5" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomOut}" Width="16" Height="16"/></StackPanel></Button>
+<ToggleButton x:Name="ZoomMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Zoom level" AutomationProperties.Name="Zoom level" AutomationProperties.AutomationId="ZoomMenuButton"><Viewbox StretchDirection="DownOnly" Stretch="Uniform"><TextBlock x:Name="ZoomText" FontFamily="Consolas" FontSize="11" TextAlignment="Center"/></Viewbox></ToggleButton>
+<Button x:Name="ZoomInButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom in (+)" AutomationProperties.Name="Zoom in (+)" AutomationProperties.AutomationId="ZoomInButton" Tag="2" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomIn}" Width="16" Height="16"/></StackPanel></Button>
+<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource ViewerToggle}" ToolTip="{Binding MeasurementToolTip}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ruler}" Width="16" Height="16"/><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton><Button x:Name="ClearMeasurementButton" Style="{StaticResource ViewerButton}" Width="36" MinWidth="28" FontSize="10" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}" Content="Clear" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
+                                AutomationProperties.Name="Clear measurement" AutomationProperties.AutomationId="ClearMeasurementButton"/></StackPanel>
+<Button x:Name="PinPixelButton" Style="{StaticResource ViewerButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)" AutomationProperties.Name="Pin" AutomationProperties.AutomationId="PinPixelButton" Click="PinPixel_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Pin}" Width="16" Height="16"/><TextBlock x:Name="PinPixelButtonText" Text="Pin" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
+<CheckBox x:Name="LinkViewsBox" Style="{StaticResource ViewerCheck}" ToolTip="Keep zoom and position when switching images" AutomationProperties.Name="Link views" AutomationProperties.AutomationId="LinkViewsBox" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Link}" Width="16" Height="16"/><TextBlock x:Name="LinkViewsText" Text="Link views" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
+<CheckBox x:Name="SelectionOverlayBox" Style="{StaticResource ViewerCheck}" ToolTip="Outline the 5×5 neighborhood around the hovered or pinned pixel" AutomationProperties.Name="5×5 box" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.SelectAll}" Width="16" Height="16"/><TextBlock x:Name="SelectionOverlayText" Text="5×5 box" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
+<ToggleButton x:Name="SaveMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Save the active image" AutomationProperties.Name="Save" AutomationProperties.AutomationId="SaveMenuButton" ><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16"/><TextBlock x:Name="SaveMenuButtonText" Text="Save" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton>
+<ToggleButton x:Name="MoreMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="More commands" AutomationProperties.Name="More commands" AutomationProperties.AutomationId="MoreMenuButton" ><Grid><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ellipsis}" Width="16" Height="16"/><Ellipse x:Name="MoreUnreadBadge" Width="6" Height="6" Fill="{DynamicResource StatusAccentBrush}" HorizontalAlignment="Right" VerticalAlignment="Top"/></Grid></ToggleButton></WrapPanel>
+                        </ScrollViewer>
+                    </Border>
+                    <Slider x:Name="ZoomSlider" Visibility="Collapsed" Width="1" Minimum="0.01" Maximum="32" Value="1" TickFrequency="0.1" ValueChanged="ZoomSlider_ValueChanged"/>
+                    <Border x:Name="ViewerToolbarSeparator" Visibility="Collapsed"/>
+                    <Popup x:Name="SavePopup" PlacementTarget="{Binding ElementName=SaveMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=SaveMenuButton, Mode=TwoWay}">
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button x:Name="SaveVisiblePngButton" ToolTip="Save visible PNG" AutomationProperties.Name="Save visible PNG" AutomationProperties.AutomationId="SaveVisiblePngButton" Click="SaveVisiblePng_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Save}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="SaveButtonText" Text="Save visible PNG"/>
+                        </StackPanel>
+                    </Button><Button Content="Save raw snapshot…" Click="SaveSnapshot_Click" AutomationProperties.AutomationId="SaveRawSnapshotButton"/></StackPanel></Border>
+                    </Popup>
+                    <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=MoreMenuButton, Mode=TwoWay}">
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button x:Name="OpenButton" ToolTip="Open snapshot file…" AutomationProperties.Name="Open" AutomationProperties.AutomationId="OpenButton" Click="Open_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFile}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock x:Name="OpenButtonText" Text="Open snapshot file…"/>
+                        </StackPanel>
+                    </Button><ToggleButton x:Name="EnvironmentCheckButton"
+                                  ToolTip="Show or hide runtime compatibility status"
+                                  AutomationProperties.Name="Toggle environment check"
+                                  AutomationProperties.AutomationId="EnvironmentCheckToggleButton"
+                                  Click="EnvironmentCheck_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Environment}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock Text="Environment check"/>
+                        </StackPanel>
+                    </ToggleButton><ToggleButton x:Name="WhatsNewButton"
+                                  ToolTip="Show or hide the current Raw Buffer Visualizer release highlights"
+                                  AutomationProperties.Name="Toggle release highlights"
+                                  AutomationProperties.AutomationId="ReleaseAnnouncementOpenButton"
+                                  Click="WhatsNew_Click">
+                        <StackPanel Orientation="Horizontal">
+                            <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.New}" Width="16" Height="16" Margin="0,0,5,0"/>
+                            <TextBlock Text="What's new in 2.2.3"/>
+                        </StackPanel>
+                    </ToggleButton><Separator/><Button Content="Release notes" Click="ViewReleaseNotes_Click"/></StackPanel></Border>
+                    </Popup>
+                    <Popup x:Name="ZoomPopup" PlacementTarget="{Binding ElementName=ZoomMenuButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=ZoomMenuButton, Mode=TwoWay}">
+                        <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="ViewerMenu_Click"><Button Content="25%" Tag="0.25" Click="ZoomPreset_Click"/><Button Content="50%" Tag="0.5" Click="ZoomPreset_Click"/><Button Content="100%" Tag="1" Click="ZoomPreset_Click"/><Button Content="200%" Tag="2" Click="ZoomPreset_Click"/><Button Content="400%" Tag="4" Click="ZoomPreset_Click"/><Button Content="800%" Tag="8" Click="ZoomPreset_Click"/><Button Content="1600%" Tag="16" Click="ZoomPreset_Click"/><Button Content="3200%" Tag="32" Click="ZoomPreset_Click"/></StackPanel></Border>
+                    </Popup>
+<Grid x:Name="CanvasArea" Grid.Row="2" Grid.Column="1">
                 <Border Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,1,0">
                     <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
                 </Border>
@@ -616,7 +565,7 @@
                         <TextBlock x:Name="EmptyViewerGuidanceText"
                                    Text="Break at an image variable or select Open."
                                    Margin="0,10,0,0"
-                                   Foreground="{StaticResource MutedTextBrush}"
+                                   Foreground="{StaticResource SecondaryTextBrush}"
                                    TextAlignment="Center"
                                    TextWrapping="Wrap"/>
                     </StackPanel>
@@ -635,8 +584,8 @@
                     <StackPanel>
                         <TextBlock Text="Image could not be visualized" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap"/>
                         <TextBlock x:Name="ErrorIdText" Margin="0,5,0,0" Foreground="#F48771" FontFamily="Consolas" FontSize="11"/>
-                        <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
-                        <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                        <TextBlock x:Name="ErrorMessageText" Margin="0,8,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" MaxHeight="120"/>
+                        <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Margin="0,8,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                         <WrapPanel Margin="0,12,0,0">
                             <Button x:Name="CopyErrorReportButton" AutomationProperties.Name="Copy report" AutomationProperties.AutomationId="CopyErrorReportButton" Click="CopySupportReport_Click">
                                 <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Copy Report"/></StackPanel>
@@ -647,6 +596,55 @@
                         </WrapPanel>
                     </StackPanel>
                 </Border>
+            <Popup x:Name="ReleaseAnnouncementPopup" PlacementTarget="{Binding ElementName=CanvasArea}" Placement="Relative" AllowsTransparency="True" StaysOpen="True" Width="{Binding ActualWidth, ElementName=CanvasArea}" MaxHeight="{Binding ActualHeight, ElementName=CanvasArea}"><Border x:Name="ReleaseAnnouncementBanner" VerticalAlignment="Top" Panel.ZIndex="3"
+                    Visibility="Collapsed"
+                    Background="#17384A"
+                    BorderBrush="#2B88B8"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,8"
+                    AutomationProperties.Name="Raw Buffer Visualizer release highlights"
+                    AutomationProperties.AutomationId="ReleaseAnnouncementBanner">
+                <DockPanel LastChildFill="True">
+                    <StackPanel DockPanel.Dock="Right"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Top"
+                                Margin="12,0,0,0">
+                        <Button Content="View release notes"
+                                ToolTip="Open the complete release notes in your browser"
+                                AutomationProperties.Name="View release notes"
+                                AutomationProperties.AutomationId="ReleaseAnnouncementNotesButton"
+                                Click="ViewReleaseNotes_Click"/>
+                        <Button Content="Dismiss"
+                                Margin="0"
+                                ToolTip="Hide these highlights for this version"
+                                AutomationProperties.Name="Dismiss release highlights"
+                                AutomationProperties.AutomationId="ReleaseAnnouncementDismissButton"
+                                Click="DismissReleaseAnnouncement_Click"/>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock x:Name="ReleaseAnnouncementTitleText"
+                                   AutomationProperties.AutomationId="ReleaseAnnouncementTitle"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"
+                                   Foreground="#FFFFFF"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ReleaseAnnouncementHighlightOneText"
+                                   Margin="0,4,0,0"
+                                   Foreground="#D8EEF8"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ReleaseAnnouncementHighlightTwoText"
+                                   Margin="0,2,0,0"
+                                   Foreground="#D8EEF8"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock x:Name="ReleaseAnnouncementHighlightThreeText"
+                                   Margin="0,2,0,0"
+                                   Foreground="#D8EEF8"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+                </DockPanel>
+            </Border></Popup>
+            </Grid>
+                </Grid>
             </Grid>
 
             <GridSplitter x:Name="InspectorGridSplitter"
@@ -672,11 +670,11 @@
                             <StackPanel Margin="12,8">
                     <StackPanel x:Name="PixelSection" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}">
 <TextBlock x:Name="PixelHeadingText" Text="Pixel" FontSize="16" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"/>
                     <TextBlock x:Name="PixelNeighborhoodHeadingText" Text="Hover 5x5 Values" Margin="0,10,0,4" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="PixelNeighborhoodText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="PixelNeighborhoodText" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                     <TextBlock x:Name="PixelStatsHeadingText" Text="Hover 5x5 Stats" Margin="0,10,0,4" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="RoiStatsText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="RoiStatsText" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                     <TextBlock Text="Marker" Margin="0,10,0,4" FontWeight="SemiBold"/>
                     <WrapPanel>
                         <Button ToolTip="Pin the selected or hovered pixel and freeze inspector values" AutomationProperties.Name="Pin marker" Click="PinMarker_Click">
@@ -686,9 +684,9 @@
                             <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Clear"/></StackPanel>
                         </Button>
                     </WrapPanel>
-                    <TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"/>
                     <TextBlock Text="Line" Margin="0,10,0,4" FontWeight="SemiBold"/>
-                    <TextBlock x:Name="LineProfileText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
+                    <TextBlock x:Name="LineProfileText" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Consolas" FontSize="11"/>
                     </StackPanel>
                     <StackPanel x:Name="HistogramSection" Visibility="{Binding IsHistogramSelected, Converter={StaticResource BooleanVisibility}}">
 <presentation:HistogramView x:Name="HistogramPanel" Margin="0,14,0,0" Background="{DynamicResource InputBrush}"/>
@@ -730,13 +728,13 @@
                                        FontWeight="SemiBold"/>
                             <TextBlock x:Name="AutomaticInspectionMembersText"
                                        Margin="0,5,0,0"
-                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
                                        FontFamily="Consolas"
                                        FontSize="11"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="AutomaticInspectionValidationText"
                                        Margin="0,5,0,0"
-                                       Foreground="{StaticResource MutedTextBrush}"
+                                       Foreground="{StaticResource SecondaryTextBrush}"
                                        TextWrapping="Wrap"/>
                             <Button x:Name="EditAutomaticMappingButton"
                                     Content="Edit Mapping"
@@ -751,7 +749,7 @@
                     <DockPanel LastChildFill="True">
                         <TextBlock DockPanel.Dock="Top" Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
                         <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <TextBlock x:Name="DescriptorText" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DescriptorText" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"/>
                         </ScrollViewer>
                     </DockPanel>
                 </Border>
@@ -801,7 +799,7 @@
                                 <Button x:Name="CloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
                                 <TextBlock Text="Diagnose Buffer" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             </DockPanel>
-                            <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                            <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                             <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" MaxHeight="280" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
                                 <ListBox.ItemTemplate>
                                     <DataTemplate>
@@ -820,7 +818,7 @@
                                                     </Border>
                                                     <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
                                                 </DockPanel>
-                                                <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{StaticResource MutedTextBrush}" TextTrimming="CharacterEllipsis"/>
+                                                <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{StaticResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"/>
                                                 <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" Foreground="#D7BA7D" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
                                             </StackPanel>
                                         </Grid>
@@ -839,9 +837,54 @@
                         <Button Content="Diff" Click="ShowDiff_Click"/>
                         <Button x:Name="BlinkButton" Content="Blink" Click="Blink_Click"/>
                     </WrapPanel>
-                    <TextBlock x:Name="CompareText" Margin="0,6,0,0" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="CompareText" Margin="0,6,0,0" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap"/>
                     </StackPanel>
-                    <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}">
+                    <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}"><Border x:Name="EnvironmentCheckPanel"
+                    Visibility="Collapsed"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource StatusAccentBrush}"
+                    BorderThickness="0,0,0,1"
+                    Padding="10,8"
+                    AutomationProperties.Name="Raw Buffer Visualizer environment check"
+                    AutomationProperties.AutomationId="EnvironmentCheckPanel">
+                <StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="Environment Check"
+                                   FontSize="14"
+                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="Checks the Visual Studio host, extension registration, and temporary storage."
+                                   Margin="0,2,0,0"
+                                   Foreground="{StaticResource MutedTextBrush}"
+                                   TextWrapping="Wrap"
+                                   FontSize="11"/>
+                    </StackPanel>
+
+                    <StackPanel Margin="0,8,0,0">
+                        <TextBlock x:Name="EnvironmentVisualStudioText"
+                                   AutomationProperties.AutomationId="EnvironmentVisualStudioStatus"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,3"/>
+                        <TextBlock x:Name="EnvironmentExtensionText"
+                                   AutomationProperties.AutomationId="EnvironmentExtensionStatus"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,3"/>
+                        <TextBlock x:Name="EnvironmentTempStorageText"
+                                   AutomationProperties.AutomationId="EnvironmentTempStorageStatus"
+                                   TextWrapping="Wrap"/>
+                    </StackPanel>
+
+                    <WrapPanel Margin="0,8,0,0">
+                        <Button Content="Refresh"
+                                AutomationProperties.Name="Refresh environment check"
+                                AutomationProperties.AutomationId="EnvironmentCheckRefreshButton"
+                                Click="RefreshEnvironmentCheck_Click"/>
+                        <Button Content="Copy diagnostic report"
+                                AutomationProperties.Name="Copy environment diagnostic report"
+                                AutomationProperties.AutomationId="EnvironmentCheckCopyReportButton"
+                                Click="CopyEnvironmentReport_Click"/>
+                    </WrapPanel>
+                </StackPanel>
+            </Border>
 <TextBlock Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
                     <WrapPanel Margin="0,0,0,6">
                         <Button ToolTip="Copy diagnostics and environment details without image data" AutomationProperties.Name="Copy report" Click="CopySupportReport_Click">
@@ -851,7 +894,7 @@
                             <StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.OpenFolder}" Width="16" Height="16" Margin="0,0,5,0"/><TextBlock Text="Open Logs"/></StackPanel>
                         </Button>
                     </WrapPanel>
-                    <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{StaticResource MutedTextBrush}" TextWrapping="Wrap" FontSize="11"/>
+                    <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{StaticResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                     <ListBox x:Name="DiagnosticsList" Height="110"/>
                     </StackPanel>
                             </StackPanel>
@@ -889,7 +932,7 @@
 
         </Grid>
 
-        <Border Grid.Row="3" MinHeight="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
+        <Border Grid.Row="1" MinHeight="28" Background="{StaticResource StatusBarBrush}" BorderBrush="{StaticResource StatusAccentBrush}" BorderThickness="0,1,0,0" Padding="8,0">
             <DockPanel LastChildFill="True">
                 <TextBlock x:Name="StatusText"
                            Text="{Binding Status}" ToolTip="{Binding StatusDetails}"
