@@ -26,13 +26,16 @@ namespace RawBufferVisualizer.Tests
                 Require(model.ChannelValues.Select(channel => channel.Name).SequenceEqual(new[] { "R", "G", "B", "GV" }), "RGB and gray value are distinct");
                 Require(model.ChannelValues[0].Decimal == "40" && model.ChannelValues[0].Hex == "0x28", "Channel decimal/hex use source values");
                 Require(((SolidColorBrush)model.Cells[12].Background).Color == Color.FromRgb(40, 22, 18), "Cell color uses rendered pixel");
-                Require(model.ProfileSampleCount == 17 && model.ProfileR.Bounds.Width == 240 && !model.ProfileG.IsEmpty() && !model.ProfileB.IsEmpty(), "All 17 RGB samples are graphed");
+                Require(model.ProfileSampleCount == 17 && model.ProfileR.Bounds.X == 30 && model.ProfileR.Bounds.Width == 238 && !model.ProfileG.IsEmpty() && !model.ProfileB.IsEmpty(), "All 17 RGB samples are graphed");
                 model.SelectedChannel = "R";
                 Require(model.Cells[12].Value == "40" && model.Mean == "40.00" && model.StandardDeviation == "2.000", "Channel selection changes numbers and statistics with the approved display precision");
-                Require(model.HasPixelData && model.RawByteNote == " (B G R)" && model.ProfileRMarker.Bounds.X == 117, "Pixel state, memory-order note and current profile point are presented");
+                Require(model.HasPixelData && model.RawByteNote == " (B G R)" && model.ProfileRMarker.Bounds.X == 146, "Pixel state, memory-order note and current profile point are presented");
                 model.SelectedChannel = "GV";
                 model.Update(source, descriptor, 0, 0, source.CreateRenderOptions());
                 Require(model.Cells.Count == 25 && model.Cells[0].Value == "—" && model.Cells[12].IsCenter && model.Count == "9" && model.ProfileSampleCount == 9, "Corner leaves missing cells blank and bounds statistics/profile");
+                Require(model.ProfileStart == string.Empty && model.ProfileEnd == "8" && model.ProfileCaption == "Row 0 · x 0–8" && model.ProfileR.Bounds.X == 149 && model.ProfileR.Bounds.Width == 119, "Left-edge profile retains the selected pixel at the center and leaves unavailable positions blank");
+                model.Update(source, descriptor, 16, 0, source.CreateRenderOptions());
+                Require(model.ProfileStart == "8" && model.ProfileEnd == string.Empty && model.ProfileCaption == "Row 0 · x 8–16" && model.ProfileSampleCount == 9 && model.ProfileR.Bounds.X == 30 && model.ProfileR.Bounds.Width == 119, "Right-edge profile retains the same coordinate frame and only valid samples");
             }
             foreach (var order in new[] { RawByteOrder.LittleEndian, RawByteOrder.BigEndian })
             {
