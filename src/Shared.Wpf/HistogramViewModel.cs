@@ -56,6 +56,10 @@ namespace RawBufferVisualizer.Presentation
         public string ValueRange => Result?.FiniteCount > 0 ? (Result.IsSampled ? "Sample range: " : "Range: ") + Number(Result.Minimum) + " to " + Number(Result.Maximum) : string.Empty;
         public string Exclusions => Result?.ExcludedCount > 0 ? string.Format(CultureInfo.CurrentCulture, "Excluded: {0:N0} NaN or infinite values", Result.ExcludedCount) : string.Empty;
         public string FrequencyScale => Result == null ? string.Empty : string.Format(CultureInfo.CurrentCulture, "Y: pixels per bin · 0 to {0:N0}", Result.Bins.Max());
+        public string DockedFrequencyScale => Result == null ? string.Empty : string.Format(CultureInfo.CurrentCulture, "Count · linear · max {0:N0}", Result.Bins.Max());
+        public string DockedCoverage => Result == null ? string.Empty : string.Format(CultureInfo.CurrentCulture,
+            Result.IsSampled ? "Coverage: sampled · {0:N0} / {1:N0} px" : "Coverage: full image · {0:N0} px", Result.SampleCount, Result.TotalPixels);
+        public string DockedValueRange => Result?.FiniteCount > 0 ? "min " + Number(Result.Minimum, true) + " · max " + Number(Result.Maximum, true) : string.Empty;
         public string AxisDescription => Result == null ? string.Empty : "X: pixel value · 256 equal-width bins";
         public string SamplingDescription => Result?.IsSampled == true ? "A spatial sample keeps inspection responsive. Counts and range describe sampled pixels; rare values may be missed." : string.Empty;
         public string ChannelDescription => HasChannels && _selectedChannelIndex == 0 ? "RGB mean = (R + G + B) / 3 per pixel; alpha is excluded. This is not luminance." : string.Empty;
@@ -196,6 +200,6 @@ namespace RawBufferVisualizer.Presentation
             _actionCommand.Refresh();
         }
 
-        private string Number(double value) => value.ToString(_source?.Descriptor.PixelFormat == RawPixelFormat.Int32 ? "0" : "G9", CultureInfo.CurrentCulture);
+        private string Number(double value, bool docked = false) => value.ToString(_source?.Descriptor.PixelFormat == RawPixelFormat.Int32 ? "0" : docked && _source?.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "F3" : "G9", CultureInfo.CurrentCulture);
     }
 }
