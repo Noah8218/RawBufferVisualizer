@@ -580,7 +580,7 @@ try {
         $standaloneHistogram.Background=$standaloneHistogram.FindResource('RbvWindowBrush')
         Arrange-Control $standaloneHistogram 420 360
         $standaloneTitle=$standaloneHistogram.Content.Children[0].Children[0]
-        if ($standaloneTitle.Foreground.Color.ToString() -ne '#FFF1F1F1' -or $standaloneHistogram.FindName('HistogramCanvas').PlotBrush.Color.ToString() -ne '#FF9CDCFE') { throw 'Standalone histogram lost its actual parent theme resource contract' }
+        if ($standaloneTitle.Foreground.Color.ToString() -ne '#FFF1F1F1' -or $standaloneHistogram.Content.Children[0].Children[2].Children[0].Foreground.Color.ToString() -ne '#FFF1F1F1' -or $standaloneHistogram.FindName('HistogramCanvas').PlotBrush.Color.ToString() -ne '#FF9CDCFE') { throw 'Standalone histogram lost its actual parent theme resource contract' }
         if ($standaloneHistogram.FindName('HistogramCoverage').Text -ne 'All pixels: 3' -or $standaloneHistogram.FindName('HistogramValueRange').Text -ne 'Range: 43 to 43' -or $standaloneHistogram.FindName('HistogramFrequencyScale').Text -ne 'Y: pixels per bin · 0 to 3' -or $standaloneHistogram.FindName('HistogramAction').ContentTemplate -ne $null) { throw 'Standalone histogram defaults changed with docked presentation' }
         Save-Render $standaloneHistogram 420 360 'histogram-standalone-full.png'
         $histogramCases+=[pscustomobject]@{Case='RGB full';Docked=$histogram.DockedCoverage;Standalone=$histogram.Coverage;Range=$histogram.DockedValueRange}
