@@ -319,11 +319,9 @@
             <Setter Property="Padding" Value="6,4"/><Setter Property="CornerRadius" Value="2"/><Setter Property="Background" Value="{DynamicResource InputBrush}"/>
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
         </Style>
-        <Style x:Key="ChannelSegments" TargetType="ComboBox">
-            <Setter Property="Height" Value="24"/><Setter Property="IsTabStop" Value="False"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ComboBox">
+        <ControlTemplate x:Key="ChannelSegmentsTemplate" TargetType="ComboBox">
                 <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Background="{DynamicResource InputBrush}">
-                    <ListBox x:Name="SegmentList" ItemsSource="{TemplateBinding ItemsSource}" SelectedItem="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" BorderThickness="0" Padding="0" Background="Transparent" AlternationCount="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                    <ListBox x:Name="SegmentList" ItemsSource="{TemplateBinding ItemsSource}" ItemTemplate="{TemplateBinding ItemTemplate}" SelectedItem="{Binding SelectedItem, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}" BorderThickness="0" Padding="0" Background="Transparent" AlternationCount="4" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
                         <ListBox.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal"/></ItemsPanelTemplate></ListBox.ItemsPanel>
                         <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
                             <Setter Property="MinWidth" Value="32"/><Setter Property="Height" Value="22"/><Setter Property="Padding" Value="8,0"/><Setter Property="FontSize" Value="11.5"/><Setter Property="Cursor" Value="Hand"/>
@@ -340,7 +338,10 @@
                         </Style></ListBox.ItemContainerStyle>
                     </ListBox>
                 </Border>
-            </ControlTemplate></Setter.Value></Setter>
+            </ControlTemplate>
+        <Style x:Key="ChannelSegments" TargetType="ComboBox">
+            <Setter Property="Height" Value="24"/><Setter Property="IsTabStop" Value="False"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template" Value="{StaticResource ChannelSegmentsTemplate}"/>
         </Style>
         <Style TargetType="ComboBox" BasedOn="{StaticResource RbvComboBoxStyle}"/>
         <Style TargetType="ComboBoxItem" BasedOn="{StaticResource RbvComboBoxItemStyle}"/>
@@ -899,7 +900,7 @@
     </StackPanel>
 <TextBlock x:Name="PixelHeadingText" Text="Pixel" FontSize="16" FontWeight="SemiBold" Visibility="Collapsed"/><TextBlock x:Name="PixelText" Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/><TextBlock x:Name="PixelNeighborhoodText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="RoiStatsText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="LineProfileText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11" Visibility="Collapsed"/><TextBlock x:Name="MarkerText" AutomationProperties.AutomationId="MarkerText" Margin="0,4,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Visibility="Collapsed"/></StackPanel>
                     <StackPanel x:Name="HistogramSection" Visibility="{Binding IsHistogramSelected, Converter={StaticResource BooleanVisibility}}">
-<presentation:HistogramView x:Name="HistogramPanel" Margin="0,14,0,0" Background="{DynamicResource InputBrush}"/>
+<presentation:HistogramView x:Name="HistogramPanel" Tag="Docked" Background="{DynamicResource PanelBrush}"/>
 
                     <TextBlock Text="Display Range" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold" ToolTip="Display black/white range. Raw data is not changed." Visibility="Collapsed"/>
                     <Grid Visibility="Collapsed">
