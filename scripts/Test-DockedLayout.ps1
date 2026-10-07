@@ -66,6 +66,14 @@ try {
         if ([string]$control.FindName('MeasureButton').ToolTip -ne 'Click two image pixels to measure their horizontal and vertical distance (M)') { throw 'Full-image measurement tooltip differs from the approved mockup' }
         $orientation = if ($height -lt 560) { 'Vertical' } else { 'Horizontal' }
         if ([string]$control.FindName('ToolbarCommandsPanel').Orientation -ne $orientation) { throw "Wrong toolbar orientation at $width x $height" }
+        $toolbar = $control.FindName('ToolbarBorder')
+        foreach ($name in @('SaveMenuButton', 'MoreMenuButton')) { Assert-InBounds $control.FindName($name) $toolbar "Trailing toolbar $name at $width x $height" }
+        $zoomBefore = if ($height -lt 560) { 'ZoomInButton' } else { 'ZoomOutButton' }
+        if ($control.FindName('ToolbarCommandsPanel').Children[2] -ne $control.FindName($zoomBefore)) { throw 'Zoom commands differ from the mockup orientation order' }
+        if ($height -lt 560 -and $control.FindName('TrailingGroupSeparator').Visibility -ne 'Visible') { throw 'Vertical Save group separator is missing' }
+        if ($width -eq 1440 -and $control.FindName('ImagesColumn').Width.Value -ne $(if ($height -lt 560) { 260 } else { 280 })) { throw 'Default wide image-panel width differs from the mockup' }
+        foreach ($name in @('ImageNameText', 'ImageFormatChip')) { Assert-InBounds $control.FindName($name) $control.FindName('ImageInfoBar') "Required header $name at $width x $height" }
+        if ($width -eq 1000 -and $height -eq 720 -and $control.FindName('ImageStateChip').Visibility -ne 'Visible') { throw 'Measured header unnecessarily hid a fitting state chip' }
         foreach ($name in @('FitButton','ZoomOutButton','ZoomInButton','PinPixelButton','SaveMenuButton','MoreMenuButton')) {
             $icon = $control.FindName($name).Content.Children[0]
             if ($icon -isnot [Windows.Controls.Viewbox] -or $icon.Child.Children[0].Data.Bounds.IsEmpty) { throw "Prototype vector icon unavailable: $name" }

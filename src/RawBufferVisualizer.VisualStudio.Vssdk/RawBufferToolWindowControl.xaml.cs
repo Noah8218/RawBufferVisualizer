@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -62,6 +63,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private readonly HistogramViewModel _histogram = new HistogramViewModel();
         private readonly InspectorNavigationViewModel _inspector = new InspectorNavigationViewModel();
         private bool _applyingInspectorLayout;
+        private bool _applyingImageHeaderLayout;
         private readonly AutomaticInspectionStatusViewModel _inspectionStatus = new AutomaticInspectionStatusViewModel();
         private readonly PixelMeasurementViewModel _measurement = new PixelMeasurementViewModel();
         private bool _savingSnapshot;
@@ -3689,6 +3691,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ViewerToolbarRow.Height = new GridLength(side ? 0 : 32);
             ViewerToolbarSideColumn.Width = new GridLength(side ? 40 : 0);
             ToolbarCommandsPanel.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
+            var zoomBefore = side ? ZoomInButton : ZoomOutButton;
+            var zoomAfter = side ? ZoomOutButton : ZoomInButton;
+            if (ToolbarCommandsPanel.Children[2] != zoomBefore)
+            {
+                ToolbarCommandsPanel.Children.Remove(zoomBefore);
+                ToolbarCommandsPanel.Children.Insert(2, zoomBefore);
+                ToolbarCommandsPanel.Children.Remove(ZoomMenuButton);
+                ToolbarCommandsPanel.Children.Insert(3, ZoomMenuButton);
+                ToolbarCommandsPanel.Children.Remove(zoomAfter);
+                ToolbarCommandsPanel.Children.Insert(4, zoomAfter);
+            }
             ToolbarScroller.HorizontalScrollBarVisibility = side ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Hidden;
             ToolbarScroller.VerticalScrollBarVisibility = side ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled;
             MeasurementCommands.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
@@ -3698,14 +3711,97 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ActualSizeIcon.Visibility = Visibility.Collapsed;
             foreach (var button in new Control[] { FitButton, ActualSizeButton, ZoomOutButton, ZoomMenuButton, ZoomInButton, MeasureButton, PinPixelButton, LinkViewsBox, SelectionOverlayBox, SaveMenuButton, MoreMenuButton })
             {
-                button.Width = side ? 36 : double.NaN;
-                button.Padding = side ? new Thickness(2, 2, 2, 2) : new Thickness(5, 2, 5, 2);
+                button.Width = side ? 32 : double.NaN;
+                button.Height = side ? 26 : 24;
+                button.Margin = side ? new Thickness(0, 0, 0, 2) : new Thickness(0, 0, 2, 0);
+                button.Padding = side ? new Thickness(0) : new Thickness(6, 0, 6, 0);
+            }
+            ToolbarBorder.BorderThickness = side ? new Thickness(0, 0, 1, 0) : new Thickness(0, 0, 0, 1);
+            ToolbarTrailingColumn.Width = side ? new GridLength(0) : GridLength.Auto;
+            ToolbarTrailingRow.Height = side ? GridLength.Auto : new GridLength(0);
+            Grid.SetRow(TrailingToolbarCommands, side ? 1 : 0);
+            Grid.SetColumn(TrailingToolbarCommands, side ? 0 : 1);
+            TrailingToolbarCommands.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
+            TrailingGroupSeparator.Visibility = side ? Visibility.Visible : Visibility.Collapsed;
+            TrailingToolbarCommands.Margin = side ? new Thickness(0, 4, 0, 6) : new Thickness(0, 0, 4, 0);
+            ToolbarScroller.Margin = side ? new Thickness(0, 6, 0, 0) : new Thickness(6, 0, 0, 0);
+            ToolbarCommandsPanel.HorizontalAlignment = side ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+            ToolbarCommandsPanel.VerticalAlignment = side ? VerticalAlignment.Top : VerticalAlignment.Center;
+            ZoomMenuButton.MinWidth = side ? 0 : 54;
+            ActualSizeButton.MinWidth = side ? 0 : 30;
+            ZoomText.FontSize = side ? 10 : 12;
+            foreach (var divider in new[] { ZoomGroupSeparator, MeasurementGroupSeparator })
+            {
+                divider.Width = side ? 20 : 1;
+                divider.Height = side ? 1 : 16;
+                divider.Margin = side ? new Thickness(0, 4, 0, 6) : new Thickness(4, 0, 6, 0);
             }
             UpdateReleaseAnnouncementPopup();
-            ImageTypeText.Visibility = ViewerGrid.ActualWidth >= 700 ? Visibility.Visible : Visibility.Collapsed;
-            ImageStateChip.Visibility = ViewerGrid.ActualWidth >= 600 ? Visibility.Visible : Visibility.Collapsed;
-            ImageStrideChip.Visibility = ViewerGrid.ActualWidth >= 480 ? Visibility.Visible : Visibility.Collapsed;
-            ImageSizeChip.Visibility = ViewerGrid.ActualWidth >= 340 ? Visibility.Visible : Visibility.Collapsed;
+            UpdateImageHeaderLayout();
+        }
+
+        private void ImageInfoBar_TargetUpdated(object sender, DataTransferEventArgs e) => UpdateImageHeaderLayout();
+
+        private void UpdateImageHeaderLayout()
+        {
+            if (ImageStateChip == null || ImageInfoBar.ActualWidth <= 0 || _applyingImageHeaderLayout) return;
+            _applyingImageHeaderLayout = true;
+            try
+            {
+                var chips = new[] { ImageSizeChip, ImageFormatChip, ImageStrideChip, ImageStateChip };
+                var available = Math.Max(0, ImageInfoBar.ActualWidth - 20);
+                var widths = new double[chips.Length];
+                var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
+                var hasImage = ImageInfoBar.DataContext != null;
+                for (var i = 0; i < chips.Length; i++)
+                {
+                    chips[i].Visibility = hasImage ? Visibility.Visible : Visibility.Collapsed;
+                    chips[i].Measure(infinite);
+                    widths[i] = chips[i].DesiredSize.Width - chips[i].Margin.Left;
+                }
+                ImageNameText.Measure(infinite);
+                ImageTypeText.Visibility = string.IsNullOrEmpty(ImageTypeText.Text) ? Visibility.Collapsed : Visibility.Visible;
+                ImageTypeText.Measure(infinite);
+                var nameWidth = ImageNameText.DesiredSize.Width;
+                Func<double> chipWidth = () =>
+                {
+                    var visibleCount = 0;
+                    var total = 0.0;
+                    for (var i = 0; i < chips.Length; i++) if (chips[i].Visibility == Visibility.Visible) { visibleCount++; total += widths[i]; }
+                    return total + Math.Max(0, visibleCount - 1) * 6;
+                };
+                var typeFits = ImageTypeText.Visibility == Visibility.Visible && nameWidth + ImageTypeText.DesiredSize.Width + 10 + chipWidth() <= available;
+                ImageTypeText.Visibility = typeFits ? Visibility.Visible : Visibility.Collapsed;
+                if (!typeFits)
+                {
+                    foreach (var chip in new[] { ImageStateChip, ImageStrideChip, ImageSizeChip })
+                    {
+                        if (nameWidth + 10 + chipWidth() <= available) break;
+                        chip.Visibility = Visibility.Collapsed;
+                    }
+                }
+                var first = true;
+                foreach (var chip in chips)
+                {
+                    chip.Margin = new Thickness(first ? 0 : 6, 0, 0, 0);
+                    if (chip.Visibility == Visibility.Visible) first = false;
+                }
+                ImageHeaderNames.Margin = new Thickness(0, 0, hasImage ? 10 : 0, 0);
+            }
+            finally { _applyingImageHeaderLayout = false; }
+        }
+
+        private void AutomaticInspectionBar_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (ScanNowButton == null || AutomaticInspectionSwitchGroup == null) return;
+            var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
+            AutomaticInspectionSwitchGroup.Measure(infinite);
+            ScanNowButton.Measure(infinite);
+            var wrap = AutomaticInspectionSwitchGroup.DesiredSize.Width + ScanNowButton.DesiredSize.Width - ScanNowButton.Margin.Left + 6 > AutomaticInspectionBar.ActualWidth;
+            Grid.SetRow(ScanNowButton, wrap ? 1 : 0);
+            Grid.SetColumn(ScanNowButton, wrap ? 0 : 1);
+            Grid.SetColumnSpan(ScanNowButton, wrap ? 2 : 1);
+            ScanNowButton.Margin = wrap ? new Thickness(0, 6, 0, 0) : new Thickness(6, 0, 0, 0);
         }
 
         private void ToolbarScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -4940,16 +5036,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var nextMode = width < 760 ? LayoutMode.Narrow : width < 1200 ? LayoutMode.Medium : LayoutMode.Wide;
                 var strip = _inspector.IsImageStrip;
                 var wasStrip = ImagesColumn.MinWidth == 64;
-                var maxImages = Math.Max(0, Math.Min(420, width - 44 - (_inspector.IsOpen && !_inspector.IsNarrow ? 300 : 0) - 5 - 140));
+                var maxImages = Math.Max(0, Math.Min(420, width - 44 - (_inspector.IsOpen && !_inspector.IsNarrow ? 300 : 0) - 4 - 140));
                 ImagesColumn.MinWidth = strip ? 64 : Math.Min(180, maxImages);
                 ImagesColumn.MaxWidth = strip ? 64 : maxImages;
                 if (strip) ImagesColumn.Width = new GridLength(64);
-                else if (nextMode != _layoutMode || wasStrip) ImagesColumn.Width = new GridLength(nextMode == LayoutMode.Wide ? 300 : 236);
-                ImageList.Margin = strip ? new Thickness(2, 0, 2, 4) : new Thickness(4, 0, 4, 4);
+                else if (nextMode != _layoutMode || wasStrip || nextMode == LayoutMode.Wide &&
+                    (ActualHeight < 560 && ImagesColumn.Width.Value == 280 || ActualHeight >= 560 && ImagesColumn.Width.Value == 260))
+                    ImagesColumn.Width = new GridLength(nextMode == LayoutMode.Wide ? ActualHeight < 560 ? 260 : 280 : 236);
+                ImageList.Margin = strip ? new Thickness(4, 6, 4, 6) : new Thickness(4, 4, 4, 4);
                 ImagePanelTop.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
                 ImageStripHeader.Visibility = strip ? Visibility.Visible : Visibility.Collapsed;
                 ImagesGridSplitter.Visibility = strip ? Visibility.Collapsed : Visibility.Visible;
-                MainContentGrid.ColumnDefinitions[1].Width = new GridLength(strip ? 0 : 5);
+                MainContentGrid.ColumnDefinitions[1].Width = new GridLength(strip ? 0 : 4);
                 InspectorGridSplitter.Visibility = Visibility.Collapsed;
                 InspectorSplitterColumn.Width = new GridLength(0);
                 InspectorColumn.Width = new GridLength(!_inspector.IsNarrow && _inspector.IsOpen ? 300 : 0);
