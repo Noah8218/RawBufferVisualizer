@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -4571,7 +4572,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelBadgeText.Text = InspectorPixelStateText.Text = state;
             PixelBadgeGlyph.Text = state == "PINNED" ? "⚑" : state == "SELECTED" ? "■" : state == "MEASURE" ? "↔" : "●";
             PixelStateBadge.Background = state == "PINNED" ? new SolidColorBrush(Color.FromRgb(242, 163, 58)) : state == "MEASURE" ? (Brush)Resources["StatusAccentBrush"] : (Brush)Resources["ChannelChipBrush"];
-            PixelBadgeText.Foreground = PixelBadgeGlyph.Foreground = state == "PINNED" ? Brushes.Black : (Brush)Resources["TextBrush"];
+            PixelBadgePath.Data = (Geometry)Resources[state == "PINNED" ? "IconPinGeometry" : state == "MEASURE" ? "IconRulerGeometry" : "IconCrosshairGeometry"];
+            PixelBadgeText.Foreground = PixelBadgeGlyph.Foreground = state == "PINNED" ? new SolidColorBrush(Color.FromRgb(27, 18, 3))
+                : (Brush)Resources[state == "MEASURE" ? "TextBrush" : "SecondaryTextBrush"];
             PixelStateBadge.Visibility = _measurement.IsEnabled || PixelReadoutWrap.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
             InspectorPinButtonText.Text = IsInspectorPinned ? "Unpin" : "Pin hovered pixel";
             InspectorMarkerCaption.Text = IsInspectorPinned
@@ -4594,19 +4597,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     Grid.SetRow(PixelReadoutHost, 0);
                     Grid.SetColumn(PixelReadoutHost, 1);
                     Grid.SetColumnSpan(PixelReadoutHost, 1);
-                    PixelReadoutWrap.Visibility = PixelEmptyText.Visibility = Visibility.Collapsed;
+                    PixelReadoutWrap.Visibility = PixelEmptyText.Visibility = PixelBarPinButton.Visibility = Visibility.Collapsed;
                     return;
                 }
                 PixelReadoutWrap.Visibility = PixelPositionText.Text == "X -  Y -" ? Visibility.Collapsed : Visibility.Visible;
                 PixelEmptyText.Visibility = PixelReadoutWrap.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+                if (PixelReadoutWrap.Visibility != Visibility.Visible)
+                {
+                    PixelBarPinButton.Visibility = PinPixelButton.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+                    return;
+                }
                 var optional = new FrameworkElement[] { PixelBarPinButton, PixelNeighborhoodStatsText, PixelOffsetText, PixelRawText, PixelBadgeText, PixelPositionText };
                 foreach (var item in optional) item.Visibility = Visibility.Visible;
                 var unlimited = new Size(double.PositiveInfinity, double.PositiveInfinity);
                 Func<double> badgeWidth = () =>
                 {
-                    PixelBadgeGlyph.Measure(unlimited);
-                    PixelBadgeText.Measure(unlimited);
-                    return PixelBadgeGlyph.DesiredSize.Width + PixelBadgeText.DesiredSize.Width + PixelStateBadge.Padding.Left + PixelStateBadge.Padding.Right + PixelStateBadge.Margin.Left + PixelStateBadge.Margin.Right;
+                    var iconVisible = PixelBadgeText.Text == "PINNED" || PixelBadgeText.Text == "MEASURE" || PixelBadgeText.Visibility != Visibility.Visible;
+                    PixelBadgeIcon.Visibility = iconVisible ? Visibility.Visible : Visibility.Collapsed;
+                    PixelBadgeText.Margin = iconVisible && PixelBadgeText.Visibility == Visibility.Visible ? new Thickness(4, 0, 0, 0) : new Thickness(0);
+                    PixelStateBadge.Measure(unlimited);
+                    return PixelStateBadge.DesiredSize.Width;
                 };
                 var values = PixelChannelsPanel.Visibility == Visibility.Visible ? (FrameworkElement)PixelChannelsPanel : PixelValueText;
                 values.Measure(unlimited);
@@ -4795,8 +4805,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelColorText.Text = BuildPixelColorStatus(document.Descriptor, description);
             PixelRawText.Text = BuildPixelByteStatus(description);
             UpdatePixelChannelStatus(document.Descriptor, description);
+            StylePixelReadout(PixelPositionText, "X", "Y");
+            foreach (var text in new[] { PixelValueText, PixelRText, PixelGText, PixelBText, PixelAText, PixelGvText, PixelRawText, PixelOffsetText, PixelNeighborhoodStatsText })
+                StylePixelReadout(text, "GV", "R", "G", "B", "A", "Raw", "Offset", "5×5", "μ", "σ");
             RefreshPixelBadge();
             ApplyPixelBarLayout();
+        }
+
+        private void StylePixelReadout(TextBlock text, params string[] labels)
+        {
+            var parts = text.Text.Split(' ');
+            text.Inlines.Clear();
+            for (var index = 0; index < parts.Length; index++)
+            {
+                text.Inlines.Add(new Run((index == 0 ? string.Empty : " ") + parts[index])
+                {
+                    Foreground = (Brush)Resources[labels.Contains(parts[index]) ? "SecondaryTextBrush" : "TextBrush"]
+                });
+            }
         }
 
         private void UpdatePixelChannelStatus(RawImageDescriptor descriptor, string description)
@@ -5165,6 +5191,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             EmptyViewerPanel.Visibility = _documents.Count == 0
                 ? Visibility.Visible
                 : Visibility.Collapsed;
+            PixelEmptyText.Text = _documents.Count == 0 ? "No image selected." : hasActiveImage
+                ? "Move the pointer over the image to read pixel values." : "No pixel data for this item.";
             if (_documents.Count == 0)
             {
                 ErrorPanel.Visibility = Visibility.Collapsed;

@@ -426,6 +426,10 @@
             <Setter Property="Height" Value="1"/><Setter Property="Margin" Value="0,4"/>
             <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Separator"><Border Background="{DynamicResource BorderBrush}"/></ControlTemplate></Setter.Value></Setter>
         </Style>
+        <Style x:Key="PixelBarAction" TargetType="Button" BasedOn="{StaticResource ViewerButton}">
+            <Setter Property="Height" Value="22"/><Setter Property="MinHeight" Value="22"/><Setter Property="MinWidth" Value="0"/><Setter Property="Padding" Value="6,0"/>
+            <Setter Property="Foreground" Value="{DynamicResource LinkBrush}"/><Setter Property="FontSize" Value="12"/>
+        </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -714,56 +718,60 @@
                         </Grid>
                     </Border>
 
-                    <Border x:Name="PixelBar" Grid.Row="1" Grid.ColumnSpan="2" MinHeight="30" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,4" SizeChanged="PixelBar_SizeChanged">
+                    <Border x:Name="PixelBar" Grid.Row="1" Grid.ColumnSpan="2" MinHeight="30" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,0" SizeChanged="PixelBar_SizeChanged">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                            <Border x:Name="PixelStateBadge" CornerRadius="3" Background="{DynamicResource ChannelChipBrush}" Padding="4,1" Margin="0,0,8,0" VerticalAlignment="Top">
-                                <StackPanel Orientation="Horizontal"><TextBlock x:Name="PixelBadgeGlyph" Text="●" FontSize="11"/><TextBlock x:Name="PixelBadgeText" Text="HOVER" FontSize="10" Margin="4,0,0,0"/></StackPanel>
+                            <Border x:Name="PixelStateBadge" CornerRadius="2" Background="{DynamicResource ChannelChipBrush}" Height="18" Padding="6,0" Margin="0,6,14,5" VerticalAlignment="Top">
+                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock x:Name="PixelBadgeGlyph" Text="●" Visibility="Collapsed"/>
+                                    <Viewbox x:Name="PixelBadgeIcon" Width="11" Height="11" VerticalAlignment="Center"><Canvas Width="16" Height="16"><Path x:Name="PixelBadgePath" Data="{StaticResource IconCrosshairGeometry}" Stroke="{Binding Foreground, ElementName=PixelBadgeText}" StrokeThickness="1.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"/></Canvas></Viewbox>
+                                    <TextBlock x:Name="PixelBadgeText" Text="HOVER" FontSize="10" FontWeight="SemiBold" FontFamily="Segoe UI" VerticalAlignment="Center"/>
+                                </StackPanel>
                             </Border>
-                            <Grid x:Name="PixelReadoutHost" Grid.Column="1">
+                            <Grid x:Name="PixelReadoutHost" Grid.Column="1"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                                 <TextBlock x:Name="PixelEmptyText" Text="Move the pointer over the image to read pixel values." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                 <WrapPanel x:Name="PixelReadoutWrap" TextElement.FontFamily="Cascadia Mono, Consolas" VerticalAlignment="Center">
-<TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+<TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <Grid x:Name="PixelChannelGroup" VerticalAlignment="Center">
-                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="PixelSwatch" Width="13" Height="13" Margin="0,0,6,0" Background="#1E1E1E" BorderBrush="#AAAAAA" BorderThickness="1"/>
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="PixelSwatch" Width="12" Height="12" CornerRadius="2" Margin="0,0,7,0" VerticalAlignment="Center" Background="#1E1E1E" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/>
                                         <Grid Grid.Column="1"><Border x:Name="PixelValueChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1">
-                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="13" Foreground="{DynamicResource TextBrush}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     </Border><WrapPanel x:Name="PixelChannelsPanel" Orientation="Horizontal" Visibility="Collapsed">
                         <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelRSwatch" Width="0" Height="12" Margin="0" Background="#550000" BorderBrush="#AAAAAA" BorderThickness="0"/>
-                                <TextBlock x:Name="PixelRText" Text="R -" FontSize="13" Foreground="#E06C75"/>
+                                <TextBlock x:Name="PixelRText" TextWrapping="Wrap" Text="R -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
                         <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelGSwatch" Width="0" Height="12" Margin="0" Background="#005500" BorderBrush="#AAAAAA" BorderThickness="0"/>
-                                <TextBlock x:Name="PixelGText" Text="G -" FontSize="13" Foreground="#98C379"/>
+                                <TextBlock x:Name="PixelGText" TextWrapping="Wrap" Text="G -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
                         <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelBSwatch" Width="0" Height="12" Margin="0" Background="#000055" BorderBrush="#AAAAAA" BorderThickness="0"/>
-                                <TextBlock x:Name="PixelBText" Text="B -" FontSize="13" Foreground="#61AFEF"/>
+                                <TextBlock x:Name="PixelBText" TextWrapping="Wrap" Text="B -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
                         <Border x:Name="PixelAChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0" Visibility="Collapsed">
                             <StackPanel Orientation="Horizontal">
                                 <Border x:Name="PixelASwatch" Width="0" Height="12" Margin="0" Background="#555555" BorderBrush="#AAAAAA" BorderThickness="0"/>
-                                <TextBlock x:Name="PixelAText" Text="A -" FontSize="13" Foreground="#A3A7AE"/>
+                                <TextBlock x:Name="PixelAText" TextWrapping="Wrap" Text="A -" FontSize="13" Foreground="{DynamicResource TextBrush}"/>
                             </StackPanel>
                         </Border>
-                    <TextBlock x:Name="PixelGvText" FontSize="13" VerticalAlignment="Center"/></WrapPanel></Grid>
+                    <TextBlock x:Name="PixelGvText" TextWrapping="Wrap" FontSize="13" VerticalAlignment="Center"/></WrapPanel></Grid>
                                     </Grid><TextBlock x:Name="PixelColorText" Text="RGB -" Visibility="Collapsed"/><TextBlock x:Name="PixelRawText" Text="Bytes -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                     <TextBlock x:Name="PixelOffsetText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
                                     <TextBlock x:Name="PixelNeighborhoodStatsText" FontSize="13" Foreground="{DynamicResource SecondaryTextBrush}" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                                    <Button x:Name="PixelBarPinButton" Content="Pin" Click="PinPixel_Click" Style="{StaticResource ViewerButton}" Margin="10,0,0,0" ToolTip="Freeze values at the hovered pixel (right-click the image)"/>
+
                                 </WrapPanel>
-                                <Grid x:Name="MeasurementReadout" Visibility="Collapsed">
+                                <Button x:Name="PixelBarPinButton" Content="Pin" Click="PinPixel_Click" Style="{StaticResource PixelBarAction}" Grid.Column="1" Margin="14,0,0,0" VerticalAlignment="Center" IsEnabled="{Binding IsEnabled, ElementName=PinPixelButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)"/>
+                                <Grid x:Name="MeasurementReadout" Grid.ColumnSpan="2" Visibility="Collapsed">
                                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions><TextBlock x:Name="MeasurementStatusText" Text="{Binding Status}" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}"
                            TextWrapping="Wrap" VerticalAlignment="Center" FontSize="13" Foreground="{DynamicResource StatusTextBrush}"
-                           AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="MeasurementStatusText"/><Button x:Name="ClearMeasurementButton" Grid.Column="1" Style="{StaticResource ViewerButton}" MinWidth="28" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}" Content="Clear" Margin="4,0,0,0" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
+                           AutomationProperties.LiveSetting="Polite" AutomationProperties.AutomationId="MeasurementStatusText"/><Button x:Name="ClearMeasurementButton" Grid.Column="1" Style="{StaticResource ViewerButton}" MinWidth="28" Visibility="{Binding IsEnabled, Converter={StaticResource BooleanVisibility}}" Content="Clear" Margin="4,0,0,0" Height="22" MinHeight="22" Foreground="{DynamicResource LinkBrush}" Command="{Binding ClearCommand}" ToolTip="Clear the measurement and choose two new points"
                                 AutomationProperties.Name="Clear measurement" AutomationProperties.AutomationId="ClearMeasurementButton"/></Grid>
                             </Grid>
                         </Grid>
@@ -817,19 +825,18 @@
                 <Border Background="#111111" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1,0,1,0">
                     <gl:RawOpenGlImageCanvas x:Name="OpenGlImageView" AutomationProperties.AutomationId="RawBufferOpenGlImageView"/>
                 </Border>
-                <Border x:Name="EmptyViewerPanel"
-                        Panel.ZIndex="1"
-                        IsHitTestVisible="False"
-                        AutomationProperties.AutomationId="EmptyViewerPanel">
-                    <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="320" Margin="12">
-                        <Viewbox Width="32" Height="32" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconImageGeometry}"/></Canvas></Viewbox>
-                        <TextBlock x:Name="EmptyViewerGuidanceText"
-                                   Text="Break at an image variable or select Open."
-                                   Margin="0,10,0,0"
-                                   Foreground="{DynamicResource SecondaryTextBrush}"
-                                   TextAlignment="Center"
-                                   TextWrapping="Wrap"/>
-                    </StackPanel>
+                <Border x:Name="EmptyViewerPanel" Panel.ZIndex="1" Background="{DynamicResource CanvasBrush}" AutomationProperties.AutomationId="EmptyViewerPanel">
+                    <ScrollViewer x:Name="EmptyViewerScroller" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel HorizontalAlignment="Stretch" VerticalAlignment="Center" MaxWidth="420" Margin="16">
+                            <Viewbox Width="32" Height="32" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Data="{StaticResource IconImageGeometry}" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1.5"/></Canvas></Viewbox>
+                            <TextBlock Text="No image selected" FontSize="14" FontWeight="SemiBold" TextAlignment="Center" Margin="0,10,0,0"/>
+                            <TextBlock x:Name="EmptyViewerGuidanceText" Text="Pause at a breakpoint and select Scan now, or open an image variable's magnifier menu and choose Raw Buffer Visualizer." Margin="0,10,0,0" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" LineHeight="18" TextAlignment="Center" TextWrapping="Wrap"/>
+                            <WrapPanel HorizontalAlignment="Center" Margin="0,14,0,0">
+                                <Button x:Name="EmptyViewerScanButton" Content="Scan now" Background="{DynamicResource StatusAccentBrush}" BorderBrush="{DynamicResource StatusAccentBrush}" IsEnabled="{Binding IsEnabled, ElementName=ScanNowButton}" Click="ScanNow_Click" Margin="0,0,8,8"/>
+                                <Button x:Name="EmptyViewerOpenButton" Content="Open snapshot file…" Click="Open_Click" Margin="0,0,0,8"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
                 <Border x:Name="ErrorPanel"
                         Visibility="Collapsed"
@@ -924,7 +931,9 @@
                         <Border BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1"><DockPanel Margin="12,0,4,0">
                             <Button DockPanel.Dock="Right" Style="{StaticResource ImageIconButton}"
                                     Command="{Binding CloseCommand}" ToolTip="Collapse inspector" AutomationProperties.Name="Collapse inspector" AutomationProperties.AutomationId="CollapseInspectorButton"><Viewbox Width="16" Height="16"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconChevronsRightGeometry}"/></Canvas></Viewbox></Button>
-                            <Border DockPanel.Dock="Right" Visibility="{Binding IsPixelSelected, Converter={StaticResource BooleanVisibility}}" Background="{Binding Background, ElementName=PixelStateBadge}" Height="17" Padding="5,0" CornerRadius="2" VerticalAlignment="Center" Margin="8,0"><TextBlock x:Name="InspectorPixelStateText" Text="HOVER" Foreground="{Binding Foreground, ElementName=PixelBadgeText}" FontSize="9.5" VerticalAlignment="Center"/></Border>
+                            <Border x:Name="InspectorPixelStateBadge" DockPanel.Dock="Right" Background="{Binding Background, ElementName=PixelStateBadge}" Height="17" Padding="5,0" CornerRadius="2" VerticalAlignment="Center" Margin="8,0"><Border.Style><Style TargetType="Border"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><MultiDataTrigger><MultiDataTrigger.Conditions>
+                                <Condition Binding="{Binding IsPixelSelected}" Value="True"/><Condition Binding="{Binding Visibility, ElementName=PixelStateBadge}" Value="Visible"/><Condition Binding="{Binding IsChecked, ElementName=MeasureButton}" Value="False"/>
+                            </MultiDataTrigger.Conditions><Setter Property="Visibility" Value="Visible"/></MultiDataTrigger></Style.Triggers></Style></Border.Style><TextBlock x:Name="InspectorPixelStateText" Text="HOVER" Foreground="{Binding Foreground, ElementName=PixelBadgeText}" FontSize="9.5" VerticalAlignment="Center"/></Border>
                             <TextBlock x:Name="InspectorTitleText" Text="{Binding Title}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
                         </DockPanel></Border>
                         <ScrollViewer x:Name="InspectorPanel" AutomationProperties.AutomationId="InspectorPanel" Grid.Row="1"
@@ -935,7 +944,7 @@
         <TextBlock.Style><Style TargetType="TextBlock"><Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=PixelVisualization}" Value="Visible"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></TextBlock.Style>
     </TextBlock>
     <StackPanel x:Name="PixelVisualization" Visibility="{Binding HasPixelData, Converter={StaticResource BooleanVisibility}}">
-        <DockPanel Margin="0,0,0,6"><Border DockPanel.Dock="Right" Width="22" Height="22" CornerRadius="2" Background="{Binding Swatch}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/><TextBlock x:Name="InspectorPixelPositionText" Text="{Binding Position}" AutomationProperties.Name="{Binding Text, ElementName=PixelText}" FontFamily="Cascadia Mono, Consolas" FontSize="16" FontWeight="Medium"/></DockPanel>
+        <DockPanel Margin="0,0,0,6"><Border DockPanel.Dock="Right" Width="22" Height="22" CornerRadius="2" Background="{Binding Swatch}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1"/><TextBlock x:Name="InspectorPixelPositionText" Text="{Binding Position}" TextWrapping="Wrap" AutomationProperties.Name="{Binding Text, ElementName=PixelText}" FontFamily="Cascadia Mono, Consolas" FontSize="16" FontWeight="Medium"/></DockPanel>
         <ItemsControl ItemsSource="{Binding ChannelValues}" Foreground="{DynamicResource TextBrush}"><ItemsControl.ItemTemplate><DataTemplate><Grid Margin="0,1" MinHeight="18"><Grid.ColumnDefinitions><ColumnDefinition Width="44"/><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><TextBlock Text="{Binding Name}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Cascadia Mono, Consolas"/><TextBlock Grid.Column="1" Foreground="{DynamicResource TextBrush}" Text="{Binding Decimal}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Right" Margin="0,0,14,0"/><TextBlock Grid.Column="2" Text="{Binding Hex}" Foreground="{DynamicResource SecondaryTextBrush}" FontFamily="Cascadia Mono, Consolas" TextWrapping="Wrap" TextAlignment="Right"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
         <Grid Margin="0,6,0,0"><Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <TextBlock Text="Raw bytes" Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" Margin="0,0,10,2"/><TextBlock Grid.Column="1" FontFamily="Cascadia Mono, Consolas" FontSize="12" TextWrapping="Wrap"><Run Text="{Binding RawBytes}"/><Run Text="{Binding RawByteNote}"/></TextBlock>
