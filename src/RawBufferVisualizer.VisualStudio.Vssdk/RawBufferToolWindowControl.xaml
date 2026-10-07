@@ -352,7 +352,7 @@
             <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
             <Setter Property="CaretBrush" Value="{DynamicResource TextBrush}"/><Setter Property="SelectionBrush" Value="{DynamicResource StatusAccentBrush}"/>
             <Setter Property="MinHeight" Value="26"/><Setter Property="Padding" Value="6,3"/>
-            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}"/></Border>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox"><Border x:Name="InputBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}"><ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/></Border>
                 <ControlTemplate.Triggers>
                     <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
                     <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="InputBorder" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="InputBorder" Property="BorderThickness" Value="2"/></Trigger>
@@ -362,6 +362,34 @@
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
+        <Style x:Key="InspectorCard" TargetType="Border">
+            <Setter Property="Padding" Value="10"/><Setter Property="CornerRadius" Value="3"/><Setter Property="Background" Value="{DynamicResource InputBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
+        </Style>
+        <Style x:Key="LayoutInput" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
+            <Setter Property="Height" Value="24"/><Setter Property="MinHeight" Value="24"/><Setter Property="Padding" Value="6,0"/>
+            <Setter Property="FontFamily" Value="Cascadia Mono, Consolas"/><Setter Property="FontSize" Value="12"/><Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="LayoutSelectionText" TargetType="TextBlock">
+            <Setter Property="Text" Value="{Binding}"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding}" Value="Bgr24"><Setter Property="Text" Value="BGR24"/></DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="Rgb24"><Setter Property="Text" Value="RGB24"/></DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="Bgra32"><Setter Property="Text" Value="BGRA32"/></DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="LittleEndian"><Setter Property="Text" Value="Little-endian"/></DataTrigger>
+                <DataTrigger Binding="{Binding}" Value="BigEndian"><Setter Property="Text" Value="Big-endian"/></DataTrigger>
+            </Style.Triggers>
+        </Style>
+        <Style x:Key="LayoutChoice" TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
+            <Setter Property="Height" Value="24"/><Setter Property="MinHeight" Value="24"/><Setter Property="Padding" Value="6,0"/><Setter Property="FontSize" Value="12"/>
+            <Setter Property="ItemTemplate"><Setter.Value><DataTemplate><TextBlock Style="{StaticResource LayoutSelectionText}"/></DataTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="CompareSlotName" TargetType="TextBlock">
+            <Setter Property="Text" Value="{Binding ObjectName}"/><Setter Property="FontSize" Value="12"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="TextWrapping" Value="Wrap"/><Setter Property="LineHeight" Value="16.2"/>
+            <Style.Triggers><DataTrigger Binding="{Binding}" Value="{x:Null}"><Setter Property="Text" Value="Not set"/><Setter Property="FontWeight" Value="Normal"/><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/></DataTrigger></Style.Triggers>
+        </Style>
+        <GeometryGroup x:Key="IconPlayGeometry"><PathGeometry Figures="M5 3l8 5-8 5z"/></GeometryGroup>
+        <GeometryGroup x:Key="IconStopGeometry"><RectangleGeometry Rect="4,4,8,8" RadiusX=".5" RadiusY=".5"/></GeometryGroup>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -927,21 +955,17 @@
 <Border x:Name="AutomaticInspectionPanel"
                             Visibility="Collapsed"
                             Margin="0,0,0,12"
-                            Padding="9"
-                            Background="#252526"
-                            BorderBrush="{DynamicResource StatusAccentBrush}"
-                            BorderThickness="1">
+                            Style="{StaticResource InspectorCard}">
                         <StackPanel>
-                            <TextBlock Text="Source" FontSize="14" FontWeight="SemiBold"/>
+                            <TextBlock Text="SOURCE" Style="{StaticResource InspectorBlockHeading}"/>
                             <TextBlock x:Name="AutomaticInspectionConfidenceText"
-                                       Margin="0,5,0,0"
-                                       Foreground="#9CDCFE"
-                                       FontWeight="SemiBold"/>
+                                       Margin="0,8,0,0"
+                                       FontSize="12" TextWrapping="Wrap" LineHeight="18"/>
                             <TextBlock x:Name="AutomaticInspectionMembersText"
                                        Margin="0,5,0,0"
-                                       Foreground="{DynamicResource SecondaryTextBrush}"
+                                       Foreground="{DynamicResource TextBrush}"
                                        FontFamily="Cascadia Mono, Consolas"
-                                       FontSize="11"
+                                       FontSize="11" LineHeight="17.6"
                                        TextWrapping="Wrap"/>
                             <TextBlock x:Name="AutomaticInspectionValidationText"
                                        Margin="0,5,0,0"
@@ -949,25 +973,18 @@
                                        TextWrapping="Wrap"/>
                             <Button x:Name="EditAutomaticMappingButton"
                                     Content="Edit mapping"
-                                    Margin="0,7,0,0"
+                                    Margin="0,8,0,0"
                                     HorizontalAlignment="Left"
                                     ToolTip="Review inferred members and save corrections for this runtime type"
                                     AutomationProperties.AutomationId="EditAutomaticVisionMappingButton"
                                     Click="EditAutomaticMapping_Click"/>
                         </StackPanel>
                     </Border>
-                    <Border x:Name="DescriptorPanel" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,1,0,0" Padding="10" MaxHeight="120">
-                    <DockPanel LastChildFill="True">
-                        <TextBlock DockPanel.Dock="Top" Text="Descriptor" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-                            <TextBlock x:Name="DescriptorText" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
-                        </ScrollViewer>
-                    </DockPanel>
-                </Border>
-<TextBlock Text="Layout" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
+
+<TextBlock Text="LAYOUT" Margin="0,0,0,6" Style="{StaticResource InspectorBlockHeading}"/>
                     <Grid x:Name="InterpretControls">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="80"/>
+                            <ColumnDefinition Width="88"/>
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
@@ -979,35 +996,34 @@
                             <RowDefinition Height="Auto"/>
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
-                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Format" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" AutomationProperties.AutomationId="InterpretPixelFormatBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" AutomationProperties.AutomationId="InterpretWidthTextBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" AutomationProperties.AutomationId="InterpretHeightTextBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" AutomationProperties.AutomationId="InterpretStrideTextBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Valid bits" Margin="0,0,8,6"/>
-                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" AutomationProperties.AutomationId="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
-                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Byte order" Margin="0,0,8,6"/>
-                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="InterpretByteOrderBox" AutomationProperties.AutomationId="InterpretByteOrderBox" Margin="0,0,0,6"/>
-                        <StackPanel Grid.Row="6" Grid.ColumnSpan="2"><TextBlock x:Name="LayoutDerivedText" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,4,0,8"/><WrapPanel>
-                            <Button x:Name="ApplyInterpretationButton" Content="Apply" AutomationProperties.AutomationId="ApplyInterpretationButton" Click="ApplyInterpretation_Click"/>
+                        <TextBlock Grid.Row="0" Grid.Column="0" Text="Pixel format" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <ComboBox Grid.Row="0" Grid.Column="1" x:Name="InterpretPixelFormatBox" Style="{StaticResource LayoutChoice}" AutomationProperties.AutomationId="InterpretPixelFormatBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="1" Grid.Column="0" Text="Width" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="InterpretWidthTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretWidthTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="2" Grid.Column="0" Text="Height" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="2" Grid.Column="1" x:Name="InterpretHeightTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretHeightTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="3" Grid.Column="0" Text="Stride" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="3" Grid.Column="1" x:Name="InterpretStrideTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretStrideTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="4" Grid.Column="0" Text="Valid bits" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <TextBox Grid.Row="4" Grid.Column="1" x:Name="InterpretValidBitsTextBox" Style="{StaticResource LayoutInput}" AutomationProperties.AutomationId="InterpretValidBitsTextBox" Margin="0,0,0,6"/>
+                        <TextBlock Grid.Row="5" Grid.Column="0" Text="Byte order" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center" Margin="0,0,8,6"/>
+                        <ComboBox Grid.Row="5" Grid.Column="1" x:Name="InterpretByteOrderBox" Style="{StaticResource LayoutChoice}" AutomationProperties.AutomationId="InterpretByteOrderBox" Margin="0,0,0,6"/>
+                        <StackPanel Grid.Row="6" Grid.ColumnSpan="2"><TextBlock x:Name="LayoutDerivedText" FontFamily="Cascadia Mono, Consolas" FontSize="11.5" LineHeight="16.675" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,8"/><WrapPanel>
+                            <Button x:Name="ApplyInterpretationButton" Content="Apply" Background="{DynamicResource StatusAccentBrush}" BorderBrush="{DynamicResource StatusAccentBrush}" AutomationProperties.AutomationId="ApplyInterpretationButton" Click="ApplyInterpretation_Click"/>
 </WrapPanel></StackPanel></Grid>
 
-                    <TextBlock Text="Buffer Doctor" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/><TextBlock Text="Ranks likely width, stride, format, valid bits and byte order from a bounded sample. Debuggee bytes are not changed." FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,0,0,8"/><Button x:Name="DiagnoseBufferButton" Content="Diagnose buffer" AutomationProperties.AutomationId="DiagnoseBufferButton" Click="DiagnoseBuffer_Click" HorizontalAlignment="Left"/>
+                    <Border Style="{StaticResource InspectorCard}" Margin="0,12,0,0"><StackPanel>
+                        <TextBlock Text="BUFFER DOCTOR" Style="{StaticResource InspectorBlockHeading}"/>
+                        <TextBlock Text="Ranks likely width, stride, format, valid bits and byte order from a bounded sample. Debuggee bytes are not changed." FontSize="12" LineHeight="18" TextWrapping="Wrap" Margin="0,8,0,8"/>
+                        <Button x:Name="DiagnoseBufferButton" Content="Diagnose buffer" AutomationProperties.AutomationId="DiagnoseBufferButton" Click="DiagnoseBuffer_Click" HorizontalAlignment="Left" Margin="0"/>
                     <Border x:Name="DiagnosisPanel"
                             AutomationProperties.AutomationId="DiagnosisPanel"
                             Visibility="Collapsed"
-                            Margin="0,10,0,0"
-                            Padding="8"
-                            Background="{DynamicResource InputBrush}"
-                            BorderBrush="{DynamicResource BorderBrush}"
-                            BorderThickness="1">
+                            Margin="0,8,0,0">
                         <StackPanel>
                             <DockPanel LastChildFill="True">
                                 <Button x:Name="CloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
-                                <TextBlock Text="Diagnose Buffer" FontSize="14" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock Text="BUFFER DOCTOR" Style="{StaticResource InspectorBlockHeading}"/>
                             </DockPanel>
                             <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
                             <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" MaxHeight="280" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
@@ -1015,10 +1031,10 @@
                                     <DataTemplate>
                                         <Grid Margin="0,2" ToolTip="{Binding ReasonsText}">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="76"/>
+                                                <ColumnDefinition Width="64"/>
                                                 <ColumnDefinition Width="*"/>
                                             </Grid.ColumnDefinitions>
-                                            <Border Width="66" Height="50" Background="#111111" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left">
+                                            <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2" HorizontalAlignment="Left">
                                                 <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
                                             </Border>
                                             <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
@@ -1026,10 +1042,10 @@
                                                     <Border DockPanel.Dock="Right" Background="{DynamicResource StatusAccentBrush}" Padding="6,1" CornerRadius="2" VerticalAlignment="Top">
                                                         <TextBlock Text="{Binding ScoreText}" FontSize="11" FontWeight="SemiBold"/>
                                                     </Border>
-                                                    <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis"/>
+                                                    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
                                                 </DockPanel>
-                                                <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" Foreground="#D7BA7D" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
+                                                <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                                                <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" Foreground="{DynamicResource AttentionTextBrush}" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
                                             </StackPanel>
                                         </Grid>
                                     </DataTemplate>
@@ -1037,34 +1053,64 @@
                             </ListBox>
                         </StackPanel>
                     </Border>
+                    </StackPanel></Border>
+                    <Border x:Name="DescriptorPanel" Style="{StaticResource InspectorCard}" Margin="0,12,0,0" MaxHeight="160">
+                    <DockPanel LastChildFill="True">
+                        <TextBlock DockPanel.Dock="Top" Text="DESCRIPTOR" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,6"/>
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <TextBlock x:Name="DescriptorText" FontFamily="Cascadia Mono, Consolas" FontSize="11" LineHeight="16.5" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                        </ScrollViewer>
+                    </DockPanel>
+                </Border>
                     </StackPanel>
                     <StackPanel x:Name="CompareSection" Visibility="{Binding IsCompareSelected, Converter={StaticResource BooleanVisibility}}">
-<TextBlock Text="Compare" Margin="0,14,0,8" FontSize="14" FontWeight="SemiBold"/>
-                    <Grid Margin="0,0,0,10"><Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-    <Border x:Name="CompareASlot" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="6" Margin="0,0,4,0"><StackPanel><TextBlock Text="A" FontWeight="SemiBold"/><Image Source="{Binding Thumbnail}" Height="56" Stretch="Uniform"/><TextBlock Text="{Binding ObjectName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ObjectName}" FontSize="11"/></StackPanel></Border>
-    <Border x:Name="CompareBSlot" Grid.Column="1" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="6" Margin="4,0,0,0"><StackPanel><TextBlock Text="B" FontWeight="SemiBold"/><Image Source="{Binding Thumbnail}" Height="56" Stretch="Uniform"/><TextBlock Text="{Binding ObjectName}" TextTrimming="CharacterEllipsis" ToolTip="{Binding ObjectName}" FontSize="11"/></StackPanel></Border>
-</Grid><WrapPanel>
-                        <Button Content="Set A" Click="SetCompareA_Click"/>
-                        <Button Content="Set B" Click="SetCompareB_Click"/>
-                        <Button Content="Split" Click="ShowSplit_Click"/>
-                        <Button Content="Diff" Click="ShowDiff_Click"/>
-                        <Button x:Name="BlinkButton" Content="Blink" Click="Blink_Click"/>
-                    </WrapPanel>
-                    <TextBlock x:Name="CompareText" Margin="0,6,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                        <Border x:Name="CompareASlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0,0,0,6">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2"><Grid>
+                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                    <Viewbox Width="16" Height="16"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Data="{StaticResource IconImageGeometry}" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1.5"/></Canvas></Viewbox>
+                                    <Border Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2" Background="{DynamicResource StatusAccentBrush}" CornerRadius="2"><TextBlock Text="A" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                </Grid></Border>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource CompareSlotName}"/>
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"><Run Text="{Binding SizeText, Mode=OneWay}"/><Run><Run.Style><Style TargetType="Run"><Setter Property="Text" Value=" · "/><Style.Triggers><DataTrigger Binding="{Binding}" Value="{x:Null}"><Setter Property="Text" Value=""/></DataTrigger></Style.Triggers></Style></Run.Style></Run><Run Text="{Binding FormatText, Mode=OneWay}"/></TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <Border x:Name="CompareBSlot" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="2" Padding="6" Margin="0,0,0,6">
+                            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2"><Grid>
+                                    <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
+                                    <Viewbox Width="16" Height="16"><Viewbox.Style><Style TargetType="Viewbox"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></Viewbox.Style><Canvas Width="16" Height="16"><Path Data="{StaticResource IconImageGeometry}" Stroke="{DynamicResource FaintTextBrush}" StrokeThickness="1.5"/></Canvas></Viewbox>
+                                    <Border Width="14" Height="14" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="2" Background="{DynamicResource StatusAccentBrush}" CornerRadius="2"><TextBlock Text="B" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                                </Grid></Border>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center"><TextBlock Style="{StaticResource CompareSlotName}"/>
+                                    <TextBlock FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"><Run Text="{Binding SizeText, Mode=OneWay}"/><Run><Run.Style><Style TargetType="Run"><Setter Property="Text" Value=" · "/><Style.Triggers><DataTrigger Binding="{Binding}" Value="{x:Null}"><Setter Property="Text" Value=""/></DataTrigger></Style.Triggers></Style></Run.Style></Run><Run Text="{Binding FormatText, Mode=OneWay}"/></TextBlock>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+                        <WrapPanel Margin="0,0,0,6">
+                            <Button Content="Set current as A" Click="SetCompareA_Click"/>
+                            <Button Content="Set current as B" Click="SetCompareB_Click" Margin="0"/>
+                        </WrapPanel>
+                        <WrapPanel Margin="0,0,0,6">
+                            <Button Click="ShowSplit_Click" AutomationProperties.Name="Split"><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSplitGeometry}"/></Canvas></Viewbox><TextBlock Text="Split"/></StackPanel></Button>
+                            <Button Content="Diff" Click="ShowDiff_Click"/>
+                            <Button x:Name="BlinkButton" Content="Blink" Click="Blink_Click" Margin="0">
+                                <Button.ContentTemplate><DataTemplate><StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path x:Name="BlinkStateIcon" Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPlayGeometry}"/></Canvas></Viewbox><TextBlock x:Name="BlinkStateCaption" Text="{Binding}"/></StackPanel><DataTemplate.Triggers><DataTrigger Binding="{Binding}" Value="Stop"><Setter TargetName="BlinkStateIcon" Property="Data" Value="{StaticResource IconStopGeometry}"/><Setter TargetName="BlinkStateCaption" Property="Text" Value="Stop blink"/></DataTrigger></DataTemplate.Triggers></DataTemplate></Button.ContentTemplate>
+                            </Button>
+                        </WrapPanel>
+                        <TextBlock x:Name="CompareText" Margin="0,0,0,6" Foreground="{DynamicResource ErrorTextBrush}" TextWrapping="Wrap" FontSize="11.5"/>
+                        <TextBlock Text="Split and Diff add a new image to the list. Turn on Link views to keep zoom and position while switching." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" LineHeight="16.675" TextWrapping="Wrap"/>
                     </StackPanel>
                     <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}"><Border x:Name="EnvironmentCheckPanel"
                     Visibility="Collapsed"
-                    Background="{DynamicResource PanelBrush}"
-                    BorderBrush="{DynamicResource StatusAccentBrush}"
-                    BorderThickness="0,0,0,1"
-                    Padding="10,8"
+                    Margin="0,0,0,12"
                     AutomationProperties.Name="Raw Buffer Visualizer environment check"
                     AutomationProperties.AutomationId="EnvironmentCheckPanel">
                 <StackPanel>
                     <StackPanel>
-                        <TextBlock Text="Environment Check"
-                                   FontSize="14"
-                                   FontWeight="SemiBold"/>
+                        <TextBlock Text="ENVIRONMENT"
+                                   Style="{StaticResource InspectorBlockHeading}"/>
                         <TextBlock Text="Checks the Visual Studio host, extension registration, and temporary storage."
                                    Margin="0,2,0,0"
                                    Foreground="{DynamicResource MutedTextBrush}"
@@ -1098,27 +1144,37 @@
                     </WrapPanel>
                 </StackPanel>
             </Border>
-<TextBlock Text="Diagnostics" FontSize="14" FontWeight="SemiBold" Margin="0,14,0,6"/>
+<TextBlock Text="RENDERING" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,6"/>
+                    <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="12"><TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers><DataTrigger Binding="{Binding DataContext, ElementName=RenderingMetricsPanel}" Value="{x:Null}"><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers></Style></TextBlock.Style></TextBlock>
+                    <Grid x:Name="RenderingMetricsPanel" Margin="0,0,0,12">
+                        <Grid.Style><Style TargetType="Grid"><Style.Triggers><DataTrigger Binding="{Binding}" Value="{x:Null}"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger></Style.Triggers></Style></Grid.Style>
+                        <Grid.Resources><Style TargetType="TextBlock"><Setter Property="FontSize" Value="12"/><Setter Property="Margin" Value="0,0,0,3"/><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/></Style></Grid.Resources>
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" Text="Frames drawn" Margin="0,0,10,3"/>
+                        <TextBlock Grid.Row="0" Grid.Column="1" FontFamily="Cascadia Mono, Consolas" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"><Run Text="{Binding FrameCount, Mode=OneWay, StringFormat={}{0:N0}}"/></TextBlock>
+                        <TextBlock Grid.Row="1" Text="Max frame" Margin="0,0,10,3"/>
+                        <TextBlock Grid.Row="1" Grid.Column="1" FontFamily="Cascadia Mono, Consolas" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"><Run Text="{Binding MaxFrameMilliseconds, Mode=OneWay, StringFormat={}{0:0.0} ms}"/></TextBlock>
+                        <TextBlock Grid.Row="2" Text="Wheel inputs" Margin="0,0,10,3"/>
+                        <TextBlock Grid.Row="2" Grid.Column="1" FontFamily="Cascadia Mono, Consolas" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"><Run Text="{Binding WheelInputCount, Mode=OneWay, StringFormat={}{0:N0}}"/><Run Text=" · max "/><Run Text="{Binding MaxWheelInputMilliseconds, Mode=OneWay, StringFormat={}{0:0.0} ms}"/></TextBlock>
+                        <TextBlock Grid.Row="3" Text="Drag inputs" Margin="0,0,10,3"/>
+                        <TextBlock Grid.Row="3" Grid.Column="1" FontFamily="Cascadia Mono, Consolas" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"><Run Text="{Binding DragInputCount, Mode=OneWay, StringFormat={}{0:N0}}"/><Run Text=" · max "/><Run Text="{Binding MaxDragInputMilliseconds, Mode=OneWay, StringFormat={}{0:0.0} ms}"/></TextBlock>
+                        <TextBlock Grid.Row="4" Text="Image uploads" Margin="0,0,10,3"/>
+                        <TextBlock Grid.Row="4" Grid.Column="1" FontFamily="Cascadia Mono, Consolas" Foreground="{DynamicResource TextBrush}" HorizontalAlignment="Right"><Run Text="{Binding TextureUploadCount, Mode=OneWay, StringFormat={}{0:N0}}"/><Run Text=" · max "/><Run Text="{Binding MaxTextureUploadMilliseconds, Mode=OneWay, StringFormat={}{0:0.0} ms}"/></TextBlock>
+                    </Grid>
+                    <TextBlock Text="LOG" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,6"/>
+                    <ListBox x:Name="DiagnosticsList" MaxHeight="150" MinHeight="40" Padding="8,6" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" FontFamily="Cascadia Mono, Consolas" FontSize="11" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" LineHeight="16.5"/></DataTemplate></ListBox.ItemTemplate></ListBox>
+                    <TextBlock x:Name="TempUsageText" Margin="0,6,0,12" Foreground="{DynamicResource StatusTextBrush}" FontSize="11.5" TextWrapping="Wrap" AutomationProperties.AutomationId="TempUsageText"/>
                     <WrapPanel Margin="0,0,0,6">
                         <Button ToolTip="Copy diagnostics and environment details without image data" AutomationProperties.Name="Copy report" Click="CopySupportReport_Click">
-                            <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox><TextBlock Text="Copy Report"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCopyGeometry}"/></Canvas></Viewbox><TextBlock Text="Copy report"/></StackPanel>
                         </Button>
                         <Button ToolTip="Write the current report and open its log folder" AutomationProperties.Name="Open logs" Click="OpenSupportLogs_Click">
-                            <StackPanel Orientation="Horizontal"><Viewbox Width="16" Height="16" Margin="0,0,5,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox><TextBlock Text="Open Logs"/></StackPanel>
+                            <StackPanel Orientation="Horizontal"><Viewbox Width="13" Height="13" Margin="0,0,6,0"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconFolderGeometry}"/></Canvas></Viewbox><TextBlock Text="Open logs folder"/></StackPanel>
                         </Button>
                     </WrapPanel>
-                    <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
-                    <ListBox x:Name="DiagnosticsList" Height="110" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></ListBox.ItemTemplate></ListBox>
-                    <TextBlock x:Name="TempUsageText"
-
-
-                           Margin="0,8,0,0"
-                           VerticalAlignment="Center"
-
-                           Foreground="{DynamicResource StatusTextBrush}"
-                           FontSize="11"
-                           TextWrapping="Wrap"
-                           AutomationProperties.AutomationId="TempUsageText"/></StackPanel>
+                    <TextBlock Text="The report contains diagnostics and environment details, but no image payload." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="11.5" LineHeight="16.675" TextWrapping="Wrap"/>
+                    </StackPanel>
                             </StackPanel>
                         </ScrollViewer>
                     </Grid>

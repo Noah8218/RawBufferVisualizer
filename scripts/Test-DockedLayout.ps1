@@ -116,6 +116,22 @@ try {
                 if ($width -ge 1000 -and $control.FindName('PixelNeighborhoodHeadingText').ActualHeight -gt 24) { throw 'Neighborhood heading wrapped despite the supported inspector width' }
             }
             if ($section -eq 'Format' -and [string]::IsNullOrEmpty($control.FindName('DescriptorText').Text)) { throw 'Descriptor is unavailable' }
+            if ($section -eq 'Format') {
+                foreach ($name in @('InterpretPixelFormatBox','InterpretWidthTextBox','InterpretHeightTextBox','InterpretStrideTextBox','InterpretValidBitsTextBox','InterpretByteOrderBox')) {
+                    if ($control.FindName($name).ActualHeight -ne 24) { throw "Layout input height differs from the approved 24px: $name" }
+                }
+                if ($control.FindName('ApplyInterpretationButton').Background.Color.ToString() -ne '#FF007ACC') { throw 'Layout Apply lost the primary action color' }
+                if ($control.FindName('DescriptorPanel').TranslatePoint([Windows.Point]::new(0,0), $control.FindName('FormatSection')).Y -le
+                    $control.FindName('DiagnoseBufferButton').TranslatePoint([Windows.Point]::new(0,0), $control.FindName('FormatSection')).Y) { throw 'Descriptor displaced the approved Source/Layout/Doctor workflow' }
+            }
+            if ($section -eq 'Compare') {
+                $slotA=$control.FindName('CompareASlot'); $slotB=$control.FindName('CompareBSlot'); $compare=$control.FindName('CompareSection')
+                if ($slotB.TranslatePoint([Windows.Point]::new(0,0),$compare).Y -lt $slotA.ActualHeight) { throw 'Compare A/B slots are not stacked vertically' }
+                foreach ($slot in @($slotA,$slotB)) {
+                    $thumbnail=$slot.Child.Children[0]
+                    if ($thumbnail.ActualWidth -ne 64 -or $thumbnail.ActualHeight -ne 48) { throw 'Compare thumbnail does not match the approved 64x48 slot' }
+                }
+            }
             if ($section -eq 'Compare' -and -not $control.FindName('BlinkButton').IsEnabled) { throw 'Compare is unavailable' }
             if ($width -in @(320,1000) -and $height -eq 720) {
                 if ($nav.IsNarrow) {
@@ -136,7 +152,38 @@ try {
                     } finally { $renderRoot.Children.Clear(); $popup.Child = $panel }
                 } else { Save-Render $panel ([int]$panel.ActualWidth) $height "inspector-$section-$width.png" }
             }
-            $sections += [pscustomobject]@{ Width=$width; Height=$height; Section=$section; PanelWidth=$panel.ActualWidth; Overlay=$nav.IsNarrow }
+            $targets = switch ($section) {
+                'Pixel' { @('RowProfileGraph') }
+                'Format' { @('ApplyInterpretationButton','DiagnoseBufferButton','DescriptorPanel') }
+                'Compare' { @('BlinkButton') }
+                'Diagnostics' { @('DiagnosticsList') }
+                default { @() }
+            }
+            $scroller=$control.FindName('InspectorPanel')
+            $scrollRoot=$control
+            if ($nav.IsNarrow) {
+                # Closed native popups do not lay out their visual tree. Host the identical content in-process.
+                $popup=$control.FindName('InspectorOverlayPopup'); $popup.Child=$null
+                $scrollRoot=[Windows.Controls.Grid]::new(); $scrollRoot.Resources=$control.Resources
+                [Windows.Documents.TextElement]::SetForeground($scrollRoot,$control.Foreground)
+                [Windows.Documents.TextElement]::SetFontFamily($scrollRoot,$control.FontFamily)
+                [Windows.Documents.TextElement]::SetFontSize($scrollRoot,$control.FontSize)
+                [Windows.NameScope]::SetNameScope($scrollRoot,[Windows.NameScope]::GetNameScope($control))
+                $scrollRoot.Children.Add($panel) | Out-Null
+            }
+            try {
+                $scrollWidth=if ($nav.IsNarrow) { $panel.Width } else { $width }
+                Arrange-Control $scrollRoot $scrollWidth $height
+                foreach ($targetName in $targets) {
+                    $target=$control.FindName($targetName); $target.BringIntoView()
+                    Arrange-Control $scrollRoot $scrollWidth $height
+                    Assert-InBounds $target $scroller "Inspector scroll access $targetName at $width x $height"
+                }
+                $scroller.ScrollToTop(); Arrange-Control $scrollRoot $scrollWidth $height
+            } finally {
+                if ($nav.IsNarrow) { $scrollRoot.Children.Clear(); $popup.Child=$panel }
+            }
+            $sections += [pscustomobject]@{ Width=$width; Height=$height; Section=$section; PanelWidth=$panel.ActualWidth; Overlay=$nav.IsNarrow; ScrollAccess=$targets }
         }
         $nav.Show('Pixel')
     } }
@@ -184,6 +231,27 @@ try {
     if ($control.FindName('LayoutDerivedText').Text -ne 'Row bytes 51 · padding 5 B/row · buffer 275 B') { throw 'Derived layout disagrees with final-row extent contract' }
     foreach ($method in @('SetCompareA_Click', 'SetCompareB_Click')) { $control.GetType().GetMethod($method, $flags).Invoke($control, [object[]]@($null, [Windows.RoutedEventArgs]::new())) | Out-Null }
     if ($control.FindName('CompareASlot').DataContext -ne $document -or $control.FindName('CompareBSlot').DataContext -ne $document) { throw 'Compare slots lost document bindings' }
+    $nav.Show('Compare'); Arrange-Control $control $control.Width $control.Height
+    foreach ($name in @('CompareASlot','CompareBSlot')) {
+        $slot=$control.FindName($name)
+        if ($slot.Child.Children[1].Children[0].Text -ne $document.ObjectName -or $slot.Child.Children[1].Children[1].Text -ne '17×5 · BGR24') { throw 'Compare rendered metadata lost its source binding' }
+    }
+    $nav.Show('Diagnostics')
+    $control.GetType().GetMethod('UpdatePerformanceText',$flags).Invoke($control,@()) | Out-Null
+    $metrics=$control.FindName('RenderingMetricsPanel')
+    if ($metrics.DataContext -eq $null) { throw 'Rendering metrics do not receive the current render snapshot' }
+    $snapshot=[RawBufferVisualizer.OpenGlCanvas.RawOpenGlRenderStats]::new()
+    $snapshot.FrameCount=1234; $snapshot.MaxFrameMilliseconds=2.5; $snapshot.WheelInputCount=7; $snapshot.MaxWheelInputMilliseconds=0.7
+    $snapshot.DragInputCount=8; $snapshot.MaxDragInputMilliseconds=0.8; $snapshot.TextureUploadCount=9; $snapshot.MaxTextureUploadMilliseconds=0.9
+    $metrics.DataContext=$snapshot; Arrange-Control $control $control.Width $control.Height
+    $expected=@('1,234','2.5 ms','7 · max 0.7 ms','8 · max 0.8 ms','9 · max 0.9 ms')
+    for ($row=0;$row -lt 5;$row++) {
+        $value=$metrics.Children[$row*2+1].Text
+        if ($value -ne $expected[$row]) { throw "Rendering metric row $row lost the count, duration or unit: $value" }
+    }
+    $control.GetType().GetMethod('UpdatePerformanceText',$flags).Invoke($control,@()) | Out-Null
+    $nav.Show('Pixel')
+
     $canvas = $control.FindName('OpenGlImageView'); $measure = $control.FindName('MeasureButton')
     $measure.IsChecked = $true
     $canvas.SelectPixelAtImagePixel(1, 0) | Out-Null; $canvas.SelectPixelAtImagePixel(4, 2) | Out-Null
