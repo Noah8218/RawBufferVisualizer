@@ -185,7 +185,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             OpenGlImageView.ViewChanged += OpenGlImageView_ViewChanged;
             OpenGlImageView.SourceUnavailable += OpenGlImageView_SourceUnavailable;
             OpenGlImageView.SelectionOverlayEnabled = SelectionOverlayBox.IsChecked == true;
-            InterpretPixelFormatBox.ItemsSource = Enum.GetValues(typeof(RawPixelFormat));
+            InterpretPixelFormatBox.ItemsSource = new[]
+            {
+                RawPixelFormat.Mono8, RawPixelFormat.Mono16, RawPixelFormat.Mono10PackedLsb, RawPixelFormat.Mono12PackedLsb,
+                RawPixelFormat.Binary, RawPixelFormat.RGB24, RawPixelFormat.BGR24, RawPixelFormat.BGRA32, RawPixelFormat.Float32, RawPixelFormat.Int32,
+                RawPixelFormat.BayerRGGB8, RawPixelFormat.BayerGRBG8, RawPixelFormat.BayerGBRG8, RawPixelFormat.BayerBGGR8
+            };
             InterpretByteOrderBox.ItemsSource = Enum.GetValues(typeof(RawByteOrder));
             _performanceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
             _performanceTimer.Tick += delegate { UpdatePerformanceText(); };
@@ -5247,55 +5252,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ApplyVisualStudioTheme()
         {
-            try
-            {
-                SetThemeBrush("RbvPanelBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
-                SetThemeBrush("RbvWindowBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
-                SetThemeBrush("RbvInputBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
-                SetThemeBrush("RbvInputHoverBrush", EnvironmentColors.CommandBarHoverColorKey);
-                SetThemeBrush("RbvBorderBrush", EnvironmentColors.ToolWindowBorderColorKey);
-                SetThemeBrush("RbvTextBrush", EnvironmentColors.ToolWindowTextColorKey);
-                SetThemeBrush("RbvAccentBrush", EnvironmentColors.AccentMediumColorKey);
-                SetThemeBrush("RbvAccentHoverBrush", EnvironmentColors.AccentMediumColorKey);
-                SetThemeBrush("RbvPressedBrush", EnvironmentColors.CommandBarSelectedColorKey);
-                SetThemeBrush("PanelBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
-                SetThemeBrush("InputBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
-                SetThemeBrush("BorderBrush", EnvironmentColors.ToolWindowBorderColorKey);
-                SetThemeBrush("CommandBrush", EnvironmentColors.CommandBarGradientBeginColorKey);
-                SetThemeBrush("CommandHoverBrush", EnvironmentColors.CommandBarHoverColorKey);
-                SetThemeBrush("CommandPressedBrush", EnvironmentColors.CommandBarSelectedColorKey);
-                SetThemeBrush("TextBrush", EnvironmentColors.ToolWindowTextColorKey);
-                SetThemeBrush("MutedTextBrush", EnvironmentColors.CommandBarTextInactiveColorKey);
-                SetThemeBrush("SecondaryTextBrush", EnvironmentColors.CommandBarTextInactiveColorKey);
-                SetThemeBrush("StatusBarBrush", EnvironmentColors.CommandBarGradientBeginColorKey);
-                SetThemeBrush("StatusAccentBrush", EnvironmentColors.AccentMediumColorKey);
-                SetThemeBrush("StatusTextBrush", EnvironmentColors.ToolWindowTextColorKey);
-                SetThemeBrush("ChannelChipBrush", EnvironmentColors.ToolWindowContentGridColorKey);
-                SetThemeBrush("SplitterBrush", EnvironmentColors.ToolWindowBorderColorKey);
-                SetThemeBrush("SplitterHoverBrush", EnvironmentColors.AccentMediumColorKey);
-            }
-            catch
-            {
-                // Standalone layout smoke tests do not initialize the Visual Studio theme service.
-            }
-        }
-
-        private void SetThemeBrush(string resourceName, ThemeResourceKey colorKey)
-        {
-            var brush = Resources[resourceName] as SolidColorBrush;
-            if (brush == null)
-            {
-                return;
-            }
-
-            var color = VSColorTheme.GetThemedColor(colorKey);
-            if (brush.IsFrozen)
-            {
-                brush = brush.Clone();
-                brush.Color = Color.FromArgb(color.A, color.R, color.G, color.B);
-                Resources[resourceName] = brush;
-            }
-            else brush.Color = Color.FromArgb(color.A, color.R, color.G, color.B);
+            // The approved docked mockup keeps its dark palette in both review-page themes.
+            // Reuse the view's semantic brushes instead of overwriting them with IDE colors.
+            Resources["RbvPanelBrush"] = Resources["PanelBrush"];
+            Resources["RbvWindowBrush"] = Resources["InputBrush"];
+            Resources["RbvInputBrush"] = Resources["InputBrush"];
+            Resources["RbvInputHoverBrush"] = Resources["CommandHoverBrush"];
+            Resources["RbvBorderBrush"] = Resources["BorderBrush"];
+            Resources["RbvTextBrush"] = Resources["TextBrush"];
+            Resources["RbvMutedTextBrush"] = Resources["SecondaryTextBrush"];
+            Resources["RbvAttentionTextBrush"] = Resources["AttentionTextBrush"];
+            Resources["RbvAccentBrush"] = Resources["StatusAccentBrush"];
+            Resources["RbvAccentHoverBrush"] = Resources["LinkBrush"];
+            Resources["RbvPressedBrush"] = Resources["CommandPressedBrush"];
         }
 
         private void SetTransientStatus(string text)
