@@ -154,6 +154,11 @@ try {
             } elseif ($control.FindName('DockedInspectorHost').Content -ne $panel -or [Math]::Abs($panel.ActualWidth - 300) -gt 0.5) { throw 'Docked panel did not reuse the inspector' }
             if ($section -eq 'Pixel' -and $control.FindName('RowProfileGraph').ActualWidth -le 0) { throw 'Row profile is unavailable' }
             if ($section -eq 'Pixel') {
+                $title=$control.FindName('InspectorTitleText'); $badge=$control.FindName('InspectorPixelStateBadge'); $badgeText=$control.FindName('InspectorPixelStateText')
+                $titlePoint=$title.TranslatePoint([Windows.Point]::new(0,0),$title.Parent)
+                $badgePoint=$badge.TranslatePoint([Windows.Point]::new(0,0),$title.Parent)
+                if ([Math]::Abs($badgePoint.X-$titlePoint.X-$title.ActualWidth-8) -gt 0.5 -or $badge.ActualHeight -ne 18 -or $badge.Padding.Left -ne 6) { throw 'Pixel inspector state badge does not follow the title with the approved gap and size' }
+                if ($badgeText.FontSize -ne 10 -or $badgeText.FontWeight -ne [Windows.FontWeights]::SemiBold) { throw 'Pixel inspector state badge typography differs from the approved header' }
                 $graph=$control.FindName('RowProfileGraph')
                 if ([Math]::Abs($graph.ActualHeight-$graph.ActualWidth*96/276) -gt 0.5) { throw 'Row profile no longer uses the approved SVG aspect ratio' }
                 $stats=$control.FindName('PixelStatisticsCards')
@@ -348,9 +353,14 @@ try {
     $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0, 0))) | Out-Null
     if ($control.FindName('PixelPositionText').Text -ne 'X    8  Y    2' -or $control.FindName('PixelBadgeText').Text -ne 'PINNED') { throw 'Pinned values changed on hover' }
     if ($control.FindName('PixelBadgeText').Foreground.Color.ToString() -ne '#FF1B1203' -or $control.FindName('PixelBadgePath').Data -ne $control.Resources['IconPinGeometry']) { throw 'Pinned badge lost its approved foreground or vector icon' }
+    Arrange-Control $control $control.Width $control.Height
+    $inspectorPin=$control.FindName('InspectorPinnedBadgeIcon')
+    if ($inspectorPin.Visibility -ne 'Visible' -or $inspectorPin.ActualWidth -ne 11 -or $inspectorPin.Child.Children[0].Data -ne $control.Resources['IconPinGeometry']) { throw 'Pinned inspector header lost its approved pin icon' }
     $canvas.ClearPinnedMarker()
     $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(-1, -1))) | Out-Null
     if ($control.FindName('PixelPositionText').Text -ne 'X    4  Y    2' -or $control.FindName('PixelBadgeText').Text -ne 'SELECTED') { throw 'Hover leave did not restore selection' }
+    Arrange-Control $control $control.Width $control.Height
+    if ($inspectorPin.Visibility -ne 'Collapsed') { throw 'Selected inspector header retained a stale pin icon' }
     Click-Button $control.FindName('ClearButton')
     if ($control.FindName('ImageList').Items.Count -ne 1 -or $control.FindName('ClearAllConfirmation').Visibility -ne 'Visible') { throw 'Clear ran before confirmation' }
     Click-Button $control.FindName('CancelClearAllButton')
