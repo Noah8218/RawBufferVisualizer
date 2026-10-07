@@ -143,6 +143,8 @@ $window.Show()
 Wait-Dispatcher 500
 $control.OpenPath($metadataPath)
 Wait-Dispatcher 1500
+$control.FindName("InspectorRail").DataContext.Show("Format")
+Wait-Dispatcher 100
 
 $helper = New-Object System.Windows.Interop.WindowInteropHelper($window)
 [RawBufferDockedLayoutNative]::ShowWindow($helper.Handle, 9) | Out-Null

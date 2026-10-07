@@ -247,13 +247,7 @@ foreach ($layoutWidth in $Widths) {
     $emptyViewerPanel = $control.FindName("EmptyViewerPanel")
     $emptyViewerGuidance = $control.FindName("EmptyViewerGuidanceText")
     $interpretControls = $control.FindName("InterpretControls")
-    $compactInterpretControls = $control.FindName("InterpretControls")
     $interpretTextBoxes = @(
-        $control.FindName("InterpretWidthTextBox")
-        $control.FindName("InterpretHeightTextBox")
-        $control.FindName("InterpretStrideTextBox")
-        $control.FindName("InterpretValidBitsTextBox"))
-    $compactInterpretTextBoxes = @(
         $control.FindName("InterpretWidthTextBox")
         $control.FindName("InterpretHeightTextBox")
         $control.FindName("InterpretStrideTextBox")
@@ -261,11 +255,7 @@ foreach ($layoutWidth in $Widths) {
     $interpretComboBoxes = @(
         $control.FindName("InterpretPixelFormatBox")
         $control.FindName("InterpretByteOrderBox"))
-    $compactInterpretComboBoxes = @(
-        $control.FindName("InterpretPixelFormatBox")
-        $control.FindName("InterpretByteOrderBox"))
-    $int32FormatAvailable = @($interpretComboBoxes[0].Items | ForEach-Object { [string]$_ }) -contains "Int32" -and
-        @($compactInterpretComboBoxes[0].Items | ForEach-Object { [string]$_ }) -contains "Int32"
+    $int32FormatAvailable = @($interpretComboBoxes[0].Items | ForEach-Object { [string]$_ }) -contains "Int32"
     $collectionOption = $control.FindName("IncludeImageCollectionsBox")
     $imageListHeader = $control.FindName("ImageListHeader")
     $imagesHeadingText = $control.FindName("ImagesHeadingText")
@@ -303,9 +293,8 @@ foreach ($layoutWidth in $Widths) {
         -not $fitButton.IsEnabled -and
         -not $actualSizeButton.IsEnabled
     $emptyInterpretationStateValid = -not $interpretControls.IsEnabled -and
-        -not $compactInterpretControls.IsEnabled -and
-        @($interpretTextBoxes + $compactInterpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
-        @($interpretComboBoxes + $compactInterpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
+        @($interpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
+        @($interpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
     $emptyGuidanceOrigin = $emptyViewerGuidance.TranslatePoint(
         [System.Windows.Point]::new(0, 0),
         $emptyViewerPanel)
@@ -337,17 +326,11 @@ foreach ($layoutWidth in $Widths) {
         $actualSizeButton.IsEnabled -and
         $emptyViewerPanel.Visibility -eq [System.Windows.Visibility]::Collapsed
     $loadedInterpretationStateValid = $interpretControls.IsEnabled -and
-        $compactInterpretControls.IsEnabled -and
         $interpretTextBoxes[0].Text -eq "640" -and
         $interpretTextBoxes[1].Text -eq "480" -and
         $interpretTextBoxes[2].Text -eq "640" -and
         $interpretTextBoxes[3].Text -eq "8" -and
-        $compactInterpretTextBoxes[0].Text -eq "640" -and
-        $compactInterpretTextBoxes[1].Text -eq "480" -and
-        $compactInterpretTextBoxes[2].Text -eq "640" -and
-        $compactInterpretTextBoxes[3].Text -eq "8" -and
-        [string]($interpretComboBoxes[0].SelectedItem) -eq "Mono8" -and
-        [string]($compactInterpretComboBoxes[0].SelectedItem) -eq "Mono8"
+        [string]($interpretComboBoxes[0].SelectedItem) -eq "Mono8"
     if (-not $loadedCommandStateValid -or -not $loadedInterpretationStateValid) {
         throw "Loaded-image toolbar contract failed at width $layoutWidth."
     }
@@ -438,7 +421,11 @@ foreach ($layoutWidth in $Widths) {
     }
 
     $inspector = $control.FindName("InspectorPanel")
-    $compact = $control.FindName("InspectorContainer")
+    $inspectorContainer = $control.FindName("InspectorContainer")
+    if ($navigation.IsImageStrip) {
+        $navigation.ToggleImageListCommand.Execute($null)
+        Wait-Dispatcher 100
+    }
     $imageView = $control.FindName("OpenGlImageView")
     $viewState = $imageView.GetViewState()
     $viewAspect = $viewState.Width / $viewState.Height
@@ -729,6 +716,10 @@ foreach ($layoutWidth in $Widths) {
     }
 
     $clearButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    if ($control.FindName("ClearAllConfirmation").Visibility -ne [System.Windows.Visibility]::Visible -or $imageList.Items.Count -eq 0) { throw "Clear ran without inline review at width $layoutWidth." }
+    $control.FindName("CancelClearAllButton").RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    $clearButton.RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
+    $control.FindName("ConfirmClearAllButton").RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
     Wait-Dispatcher 250
     foreach ($itemMetadataPath in $twentyMetadataPaths) {
         $control.OpenPath($itemMetadataPath)
@@ -741,12 +732,9 @@ foreach ($layoutWidth in $Widths) {
     $twentyImageCapturePath = Join-Path $outputRoot "twenty-images-before-clear-$layoutWidth.png"
     Capture-Window $helper.Handle $twentyImageCapturePath
 
-    $diagnoseButton = if ($compact.Visibility -eq [System.Windows.Visibility]::Visible) {
-        $control.FindName("DiagnoseBufferButton")
-    }
-    else {
-        $control.FindName("DiagnoseBufferButton")
-    }
+    $navigation.Show("Format")
+    Wait-Dispatcher 100
+    $diagnoseButton = $control.FindName("DiagnoseBufferButton")
     $diagnoseButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         Wait-Dispatcher 100
@@ -755,15 +743,13 @@ foreach ($layoutWidth in $Widths) {
         }
     }
     $diagnosisPrepared = $null -ne $control.FindName("DiagnosisCandidateList").ItemsSource -and
-        $control.FindName("DiagnosisCandidateList").Items.Count -gt 0 -and
-        $null -ne $control.FindName("DiagnosisCandidateList").ItemsSource -and
         $control.FindName("DiagnosisCandidateList").Items.Count -gt 0
     if (-not $diagnosisPrepared) {
         throw "Buffer Doctor did not prepare candidates before Clear at width $layoutWidth."
     }
 
     $inspectorVisibilityBeforeClear = $inspector.Visibility
-    $compactInspectorVisibilityBeforeClear = $compact.Visibility
+    $inspectorContainerVisibilityBeforeClear = $inspectorContainer.Visibility
     [RawBufferDockedLayoutNative]::BringWindowToTop($helper.Handle) | Out-Null
     [RawBufferDockedLayoutNative]::SetForegroundWindow($helper.Handle) | Out-Null
     [RawBufferDockedLayoutNative]::SetCursorPos($testScreen.WorkingArea.Right - 8, $testScreen.WorkingArea.Bottom - 8) | Out-Null
@@ -841,34 +827,29 @@ foreach ($layoutWidth in $Widths) {
         [RawBufferDockedLayoutNative]::mouse_event([RawBufferDockedLayoutNative]::MOUSEEVENTF_LEFTUP, 0, 0, 0, [UIntPtr]::Zero)
     }
     Wait-Dispatcher 250
-    $clearMouseCommandObserved = $imageList.Items.Count -eq 0
+    $clearMouseCommandObserved = $imageList.Items.Count -eq 20 -and $control.FindName("ClearAllConfirmation").Visibility -eq [System.Windows.Visibility]::Visible
     if (-not $clearMouseCommandObserved) {
         $clearButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
     }
+    $control.FindName("ConfirmClearAllButton").RaiseEvent([Windows.RoutedEventArgs]::new([Windows.Controls.Button]::ClickEvent))
     Wait-Dispatcher 750
     $clearPointerDownOrCommandValid = $clearPressedStateValid -or $clearMouseCommandObserved
 
     $clearInterpretationStateValid = -not $interpretControls.IsEnabled -and
-        -not $compactInterpretControls.IsEnabled -and
-        @($interpretTextBoxes + $compactInterpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
-        @($interpretComboBoxes + $compactInterpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
+        @($interpretTextBoxes | Where-Object { -not [string]::IsNullOrEmpty($_.Text) }).Count -eq 0 -and
+        @($interpretComboBoxes | Where-Object { $null -ne $_.SelectedItem }).Count -eq 0
     $clearDiagnosisStateValid = $control.FindName("DiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
-        $control.FindName("DiagnosisPanel").Visibility -eq [System.Windows.Visibility]::Collapsed -and
         $null -eq $control.FindName("DiagnosisCandidateList").ItemsSource -and
-        $null -eq $control.FindName("DiagnosisCandidateList").ItemsSource -and
-        [string]::IsNullOrEmpty($control.FindName("DiagnosisStatusText").Text) -and
         [string]::IsNullOrEmpty($control.FindName("DiagnosisStatusText").Text)
     $clearInspectorStateValid = [string]::IsNullOrEmpty($control.FindName("MarkerText").Text) -and
-        [string]::IsNullOrEmpty($control.FindName("MarkerText").Text) -and
-        $control.FindName("PixelHeadingText").Text -eq "Pixel" -and
         $control.FindName("PixelHeadingText").Text -eq "Pixel"
     $clearLayoutStateValid = $inspector.Visibility -eq $inspectorVisibilityBeforeClear -and
-        $compact.Visibility -eq $compactInspectorVisibilityBeforeClear
+        $inspectorContainer.Visibility -eq $inspectorContainerVisibilityBeforeClear
     $clearDocumentStateValid = $imageList.Items.Count -eq 0 -and
         $emptyViewerPanel.Visibility -eq [System.Windows.Visibility]::Visible -and
         $imageView.Visibility -eq [System.Windows.Visibility]::Collapsed -and
         -not $clearButton.IsEnabled -and
-        $statusText.Text -eq "0 images"
+        $statusText.Text -eq $statusText.DataContext.Status -and $statusText.DataContext.StatusDetails.Contains("0 images")
     if (-not $clearInterpretationStateValid -or
         -not $clearDiagnosisStateValid -or
         -not $clearInspectorStateValid -or
@@ -888,9 +869,7 @@ foreach ($layoutWidth in $Widths) {
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         Wait-Dispatcher 100
         $clearReopenStateValid = $interpretControls.IsEnabled -and
-            $compactInterpretControls.IsEnabled -and
             $interpretTextBoxes[0].Text -eq "640" -and
-            $compactInterpretTextBoxes[0].Text -eq "640" -and
             $clearButton.IsEnabled -and
             $imageList.Items.Count -eq 1
         if ($clearReopenStateValid) {
@@ -898,7 +877,7 @@ foreach ($layoutWidth in $Widths) {
         }
     }
     if (-not $clearReopenStateValid) {
-        throw "Interpret controls did not restore after reopening an image at width $layoutWidth. Interpret=$($interpretControls.IsEnabled) Compact=$($compactInterpretControls.IsEnabled) Width='$($interpretTextBoxes[0].Text)' Width='$($compactInterpretTextBoxes[0].Text)' Clear=$($clearButton.IsEnabled) Items=$($imageList.Items.Count)."
+        throw "Interpret controls did not restore after reopening an image at width $layoutWidth. Interpret=$($interpretControls.IsEnabled) Width='$($interpretTextBoxes[0].Text)' Clear=$($clearButton.IsEnabled) Items=$($imageList.Items.Count)."
     }
 
     $liveBuffer = [byte[]]$buffer.Clone()
@@ -1102,6 +1081,15 @@ foreach ($layoutWidth in $Widths) {
         Wait-Dispatcher 100
         [RawBufferDockedLayoutNative]::keybd_event([RawBufferDockedLayoutNative]::VK_SPACE, 0, [RawBufferDockedLayoutNative]::KEYEVENTF_KEYUP, [UIntPtr]::Zero)
         Wait-Dispatcher 250
+        if ($control.FindName("ClearAllConfirmation").Visibility -eq [Windows.Visibility]::Visible) {
+            if ($imageList.Items.Count -ne 4) { throw "Keyboard Clear ran before confirmation at width $layoutWidth." }
+            $confirm = $control.FindName("ConfirmClearAllButton")
+            [Windows.Input.Keyboard]::Focus($confirm) | Out-Null
+            [RawBufferDockedLayoutNative]::keybd_event([RawBufferDockedLayoutNative]::VK_SPACE, 0, 0, [UIntPtr]::Zero)
+            Wait-Dispatcher 50
+            [RawBufferDockedLayoutNative]::keybd_event([RawBufferDockedLayoutNative]::VK_SPACE, 0, [RawBufferDockedLayoutNative]::KEYEVENTF_KEYUP, [UIntPtr]::Zero)
+            Wait-Dispatcher 250
+        }
         $clearKeyboardStateValid = $imageList.Items.Count -eq 0 -and -not $clearButton.IsEnabled
         if ($clearKeyboardStateValid) {
             break
@@ -1130,7 +1118,7 @@ foreach ($layoutWidth in $Widths) {
         LoadedCommandStateValid = $loadedCommandStateValid
         EmptyGuidanceVisible = $emptyGuidanceBoundsValid
         InspectorVisible = $inspector.Visibility.ToString()
-        InspectorContainerVisible = $compact.Visibility.ToString()
+        InspectorContainerVisible = $inspectorContainer.Visibility.ToString()
         ImageViewWidth = [Math]::Round($imageView.ActualWidth, 1)
         ImageViewHeight = [Math]::Round($imageView.ActualHeight, 1)
         RelativeAspectError = [Math]::Round($aspectError, 8)
