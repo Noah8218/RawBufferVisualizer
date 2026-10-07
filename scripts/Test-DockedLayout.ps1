@@ -46,6 +46,17 @@ try {
     if ($control.FontFamily.Source -ne 'Segoe UI' -or $control.FontSize -ne 12) { throw 'View typography differs from the approved mockup' }
     $palette = @{ PanelBrush='#FF252526'; InputBrush='#FF1E1E1E'; ToolbarBrush='#FF2D2D30'; BorderBrush='#FF3F3F46'; TextBrush='#FFF1F1F1'; SecondaryTextBrush='#FFA3A7AE'; FaintTextBrush='#FF6E737B'; LinkBrush='#FF3794FF' }
     foreach ($key in $palette.Keys) { if ($control.Resources[$key].Color.ToString() -ne $palette[$key]) { throw "Mockup palette mismatch: $key" } }
+    if ($control.FindName('OpenGlImageView').Background.Color.ToString() -ne '#FF141414') { throw 'View canvas underlay differs from the approved background' }
+    $aliases=@{ RbvPanelBrush='PanelBrush'; RbvWindowBrush='InputBrush'; RbvInputBrush='InputBrush'; RbvInputHoverBrush='CommandHoverBrush'; RbvBorderBrush='BorderBrush'; RbvTextBrush='TextBrush'; RbvMutedTextBrush='SecondaryTextBrush'; RbvAttentionTextBrush='AttentionTextBrush'; RbvAccentBrush='StatusAccentBrush'; RbvAccentHoverBrush='LinkBrush'; RbvPressedBrush='CommandPressedBrush' }
+    foreach ($key in $aliases.Keys) { $control.Resources[$key]=[Windows.Media.Brushes]::White }
+    $control.GetType().GetMethod('ApplyVisualStudioTheme',$flags).Invoke($control,@()) | Out-Null
+    foreach ($key in $aliases.Keys) { if ($control.Resources[$key] -ne $control.Resources[$aliases[$key]]) { throw "View theme did not restore its approved semantic brush: $key" } }
+    foreach ($key in $palette.Keys) { if ($control.Resources[$key].Color.ToString() -ne $palette[$key]) { throw "View theme overwrote the approved primary palette: $key" } }
+    $formatsInOrder=@($control.FindName('InterpretPixelFormatBox').Items | ForEach-Object { $_.ToString() })
+    $approvedOrder=@('Mono8','Mono16','Mono10PackedLsb','Mono12PackedLsb','Binary','RGB24','BGR24','BGRA32','Float32','Int32','BayerRGGB8','BayerGRBG8','BayerGBRG8','BayerBGGR8')
+    if (($formatsInOrder -join ',') -ne ($approvedOrder -join ',')) { throw 'Layout choices differ from the approved HTML option order' }
+    if ($formatsInOrder.Count -ne [Enum]::GetValues([RawBufferVisualizer.Core.RawPixelFormat]).Length) { throw 'Layout option ordering removed an existing pixel format' }
+
     $descriptor = [RawBufferVisualizer.Core.RawImageDescriptor]::new()
     $descriptor.Width = 17; $descriptor.Height = 5; $descriptor.Stride = 56; $descriptor.PixelFormat = 'Bgr24'; $descriptor.ValidBits = 8
     $bytes = New-Object byte[] 280
@@ -320,6 +331,7 @@ try {
         $emptyWidth=$emptyCase[0];$emptyHeight=$emptyCase[1];$control.Width=$emptyWidth;$control.Height=$emptyHeight
         Arrange-Control $control $emptyWidth $emptyHeight
         if ($control.FindName('PixelEmptyText').Text -ne 'No image selected.' -or $control.FindName('InspectorPixelStateBadge').Visibility -ne 'Collapsed') { throw 'No-image state retained pixel data or an inspector badge' }
+        if ($control.FindName('EmptyViewerScanButton').Foreground.Color.ToString() -ne '#FFFFFFFF' -or $control.FindName('ConfirmClearAllButton').Foreground.Color.ToString() -ne '#FFFFFFFF' -or $control.FindName('ConfirmClearAllButton').BorderBrush.Color.ToString() -ne '#FFC42B1C') { throw 'Primary/danger normal-state colors differ from the approved CSS' }
         if ($control.FindName('EmptyViewerScanButton').IsEnabled -ne $control.FindName('ScanNowButton').IsEnabled) { throw 'Empty Scan action disagrees with the existing scan availability binding' }
         $emptyScroll=$control.FindName('EmptyViewerScroller')
         foreach ($name in @('EmptyViewerScanButton','EmptyViewerOpenButton')) {
