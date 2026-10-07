@@ -3844,14 +3844,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (ScanNowButton == null || AutomaticInspectionSwitchGroup == null) return;
             AutomaticHelpTip.PlacementTarget = AutomaticInspectionActions;
             AutomaticHelpTip.Width = Math.Max(40, Math.Min(340, AutomaticInspectionBar.ActualWidth + 4));
-            var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
-            AutomaticInspectionSwitchGroup.Measure(infinite);
-            ScanNowButton.Measure(infinite);
-            var wrap = AutomaticInspectionSwitchGroup.DesiredSize.Width + ScanNowButton.DesiredSize.Width - ScanNowButton.Margin.Left + 6 > AutomaticInspectionBar.ActualWidth;
-            Grid.SetRow(ScanNowButton, wrap ? 1 : 0);
-            Grid.SetColumn(ScanNowButton, wrap ? 0 : 1);
-            Grid.SetColumnSpan(ScanNowButton, wrap ? 2 : 1);
-            ScanNowButton.Margin = wrap ? new Thickness(0, 6, 0, 0) : new Thickness(6, 0, 0, 0);
         }
 
         private void ToolbarScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)

@@ -116,6 +116,14 @@ try {
         }
         $nav.Show('Pixel')
         Arrange-Control $control $width $height
+        $headerName=$control.FindName('ImageNameText'); $headerType=$control.FindName('ImageTypeText')
+        if ($headerType.Visibility -eq 'Visible') {
+            $namePoint=$headerName.TranslatePoint([Windows.Point]::new(0,0),$control.FindName('ImageHeaderNames'))
+            $typePoint=$headerType.TranslatePoint([Windows.Point]::new(0,0),$control.FindName('ImageHeaderNames'))
+            if ([Math]::Abs($typePoint.X-$namePoint.X-$headerName.ActualWidth-8) -gt 0.5) { throw 'Visible source type does not follow the image name with the approved 8px gap' }
+        }
+        $scanAction=$control.FindName('ScanNowButton')
+        if ([Windows.Controls.Grid]::GetRow($scanAction) -ne 1 -or [Windows.Controls.Grid]::GetColumnSpan($scanAction) -ne 2 -or $scanAction.Margin.Top -ne 6) { throw 'Scan now left the approved second action row' }
         $image = "layout-$width-$height.png"
         Save-Render $control $width $height $image
         $cases += [pscustomobject]@{ Width=$width; Height=$height; Toolbar=$orientation; Overlay=$nav.IsNarrow; Evidence=$image }
