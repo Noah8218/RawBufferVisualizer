@@ -1,0 +1,253 @@
+using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.ComponentModel;
+using System.Globalization;
+using System.Linq;
+using System.Windows;
+using System.Windows.Media;
+using RawBufferVisualizer.Core;
+
+namespace RawBufferVisualizer.VisualStudio.Vssdk
+{
+    internal sealed class PixelInspectorViewModel : INotifyPropertyChanged
+    {
+        private readonly List<Sample> _neighborhood = new List<Sample>();
+        private RawPixelStatistics? _statistics;
+        private string _selectedChannel = "GV";
+        private bool _isFloat;
+
+        public event PropertyChangedEventHandler? PropertyChanged;
+        public ObservableCollection<NeighborhoodCell> Cells { get; } = new ObservableCollection<NeighborhoodCell>();
+        public ObservableCollection<ChannelValue> ChannelValues { get; } = new ObservableCollection<ChannelValue>();
+        public Brush Swatch => Cells.Count > 12 ? Cells[12].Background : Brushes.Transparent;
+        public string[] ChannelOptions { get; } = { "GV", "R", "G", "B" };
+        public string Position { get; private set; } = "X —  Y —";
+        public string RawBytes { get; private set; } = "—";
+        public string ByteOffset { get; private set; } = "—";
+        public bool IsColor { get; private set; }
+        public string Count { get; private set; } = "—";
+        public string Minimum { get; private set; } = "—";
+        public string Maximum { get; private set; } = "—";
+        public string Mean { get; private set; } = "—";
+        public string StandardDeviation { get; private set; } = "—";
+        public string ProfileCaption { get; private set; } = string.Empty;
+        public string ProfileStart { get; private set; } = string.Empty;
+        public string ProfileCenter { get; private set; } = string.Empty;
+        public string ProfileEnd { get; private set; } = string.Empty;
+        public Geometry ProfileR { get; private set; } = Geometry.Empty;
+        public Geometry ProfileG { get; private set; } = Geometry.Empty;
+        public Geometry ProfileB { get; private set; } = Geometry.Empty;
+        public Geometry ProfileValue { get; private set; } = Geometry.Empty;
+        public int ProfileSampleCount { get; private set; }
+        public string SelectedChannel
+        {
+            get => _selectedChannel;
+            set
+            {
+                if (value == _selectedChannel || !ChannelOptions.Contains(value)) return;
+                _selectedChannel = value;
+                UpdateCells();
+                Notify();
+            }
+        }
+
+        public void Update(RawImageSource source, RawImageDescriptor descriptor, int x, int y, RawRenderOptions? options)
+        {
+            _isFloat = descriptor.PixelFormat == RawPixelFormat.Float32;
+            var current = Read(source.DescribePixel(x, y));
+            IsColor = current.IsColor;
+            if (!IsColor) _selectedChannel = "GV";
+            Position = string.Format(CultureInfo.InvariantCulture, "X {0}  Y {1}", x, y);
+            var description = source.DescribePixel(x, y);
+            var rawIndex = description.IndexOf("Raw=", StringComparison.Ordinal);
+            RawBytes = rawIndex < 0 ? "—" : description.Substring(rawIndex + 4);
+            int bits = descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
+            long offset = (long)y * descriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * descriptor.GetBytesPerPixel());
+            ByteOffset = string.Format(CultureInfo.InvariantCulture, "{0:N0} (0x{0:X})", offset);
+            ChannelValues.Clear();
+            if (IsColor)
+            {
+                ChannelValues.Add(new ChannelValue("R", current.R));
+                ChannelValues.Add(new ChannelValue("G", current.G));
+                ChannelValues.Add(new ChannelValue("B", current.B));
+                var alpha = ReadToken(description, "A=");
+                if (!double.IsNaN(alpha)) ChannelValues.Add(new ChannelValue("A", alpha));
+            }
+            string? floatHex = null;
+            if (_isFloat && RawBytes != "—")
+            {
+                var parts = RawBytes.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                if (parts.Length == 4)
+                {
+                    if (descriptor.ByteOrder == RawByteOrder.LittleEndian) Array.Reverse(parts);
+                    floatHex = "0x" + string.Concat(parts);
+                }
+            }
+            ChannelValues.Add(new ChannelValue(_isFloat || descriptor.PixelFormat == RawPixelFormat.Int32 ? "Value" : "GV", current.Value, _isFloat, floatHex));
+            int left = Math.Max(0, x - 2), top = Math.Max(0, y - 2);
+            int width = Math.Min(descriptor.Width, x + 3) - left, height = Math.Min(descriptor.Height, y + 3) - top;
+            var tile = source.RenderTile(left, top, width, height, options);
+            _statistics = source.GetStatistics(left, top, width, height);
+            _neighborhood.Clear();
+            for (int row = y - 2; row <= y + 2; row++)
+            {
+                for (int column = x - 2; column <= x + 2; column++)
+                {
+                    var sample = new Sample { IsCenter = row == y && column == x };
+                    if (column >= 0 && row >= 0 && column < descriptor.Width && row < descriptor.Height)
+                    {
+                        sample = Read(source.DescribePixel(column, row));
+                        sample.IsCenter = row == y && column == x;
+                        int i = (row - top) * tile.Stride + (column - left) * 4;
+                        sample.Color = Color.FromRgb(tile.Bgra32[i + 2], tile.Bgra32[i + 1], tile.Bgra32[i]);
+                        sample.IsAvailable = true;
+                    }
+                    _neighborhood.Add(sample);
+                }
+            }
+            UpdateCells();
+            var line = new List<Sample>();
+            for (int column = x - 8; column <= x + 8; column++) line.Add(column < 0 || column >= descriptor.Width ? new Sample() : Read(source.DescribePixel(column, y)));
+            ProfileSampleCount = line.Count(sample => sample.IsAvailable);
+            ProfileR = IsColor ? Plot(line, sample => sample.R) : Geometry.Empty;
+            ProfileG = IsColor ? Plot(line, sample => sample.G) : Geometry.Empty;
+            ProfileB = IsColor ? Plot(line, sample => sample.B) : Geometry.Empty;
+            var levels = options ?? source.CreateRenderOptions();
+            ProfileValue = IsColor ? Geometry.Empty : Plot(line, sample => (sample.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
+            ProfileStart = Math.Max(0, x - 8).ToString(CultureInfo.InvariantCulture);
+            ProfileCenter = x.ToString(CultureInfo.InvariantCulture);
+            ProfileEnd = Math.Min(descriptor.Width - 1, x + 8).ToString(CultureInfo.InvariantCulture);
+            ProfileCaption = string.Format(CultureInfo.InvariantCulture, "Row {0} · x {1}–{2}", y, ProfileStart, ProfileEnd);
+            Notify();
+        }
+
+        public void Clear()
+        {
+            _neighborhood.Clear();
+            _statistics = null;
+            ChannelValues.Clear();
+            Cells.Clear();
+            Position = "X —  Y —";
+            RawBytes = ByteOffset = Count = Minimum = Maximum = Mean = StandardDeviation = "—";
+            ProfileCaption = ProfileStart = ProfileCenter = ProfileEnd = string.Empty;
+            ProfileR = ProfileG = ProfileB = ProfileValue = Geometry.Empty;
+            ProfileSampleCount = 0;
+            Notify();
+        }
+
+        private void UpdateCells()
+        {
+            Cells.Clear();
+            foreach (var sample in _neighborhood)
+            {
+                double value = Value(sample);
+                Cells.Add(new NeighborhoodCell(sample.IsAvailable ? Format(value) : "—", sample.Color, sample.IsCenter));
+            }
+            if (_statistics == null) return;
+            if (_selectedChannel == "GV")
+            {
+                Count = _statistics.Count.ToString(CultureInfo.InvariantCulture);
+                Minimum = Format(_statistics.Minimum);
+                Maximum = Format(_statistics.Maximum);
+                Mean = Format(_statistics.Mean);
+                StandardDeviation = Format(_statistics.StandardDeviation);
+                return;
+            }
+            var values = _neighborhood.Where(sample => sample.IsAvailable).Select(Value).Where(value => !double.IsNaN(value) && !double.IsInfinity(value)).ToArray();
+            Count = values.Length.ToString(CultureInfo.InvariantCulture);
+            if (values.Length == 0) { Minimum = Maximum = Mean = StandardDeviation = "NaN"; return; }
+            double mean = values.Average();
+            Minimum = Format(values.Min());
+            Maximum = Format(values.Max());
+            Mean = Format(mean);
+            StandardDeviation = Format(Math.Sqrt(values.Average(value => (value - mean) * (value - mean))));
+        }
+
+        private double Value(Sample sample) => _selectedChannel == "R" ? sample.R : _selectedChannel == "G" ? sample.G : _selectedChannel == "B" ? sample.B : sample.Value;
+        private string Format(double value) => value.ToString(_isFloat ? "G5" : "0.###", CultureInfo.InvariantCulture);
+        private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
+
+        private static Geometry Plot(IReadOnlyList<Sample> line, Func<Sample, double> value)
+        {
+            var geometry = new StreamGeometry();
+            using (var context = geometry.Open())
+            {
+                bool started = false;
+                for (int i = 0; i < line.Count; i++)
+                {
+                    double number = value(line[i]);
+                    if (!line[i].IsAvailable || double.IsNaN(number) || double.IsInfinity(number)) { started = false; continue; }
+                    var point = new Point(i * 240.0 / 16, 90 - Math.Max(0, Math.Min(255, number)) * 90 / 255);
+                    if (!started) context.BeginFigure(point, false, false);
+                    else context.LineTo(point, true, false);
+                    started = true;
+                }
+            }
+            geometry.Freeze();
+            return geometry;
+        }
+
+        private static Sample Read(string description)
+        {
+            double r = ReadToken(description, "R="), g = ReadToken(description, "G="), b = ReadToken(description, "B=");
+            double value = ReadToken(description, "GV=");
+            if (double.IsNaN(value)) value = ReadToken(description, "Value=");
+            bool color = !double.IsNaN(r) && !double.IsNaN(g) && !double.IsNaN(b);
+            if (double.IsNaN(value) && color) value = (r + g + b) / 3;
+            if (double.IsNaN(value) && !color) value = !double.IsNaN(r) ? r : !double.IsNaN(g) ? g : b;
+            return new Sample { R = r, G = g, B = b, Value = value, IsColor = color, IsAvailable = true };
+        }
+
+        private static double ReadToken(string description, string key)
+        {
+            int start = description.IndexOf(key, StringComparison.Ordinal);
+            if (start < 0) return double.NaN;
+            start += key.Length;
+            int end = description.IndexOfAny(new[] { ',', ' ', '\n', '\r' }, start);
+            string token = end < 0 ? description.Substring(start) : description.Substring(start, end - start);
+            return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : double.NaN;
+        }
+
+        private sealed class Sample
+        {
+            public double R = double.NaN, G = double.NaN, B = double.NaN, Value = double.NaN;
+            public bool IsColor, IsAvailable, IsCenter;
+            public Color Color = Colors.Transparent;
+        }
+
+        internal sealed class NeighborhoodCell
+        {
+            public string Value { get; }
+            public Brush Background { get; }
+            public Brush Foreground { get; }
+            public bool IsCenter { get; }
+            public NeighborhoodCell(string value, Color color, bool center)
+            {
+                Value = value;
+                var background = new SolidColorBrush(color);
+                background.Freeze();
+                Background = background;
+                Foreground = color.R * 0.2126 + color.G * 0.7152 + color.B * 0.0722 > 140 ? Brushes.Black : Brushes.White;
+                IsCenter = center;
+            }
+        }
+
+        internal sealed class ChannelValue
+        {
+            public string Name { get; }
+            public string Decimal { get; }
+            public string Hex { get; }
+            public Brush Foreground { get; }
+            public ChannelValue(string name, double value, bool floating = false, string? hex = null)
+            {
+                Name = name;
+                var foreground = new SolidColorBrush(name == "R" ? Color.FromRgb(224, 108, 117) : name == "G" ? Color.FromRgb(152, 195, 121) : name == "B" ? Color.FromRgb(97, 175, 239) : Color.FromRgb(163, 167, 174));
+                foreground.Freeze();
+                Foreground = foreground;
+                Decimal = value.ToString(floating ? "G5" : "0.###", CultureInfo.InvariantCulture);
+                Hex = hex ?? (floating || double.IsNaN(value) || double.IsInfinity(value) ? "—" : "0x" + (name == "Value" && value < 0 ? unchecked((uint)(int)value).ToString("X8", CultureInfo.InvariantCulture) : ((long)value).ToString("X2", CultureInfo.InvariantCulture)));
+            }
+        }
+    }
+}

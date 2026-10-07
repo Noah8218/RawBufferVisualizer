@@ -58,6 +58,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             get { return _activeDocument; }
         }
         private readonly SnapshotExportOperation _snapshotExport = new SnapshotExportOperation();
+        private readonly PixelInspectorViewModel _pixelInspector = new PixelInspectorViewModel();
         private readonly HistogramViewModel _histogram = new HistogramViewModel();
         private readonly InspectorNavigationViewModel _inspector = new InspectorNavigationViewModel();
         private bool _applyingInspectorLayout;
@@ -155,6 +156,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public RawBufferToolWindowControl()
         {
             InitializeComponent();
+            PixelVisualization.DataContext = _pixelInspector;
             InspectorContainer.DataContext = _inspector;
             InspectorRail.DataContext = _inspector;
             ImageList.DataContext = ImageListHeader.DataContext = ImageStripHeader.DataContext = _inspector;
@@ -4326,6 +4328,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UpdateInterpretationControls(RawImageDescriptor descriptor)
         {
+            LayoutDerivedText.Text = string.Format(CultureInfo.InvariantCulture, "Row bytes {0:N0} · padding {1:N0} B/row · buffer {2:N0} B", descriptor.GetMinimumStride(), Math.Max(0, descriptor.Stride - descriptor.GetMinimumStride()), descriptor.GetRequiredByteCount());
             InterpretControls.IsEnabled = true;
             InterpretPixelFormatBox.SelectedItem = descriptor.PixelFormat;
             InterpretByteOrderBox.SelectedItem = descriptor.ByteOrder;
@@ -4346,6 +4349,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             InterpretValidBitsTextBox.Text = string.Empty;
 
 
+            LayoutDerivedText.Text = string.Empty;
             InterpretControls.IsEnabled = false;
         }
 
@@ -4380,6 +4384,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            CompareASlot.DataContext = _compareA;
+            CompareBSlot.DataContext = _compareB;
             CompareText.Text = string.Format(
                 CultureInfo.InvariantCulture,
                 "A: {0}\nB: {1}{2}",
@@ -4452,6 +4458,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelStateBadge.Background = state == "PINNED" ? new SolidColorBrush(Color.FromRgb(242, 163, 58)) : state == "MEASURE" ? (Brush)Resources["StatusAccentBrush"] : (Brush)Resources["ChannelChipBrush"];
             PixelBadgeText.Foreground = PixelBadgeGlyph.Foreground = state == "PINNED" ? Brushes.Black : (Brush)Resources["TextBrush"];
             PixelStateBadge.Visibility = _measurement.IsEnabled || PixelReadoutWrap.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+            InspectorPinButtonText.Text = IsInspectorPinned ? "Unpin pixel" : "Pin hovered pixel";
             PinPixelButtonText.Text = (string)(PixelBarPinButton.Content = IsInspectorPinned ? "Unpin" : "Pin");
         }
 
@@ -4518,6 +4525,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UpdateInspectorPixel(ImageDocument document, int x, int y)
         {
+            _pixelInspector.Update(document.Source, document.Descriptor, x, y, OpenGlImageView.GetRenderOptionsSnapshot());
             var pixelDescription = document.Source.DescribePixel(x, y);
             SetPixelDetails(
                 pixelDescription,
@@ -4530,8 +4538,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void SetInspectorPinnedState(bool pinned)
         {
             PixelHeadingText.Text = pinned ? "Pinned Pixel" : "Pixel";
-            PixelNeighborhoodHeadingText.Text = pinned ? "Pinned 5x5 Values" : "Hover 5x5 Values";
-            PixelStatsHeadingText.Text = pinned ? "Pinned 5x5 Stats" : "Hover 5x5 Stats";
+            PixelNeighborhoodHeadingText.Text = "5×5 NEIGHBORHOOD";
+            PixelStatsHeadingText.Text = "5×5 STATISTICS";
             RefreshPixelBadge();
         }
 
@@ -4620,6 +4628,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            _pixelInspector.Clear();
             PixelReadoutWrap.Visibility = Visibility.Collapsed;
             PixelEmptyText.Visibility = Visibility.Visible;
             PixelOffsetText.Text = PixelNeighborhoodStatsText.Text = string.Empty;
@@ -4675,9 +4684,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 PixelAChip.Visibility = TryReadIntToken(description, "A=", out var a) ? Visibility.Visible : Visibility.Collapsed;
 
                 PixelSwatch.Background = new SolidColorBrush(GetPixelStatusColor(descriptor, description));
-                var gv = (r + g + b) / 3;
+                double gv = descriptor.PixelFormat == RawPixelFormat.BGRA32 ? (r + g + b) / 3.0 : (r + g + b) / 3;
                 if (TryReadDoubleToken(description, "GV=", out var sourceGv)) gv = (int)sourceGv;
-                PixelGvText.Text = "GV " + gv.ToString(CultureInfo.InvariantCulture);
+                PixelGvText.Text = "GV " + gv.ToString("0.###", CultureInfo.InvariantCulture);
                 PixelRText.Text = "R " + r.ToString(CultureInfo.InvariantCulture);
                 PixelGText.Text = "G " + g.ToString(CultureInfo.InvariantCulture);
                 PixelBText.Text = "B " + b.ToString(CultureInfo.InvariantCulture);
@@ -4879,6 +4888,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return description.Length <= 8 ? description : description.Substring(0, 8);
         }
 
+        private void Root_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (Keyboard.Modifiers != ModifierKeys.None || Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase || Keyboard.FocusedElement is ComboBox) return;
+            if (e.Key == Key.M && _measurement.CanMeasure) MeasureButton.IsChecked = !_measurement.IsEnabled;
+            else if (e.Key == Key.F && FitButton.IsEnabled) Fit_Click(sender, e);
+            else if ((e.Key == Key.D1 || e.Key == Key.NumPad1) && ActualSizeButton.IsEnabled) ActualSize_Click(sender, e);
+            else if (e.Key == Key.Escape && IsInspectorPinned) ClearMarker_Click(sender, e);
+            else return;
+            e.Handled = true;
+        }
+
         private void Root_SizeChanged(object sender, SizeChangedEventArgs e)
         {
             ApplyResponsiveLayout(e.NewSize.Width);
@@ -5037,6 +5057,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             try
             {
+                SetThemeBrush("RbvPanelBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
+                SetThemeBrush("RbvWindowBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
+                SetThemeBrush("RbvInputBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
+                SetThemeBrush("RbvInputHoverBrush", EnvironmentColors.CommandBarHoverColorKey);
+                SetThemeBrush("RbvBorderBrush", EnvironmentColors.ToolWindowBorderColorKey);
+                SetThemeBrush("RbvTextBrush", EnvironmentColors.ToolWindowTextColorKey);
+                SetThemeBrush("RbvAccentBrush", EnvironmentColors.AccentMediumColorKey);
+                SetThemeBrush("RbvAccentHoverBrush", EnvironmentColors.AccentMediumColorKey);
+                SetThemeBrush("RbvPressedBrush", EnvironmentColors.CommandBarSelectedColorKey);
                 SetThemeBrush("PanelBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
                 SetThemeBrush("InputBrush", EnvironmentColors.ToolWindowBackgroundColorKey);
                 SetThemeBrush("BorderBrush", EnvironmentColors.ToolWindowBorderColorKey);
@@ -5068,7 +5097,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var color = VSColorTheme.GetThemedColor(colorKey);
-            brush.Color = Color.FromArgb(color.A, color.R, color.G, color.B);
+            if (brush.IsFrozen)
+            {
+                brush = brush.Clone();
+                brush.Color = Color.FromArgb(color.A, color.R, color.G, color.B);
+                Resources[resourceName] = brush;
+            }
+            else brush.Color = Color.FromArgb(color.A, color.R, color.G, color.B);
         }
 
         private void SetTransientStatus(string text)
