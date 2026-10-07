@@ -219,6 +219,33 @@ try {
     $control.Width = $Widths[-1]; $control.Height = $Heights[-1]
     Arrange-Control $control $control.Width $control.Height
     $model = $control.FindName('PixelVisualization').DataContext
+    $popupRows=@{ AddImagePopup=3; SavePopup=2; MorePopup=4; ZoomPopup=8 }
+    $control.FindName('ZoomSlider').Value=1
+    foreach ($popupName in $popupRows.Keys) {
+        $popup=$control.FindName($popupName); $menu=$popup.Child; $popup.Child=$null
+        $menuRoot=[Windows.Controls.Grid]::new(); $menuRoot.Resources=$control.Resources
+        [Windows.NameScope]::SetNameScope($menuRoot,[Windows.NameScope]::GetNameScope($control))
+        try {
+            $menuRoot.Children.Add($menu) | Out-Null
+            $menu.Measure([Windows.Size]::new([double]::PositiveInfinity,[double]::PositiveInfinity))
+            Arrange-Control $menuRoot $menu.DesiredSize.Width $menu.DesiredSize.Height
+            if ($menu.ActualWidth -ne 196 -or $menu.Background.Color.ToString() -ne '#FF2D2D30') { throw "Popup palette/width differs from the mockup: $popupName" }
+            $buttons=@($menu.Child.Children | Where-Object { $_ -is [Windows.Controls.Primitives.ButtonBase] })
+            if ($buttons.Count -ne $popupRows[$popupName]) { throw "Popup action count changed: $popupName" }
+            foreach ($button in $buttons) {
+                if ($button.ActualHeight -ne 26) { throw "Popup row height differs from 26px: $popupName" }
+                Assert-InBounds $button $menu "Popup command row $popupName"
+            }
+            if ($popupName -eq 'ZoomPopup') {
+                foreach ($button in $buttons) {
+                    $selected=$button.Content.Children[0].Opacity -eq 1
+                    if ($selected -ne ([double]::Parse($button.Tag,[Globalization.CultureInfo]::InvariantCulture) -eq 1)) { throw 'Zoom check mark disagrees with the actual zoom slider value' }
+                    if ([Windows.Automation.AutomationProperties]::GetName($button) -ne $button.Content.Children[1].Text) { throw 'Zoom accessibility caption lost its displayed value' }
+                }
+            }
+            Save-Render $menuRoot ([int]$menu.ActualWidth) ([int]$menu.ActualHeight) "popup-$popupName.png"
+        } finally { $menuRoot.Children.Clear(); $popup.Child=$menu }
+    }
     $selector = $control.FindName('NeighborhoodChannelBox')
     $segments = $selector.Template.FindName('SegmentList', $selector)
     $segments.SelectedItem = 'R'
