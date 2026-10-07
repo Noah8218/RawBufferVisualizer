@@ -4473,6 +4473,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 MeasurementReadout.Visibility = _measurement.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
                 if (_measurement.IsEnabled)
                 {
+                    Grid.SetRow(PixelReadoutHost, 0);
+                    Grid.SetColumn(PixelReadoutHost, 1);
+                    Grid.SetColumnSpan(PixelReadoutHost, 1);
                     PixelReadoutWrap.Visibility = PixelEmptyText.Visibility = Visibility.Collapsed;
                     return;
                 }
@@ -4481,15 +4484,20 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var optional = new FrameworkElement[] { PixelBarPinButton, PixelNeighborhoodStatsText, PixelOffsetText, PixelRawText, PixelBadgeText, PixelPositionText };
                 foreach (var item in optional) item.Visibility = Visibility.Visible;
                 var unlimited = new Size(double.PositiveInfinity, double.PositiveInfinity);
-                var values = PixelChannelsPanel.Visibility == Visibility.Visible ? (FrameworkElement)PixelChannelsPanel : PixelValueChip;
+                Func<double> badgeWidth = () =>
+                {
+                    PixelBadgeGlyph.Measure(unlimited);
+                    PixelBadgeText.Measure(unlimited);
+                    return PixelBadgeGlyph.DesiredSize.Width + PixelBadgeText.DesiredSize.Width + PixelStateBadge.Padding.Left + PixelStateBadge.Padding.Right + PixelStateBadge.Margin.Left + PixelStateBadge.Margin.Right;
+                };
+                var values = PixelChannelsPanel.Visibility == Visibility.Visible ? (FrameworkElement)PixelChannelsPanel : PixelValueText;
                 values.Measure(unlimited);
                 var channelWidth = values.DesiredSize.Width + 19;
                 var available = Math.Max(0, PixelBar.ActualWidth - 16);
                 if (available <= 0) return;
                 Func<double> total = () =>
                 {
-                    PixelStateBadge.Measure(unlimited);
-                    double width = channelWidth + PixelStateBadge.DesiredSize.Width;
+                    double width = channelWidth + badgeWidth();
                     foreach (var item in optional)
                     {
                         if (item == PixelBadgeText || item.Visibility != Visibility.Visible) continue;
@@ -4504,8 +4512,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     item.Visibility = Visibility.Collapsed;
                 }
                 if (PixelBar.ActualWidth < 500) PixelBadgeText.Visibility = Visibility.Collapsed;
-                PixelStateBadge.Measure(unlimited);
-                double reserved = PixelStateBadge.DesiredSize.Width;
+                var separateValueRow = values == PixelValueText && channelWidth > available - badgeWidth();
+                Grid.SetRow(PixelReadoutHost, separateValueRow ? 1 : 0);
+                Grid.SetColumn(PixelReadoutHost, separateValueRow ? 0 : 1);
+                Grid.SetColumnSpan(PixelReadoutHost, separateValueRow ? 2 : 1);
+                double reserved = separateValueRow ? 0 : badgeWidth();
                 foreach (var item in optional)
                 {
                     if (item == PixelBadgeText || item.Visibility != Visibility.Visible) continue;
