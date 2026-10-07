@@ -91,6 +91,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool _blinkShowingA;
         private double _lastZoomStatus = double.NaN;
         private double _lastOpenPathMilliseconds;
+        private string _pixelReadoutState = "HOVER";
+        private bool _applyingPixelBarLayout;
         private int _lastHoverX = -1;
         private int _lastHoverY = -1;
         private int _pinnedInspectorX = -1;
@@ -163,6 +165,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             StatusText.DataContext = _inspectionStatus;
             MeasurementCommands.DataContext = _measurement;
             MeasurementStatusText.DataContext = _measurement;
+            ClearMeasurementButton.DataContext = _measurement;
             _measurement.PropertyChanged += Measurement_PropertyChanged;
             HistogramPanel.DataContext = _histogram;
             ApplyVisualStudioTheme();
@@ -4064,13 +4067,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 _lastHoverY = -1;
                 if (!IsInspectorPinned)
                 {
-                    SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
-                    ClearPixelStatus();
+                    if (!RestoreSelectedPixel())
+                    {
+                        SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
+                        ClearPixelStatus();
+                    }
                 }
 
                 return;
             }
 
+            _pixelReadoutState = "HOVER";
             _lastHoverX = e.X;
             _lastHoverY = e.Y;
             if (!IsInspectorPinned)
@@ -4115,6 +4122,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             var start = _measurement.Start;
             var end = _measurement.End;
+            RefreshPixelBadge();
+            ApplyPixelBarLayout();
             OpenGlImageView.SetMeasurementOverlay(start == null ? (Point?)null : new Point(start.Item1, start.Item2),
                 end == null ? (Point?)null : new Point(end.Item1, end.Item2));
         }
@@ -4131,6 +4140,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            _pixelReadoutState = "SELECTED";
             _lastHoverX = e.X;
             _lastHoverY = e.Y;
             if (!IsInspectorPinned)
@@ -4157,8 +4167,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
                 else
                 {
-                    SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
-                    ClearPixelStatus();
+                    if (!RestoreSelectedPixel())
+                    {
+                        SetPixelDetails(string.Empty, string.Empty, string.Empty, string.Empty);
+                        ClearPixelStatus();
+                    }
                 }
 
                 return;
@@ -4397,6 +4410,82 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             LineProfileText.Text = line;
         }
 
+        private bool RestoreSelectedPixel()
+        {
+            if (_activeDocument == null || _activeDocument.IsSourceUnavailable || !OpenGlImageView.TryGetSelectedPixel(out var x, out var y)) return false;
+            _pixelReadoutState = "SELECTED";
+            UpdateInspectorPixel(_activeDocument, x, y);
+            return true;
+        }
+
+        private void RefreshPixelBadge()
+        {
+            if (PixelBadgeText == null) return;
+            var state = _measurement.IsEnabled ? "MEASURE" : IsInspectorPinned ? "PINNED" : _pixelReadoutState;
+            PixelBadgeText.Text = InspectorPixelStateText.Text = state;
+            PixelBadgeGlyph.Text = state == "PINNED" ? "⚑" : state == "SELECTED" ? "■" : state == "MEASURE" ? "↔" : "●";
+            PixelStateBadge.Background = state == "PINNED" ? new SolidColorBrush(Color.FromRgb(242, 163, 58)) : state == "MEASURE" ? (Brush)Resources["StatusAccentBrush"] : (Brush)Resources["ChannelChipBrush"];
+            PixelBadgeText.Foreground = PixelBadgeGlyph.Foreground = state == "PINNED" ? Brushes.Black : (Brush)Resources["TextBrush"];
+            PixelStateBadge.Visibility = _measurement.IsEnabled || PixelReadoutWrap.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+            PinPixelButtonText.Text = (string)(PixelBarPinButton.Content = IsInspectorPinned ? "Unpin" : "Pin");
+        }
+
+        private void PixelBar_SizeChanged(object sender, SizeChangedEventArgs e) => ApplyPixelBarLayout();
+
+        private void ApplyPixelBarLayout()
+        {
+            if (PixelBar == null || _applyingPixelBarLayout) return;
+            _applyingPixelBarLayout = true;
+            try
+            {
+                MeasurementReadout.Visibility = _measurement.IsEnabled ? Visibility.Visible : Visibility.Collapsed;
+                if (_measurement.IsEnabled)
+                {
+                    PixelReadoutWrap.Visibility = PixelEmptyText.Visibility = Visibility.Collapsed;
+                    return;
+                }
+                PixelReadoutWrap.Visibility = PixelPositionText.Text == "X -  Y -" ? Visibility.Collapsed : Visibility.Visible;
+                PixelEmptyText.Visibility = PixelReadoutWrap.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
+                var optional = new FrameworkElement[] { PixelBarPinButton, PixelNeighborhoodStatsText, PixelOffsetText, PixelRawText, PixelBadgeText, PixelPositionText };
+                foreach (var item in optional) item.Visibility = Visibility.Visible;
+                var unlimited = new Size(double.PositiveInfinity, double.PositiveInfinity);
+                var values = PixelChannelsPanel.Visibility == Visibility.Visible ? (FrameworkElement)PixelChannelsPanel : PixelValueChip;
+                values.Measure(unlimited);
+                var channelWidth = values.DesiredSize.Width + 19;
+                var available = Math.Max(0, PixelBar.ActualWidth - 16);
+                if (available <= 0) return;
+                Func<double> total = () =>
+                {
+                    PixelStateBadge.Measure(unlimited);
+                    double width = channelWidth + PixelStateBadge.DesiredSize.Width;
+                    foreach (var item in optional)
+                    {
+                        if (item == PixelBadgeText || item.Visibility != Visibility.Visible) continue;
+                        item.Measure(unlimited);
+                        width += item.DesiredSize.Width;
+                    }
+                    return width;
+                };
+                foreach (var item in optional)
+                {
+                    if (total() <= available) break;
+                    item.Visibility = Visibility.Collapsed;
+                }
+                if (PixelBar.ActualWidth < 500) PixelBadgeText.Visibility = Visibility.Collapsed;
+                PixelStateBadge.Measure(unlimited);
+                double reserved = PixelStateBadge.DesiredSize.Width;
+                foreach (var item in optional)
+                {
+                    if (item == PixelBadgeText || item.Visibility != Visibility.Visible) continue;
+                    item.Measure(unlimited);
+                    reserved += item.DesiredSize.Width;
+                }
+                // Channels wrap when a narrow dock cannot fit them on one line; no channel is a hide candidate.
+                PixelChannelGroup.Width = Math.Max(0, Math.Min(channelWidth, available - reserved));
+            }
+            finally { _applyingPixelBarLayout = false; }
+        }
+
         private bool IsInspectorPinned
         {
             get { return _pinnedInspectorX >= 0 && _pinnedInspectorY >= 0; }
@@ -4418,6 +4507,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelHeadingText.Text = pinned ? "Pinned Pixel" : "Pixel";
             PixelNeighborhoodHeadingText.Text = pinned ? "Pinned 5x5 Values" : "Hover 5x5 Values";
             PixelStatsHeadingText.Text = pinned ? "Pinned 5x5 Stats" : "Hover 5x5 Stats";
+            RefreshPixelBadge();
         }
 
         private void SetMarkerText(string text)
@@ -4505,6 +4595,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            PixelReadoutWrap.Visibility = Visibility.Collapsed;
+            PixelEmptyText.Visibility = Visibility.Visible;
+            PixelOffsetText.Text = PixelNeighborhoodStatsText.Text = string.Empty;
+            RefreshPixelBadge();
             PixelPositionText.Text = "X -  Y -";
             PixelColorText.Text = "RGB -";
             PixelRawText.Text = "Bytes -";
@@ -4525,10 +4619,21 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UpdatePixelStatus(ImageDocument document, int x, int y, string description)
         {
+            PixelReadoutWrap.Visibility = Visibility.Visible;
+            PixelEmptyText.Visibility = Visibility.Collapsed;
+            var bits = document.Descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : document.Descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
+            var offset = (long)y * document.Descriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * document.Descriptor.GetBytesPerPixel());
+            PixelOffsetText.Text = "Offset " + offset.ToString("N0", CultureInfo.InvariantCulture);
+            var left = Math.Max(0, x - 2);
+            var top = Math.Max(0, y - 2);
+            var stats = document.Source.GetStatistics(left, top, Math.Min(document.Descriptor.Width, x + 3) - left, Math.Min(document.Descriptor.Height, y + 3) - top);
+            PixelNeighborhoodStatsText.Text = string.Format(CultureInfo.InvariantCulture, "5×5 μ {0:0.0} σ {1:0.0}", stats.Mean, stats.StandardDeviation);
             PixelPositionText.Text = string.Format(CultureInfo.InvariantCulture, "X {0}  Y {1}", x, y);
             PixelColorText.Text = BuildPixelColorStatus(document.Descriptor, description);
             PixelRawText.Text = BuildPixelByteStatus(description);
             UpdatePixelChannelStatus(document.Descriptor, description);
+            RefreshPixelBadge();
+            ApplyPixelBarLayout();
         }
 
         private void UpdatePixelChannelStatus(RawImageDescriptor descriptor, string description)
@@ -4544,6 +4649,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 PixelChannelsPanel.Visibility = Visibility.Visible;
                 PixelAChip.Visibility = TryReadIntToken(description, "A=", out var a) ? Visibility.Visible : Visibility.Collapsed;
 
+                PixelSwatch.Background = new SolidColorBrush(GetPixelStatusColor(descriptor, description));
+                var gv = (r + g + b) / 3;
+                if (TryReadDoubleToken(description, "GV=", out var sourceGv)) gv = (int)sourceGv;
+                PixelGvText.Text = "GV " + gv.ToString(CultureInfo.InvariantCulture);
                 PixelRText.Text = "R " + r.ToString(CultureInfo.InvariantCulture);
                 PixelGText.Text = "G " + g.ToString(CultureInfo.InvariantCulture);
                 PixelBText.Text = "B " + b.ToString(CultureInfo.InvariantCulture);
@@ -4592,7 +4701,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             double value;
             if (TryReadDoubleToken(description, "Value=", out value))
             {
-                return "Value " + value.ToString(descriptor.PixelFormat == RawPixelFormat.Float32 ? "G9" : "0.###", CultureInfo.InvariantCulture);
+                return "Value " + value.ToString(descriptor.PixelFormat == RawPixelFormat.Float32 ? "G5" : "0.###", CultureInfo.InvariantCulture);
             }
 
             foreach (var key in new[] { "Bayer R=", "Bayer G=", "Bayer B=" })
@@ -4609,38 +4718,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static string BuildPixelByteStatus(string description)
         {
-            var raw = ReadTailToken(description, "Raw=") ?? string.Empty;
-            if (string.IsNullOrWhiteSpace(raw) || raw == "-")
-            {
-                return "Bytes -";
-            }
-
-            var parts = raw.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length == 0)
-            {
-                return "Bytes -";
-            }
-
-            var decimalParts = new string[parts.Length];
-            var hexParts = new string[parts.Length];
-            for (var i = 0; i < parts.Length; i++)
-            {
-                byte value;
-                if (byte.TryParse(parts[i], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out value))
-                {
-                    decimalParts[i] = value.ToString(CultureInfo.InvariantCulture);
-                    hexParts[i] = "0x" + value.ToString("X2", CultureInfo.InvariantCulture);
-                }
-                else
-                {
-                    decimalParts[i] = parts[i];
-                    hexParts[i] = parts[i];
-                }
-            }
-
-            return parts.Length == 1
-                ? string.Format(CultureInfo.InvariantCulture, "Byte {0} ({1})", decimalParts[0], hexParts[0])
-                : string.Format(CultureInfo.InvariantCulture, "Bytes {0}", string.Join(" ", decimalParts));
+            var raw = ReadTailToken(description, "Raw=");
+            return "Raw " + (string.IsNullOrWhiteSpace(raw) ? "-" : raw);
         }
 
         private static Color GetPixelStatusColor(RawImageDescriptor descriptor, string description)
