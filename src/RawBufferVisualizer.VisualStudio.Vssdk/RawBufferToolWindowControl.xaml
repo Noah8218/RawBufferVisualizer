@@ -331,7 +331,9 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel x:Name="ImagePanelTop" Grid.Row="0">
+                <ScrollViewer x:Name="ImagePanelTopScroller" Grid.Row="0" MaxHeight="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType={x:Type UserControl}}}"
+                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
+                    <StackPanel x:Name="ImagePanelTop" Grid.Row="0">
 <WrapPanel x:Name="ImageListHeader" Margin="8,4" VerticalAlignment="Center">
     <TextBlock x:Name="ImagesHeadingText" Text="Images" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
     <Border Style="{StaticResource InfoChip}" VerticalAlignment="Center" Margin="6,0"><TextBlock x:Name="ImageCountText" FontSize="11" Text="0"/></Border>
@@ -467,6 +469,7 @@
 
                 </StackPanel>
 </StackPanel>
+                </ScrollViewer>
 <StackPanel x:Name="ImageStripHeader" Grid.Row="0" Visibility="Collapsed" Margin="4,4">
     <Button Content="»" Command="{Binding ToggleImageListCommand}" MinWidth="28" Margin="0" ToolTip="Expand image list" AutomationProperties.Name="Expand image list" AutomationProperties.AutomationId="ExpandImagesButton"/>
     <Button Content="↻" IsEnabled="{Binding IsEnabled, ElementName=ScanNowButton}" MinWidth="28" Margin="0,4,0,0" ToolTip="Scan now" AutomationProperties.Name="Scan now" Click="ScanNow_Click"/>
@@ -578,21 +581,19 @@
 
                     <Border x:Name="PixelBar" Grid.Row="1" Grid.ColumnSpan="2" MinHeight="30" Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="0,0,0,1" Padding="8,4" SizeChanged="PixelBar_SizeChanged">
                         <Grid>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                             <Border x:Name="PixelStateBadge" CornerRadius="3" Background="{DynamicResource ChannelChipBrush}" Padding="4,1" Margin="0,0,8,0" VerticalAlignment="Top">
                                 <StackPanel Orientation="Horizontal"><TextBlock x:Name="PixelBadgeGlyph" Text="●" FontSize="11"/><TextBlock x:Name="PixelBadgeText" Text="HOVER" FontSize="10" Margin="4,0,0,0"/></StackPanel>
                             </Border>
-                            <Grid Grid.Column="1">
+                            <Grid x:Name="PixelReadoutHost" Grid.Column="1">
                                 <TextBlock x:Name="PixelEmptyText" Text="Move the pointer over the image to read pixel values." Foreground="{DynamicResource SecondaryTextBrush}" FontSize="12" TextWrapping="Wrap" VerticalAlignment="Center"/>
                                 <WrapPanel x:Name="PixelReadoutWrap" TextElement.FontFamily="Consolas" VerticalAlignment="Center">
 <TextBlock x:Name="PixelPositionText" Text="X -  Y -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <Grid x:Name="PixelChannelGroup" VerticalAlignment="Center">
                                         <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions><Border x:Name="PixelSwatch" Width="13" Height="13" Margin="0,0,6,0" Background="#1E1E1E" BorderBrush="#AAAAAA" BorderThickness="1"/>
                                         <Grid Grid.Column="1"><Border x:Name="PixelValueChip" Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1">
-                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-
-                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center"/>
-                        </StackPanel>
+                            <TextBlock x:Name="PixelValueText" Text="GV -" FontSize="13" Foreground="{DynamicResource StatusTextBrush}" VerticalAlignment="Center" TextWrapping="Wrap"/>
                     </Border><WrapPanel x:Name="PixelChannelsPanel" Orientation="Horizontal" Visibility="Collapsed">
                         <Border Background="Transparent" BorderBrush="#444444" BorderThickness="0" Padding="0,1" Margin="0,0,8,0">
                             <StackPanel Orientation="Horizontal">

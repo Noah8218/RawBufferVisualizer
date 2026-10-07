@@ -113,6 +113,37 @@ try {
         }
         $nav.Show('Pixel')
     } }
+    $headerCases = @()
+    foreach ($width in @(320, 640, 760)) { foreach ($startHeight in @(260, 560)) {
+        $control.Width = $width; $control.Height = $startHeight
+        Arrange-Control $control $width $startHeight
+        if ($nav.IsImageStrip) { $nav.ToggleImageListCommand.Execute($null) }
+        Arrange-Control $control $width $startHeight
+        Click-Button $control.FindName('ClearButton')
+        Arrange-Control $control $width $startHeight
+        $control.Height = 260
+        Arrange-Control $control $width 260
+        $headerScroller = $control.FindName('ImagePanelTopScroller')
+        foreach ($name in @('ClearAllConfirmationText', 'ConfirmClearAllButton', 'CancelClearAllButton', 'AutoInspectBox', 'ScanNowButton', 'AutomaticHelpButton', 'StatusText')) {
+            $element = $control.FindName($name)
+            $element.BringIntoView()
+            Arrange-Control $control $width 260
+            Assert-InBounds $element $headerScroller "Header scroll viewport $name at $width x 260"
+            Assert-InBounds $element $control "Control viewport $name at $width x 260"
+        }
+        $headerScroller.ScrollToTop()
+        Arrange-Control $control $width 260
+        Save-Render $control $width 260 "header-confirm-top-$width-$startHeight.png"
+        $headerScroller.ScrollToBottom()
+        Arrange-Control $control $width 260
+        Save-Render $control $width 260 "header-confirm-bottom-$width-$startHeight.png"
+        Click-Button $control.FindName('CancelClearAllButton')
+        Arrange-Control $control $width 260
+        if ($control.FindName('ImageList').Items.Count -ne 1 -or $headerScroller.VerticalOffset -ne 0 -or $control.FindName('ImageList').ActualHeight -le 0) { throw 'Header overflow did not recover after cancelling clear' }
+        $headerCases += [pscustomobject]@{ Width=$width; Height=260; StartHeight=$startHeight; Reachable='confirmation, cancel, automatic scan and status'; Recovery='cancel restores image list and scroll offset' }
+    } }
+    $control.Width = $Widths[-1]; $control.Height = $Heights[-1]
+    Arrange-Control $control $control.Width $control.Height
     $model = $control.FindName('PixelVisualization').DataContext
     $selector = $control.FindName('NeighborhoodChannelBox')
     $selector.SelectedItem = 'R'
@@ -161,17 +192,39 @@ try {
         [RawBufferVisualizer.Sdk.RawBufferSnapshot]::Save($path, [byte[]]$data, $scalar) | Out-Null
         $control.OpenPath($path)
         $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0, 0))) | Out-Null
-        foreach ($width in $Widths) { foreach ($height in $Heights) {
+        foreach ($width in $Widths) { foreach ($height in $Heights) { foreach ($strip in @($true, $false)) {
             $control.Width = $width; $control.Height = $height
             Arrange-Control $control $width $height
+            if ($nav.IsImageStrip -ne $strip) { $nav.ToggleImageListCommand.Execute($null) }
+            Arrange-Control $control $width $height
             $required = if ($format -eq 'BGRA32') { @('PixelRText','PixelGText','PixelBText','PixelAText','PixelGvText') } else { @('PixelValueText') }
-            foreach ($name in $required) { Assert-InBounds $control.FindName($name) $bar "$format $name at $width x $height" }
-            $formats += [pscustomobject]@{ Format=$format; Width=$width; Height=$height; Value=$control.FindName('PixelValueText').Text }
-        } }
+            foreach ($name in $required) {
+                Assert-InBounds $control.FindName($name) $bar "$format $name at $width x $height, strip=$strip"
+                Assert-InBounds $control.FindName($name) $control "$format $name control viewport at $width x $height, strip=$strip"
+            }
+            if ($format -in @('BGRA32','Float32','Int32') -and $width -in @(320,760) -and $height -eq 260) {
+                Save-Render $control $width $height "values-$format-$width-$height-strip-$strip.png"
+            }
+            $formats += [pscustomobject]@{ Format=$format; Width=$width; Height=$height; ImageStrip=$strip; Value=$control.FindName('PixelValueText').Text }
+        } } }
     }
-    [pscustomobject]@{ Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    $control.Width = 320; $control.Height = 260
+    Arrange-Control $control 320 260
+    if ($nav.IsImageStrip) { $nav.ToggleImageListCommand.Execute($null) }
+    Arrange-Control $control 320 260
+    $measure.IsChecked = $true
+    Arrange-Control $control 320 260
+    if ([Windows.Controls.Grid]::GetRow($control.FindName('PixelReadoutHost')) -ne 0) { throw 'Measurement did not restore the shared readout row' }
+    foreach ($name in @('MeasurementStatusText','ClearMeasurementButton')) { Assert-InBounds $control.FindName($name) $bar "Scalar to measurement $name" }
+    Save-Render $control 320 260 'scalar-measure-320.png'
+    $measure.IsChecked = $false
+    $hover.Invoke($control, [object[]]@($null, [RawBufferVisualizer.OpenGlCanvas.RawOpenGlPixelEventArgs]::new(0, 0))) | Out-Null
+    Arrange-Control $control 320 260
+    Assert-InBounds $control.FindName('PixelValueText') $bar 'Scalar restored after measurement'
+    Save-Render $control 320 260 'scalar-measure-recovery-320.png'
+    [pscustomobject]@{ Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
-    Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; bindings and recovery transitions."
+    Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"
     Write-Output 'Scope: in-process WPF chrome and popup-content arrangement; native desktop/popup and installed IDE remain unverified.'
 } finally { $control.Dispose() }
