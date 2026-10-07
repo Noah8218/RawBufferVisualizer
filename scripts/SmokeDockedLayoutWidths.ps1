@@ -293,19 +293,10 @@ foreach ($layoutWidth in $Widths) {
         $clearButtonText.Visibility -eq [System.Windows.Visibility]::Visible -and
         [System.Windows.Automation.AutomationProperties]::GetName($clearButton) -eq "Clear all images" -and
         [string]$clearButton.ToolTip -eq "Remove all loaded images and reset the viewer. Debuggee data is unchanged."
-    $primaryLabelStateValid = if ($layoutWidth -lt 760) {
-        @($toolbarLabels[0..1] | Where-Object {
-            $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Collapsed
-        }).Count -eq 2 -and
-        @($toolbarLabels[2..3] | Where-Object {
-            $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Visible
-        }).Count -eq 2
-    }
-    else {
-        @($toolbarLabels | Where-Object {
-            $null -ne $_ -and $_.Visibility -eq [System.Windows.Visibility]::Visible
-        }).Count -eq $toolbarLabels.Count
-    }
+    $primaryLabelStateValid = $toolbarLabels[0].Visibility -eq [System.Windows.Visibility]::Visible -and
+        $toolbarLabels[1].Visibility -eq [System.Windows.Visibility]::Visible -and
+        $toolbarLabels[2].Visibility -eq $(if ($control.FindName("ViewerGrid").ActualWidth -lt 560 -or $control.ActualHeight -lt 560) { [System.Windows.Visibility]::Collapsed } else { [System.Windows.Visibility]::Visible }) -and
+        $toolbarLabels[3].Visibility -eq [System.Windows.Visibility]::Visible
     $emptyCommandStateValid = $openButton.IsEnabled -and
         -not $clearButton.IsEnabled -and
         -not $saveButton.IsEnabled -and
@@ -372,7 +363,7 @@ foreach ($layoutWidth in $Widths) {
         $childOrigin = $child.TranslatePoint([System.Windows.Point]::new(0, 0), $toolbar)
         if ($childOrigin.X -lt -0.5 -or
             $childOrigin.Y -lt -0.5 -or
-            ($childOrigin.X + $child.ActualWidth) -gt ($toolbar.ActualWidth + 0.5) -or
+            ($childOrigin.X + $child.ActualWidth) -gt ([Math]::Max($toolbar.ActualWidth, $control.FindName("ToolbarScroller").ExtentWidth) + 0.5) -or
             ($childOrigin.Y + $child.ActualHeight) -gt ($toolbar.ActualHeight + 0.5)) {
             $toolbarBoundsValid = $false
             break

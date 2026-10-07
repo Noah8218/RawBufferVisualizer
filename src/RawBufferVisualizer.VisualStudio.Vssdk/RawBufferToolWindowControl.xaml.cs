@@ -1094,6 +1094,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ? Visibility.Visible
                 : Visibility.Collapsed;
             WhatsNewButton.IsChecked = shouldShow;
+            MoreUnreadBadge.Visibility = shouldShow ? Visibility.Visible : Visibility.Collapsed;
+            UpdateReleaseAnnouncementPopup();
 
             if (!string.IsNullOrWhiteSpace(_releaseAnnouncementPreferencesStore.LastLoadError))
             {
@@ -1106,6 +1108,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (WhatsNewButton.IsChecked != true)
             {
                 ReleaseAnnouncementBanner.Visibility = Visibility.Collapsed;
+                UpdateReleaseAnnouncementPopup();
                 SetTransientStatus("Release highlights closed");
                 return;
             }
@@ -1118,6 +1121,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             ReleaseAnnouncementBanner.Visibility = Visibility.Visible;
+            UpdateReleaseAnnouncementPopup();
         }
 
         private void ViewReleaseNotes_Click(object sender, RoutedEventArgs e)
@@ -1153,6 +1157,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
+            _inspector.Show("Diagnostics");
             EnvironmentCheckPanel.Visibility = Visibility.Visible;
             RefreshEnvironmentCheck();
         }
@@ -1242,6 +1247,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             ReleaseAnnouncementBanner.Visibility = Visibility.Collapsed;
+            MoreUnreadBadge.Visibility = Visibility.Collapsed;
+            UpdateReleaseAnnouncementPopup();
             WhatsNewButton.IsChecked = false;
         }
 
@@ -1592,6 +1599,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _inspector.PropertyChanged -= InspectorNavigation_PropertyChanged;
+            SavePopup.IsOpen = MorePopup.IsOpen = ZoomPopup.IsOpen = ReleaseAnnouncementPopup.IsOpen = false;
             Loaded -= InspectorHost_Loaded;
             Unloaded -= InspectorHost_Unloaded;
             InspectorOverlayPopup.IsOpen = false;
@@ -3635,6 +3643,71 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             UpdateTempUsageStatus();
         }
 
+        private void UpdateReleaseAnnouncementPopup()
+        {
+            ReleaseAnnouncementPopup.IsOpen = IsLoaded && IsVisible && ReleaseAnnouncementBanner.Visibility == Visibility.Visible;
+        }
+
+        private void ViewerGrid_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateViewerToolbarLayout();
+
+        private void UpdateViewerToolbarLayout()
+        {
+            if (ViewerGrid == null || ToolbarBorder == null) return;
+            var side = ActualHeight > 0 && ActualHeight < 560;
+            Grid.SetRow(ToolbarBorder, side ? 2 : 0);
+            Grid.SetColumn(ToolbarBorder, side ? 0 : 1);
+            ViewerToolbarRow.Height = new GridLength(side ? 0 : 32);
+            ViewerToolbarSideColumn.Width = new GridLength(side ? 40 : 0);
+            ToolbarCommandsPanel.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
+            ToolbarScroller.HorizontalScrollBarVisibility = side ? ScrollBarVisibility.Disabled : ScrollBarVisibility.Hidden;
+            ToolbarScroller.VerticalScrollBarVisibility = side ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Disabled;
+            MeasurementCommands.Orientation = side ? Orientation.Vertical : Orientation.Horizontal;
+            var labels = !side && ViewerGrid.ActualWidth >= 560 ? Visibility.Visible : Visibility.Collapsed;
+            foreach (var label in new[] { FitButtonText, ActualSizeButtonText, MeasureButtonText, PinPixelButtonText, LinkViewsText, SelectionOverlayText, SaveMenuButtonText }) label.Visibility = labels;
+            ActualSizeButtonText.Visibility = Visibility.Visible;
+            ActualSizeIcon.Visibility = Visibility.Collapsed;
+            foreach (var button in new Control[] { FitButton, ActualSizeButton, ZoomOutButton, ZoomMenuButton, ZoomInButton, MeasureButton, PinPixelButton, LinkViewsBox, SelectionOverlayBox, SaveMenuButton, MoreMenuButton })
+            {
+                button.Width = side ? 36 : double.NaN;
+                button.Padding = side ? new Thickness(2, 2, 2, 2) : new Thickness(5, 2, 5, 2);
+            }
+            UpdateReleaseAnnouncementPopup();
+            ImageTypeText.Visibility = ViewerGrid.ActualWidth >= 700 ? Visibility.Visible : Visibility.Collapsed;
+            ImageStateChip.Visibility = ViewerGrid.ActualWidth >= 600 ? Visibility.Visible : Visibility.Collapsed;
+            ImageStrideChip.Visibility = ViewerGrid.ActualWidth >= 480 ? Visibility.Visible : Visibility.Collapsed;
+            ImageSizeChip.Visibility = ViewerGrid.ActualWidth >= 340 ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        private void ToolbarScroller_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+        {
+            if (ToolbarCommandsPanel.Orientation != Orientation.Horizontal) return;
+            ToolbarScroller.ScrollToHorizontalOffset(ToolbarScroller.HorizontalOffset - e.Delta);
+            e.Handled = true;
+        }
+
+        private void ZoomStep_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGlImageView.SetZoomScale(OpenGlImageView.ZoomScale * double.Parse((string)((Button)sender).Tag, CultureInfo.InvariantCulture));
+            UpdateZoomStatus();
+        }
+
+        private void ZoomPreset_Click(object sender, RoutedEventArgs e)
+        {
+            OpenGlImageView.SetZoomScale(double.Parse((string)((Button)sender).Tag, CultureInfo.InvariantCulture));
+            UpdateZoomStatus();
+        }
+
+        private void ViewerMenu_Click(object sender, RoutedEventArgs e)
+        {
+            SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
+        }
+
+        private void PinPixel_Click(object sender, RoutedEventArgs e)
+        {
+            if (_pinnedInspectorX >= 0) ClearMarker_Click(sender, e);
+            else PinMarker_Click(sender, e);
+        }
+
         private void ZoomSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
         {
             if (_syncingZoomSlider || OpenGlImageView == null)
@@ -4717,6 +4790,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void InspectorHost_Unloaded(object sender, RoutedEventArgs e)
         {
             InspectorOverlayPopup.IsOpen = false;
+            ReleaseAnnouncementPopup.IsOpen = false;
             _histogram.SetVisible(false);
         }
 
@@ -4765,6 +4839,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
                 _histogram.SetVisible(_inspector.IsHistogramSelected && IsVisible);
                 _layoutMode = nextMode;
+                UpdateViewerToolbarLayout();
             }
             finally { _applyingInspectorLayout = false; }
         }
@@ -4811,6 +4886,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 && !_activeDocument.IsError
                 && !_activeDocument.IsSourceUnavailable;
             if (!hasActiveImage && _measurement.CanMeasure) _measurement.SetImageSize(0, 0);
+            ImageInfoBar.DataContext = null;
+            ImageInfoBar.DataContext = _activeDocument;
+            ZoomOutButton.IsEnabled = ZoomInButton.IsEnabled = ZoomMenuButton.IsEnabled = SaveMenuButton.IsEnabled = PinPixelButton.IsEnabled = hasActiveImage;
             ClearButton.IsEnabled = _documents.Count > 0;
             SaveVisiblePngButton.IsEnabled = hasActiveImage;
             FitButton.IsEnabled = hasActiveImage;
@@ -4858,6 +4936,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 SetThemeBrush("CommandPressedBrush", EnvironmentColors.CommandBarSelectedColorKey);
                 SetThemeBrush("TextBrush", EnvironmentColors.ToolWindowTextColorKey);
                 SetThemeBrush("MutedTextBrush", EnvironmentColors.CommandBarTextInactiveColorKey);
+                SetThemeBrush("SecondaryTextBrush", EnvironmentColors.CommandBarTextInactiveColorKey);
                 SetThemeBrush("StatusBarBrush", EnvironmentColors.CommandBarGradientBeginColorKey);
                 SetThemeBrush("StatusAccentBrush", EnvironmentColors.AccentMediumColorKey);
                 SetThemeBrush("StatusTextBrush", EnvironmentColors.ToolWindowTextColorKey);
@@ -5656,6 +5735,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string Title { get; private set; }
             public string ObjectName { get; private set; }
             public string SourceType { get; private set; }
+            public string SizeText => string.Format(CultureInfo.InvariantCulture, "{0}×{1}", Descriptor.Width, Descriptor.Height);
+            public string FormatText => Descriptor.PixelFormat.ToString();
+            public string StrideText => "stride " + Descriptor.Stride.ToString(CultureInfo.InvariantCulture);
+            public string StateChipText => IsError || IsSourceUnavailable ? "× FAILED" : AutomaticMappingRequired ? "◆ MAP" : IsPreview ? "◐ PREVIEW" : Source.IsLiveProcessBacked ? "● LIVE" : "■ CAPTURED";
             public RawImageSource Source { get; private set; }
             public RawImageDescriptor Descriptor { get; private set; }
             public RawOpenGlViewState? ViewState { get; set; }
