@@ -9,10 +9,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool _hasWidth;
         private bool _dockedOpen = true;
         private bool _overlayOpen;
+        private bool? _imageStripOverride;
 
         public InspectorNavigationViewModel()
         {
             CloseCommand = new ViewCommand(_ => Close(), () => IsOpen);
+            ToggleImageListCommand = new ViewCommand(_ => { _imageStripOverride = !IsImageStrip; Notify(); }, () => true);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
@@ -26,6 +28,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public bool IsCompareSelected { get => IsOpen && Section == "Compare"; set => Select("Compare", value); }
         public bool IsDiagnosticsSelected { get => IsOpen && Section == "Diagnostics"; set => Select("Diagnostics", value); }
         public ICommand CloseCommand { get; }
+        public bool IsImageStrip => _imageStripOverride ?? IsNarrow;
+        public ICommand ToggleImageListCommand { get; }
 
         public void SetWidth(double width)
         {
@@ -34,6 +38,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (_hasWidth && IsNarrow == narrow) return;
             _hasWidth = true;
             IsNarrow = narrow;
+            _imageStripOverride = null;
             IsOpen = narrow ? _overlayOpen : _dockedOpen;
             Notify();
         }

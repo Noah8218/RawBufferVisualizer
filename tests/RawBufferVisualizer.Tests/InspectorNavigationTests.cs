@@ -12,6 +12,10 @@ namespace RawBufferVisualizer.Tests
                 var model = new InspectorNavigationViewModel();
                 model.SetWidth(width);
                 Require(model.IsNarrow == (width < 760) && model.IsOpen == (width >= 760), "Default at " + width);
+                Require(model.IsImageStrip == (width < 760), "Default image strip at " + width);
+                model.ToggleImageListCommand.Execute(null);
+                Require(model.IsImageStrip != (width < 760), "Toggle image strip at " + width);
+                model.ToggleImageListCommand.Execute(null);
                 foreach (var section in new[] { "Pixel", "Histogram", "Format", "Compare", "Diagnostics" })
                 {
                     model.Show(section);

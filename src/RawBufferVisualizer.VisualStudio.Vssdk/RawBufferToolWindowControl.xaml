@@ -238,6 +238,41 @@
             <Setter Property="Background" Value="{DynamicResource ChannelChipBrush}"/><Setter Property="Padding" Value="4,2"/>
             <Setter Property="Margin" Value="4,0,0,0"/><Setter Property="CornerRadius" Value="3"/>
         </Style>
+
+        <Style x:Key="AutoScanSwitch" TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+                <DockPanel><Border x:Name="SwitchTrack" DockPanel.Dock="Left" Width="26" Height="14" CornerRadius="7" Margin="0,0,6,0" Background="{DynamicResource BorderBrush}" VerticalAlignment="Center"><Ellipse x:Name="SwitchThumb" Width="10" Height="10" Fill="{DynamicResource TextBrush}" HorizontalAlignment="Left" Margin="2"/></Border><ContentPresenter VerticalAlignment="Center"/></DockPanel>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsChecked" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource StatusAccentBrush}"/><Setter TargetName="SwitchThumb" Property="HorizontalAlignment" Value="Right"/></Trigger>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="SwitchTrack" Property="Opacity" Value="0.8"/></Trigger>
+                    <Trigger Property="IsPressed" Value="True"><Setter TargetName="SwitchTrack" Property="Background" Value="{DynamicResource CommandPressedBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SwitchTrack" Property="BorderBrush" Value="{DynamicResource TextBrush}"/><Setter TargetName="SwitchTrack" Property="BorderThickness" Value="1"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
+        <Style x:Key="ImageStateText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="10"/><Setter Property="Foreground" Value="#89D185"/>
+            <Style.Triggers><DataTrigger Binding="{Binding StateName}" Value="MAP"><Setter Property="Foreground" Value="#E2C08D"/></DataTrigger><DataTrigger Binding="{Binding StateName}" Value="FAILED"><Setter Property="Foreground" Value="#F48771"/></DataTrigger><DataTrigger Binding="{Binding StateName}" Value="PREVIEW"><Setter Property="Foreground" Value="{DynamicResource SecondaryTextBrush}"/></DataTrigger></Style.Triggers>
+        </Style>
+
+        <Style x:Key="ImageCardStyle" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+            <Setter Property="Padding" Value="0"/><Setter Property="Margin" Value="0"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+                <Grid x:Name="CardBackground" Background="Transparent">
+                    <ContentPresenter HorizontalAlignment="Stretch"/>
+                    <Border x:Name="CardSelection" BorderThickness="2,0,0,0" BorderBrush="Transparent" IsHitTestVisible="False"/>
+                </Grid>
+                <ControlTemplate.Triggers>
+                    <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="CardBackground" Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger>
+                    <Trigger Property="IsSelected" Value="True"><Setter TargetName="CardBackground" Property="Background" Value="{DynamicResource CommandPressedBrush}"/><Setter TargetName="CardSelection" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
+                    <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="CardSelection" Property="BorderThickness" Value="1"/><Setter TargetName="CardSelection" Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger>
+                    <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value="0.45"/></Trigger>
+                </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+        </Style>
     </UserControl.Resources>
 
     <Grid Background="{StaticResource InputBrush}">
@@ -262,21 +297,46 @@
                     <ColumnDefinition Width="44"/>
                 </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0" Background="{StaticResource PanelBrush}">
+            <Grid x:Name="ImagesPanel" Grid.Column="0" Background="{StaticResource PanelBrush}">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
 
-                <StackPanel x:Name="AutomaticInspectionBar" Grid.Row="0" Margin="10,10,10,6">
+                <StackPanel x:Name="ImagePanelTop" Grid.Row="0">
+<WrapPanel x:Name="ImageListHeader" Margin="8,4" VerticalAlignment="Center">
+    <TextBlock x:Name="ImagesHeadingText" Text="Images" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+    <Border Style="{StaticResource InfoChip}" VerticalAlignment="Center" Margin="6,0"><TextBlock x:Name="ImageCountText" FontSize="11" Text="0"/></Border>
+    <ToggleButton x:Name="AddImageButton" Content="+" MinWidth="28" Width="28" Margin="0" Padding="4,2" ToolTip="Add image" AutomationProperties.Name="Add image" AutomationProperties.AutomationId="AddImageButton"/>
+<Button x:Name="ClearButton"
+
+                                Margin="0"
+                                Padding="4,2" MinWidth="28"
+                                ToolTip="Clear all images"
+                                AutomationProperties.Name="Clear all images"
+                                AutomationProperties.AutomationId="ClearButton"
+                                Click="ReviewClear_Click">
+                            <StackPanel Orientation="Horizontal">
+                                <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" />
+                                <TextBlock x:Name="ClearButtonText" Text="Clear all" Visibility="Collapsed"/>
+                            </StackPanel>
+                        </Button>
+    <Button x:Name="CollapseImagesButton" Content="«" Command="{Binding ToggleImageListCommand}" MinWidth="28" Width="28" Margin="0" Padding="4,2" ToolTip="Collapse to thumbnails" AutomationProperties.Name="Collapse to thumbnails" AutomationProperties.AutomationId="CollapseImagesButton"/>
+</WrapPanel>
+    <Border x:Name="ClearAllConfirmation" Visibility="Collapsed" Margin="8,4" Padding="8" Background="{DynamicResource CommandBrush}" BorderBrush="#F48771" BorderThickness="1">
+        <StackPanel><TextBlock x:Name="ClearAllConfirmationText" TextWrapping="Wrap" FontSize="11.5"/>
+            <WrapPanel Margin="0,6,0,0"><Button x:Name="ConfirmClearAllButton" Content="Clear all" Click="Clear_Click" AutomationProperties.AutomationId="ConfirmClearAllButton"/><Button x:Name="CancelClearAllButton" Content="Cancel" Click="CancelClearAll_Click" AutomationProperties.AutomationId="CancelClearAllButton"/></WrapPanel>
+        </StackPanel>
+    </Border>
+<StackPanel x:Name="AutomaticInspectionBar" Grid.Row="0" Margin="8,8,8,10">
                     <WrapPanel>
                         <Grid MaxWidth="{Binding ActualWidth, ElementName=AutomaticInspectionBar}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <CheckBox x:Name="AutoInspectBox"
+                            <CheckBox x:Name="AutoInspectBox" Style="{StaticResource AutoScanSwitch}"
                                       IsChecked="True"
                                       Foreground="{StaticResource TextBrush}"
                                       VerticalAlignment="Center"
@@ -285,11 +345,11 @@
                                       AutomationProperties.AutomationId="AutomaticVisionAutoInspectCheckBox"
                                       Checked="AutoInspectBox_Changed"
                                       Unchecked="AutoInspectBox_Changed">
-                                <TextBlock Text="Auto Inspect on Break" TextWrapping="Wrap"/>
+                                <TextBlock Text="Auto scan on break" TextWrapping="Wrap"/>
                             </CheckBox>
                             <Button x:Name="AutomaticHelpButton" Grid.Column="1"
                                     Margin="4,0,0,0" Padding="3" MinWidth="24" Width="24" Height="24" VerticalAlignment="Center"
-                                    AutomationProperties.Name="Automatic inspection help"
+                                    AutomationProperties.Name="About automatic inspection"
                                     AutomationProperties.AutomationId="AutomaticVisionHelpButton"
                                     ToolTipService.InitialShowDelay="250"
                                     Click="AutomaticHelp_Click" PreviewKeyDown="AutomaticHelp_PreviewKeyDown">
@@ -312,7 +372,7 @@
                         </Grid>
                         <Button x:Name="ScanNowButton"
                                 IsEnabled="{Binding CanScan}"
-                                Content="Scan Now"
+                                Content="Scan now"
                                 Margin="6,0,0,0"
                                 ToolTip="Scan the current stack frame without waiting for another break"
                                 AutomationProperties.AutomationId="AutomaticVisionScanNowButton"
@@ -343,18 +403,18 @@
                                 AutomationProperties.AutomationId="AutomaticVisionStopButton"
                                 Click="StopAutomaticScan_Click"/>
                     </WrapPanel>
-                    <TextBlock x:Name="StatusText"
+                    <DockPanel Margin="0,6,0,0"><Ellipse Width="6" Height="6" Margin="0,0,6,0" VerticalAlignment="Center"><Ellipse.Style><Style TargetType="Ellipse"><Setter Property="Fill" Value="{DynamicResource SecondaryTextBrush}"/><Style.Triggers><DataTrigger Binding="{Binding CanScan}" Value="True"><Setter Property="Fill" Value="#89D185"/></DataTrigger></Style.Triggers></Style></Ellipse.Style></Ellipse><TextBlock x:Name="StatusText"
                            Text="{Binding Status}" ToolTip="{Binding StatusDetails}"
                            AutomationProperties.LiveSetting="Polite"
                            AutomationProperties.AutomationId="StatusText"
 
 
-                           Margin="0,6,0,0"
+                           Margin="0"
                            VerticalAlignment="Center"
 
                            Foreground="{StaticResource StatusTextBrush}"
                            FontSize="11.5"
-                           TextWrapping="Wrap"/>
+                           TextWrapping="Wrap"/></DockPanel>
                     <TextBlock x:Name="AutomaticBatchSummaryText"
                                Visibility="Collapsed"
                                Margin="0,4,0,0"
@@ -377,34 +437,22 @@
                                 AutomationProperties.AutomationId="AutomaticVisionLoadAllButton"
                                 Click="LoadAllAutomaticBatch_Click"/>
                     </WrapPanel>
-                    <Grid x:Name="ImageListHeader" Margin="0,8,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock x:Name="ImagesHeadingText"
-                                   Text="Images"
-                                   MinWidth="50"
-                                   FontSize="16"
-                                   FontWeight="SemiBold"
-                                   VerticalAlignment="Center"/>
-                        <Button x:Name="ClearButton"
-                                Grid.Column="1"
-                                Margin="6,0,0,0"
-                                Padding="5,3"
-                                ToolTip="Remove all loaded images and reset the viewer. Debuggee data is unchanged."
-                                AutomationProperties.Name="Clear all images"
-                                AutomationProperties.AutomationId="ClearButton"
-                                Click="Clear_Click">
-                            <StackPanel Orientation="Horizontal">
-                                <imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ClearCollection}" Width="16" Height="16" Margin="0,0,5,0"/>
-                                <TextBlock x:Name="ClearButtonText" Text="Clear all"/>
-                            </StackPanel>
-                        </Button>
-                    </Grid>
-                </StackPanel>
 
-                    <ListBox Grid.Row="1" Margin="10,0,10,10" x:Name="ImageList" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
+                </StackPanel>
+</StackPanel>
+<StackPanel x:Name="ImageStripHeader" Grid.Row="0" Visibility="Collapsed" Margin="4,4">
+    <Button Content="»" Command="{Binding ToggleImageListCommand}" MinWidth="28" Margin="0" ToolTip="Expand image list" AutomationProperties.Name="Expand image list" AutomationProperties.AutomationId="ExpandImagesButton"/>
+    <Button Content="↻" IsEnabled="{Binding IsEnabled, ElementName=ScanNowButton}" MinWidth="28" Margin="0,4,0,0" ToolTip="Scan now" AutomationProperties.Name="Scan now" Click="ScanNow_Click"/>
+</StackPanel>
+<Popup x:Name="AddImagePopup" PlacementTarget="{Binding ElementName=AddImageButton}" Placement="Bottom" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=AddImageButton, Mode=TwoWay}">
+    <Border Background="{DynamicResource PanelBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" Padding="4"><StackPanel ButtonBase.Click="AddImageMenu_Click">
+        <Button Content="Open snapshot file…" Click="Open_Click"/>
+        <Button Content="Open variable…" Click="OpenVariable_Click"/>
+        <Button Content="Connect your buffer…" Click="MapThisType_Click"><Button.Style><Style TargetType="Button" BasedOn="{StaticResource {x:Type Button}}"><Style.Triggers><DataTrigger Binding="{Binding Visibility, ElementName=MapThisTypeMenuItem}" Value="Collapsed"><Setter Property="IsEnabled" Value="False"/></DataTrigger></Style.Triggers></Style></Button.Style></Button>
+    </StackPanel></Border>
+</Popup>
+
+                    <ListBox Grid.Row="1" Margin="4,0,4,4" x:Name="ImageList" BorderThickness="0" Padding="0" ItemContainerStyle="{StaticResource ImageCardStyle}" HorizontalContentAlignment="Stretch" AutomationProperties.AutomationId="ImageList" SelectionChanged="ImageList_SelectionChanged" KeyDown="ImageList_KeyDown" ContextMenuOpening="ImageListContextMenu_Opening">
                         <ListBox.ContextMenu>
                             <ContextMenu>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
@@ -428,49 +476,26 @@
                         </ListBox.ContextMenu>
                         <ListBox.ItemTemplate>
                             <DataTemplate>
-                                <StackPanel Margin="4,5"
-                                      ToolTip="{Binding SourceAddressToolTip}"
-                                      AutomationProperties.Name="{Binding AccessibilityText}"
-                                      AutomationProperties.HelpText="{Binding SourceAddressToolTip}">
-                                    <TextBlock Text="{Binding ObjectName}"
-                                               TextWrapping="Wrap"
-                                               FontWeight="SemiBold"/>
-                                    <TextBlock Text="{Binding SourcePointerText}"
-                                               Visibility="{Binding SourcePointerVisibility}"
-                                               TextWrapping="Wrap"
-                                               FontFamily="Consolas"
-                                               FontSize="10"
-                                               Foreground="{StaticResource SecondaryTextBrush}"/>
-                                    <TextBlock Text="{Binding SourceAddressText}"
-                                               Visibility="{Binding SourceAddressVisibility}"
-                                               TextWrapping="Wrap"
-                                               FontFamily="Consolas"
-                                               FontSize="10"
-                                               Foreground="{StaticResource SecondaryTextBrush}"/>
-                                    <TextBlock Text="{Binding SourceStateText}"
-                                               Visibility="{Binding SourceStateVisibility}"
-                                               TextWrapping="Wrap"
-                                               FontSize="10"
-                                               Foreground="{StaticResource SecondaryTextBrush}"/>
-                                    <StackPanel Margin="0,5,0,0">
-                                        <Border Width="66" Height="50" Background="#111111" BorderBrush="{StaticResource BorderBrush}" BorderThickness="1" HorizontalAlignment="Left" VerticalAlignment="Top">
-                                            <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
-                                        </Border>
-                                        <TextBlock Text="{Binding Summary}"
-                                                   Margin="0,5,0,0"
-                                                   TextWrapping="Wrap"
-                                                   FontSize="11"
-                                                   Foreground="{StaticResource SecondaryTextBrush}"/>
+                                <Grid Margin="2,4" ToolTip="{Binding AccessibilityText}" AutomationProperties.Name="{Binding AccessibilityText}" AutomationProperties.HelpText="{Binding SourceAddressToolTip}">
+                                    <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="56"/><ColumnDefinition x:Name="CardTextColumn" Width="*"/></Grid.ColumnDefinitions>
+                                    <Border Width="56" Height="42" Background="{DynamicResource InputBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" VerticalAlignment="Top"><Grid><Image Source="{Binding Thumbnail}" Stretch="Uniform"/><TextBlock x:Name="StripStateText" Text="{Binding StateChipText}" Style="{StaticResource ImageStateText}" Background="{DynamicResource PanelBrush}" FontSize="8.5" VerticalAlignment="Bottom" Visibility="Collapsed"/></Grid></Border>
+                                    <StackPanel x:Name="CardSummary" Grid.Column="1" Margin="8,0,0,0">
+                                        <TextBlock Text="{Binding ObjectName}" FontSize="12.5" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                        <TextBlock Text="{Binding MetaText}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextTrimming="CharacterEllipsis" Margin="0,2,0,0"/>
+                                        <WrapPanel Margin="0,3,0,0"><TextBlock Text="{Binding StateChipText}" Style="{StaticResource ImageStateText}" VerticalAlignment="Center"/><Button Content="Map" Padding="4,0" MinWidth="28" Margin="6,0,0,0" Visibility="{Binding MappingActionVisibility}" ToolTip="Confirm only the unresolved member or pixel-format mapping" AutomationProperties.Name="Map this detected image type" Click="MapCandidate_Click"/></WrapPanel>
                                     </StackPanel>
-                                    <Button
-                                            Content="Map"
-                                            Margin="0,5,0,0"
-                                            HorizontalAlignment="Left"
-                                            Visibility="{Binding MappingActionVisibility}"
-                                            ToolTip="Confirm only the unresolved member or pixel-format mapping"
-                                            AutomationProperties.Name="Map this detected image type"
-                                            Click="MapCandidate_Click"/>
-                                </StackPanel>
+                                    <StackPanel x:Name="CardDetails" Grid.Row="1" Grid.ColumnSpan="2" Margin="0,6,0,0" Visibility="Collapsed">
+                                        <DockPanel Visibility="{Binding SourcePointerVisibility}"><Button DockPanel.Dock="Right" MinWidth="24" Width="24" Padding="2" Margin="4,0,0,0" ToolTip="Copy pointer address" AutomationProperties.Name="Copy pointer address" Click="CopyPointerAddress_Click"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="12" Height="12"/></Button><TextBlock Text="{Binding SourcePointerText}" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
+                                        <DockPanel Visibility="{Binding SourceAddressVisibility}" Margin="0,2,0,0"><Button DockPanel.Dock="Right" MinWidth="24" Width="24" Padding="2" Margin="4,0,0,0" ToolTip="Copy pixel address" AutomationProperties.Name="Copy pixel address" Click="CopyDataAddress_Click"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Copy}" Width="12" Height="12"/></Button><TextBlock Text="{Binding SourceAddressText}" FontFamily="Consolas" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center"/></DockPanel>
+                                        <TextBlock Text="{Binding SourceStateText}" Visibility="{Binding SourceStateVisibility}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                        <TextBlock Text="{Binding AutomaticConfidenceText}" FontSize="10" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                                    </StackPanel>
+                                </Grid>
+                                <DataTemplate.Triggers>
+                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListBoxItem}}" Value="True"><Setter TargetName="CardDetails" Property="Visibility" Value="Visible"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding DataContext.IsImageStrip, RelativeSource={RelativeSource AncestorType=ListBox}}" Value="True"><Setter TargetName="CardSummary" Property="Visibility" Value="Collapsed"/><Setter TargetName="CardDetails" Property="Visibility" Value="Collapsed"/><Setter TargetName="StripStateText" Property="Visibility" Value="Visible"/><Setter TargetName="CardTextColumn" Property="Width" Value="0"/></DataTrigger>
+                                </DataTemplate.Triggers>
                             </DataTemplate>
                         </ListBox.ItemTemplate>
                     </ListBox>
