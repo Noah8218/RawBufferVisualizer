@@ -4942,6 +4942,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 InspectorGridSplitter.Visibility = Visibility.Collapsed;
                 InspectorSplitterColumn.Width = new GridLength(0);
                 InspectorColumn.Width = new GridLength(!_inspector.IsNarrow && _inspector.IsOpen ? 300 : 0);
+                InspectorContainer.Width = Math.Min(300, Math.Max(0, width - 44));
                 if (_inspector.IsNarrow)
                 {
                     if (DockedInspectorHost.Content != null)
@@ -4964,7 +4965,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     InspectorContainer.Height = double.NaN;
                     InspectorContainer.Effect = null;
                 }
-                _histogram.SetVisible(_inspector.IsHistogramSelected && IsVisible);
+                _histogram.SetVisible(_inspector.IsHistogramSelected && IsVisible && (!_inspector.IsNarrow || InspectorOverlayPopup.IsOpen));
                 _layoutMode = nextMode;
                 UpdateViewerToolbarLayout();
             }
@@ -5179,6 +5180,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 AppendJsonProperty(builder, "tempBytes", hasTempByteCount ? tempByteCount : -1, true);
                 AppendJsonProperty(builder, "activeTitle", _activeDocument == null ? string.Empty : _activeDocument.Title, true);
                 AppendJsonProperty(builder, "status", StatusText.Text, true);
+                AppendJsonProperty(builder, "statusDetails", _inspectionStatus.StatusDetails, true);
                 AppendJsonProperty(builder, "activeErrorId", _activeDocument == null ? string.Empty : _activeDocument.ErrorId, true);
                 AppendJsonProperty(builder, "activeSourceUnavailable", _activeDocument != null && _activeDocument.IsSourceUnavailable, true);
                 AppendJsonProperty(builder, "errorPanelVisible", ErrorPanel != null && ErrorPanel.Visibility == Visibility.Visible, true);
@@ -5577,6 +5579,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 builder.AppendLine("{");
                 AppendJsonProperty(builder, "metadataPath", metadataPath, true);
                 AppendJsonProperty(builder, "status", StatusText.Text, true);
+                AppendJsonProperty(builder, "statusDetails", _inspectionStatus.StatusDetails, true);
                 AppendJsonProperty(builder, "toolWindowActualWidth", ActualWidth, true);
                 AppendJsonProperty(builder, "toolWindowActualHeight", ActualHeight, true);
                 AppendJsonProperty(builder, "imageViewActualWidth", OpenGlImageView.ActualWidth, true);

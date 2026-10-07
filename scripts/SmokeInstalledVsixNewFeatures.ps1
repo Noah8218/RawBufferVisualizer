@@ -1173,7 +1173,7 @@ function Invoke-BufferDoctorScenario(
         throw "Raw Buffer Visualizer tool window element was not found."
     }
 
-    # Wait for the tool window to finish loading an image before looking for tabs.
+    # Wait for the image before opening the Format section.
     Wait-Until "Raw Buffer Visualizer loaded" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
         @(Get-ImageListItems $toolRoot).Count -gt 0
@@ -1198,8 +1198,6 @@ function Invoke-BufferDoctorScenario(
 
     $diagnoseButton = Wait-Until "Diagnose Buffer button" {
         Dismiss-DebuggerEvaluationWarning | Out-Null
-        $byId = Find-ElementByAutomationId $toolRoot "DiagnoseBufferButton"
-        if ($byId) { return $byId }
         $byId = Find-ElementByAutomationId $toolRoot "DiagnoseBufferButton"
         if ($byId) { return $byId }
         Get-ElementsByControlType $toolRoot ([System.Windows.Automation.ControlType]::Button) |
@@ -3101,8 +3099,7 @@ function Invoke-AutomaticCollectionsScenario(
         }
     } 15
 
-    if (-not [bool]$loadedState.inspectorVisible -and
-        -not [bool]$loadedState.InspectorVisible) {
+    if (-not [bool]$loadedState.inspectorVisible) {
         $inspectorToggle = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) "InspectorFormatButton"
         if (-not $inspectorToggle -or [bool]$inspectorToggle.Current.IsOffscreen) {
             throw "The narrow installed Tool Window hid the Inspector without exposing its toggle."
@@ -3150,12 +3147,7 @@ function Invoke-AutomaticCollectionsScenario(
 
     Show-InspectorSection $MainHandle "Format"
 
-    $diagnoseButtonId = if ([bool]$loadedState.InspectorVisible) {
-        "DiagnoseBufferButton"
-    }
-    else {
-        "DiagnoseBufferButton"
-    }
+    $diagnoseButtonId = "DiagnoseBufferButton"
     $diagnoseButton = Find-ElementByAutomationId (Get-AutomationRoot $MainHandle) $diagnoseButtonId
     if (-not $diagnoseButton) {
         throw "Installed Tool Window did not expose $diagnoseButtonId."
@@ -3218,35 +3210,21 @@ function Invoke-AutomaticCollectionsScenario(
                 [string]$state.interpretStride,
                 [string]$state.interpretBits,
                 [string]$state.interpretEndian)
-            $compactFields = @(
-                [string]$state.InterpretFormat,
-                [string]$state.InterpretWidth,
-                [string]$state.InterpretHeight,
-                [string]$state.InterpretStride,
-                [string]$state.InterpretBits,
-                [string]$state.InterpretEndian)
             if ([int]$state.documentCount -eq 0 -and
                 [string]::IsNullOrEmpty([string]$state.activeTitle) -and
-                [string]$state.status -eq "0 images" -and
+                [string]$state.status -eq "Debugger paused" -and
+                ([string]$state.statusDetails).Contains("0 images") -and
                 -not [bool]$state.imageViewVisible -and
                 [bool]$state.emptyViewerVisible -and
                 -not [bool]$state.interpretEnabled -and
-                -not [bool]$state.InterpretEnabled -and
                 @($wideFields | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count -eq 0 -and
-                @($compactFields | Where-Object { -not [string]::IsNullOrEmpty($_) }).Count -eq 0 -and
                 -not [bool]$state.diagnosisVisible -and
                 [string]::IsNullOrEmpty([string]$state.diagnosisStatus) -and
                 [int]$state.diagnosisCandidateCount -eq 0 -and
-                -not [bool]$state.DiagnosisVisible -and
-                [string]::IsNullOrEmpty([string]$state.DiagnosisStatus) -and
-                [int]$state.DiagnosisCandidateCount -eq 0 -and
                 [string]::IsNullOrEmpty([string]$state.pixelText) -and
-                [string]::IsNullOrEmpty([string]$state.PixelText) -and
                 [string]::IsNullOrEmpty([string]$state.markerText) -and
-                [string]::IsNullOrEmpty([string]$state.MarkerText) -and
                 [string]$state.comparisonText -match '^A: -\r?\nB: -$' -and
-                [bool]$state.inspectorVisible -eq [bool]$loadedState.inspectorVisible -and
-                [bool]$state.InspectorVisible -eq [bool]$loadedState.InspectorVisible) {
+                [bool]$state.inspectorVisible -eq [bool]$loadedState.inspectorVisible) {
                 $state
             }
             else {

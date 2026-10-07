@@ -1,6 +1,6 @@
 # Architecture And Validation
 
-This owner map describes the 2.2.1 source line. Source changes affecting ownership must update this map; exact test execution belongs in the result for the tested source snapshot.
+This owner map describes the current source tree. Source changes affecting ownership must update this map; exact test execution belongs in the result for the tested source snapshot.
 
 ## Runtime Routes
 
@@ -22,13 +22,23 @@ Standalone file -> ViewerFiles/ViewerViewModel -> ViewerDocument -> Core source 
 | Automatic scan | `VisualStudio.Vssdk/AutomaticVisionInspector.cs` | Owns bounded discovery/cache behavior; caller coordinates cancellation and debugger state |
 | Mode/status presentation | `VisualStudio.Vssdk/AutomaticInspectionStatusViewModel.cs` | Owns frame/mode/detail/busy/image status; control wires scoped XAML bindings and its lifetime |
 | Pixel semantics | `Core/BitmapPixelConverter.cs`, `RawBufferRenderer.cs`, `RawPixelInspector.cs`, `RawPixelStatistics.cs`, `RawPixelHistogram.cs` | Core calculations; no IDE ownership |
-| Docked pixel measurement | `Shared.Wpf/PixelMeasurementViewModel.cs` -> scoped toolbar/status bindings in `VisualStudio.Vssdk/RawBufferToolWindowControl.xaml` -> `OpenGlCanvas/RawOpenGlImageCanvas.cs` overlay | ViewModel owns two pixel endpoints, mode, bounds and commands; control supplies image lifecycle and translates pixel events to commands; canvas owns display coordinates and line rendering |
+| Docked pixel measurement | `Shared.Wpf/PixelMeasurementViewModel.cs` -> scoped viewer-toolbar/pixel-bar bindings in `VisualStudio.Vssdk/RawBufferToolWindowControl.xaml` -> `OpenGlCanvas/RawOpenGlImageCanvas.cs` overlay | ViewModel owns two pixel endpoints, mode, bounds and commands; control supplies image lifecycle and translates pixel events to commands; canvas owns display coordinates and line rendering |
+| Docked inspector navigation | `VisualStudio.Vssdk/RawBufferToolWindowControl.xaml` -> `InspectorNavigationViewModel.cs` -> control `ApplyResponsiveLayout` | Model owns section, session-local docked/overlay open state and image-strip choice; control owns placement of the single inspector and closes popups on unload/disposal |
+| Docked pixel presentation | control pixel-event adapters -> `VisualStudio.Vssdk/PixelInspectorViewModel.cs` -> Pixel-section bindings | Model owns channel selection and bounded neighborhood/profile presentation snapshots; Core remains the pixel/statistics owner, canvas retains selection/pin coordinates, and the control releases its source/document lifetime |
 | Histogram presentation | `Shared.Wpf/HistogramViewModel.cs` | Owns accepted generation, background cancellation and source leases |
 | Type mappings | `VisualStudio.ObjectSource/TypeMappingStore.cs`, `TypeMappingEditSession.cs`; `VisualStudio.Vssdk/TypeMappingSaveViewModel.cs` | Store owns durable mapping writes; edit/save models retain draft and conflict state |
 | Snapshot saving | `Sdk/RawBufferSnapshot.cs`, `AtomicFileSave.cs`, `SnapshotExportOperation.cs` | Export owns progress/cancellation; atomic save preserves the prior destination on failure |
 | Standalone UI | `Wpf/MainWindow.xaml`, `ViewerViewModel.cs`, `ViewerDocument.cs`, `ViewerFiles.cs`, `ViewerDialogHost.cs` | ViewModel owns document/command state; host owns dialogs and view lifetime |
 
 Paths in this table are relative to `src/` and use the `RawBufferVisualizer.` prefix on project folders (except `Shared.Wpf`). Existing XAML binding names and command contracts are compatibility surfaces, not an invitation to restructure these owners.
+
+## Docked Presentation Contracts
+
+The control constructor supplies navigation DataContexts to the rail, inspector container and image-list surfaces, and supplies the pixel presentation model to `PixelVisualization`. The existing automatic-status, measurement and histogram contexts remain scoped to their controls. Read the XAML, the two presentation models, and then the control pixel-event/layout methods; `docs/README.md` remains the Start Here route.
+
+Rail selection and collapse bindings write navigation state. Channel selection writes only the pixel presentation model; its source input is a bounded snapshot through existing Core APIs and is not retained. Pixel hover, selection and pin coordinates still originate in the canvas. Source leases, document admission, saving and measurement commands keep their existing owners. View-specific size, scrolling, shortcut, theme, popup and reparenting handlers remain in the control; its `Dispose` releases subscriptions and closes popups.
+
+`InspectorNavigationTests` and `PixelInspectorTests` exercise these presentation owners through `--docked-layout`. `Test-DockedLayout.ps1` arranges the built control and its popup content without showing a window, checks channel bounds and all five sections, and records bitmap/JSON evidence. It does not verify native popup interaction, pointer states, Visual Studio image services or Windows DPI. Installed-IDE and native UI checks remain separate.
 
 ## Project And Startup Map
 
@@ -75,11 +85,14 @@ Build once using [development prerequisites](development-prerequisites.md), then
 | `--automatic-scan` | Automatic preference/collection and inference regressions |
 | `--mapping-save` | Mapping/save and related snapshot/transfer regressions |
 | `--pixel-correctness` | Pixel conversion and renderer/source regressions |
+| `--docked-layout` | Inspector section/resize state and pixel neighborhood, channel, statistics and profile presentation |
 | `--pixel-measurement` | Two-point coordinate distances, image bounds and measurement command/reset transitions |
 
 Use the group required by the change. With no argument, the runner executes the aggregate suite; CI uses that route. `scripts/SmokeAutomaticScanResponsiveness.ps1 -SkipWindow` exercises scanner scheduling without its desktop window. UI smoke scripts require matching built binaries and host prerequisites; they do not replace interaction with the installed extension.
 
 Run `scripts/Test-DockedPreviewOrder.ps1` in Windows PowerShell with `-STA`, supplying `-BuildRoot`, `-VisualStudioRoot` and `-OutputRoot`. It checks preview/full admission, late-preview acknowledgement and cleanup, and independent image identities through the built docked control without launching a desktop window. Use a D-drive output root on this workstation; this component check does not qualify an installed IDE.
+
+Run `scripts/Test-DockedLayout.ps1` in Windows PowerShell with `-STA`, using the same `-BuildRoot`, `-VisualStudioRoot` and a separate D-drive `-OutputRoot`. Its default matrix covers 320/640/759/760/800/1000/1440 by 440/720, including the overlay threshold and color/scalar values. Desktop scripts such as `SmokeDockedLayoutWidths.ps1` require an explicitly allowed interactive run and matching binaries.
 
 `Test-ReleaseCommunication.ps1` checks source communication coherence. `Publish-VisualStudioExtension.ps1` builds/checks the local package and compares payload hashes; it does not publish to Marketplace. Installation and external publishing are separate operations.
 

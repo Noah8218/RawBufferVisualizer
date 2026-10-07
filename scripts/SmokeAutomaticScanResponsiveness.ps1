@@ -355,7 +355,7 @@ if (-not $SkipWindow) {
                         'run' { $fixture.Mode=[EnvDTE.dbgDebugMode]::dbgRunMode; $control.InvalidateLiveSources() | Out-Null }
                         'design' { $fixture.Mode=[EnvDTE.dbgDebugMode]::dbgDesignMode; $control.EndAutomaticInspectionSession() }
                         'disable' { $control.FindName('AutoInspectBox').IsChecked=$false }
-                        'clear' { ButtonClick 'ClearButton' }
+                        'clear' { ButtonClick 'ClearButton'; ButtonClick 'ConfirmClearAllButton' }
                         'dispose' { $control.Dispose() }
                     }
                 } catch { $state.Error=$_ }

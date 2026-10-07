@@ -2,6 +2,14 @@
 
 This file records user-visible Raw Buffer Visualizer changes. The Tool Window shows a concise one-time summary for each installed version; the complete history remains available here.
 
+## [Unreleased]
+
+- Places image information, viewer commands and pixel values directly above the docked image; short windows use a side toolbar.
+- Uses one collapsible inspector with Pixel, Histogram, Buffer format, Compare and Diagnostics at every window width.
+- Keeps channel values visible as the pixel bar narrows, and preserves pinned, hovered, selected and measurement states.
+- Displays pixel-colored 5×5 neighborhoods, channel statistics and 17-sample row profiles.
+- Compresses image cards and automatic-scan controls, and confirms Clear all inline before removing list entries.
+
 ## [2.2.3] - 2026-10-01
 
 - Clears the extension's Preview label so supported Visual Studio Marketplace searches can include it when Preview extensions are excluded.

@@ -202,7 +202,7 @@
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
         </Style>
         <Style x:Key="InspectorRailButtonStyle" TargetType="ToggleButton" BasedOn="{StaticResource {x:Type ToggleButton}}">
-            <Setter Property="MinWidth" Value="44"/><Setter Property="Height" Value="54"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/>
+            <Setter Property="MinWidth" Value="44"/><Setter Property="Height" Value="50"/><Setter Property="Margin" Value="0"/><Setter Property="Padding" Value="0"/>
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="2,0,0,0"/><Setter Property="BorderBrush" Value="Transparent"/>
             <Style.Triggers><Trigger Property="IsChecked" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger></Style.Triggers>
         </Style>
@@ -216,6 +216,10 @@
             <Setter Property="MinWidth" Value="28"/><Setter Property="MinHeight" Value="26"/>
             <Setter Property="Padding" Value="5,2"/><Setter Property="Margin" Value="1,2"/>
             <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+        </Style>
+        <Style x:Key="MeasurementViewerToggle" TargetType="ToggleButton" BasedOn="{StaticResource ViewerToggle}">
+            <Setter Property="ToolTip" Value="{Binding MeasurementToolTip}"/>
+            <Style.Triggers><DataTrigger Binding="{Binding CanMeasure}" Value="True"><Setter Property="ToolTip" Value="Click two image pixels to measure their horizontal and vertical distance (M)"/></DataTrigger></Style.Triggers>
         </Style>
         <Style x:Key="ViewerCheck" TargetType="CheckBox">
             <Setter Property="Foreground" Value="{DynamicResource TextBrush}"/>
@@ -563,7 +567,7 @@
 <Button x:Name="ZoomOutButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom out (−)" AutomationProperties.Name="Zoom out (−)" AutomationProperties.AutomationId="ZoomOutButton" Tag="0.5" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomOut}" Width="16" Height="16"/></StackPanel></Button>
 <ToggleButton x:Name="ZoomMenuButton" Style="{StaticResource ViewerToggle}" ToolTip="Zoom level" AutomationProperties.Name="Zoom level" AutomationProperties.AutomationId="ZoomMenuButton"><Viewbox StretchDirection="DownOnly" Stretch="Uniform"><TextBlock x:Name="ZoomText" FontFamily="Consolas" FontSize="11" TextAlignment="Center"/></Viewbox></ToggleButton>
 <Button x:Name="ZoomInButton" Style="{StaticResource ViewerButton}" ToolTip="Zoom in (+)" AutomationProperties.Name="Zoom in (+)" AutomationProperties.AutomationId="ZoomInButton" Tag="2" Click="ZoomStep_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.ZoomIn}" Width="16" Height="16"/></StackPanel></Button>
-<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource ViewerToggle}" ToolTip="{Binding MeasurementToolTip}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ruler}" Width="16" Height="16"/><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton></StackPanel>
+<StackPanel x:Name="MeasurementCommands" Orientation="Horizontal"><ToggleButton x:Name="MeasureButton" Style="{StaticResource MeasurementViewerToggle}" AutomationProperties.Name="{Binding ModeText}" AutomationProperties.AutomationId="MeasureButton" IsChecked="{Binding IsEnabled, Mode=TwoWay}" IsEnabled="{Binding CanMeasure}" ToolTipService.ShowOnDisabled="True"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Ruler}" Width="16" Height="16"/><TextBlock x:Name="MeasureButtonText" Text="{Binding ModeText}" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></ToggleButton></StackPanel>
 <Button x:Name="PinPixelButton" Style="{StaticResource ViewerButton}" ToolTip="Freeze values at the hovered pixel (right-click the image)" AutomationProperties.Name="Pin" AutomationProperties.AutomationId="PinPixelButton" Click="PinPixel_Click"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Pin}" Width="16" Height="16"/><TextBlock x:Name="PinPixelButtonText" Text="Pin" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></Button>
 <CheckBox x:Name="LinkViewsBox" Style="{StaticResource ViewerCheck}" ToolTip="Keep zoom and position when switching images" AutomationProperties.Name="Link views" AutomationProperties.AutomationId="LinkViewsBox" Checked="LinkViewsBox_Changed" Unchecked="LinkViewsBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.Link}" Width="16" Height="16"/><TextBlock x:Name="LinkViewsText" Text="Link views" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
 <CheckBox x:Name="SelectionOverlayBox" Style="{StaticResource ViewerCheck}" ToolTip="Outline the 5×5 neighborhood around the hovered or pinned pixel" AutomationProperties.Name="5×5 box" AutomationProperties.AutomationId="SelectionOverlayBox" IsChecked="True" Checked="SelectionOverlayBox_Changed" Unchecked="SelectionOverlayBox_Changed"><StackPanel Orientation="Horizontal"><imaging:CrispImage Moniker="{x:Static catalog:KnownMonikers.SelectAll}" Width="16" Height="16"/><TextBlock x:Name="SelectionOverlayText" Text="5×5 box" Margin="5,0,0,0" VerticalAlignment="Center"/></StackPanel></CheckBox>
@@ -1024,7 +1028,7 @@
                         </Button>
                     </WrapPanel>
                     <TextBlock x:Name="PerformanceText" Margin="0,0,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
-                    <ListBox x:Name="DiagnosticsList" Height="110"/>
+                    <ListBox x:Name="DiagnosticsList" Height="110" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap"/></DataTemplate></ListBox.ItemTemplate></ListBox>
                     <TextBlock x:Name="TempUsageText"
 
 
