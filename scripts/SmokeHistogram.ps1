@@ -139,13 +139,17 @@ function Modal($window, [scriptblock]$action) {
 function BoundResult($view,$vm) {
     Pump
     Check ([object]::ReferenceEquals($view.FindName('HistogramCanvas').Histogram,$vm.Result)) 'Rendered plot binding matches current result'
-    Check ($view.FindName('HistogramCoverage').Text -eq $vm.Coverage -and $view.FindName('HistogramStatus').Text -eq $vm.Status) 'Rendered coverage/status match ViewModel'
-    Check ($view.FindName('HistogramSourceDescription').Text -eq $vm.SourceDescription -and $view.FindName('HistogramValueRange').Text -eq $vm.ValueRange -and $view.FindName('HistogramExclusions').Text -eq $vm.Exclusions) 'Rendered value basis/range/exclusions match current result'
+    $coverage=if ($view.Tag -eq 'Docked') { $vm.DockedCoverage } else { $vm.Coverage }
+    $range=if ($view.Tag -eq 'Docked') { $vm.DockedValueRange } else { $vm.ValueRange }
+    $frequency=if ($view.Tag -eq 'Docked') { $vm.DockedFrequencyScale } else { $vm.FrequencyScale }
+    Check ($view.FindName('HistogramCoverage').Text -eq $coverage -and $view.FindName('HistogramStatus').Text -eq $vm.Status) 'Rendered coverage/status match ViewModel'
+    Check ($view.FindName('HistogramSourceDescription').Text -eq $vm.SourceDescription -and $view.FindName('HistogramValueRange').Text -eq $range -and $view.FindName('HistogramExclusions').Text -eq $vm.Exclusions) 'Rendered value basis/range/exclusions match current result'
     Check ($view.FindName('HistogramLowerLabel').Text -eq $vm.LowerLabel -and $view.FindName('HistogramUpperLabel').Text -eq $vm.UpperLabel) 'Rendered axes match numeric labels'
-    Check ($view.FindName('HistogramFrequencyScale').Text -eq $vm.FrequencyScale -and $view.FindName('HistogramAxisDescription').Text -eq $vm.AxisDescription) 'Rendered frequency and value-axis explanations match the result'
+    Check ($view.FindName('HistogramFrequencyScale').Text -eq $frequency -and $view.FindName('HistogramAxisDescription').Text -eq $vm.AxisDescription) 'Rendered frequency and value-axis explanations match the result'
     Check ($view.FindName('HistogramSamplingDescription').Text -eq $vm.SamplingDescription -and $view.FindName('HistogramChannelDescription').Text -eq $vm.ChannelDescription) 'Rendered sampling and RGB-mean explanations follow the current source/channel'
     $textColor=$view.FindResource($(if ($view.Tag -eq 'Docked') { 'SecondaryTextBrush' } else { 'RbvTextBrush' })).Color
-    Check ($view.FindName('HistogramCoverage').Foreground.Color -eq $textColor -and $view.FindName('HistogramStatus').Foreground.Color -eq $textColor) 'Optional text preserves the rendered theme foreground'
+    $coverageColor=$view.FindResource($(if ($view.Tag -eq 'Docked') { 'TextBrush' } else { 'RbvTextBrush' })).Color
+    Check ($view.FindName('HistogramCoverage').Foreground.Color -eq $coverageColor -and $view.FindName('HistogramStatus').Foreground.Color -eq $textColor) 'Optional text preserves the rendered theme foreground'
 }
 function Exercise($window,$view,$vm,$hostName) {
     $button=$view.FindName('HistogramAction'); $combo=$view.FindName('HistogramChannel')

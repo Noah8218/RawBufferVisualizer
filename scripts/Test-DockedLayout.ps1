@@ -542,6 +542,74 @@ try {
         $iconCases+=[pscustomobject]@{State=$state;Color=$color;Geometry=[string]$shape.Data;Ring=[string]$ring.Visibility;Scope='synthetic row bound to the actual View template'}
     }
 
+    # Supply host visibility only for this disconnected View; calculations/bindings remain real.
+    $histogramCases=@(); $histogramView=$control.FindName('HistogramPanel'); $histogram=$histogramView.DataContext
+    $previousContext=[Threading.SynchronizationContext]::Current
+    [Threading.SynchronizationContext]::SetSynchronizationContext([Windows.Threading.DispatcherSynchronizationContext]::new())
+    function Wait-HistogramResult($vm) {
+        $deadline=[DateTime]::UtcNow.AddSeconds(15)
+        while (-not $vm.Completion.IsCompleted) {
+            [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::Background)
+            if ([DateTime]::UtcNow -gt $deadline) { throw 'Histogram result timed out' }
+            [Threading.Thread]::Sleep(5)
+        }
+        if ($vm.Completion.IsFaulted) { throw $vm.Completion.Exception }
+    }
+    $histogramSource=$null
+    try {
+        $histogram.SetVisible($false)
+        $hDescriptor=[RawBufferVisualizer.Core.RawImageDescriptor]::new(); $hDescriptor.Width=3; $hDescriptor.Height=1; $hDescriptor.Stride=9; $hDescriptor.PixelFormat='RGB24'; $hDescriptor.ValidBits=8
+        $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory([byte[]]@(9,30,90,9,30,90,9,30,90),$hDescriptor)
+        $histogram.SetSource($histogramSource); $histogram.SetVisible($true); Wait-HistogramResult $histogram
+        Arrange-Control $histogramView 300 360
+        if ($histogramView.FindName('HistogramFrequencyScale').Text -ne 'Count · linear · max 3' -or $histogramView.FindName('HistogramCoverage').Text -ne 'Coverage: full image · 3 px' -or $histogramView.FindName('HistogramValueRange').Text -ne 'min 43 · max 43') { throw 'Docked histogram captions disagree with the three RGB samples' }
+        if ($histogramView.FindName('HistogramFrequencyScale').LineHeight -ne 16.675 -or $histogramView.FindName('HistogramCoverage').LineHeight -ne 18 -or $histogramView.FindName('HistogramCoverage').Foreground.Color.ToString() -ne '#FFF1F1F1') { throw 'Docked histogram result typography differs from approved captions' }
+        $histogramAction=$histogramView.FindName('HistogramAction')
+        if ($histogramAction.Content -ne 'Refresh' -or $histogramAction.ContentTemplate -ne $histogramView.Resources['DockedHistogramActionTemplate']) { throw 'Docked histogram action lost the Refresh icon template or caption' }
+        Find-TemplatePresenter $histogramAction $histogramAction.ContentTemplate | Out-Null
+        Save-Render $histogramView 300 360 'histogram-docked-full.png'
+        $standaloneHistogram=New-Object RawBufferVisualizer.Presentation.HistogramView; $standaloneHistogram.DataContext=$histogram
+        # Reproduce the existing App/MainWindow resource contract without launching the standalone app.
+        [xml]$standaloneApp=Get-Content -Raw (Join-Path $PSScriptRoot '..\src\RawBufferVisualizer.Wpf\App.xaml')
+        foreach ($key in @('MutedTextBrush','BorderBrush')) {
+            $brushNode=@($standaloneApp.Application.'Application.Resources'.SolidColorBrush | Where-Object { $_.GetAttribute('Key','http://schemas.microsoft.com/winfx/2006/xaml') -eq $key })[0]
+            $standaloneHistogram.Resources[$key]=[Windows.Media.BrushConverter]::new().ConvertFromString($brushNode.Color)
+        }
+        $standaloneTextStyle=[Windows.Style]::new([Windows.Controls.TextBlock]); $standaloneTextStyle.BasedOn=$standaloneHistogram.FindResource('RbvTextBlockStyle')
+        $standaloneHistogram.Resources[[Windows.Controls.TextBlock]]=$standaloneTextStyle
+        $standaloneHistogram.Background=$standaloneHistogram.FindResource('RbvWindowBrush')
+        Arrange-Control $standaloneHistogram 420 360
+        $standaloneTitle=$standaloneHistogram.Content.Children[0].Children[0]
+        if ($standaloneTitle.Foreground.Color.ToString() -ne '#FFF1F1F1' -or $standaloneHistogram.FindName('HistogramCanvas').PlotBrush.Color.ToString() -ne '#FF9CDCFE') { throw 'Standalone histogram lost its actual parent theme resource contract' }
+        if ($standaloneHistogram.FindName('HistogramCoverage').Text -ne 'All pixels: 3' -or $standaloneHistogram.FindName('HistogramValueRange').Text -ne 'Range: 43 to 43' -or $standaloneHistogram.FindName('HistogramFrequencyScale').Text -ne 'Y: pixels per bin · 0 to 3' -or $standaloneHistogram.FindName('HistogramAction').ContentTemplate -ne $null) { throw 'Standalone histogram defaults changed with docked presentation' }
+        Save-Render $standaloneHistogram 420 360 'histogram-standalone-full.png'
+        $histogramCases+=[pscustomobject]@{Case='RGB full';Docked=$histogram.DockedCoverage;Standalone=$histogram.Coverage;Range=$histogram.DockedValueRange}
+        $histogram.SetVisible($true); $histogramView.FindName('HistogramChannel').SelectedIndex=2; Wait-HistogramResult $histogram
+        if ($histogram.SelectedChannelIndex -ne 2 -or $histogram.DockedValueRange -ne 'min 30 · max 30' -or $standaloneHistogram.FindName('HistogramChannel').SelectedIndex -ne 2) { throw 'Shared histogram channel binding lost its two-way contract' }
+        $histogramCases+=[pscustomobject]@{Case='G selection';Range=$histogram.DockedValueRange}
+        $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
+        $hDescriptor.Width=2; $hDescriptor.Stride=8; $hDescriptor.PixelFormat='Float32'; $hDescriptor.ValidBits=32
+        $hBytes=[byte[]]([BitConverter]::GetBytes([single]0.25)+[BitConverter]::GetBytes([single]1))
+        $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory($hBytes,$hDescriptor)
+        $histogram.SetSource($histogramSource); Wait-HistogramResult $histogram
+        Arrange-Control $histogramView 300 360
+        if ($histogram.DockedValueRange -ne 'min 0.250 · max 1.000' -or $histogram.ValueRange -ne 'Range: 0.25 to 1') { throw 'Float histogram formatting changed data or standalone output' }
+        $histogramCases+=[pscustomobject]@{Case='Float32';Docked=$histogram.DockedValueRange;Standalone=$histogram.ValueRange}
+        $histogram.SetSource($null); $histogramSource.Dispose(); $histogramSource=$null
+        $hDescriptor.Width=257; $hDescriptor.Height=257; $hDescriptor.Stride=257; $hDescriptor.PixelFormat='Mono8'; $hDescriptor.ValidBits=8
+        $histogramSource=[RawBufferVisualizer.Core.RawImageSource]::FromMemory([byte[]]::new(66049),$hDescriptor)
+        $histogram.SetVisible($true); $histogram.SetSource($histogramSource); Wait-HistogramResult $histogram
+        if (-not $histogram.Result.IsSampled -or -not $histogram.DockedCoverage.StartsWith('Coverage: sampled · ') -or $histogram.DockedCoverage.Contains('full image')) { throw 'Sampled histogram falsely claims full-image coverage' }
+        $histogramCases+=[pscustomobject]@{Case='Sampled';Docked=$histogram.DockedCoverage;Sampled=$histogram.Result.IsSampled}
+        $histogram.SetSource($null); Arrange-Control $histogramView 300 360
+        if ($histogram.DockedFrequencyScale -ne '' -or $histogram.DockedCoverage -ne '' -or $histogram.DockedValueRange -ne '' -or $histogramView.FindName('HistogramCoverage').Visibility -ne 'Collapsed') { throw 'Empty histogram retained stale result captions' }
+        $histogramCases+=[pscustomobject]@{Case='Empty';StaleCaptions=$false}
+    } finally {
+        $histogram.SetVisible($false); $histogram.SetSource($null)
+        if ($null -ne $histogramSource) { $histogramSource.Dispose() }
+        [Threading.SynchronizationContext]::SetSynchronizationContext($previousContext)
+    }
+
     # Reproduce a fixed-width RGB -> Float32 document switch through the real binding path.
     $sourceDescriptor=[RawBufferVisualizer.Core.RawImageDescriptor]::new()
     $sourceDescriptor.Width=640; $sourceDescriptor.Height=480; $sourceDescriptor.Stride=2560
@@ -588,7 +656,7 @@ try {
     $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
     if ($null -ne $headerOperation.GetValue($control)) { throw 'Disposed view accepted a new header refresh' }
 
-    [pscustomobject]@{ StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    [pscustomobject]@{ HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"
