@@ -192,6 +192,8 @@ try {
                 if ([Windows.Media.TextOptions]::GetTextFormattingMode($caption) -ne 'Ideal' -or $caption.LineStackingStrategy -ne 'BlockLineHeight') { throw 'Compare caption lost the approved fractional text metrics' }
                 if ($caption.ActualWidth -ge 270 -and [Math]::Abs($caption.ActualHeight-33.35) -gt 0.5) { throw 'Compare caption does not wrap into the approved two lines at the full panel width' }
                 if ($slotB.TranslatePoint([Windows.Point]::new(0,0),$compare).Y -lt $slotA.ActualHeight) { throw 'Compare A/B slots are not stacked vertically' }
+                $swap=$control.FindName('SwapCompareButton')
+                if ($swap.ActualWidth -ne 28 -or $swap.ActualHeight -ne 28 -or [Math]::Abs($swap.TranslatePoint([Windows.Point]::new(0,0),$compare).X-$slotA.ActualWidth-6) -gt 0.5) { throw 'Compare Swap does not match its approved 28px column and 6px gap' }
                 foreach ($slot in @($slotA,$slotB)) {
                     $thumbnail=$slot.Child.Children[0]
                     if ($thumbnail.ActualWidth -ne 64 -or $thumbnail.ActualHeight -ne 48) { throw 'Compare thumbnail does not match the approved 64x48 slot' }
@@ -320,7 +322,7 @@ try {
     Arrange-Control $control $control.Width $control.Height
     if ($segments.SelectedItem -ne 'B' -or $selector.SelectedItem -ne 'B' -or $model.Cells[12].Value -ne '164') { throw 'Model did not update rendered selector' }
     $model.SelectedChannel = 'GV'
-    if ($control.FindName('LayoutDerivedText').Text -ne 'Row bytes 51 · padding 5 B/row · buffer 275 B') { throw 'Derived layout disagrees with final-row extent contract' }
+    if ($control.FindName('LayoutDerivedText').Text -ne 'Row bytes 51 · padding 5 B/row · buffer 280 B') { throw 'Derived layout disagrees with actual source buffer length' }
     foreach ($method in @('SetCompareA_Click', 'SetCompareB_Click')) { $control.GetType().GetMethod($method, $flags).Invoke($control, [object[]]@($null, [Windows.RoutedEventArgs]::new())) | Out-Null }
     if ($control.FindName('CompareASlot').DataContext -ne $document -or $control.FindName('CompareBSlot').DataContext -ne $document) { throw 'Compare slots lost document bindings' }
     $nav.Show('Compare'); Arrange-Control $control $control.Width $control.Height
@@ -328,6 +330,26 @@ try {
         $slot=$control.FindName($name)
         if ($slot.Child.Children[1].Children[0].Text -ne $document.ObjectName -or $slot.Child.Children[1].Children[1].Text -ne '17×5 · BGR24') { throw 'Compare rendered metadata lost its source binding' }
     }
+    $swap=$control.FindName('SwapCompareButton')
+    $swap.Command.Execute($swap.CommandParameter); Arrange-Control $control $control.Width $control.Height
+    if ($control.FindName('CompareASlot').DataContext -ne $document -or $control.FindName('CompareBSlot').DataContext -ne $document) { throw 'Swap lost comparison bindings' }
+    $nav.Show('Format'); Arrange-Control $control $control.Width $control.Height
+    $control.FindName('InterpretWidthTextBox').Text='16'; Arrange-Control $control $control.Width $control.Height
+    if ($control.FindName('LayoutDerivedText').Text -ne 'Row bytes 48 · padding 8 B/row · buffer 280 B') { throw 'Layout input binding did not update the derived values' }
+    $reset=$control.FindName('ResetInterpretationButton'); $reset.Command.Execute($reset.CommandParameter)
+    Arrange-Control $control $control.Width $control.Height
+    if ($control.FindName('InterpretWidthTextBox').Text -ne '17' -or $document.Descriptor.Width -ne 17) { throw 'Layout Reset did not restore rendered input without changing the source' }
+    $control.FindName('InterpretWidthTextBox').Text='16'; Arrange-Control $control $control.Width $control.Height
+    $apply=$control.FindName('ApplyInterpretationButton'); $apply.Command.Execute($apply.CommandParameter)
+    Arrange-Control $control $control.Width $control.Height
+    if ($document.Descriptor.Width -ne 16 -or $control.FindName('InterpretWidthTextBox').Text -ne '16') { throw 'Layout Apply lost its descriptor-result contract' }
+    $reset.Command.Execute($reset.CommandParameter); Arrange-Control $control $control.Width $control.Height
+    if ($document.Descriptor.Width -ne 17 -or $control.FindName('InterpretWidthTextBox').Text -ne '17') { throw 'Reset did not restore the declared source layout after Apply' }
+    $control.FindName('InterpretStrideTextBox').Text='1'; Arrange-Control $control $control.Width $control.Height
+    $apply.Command.Execute($apply.CommandParameter); Arrange-Control $control $control.Width $control.Height
+    if ($document.Descriptor.Stride -ne 56 -or $control.FindName('LayoutErrorText').Text -eq '') { throw 'Invalid layout changed the image or failed to display its error' }
+    $reset.Command.Execute($reset.CommandParameter); Arrange-Control $control $control.Width $control.Height
+    if ($control.FindName('InterpretStrideTextBox').Text -ne '56' -or $control.FindName('LayoutErrorText').Text -ne '') { throw 'Reset failed to recover invalid input' }
     $nav.Show('Diagnostics')
     $control.GetType().GetMethod('UpdatePerformanceText',$flags).Invoke($control,@()) | Out-Null
     $metrics=$control.FindName('RenderingMetricsPanel')
