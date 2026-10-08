@@ -735,7 +735,7 @@ foreach ($layoutWidth in $Widths) {
     $navigation.Show("Format")
     Wait-Dispatcher 100
     $diagnoseButton = $control.FindName("DiagnoseBufferButton")
-    $diagnoseButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+    $diagnoseButton.Command.Execute($diagnoseButton.CommandParameter)
     for ($attempt = 0; $attempt -lt 30; $attempt++) {
         Wait-Dispatcher 100
         if ($null -ne $control.FindName("DiagnosisCandidateList").ItemsSource) {

@@ -158,7 +158,7 @@ if ($null -eq $diagnoseButton) {
     throw "Diagnose Buffer button was not found in the Interpret section."
 }
 
-$diagnoseButton.RaiseEvent((New-Object System.Windows.RoutedEventArgs([System.Windows.Controls.Button]::ClickEvent)))
+$diagnoseButton.Command.Execute($diagnoseButton.CommandParameter)
 
 $panel = $control.FindName("DiagnosisPanel")
 $candidateList = $control.FindName("DiagnosisCandidateList")
@@ -188,6 +188,10 @@ Capture-Window $helper.Handle $diagnoseCapturePath
 
 $candidateList.SelectedIndex = 0
 Wait-Dispatcher 800
+$applyCandidateButton = $control.FindName("ApplyDiagnosisCandidateButton")
+if (-not $applyCandidateButton.Command.CanExecute($null)) { throw "Candidate preview did not enable Apply candidate." }
+$applyCandidateButton.Command.Execute($null)
+Wait-Dispatcher 100
 
 $appliedStride = $control.FindName("InterpretStrideTextBox").Text
 if ($appliedStride -ne "$stride") {
