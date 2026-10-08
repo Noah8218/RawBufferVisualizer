@@ -1216,21 +1216,21 @@
                     </StackPanel>
                     <StackPanel x:Name="DiagnosticsSection" Visibility="{Binding IsDiagnosticsSelected, Converter={StaticResource BooleanVisibility}}"><Border x:Name="EnvironmentCheckPanel" Visibility="Visible" Margin="0,0,0,12"
                             AutomationProperties.Name="Raw Buffer Visualizer environment check" AutomationProperties.AutomationId="EnvironmentCheckPanel">
-                        <StackPanel><TextBlock Text="ENVIRONMENT" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,8"/>
+                        <StackPanel TextOptions.TextFormattingMode="Ideal"><TextBlock Text="ENVIRONMENT" Style="{StaticResource InspectorBlockHeading}" Margin="0,0,0,8"/>
                             <Grid Tag="{Binding Tag, ElementName=EnvironmentVisualStudioText}" Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Viewbox Width="16" Height="16" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
+                                <Viewbox Width="16" Height="16" Margin="0,1,0,0" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
                                 <TextBlock Grid.Column="2" x:Name="EnvironmentVisualStudioText" AutomationProperties.AutomationId="EnvironmentVisualStudioStatus" Text="Visual Studio host" FontSize="12" LineHeight="17.4" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
                             </Grid>
                             <Grid Tag="{Binding Tag, ElementName=EnvironmentExtensionText}" Margin="0,0,0,6"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                <Viewbox Width="16" Height="16" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
+                                <Viewbox Width="16" Height="16" Margin="0,1,0,0" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
                                 <TextBlock Grid.Column="2" x:Name="EnvironmentExtensionText" AutomationProperties.AutomationId="EnvironmentExtensionStatus" Text="Raw Buffer Visualizer" FontSize="12" LineHeight="17.4" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
                             </Grid>
                             <Grid Tag="{Binding Tag, ElementName=EnvironmentTempStorageText}"><Grid.ColumnDefinitions><ColumnDefinition Width="16"/><ColumnDefinition Width="8"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <Viewbox Width="16" Height="16" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
+                                <Viewbox Width="16" Height="16" Margin="0,1,0,0" VerticalAlignment="Top"><Canvas Width="16" Height="16"><Path Style="{StaticResource EnvironmentStatusIcon}"/></Canvas></Viewbox>
                                 <StackPanel Grid.Column="2"><TextBlock x:Name="EnvironmentTempStorageText" AutomationProperties.AutomationId="EnvironmentTempStorageStatus" Text="Temp storage" FontSize="12" LineHeight="17.4" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
                                     <TextBlock x:Name="TempUsageText" Visibility="Collapsed" AutomationProperties.AutomationId="TempUsageText"/>
                                 </StackPanel>
-                                <Button Grid.Column="3" Content="Refresh" AutomationProperties.Name="Refresh environment check" AutomationProperties.AutomationId="EnvironmentCheckRefreshButton" Click="RefreshEnvironmentCheck_Click" Height="20" MinHeight="20" FontSize="11" Padding="6,0" Margin="8,0,0,0" VerticalAlignment="Center"/>
+                                <Button Grid.Column="3" Content="Refresh" AutomationProperties.Name="Refresh environment check" AutomationProperties.AutomationId="EnvironmentCheckRefreshButton" Click="RefreshEnvironmentCheck_Click" Height="20" MinHeight="20" FontSize="11" Padding="6,0" Margin="8,0,0,0" VerticalAlignment="Top"/>
                             </Grid>
                             <Button Content="Copy diagnostic report" Visibility="Collapsed" AutomationProperties.Name="Copy environment diagnostic report" AutomationProperties.AutomationId="EnvironmentCheckCopyReportButton" Click="CopyEnvironmentReport_Click"/>
                         </StackPanel>
