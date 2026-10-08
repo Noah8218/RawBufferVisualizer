@@ -41,6 +41,8 @@ The control constructor supplies navigation DataContexts to the rail, inspector 
 
 Rail selection and collapse bindings write navigation state. Channel selection writes only the pixel presentation model; its source input is a bounded snapshot through existing Core APIs and is not retained. Pixel hover, selection and pin coordinates still originate in the canvas. Source leases, document admission, saving and measurement commands keep their existing owners. View-specific size, scrolling, shortcut, theme, popup and reparenting handlers remain in the control; its `Dispose` releases subscriptions and closes popups.
 
+`ImageObjectCaptionConverter` is a stateless, View-owned resource used by the header, image cards and comparison slots. Its one-way `ObjectName`/`IsAutomaticInspection` bindings remove the automatic status prefix only from displayed captions. They never write the debugger expression or document identity. Follow the XAML resource to the converter and `Test-DockedLayout.ps1` for rendered caption and identity checks.
+
 `InspectorNavigationTests` and `PixelInspectorTests` exercise these presentation owners through `--docked-layout`. `Test-DockedLayout.ps1` arranges the built control and its popup content without showing a window, checks channel bounds and all five sections, and records bitmap/JSON evidence. It does not verify native popup interaction, pointer states, Visual Studio image services or Windows DPI. Installed-IDE and native UI checks remain separate.
 
 ## Project And Startup Map

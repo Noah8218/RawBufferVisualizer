@@ -4601,6 +4601,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             SetCompareAButton.IsEnabled = SetCompareBButton.IsEnabled = _activeDocument != null && !_activeDocument.IsError && !_activeDocument.IsSourceUnavailable;
+            CompareASlot.DataContext = null;
+            CompareBSlot.DataContext = null;
             CompareASlot.DataContext = _compareA;
             CompareBSlot.DataContext = _compareB;
             CompareText.Text = message ?? string.Empty;
@@ -4717,7 +4719,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 };
                 var values = PixelChannelsPanel.Visibility == Visibility.Visible ? (FrameworkElement)PixelChannelsPanel : PixelValueText;
                 values.Measure(unlimited);
-                var channelWidth = values.DesiredSize.Width + 19;
+                var channelWidth = Math.Ceiling(values.DesiredSize.Width) + 19;
                 var available = Math.Max(0, PixelBar.ActualWidth - 16);
                 if (available <= 0) return;
                 Func<double> total = () =>
