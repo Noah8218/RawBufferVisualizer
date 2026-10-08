@@ -10,6 +10,7 @@
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\InspectorNavigationViewModel.cs" Link="InspectorNavigationViewModel.cs" />
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\BufferLayoutViewModel.cs" Link="BufferLayoutViewModel.cs" />
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\CompareSelectionViewModel.cs" Link="CompareSelectionViewModel.cs" />
+    <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\ImageCardActionsViewModel.cs" Link="ImageCardActionsViewModel.cs" />
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\AutomaticInspectionStatusViewModel.cs" Link="AutomaticInspectionStatusViewModel.cs" />
     <ProjectReference Include="..\..\samples\Cressem.ImageModel.TestFixture\Cressem.ImageModel.TestFixture.csproj" />

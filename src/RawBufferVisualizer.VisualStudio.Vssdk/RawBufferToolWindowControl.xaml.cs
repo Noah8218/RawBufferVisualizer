@@ -92,6 +92,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private RawOpenGlViewState? _linkedViewState;
         private readonly CompareSelectionViewModel<ImageDocument> _comparison = new CompareSelectionViewModel<ImageDocument>();
         private readonly BufferLayoutViewModel _layout = new BufferLayoutViewModel();
+        private readonly ImageCardActionsViewModel<ImageDocument> _cardActions;
         private ImageDocument? _compareA { get => _comparison.A; set => _comparison.A = value; }
         private ImageDocument? _compareB { get => _comparison.B; set => _comparison.B = value; }
         private readonly DispatcherTimer _blinkTimer;
@@ -159,9 +160,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
+        public ICommand? ImageCardMenuCommand => _cardActions?.OpenCommand;
+
         public RawBufferToolWindowControl()
         {
             InitializeComponent();
+            _cardActions = new ImageCardActionsViewModel<ImageDocument>(_comparison, document => !document.IsError && !document.IsSourceUnavailable, document => document.HasSourcePointerAddress, document => document.HasDataAddress);
+            ImageCardPopup.DataContext = _cardActions;
+            _cardActions.ActionRequested += ImageCardAction_Requested;
             PixelVisualization.DataContext = _pixelInspector;
             InspectorContainer.DataContext = _inspector;
             InspectorRail.DataContext = _inspector;
@@ -1593,6 +1599,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 #pragma warning restore VSTHRD010
             SetAutomaticScanBusy(false, string.Empty);
             ClearAllConfirmation.Visibility = Visibility.Collapsed;
+            _cardActions.Clear();
             _syncingDocumentSelection = true;
             try
             {
@@ -1638,6 +1645,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _layout.Applied -= ApplyInterpretationDescriptor;
             _layout.Failed -= Layout_Failed;
             _comparison.PropertyChanged -= CompareSelection_PropertyChanged;
+            _cardActions.ActionRequested -= ImageCardAction_Requested;
+            _cardActions.Clear();
             _layout.Clear();
             _comparison.A = _comparison.B = null;
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
@@ -1693,15 +1702,29 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ImageCardMore_Click(object sender, RoutedEventArgs e)
         {
-            var button = sender as FrameworkElement;
-            var item = button == null ? null : ItemsControl.ContainerFromElement(ImageList, button) as ListBoxItem;
-            if (item == null) return;
-            item.IsSelected = true;
-            var menu = ImageList.ContextMenu;
-            menu.PlacementTarget = button;
-            menu.Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom;
-            menu.IsOpen = true;
+            if (sender is not FrameworkElement button) return;
+            ImageCardPopup.PlacementTarget = button;
+            ImageCardPopup.HorizontalOffset = button.ActualWidth - 197;
             e.Handled = true;
+        }
+
+        private void ImageCardAction_Requested(ImageDocument document, ImageCardAction action)
+        {
+            if (_disposed || !_documents.Contains(document)) return;
+            switch (action)
+            {
+                case ImageCardAction.SaveVisiblePng:
+                    ActivateDocument(document);
+                    SaveVisiblePng_Click(document, new RoutedEventArgs());
+                    break;
+                case ImageCardAction.SaveSnapshot:
+                    ActivateDocument(document);
+                    SaveSnapshot_Click(document, new RoutedEventArgs());
+                    break;
+                case ImageCardAction.CopyPointer: CopyPointerAddress_Click(document, new RoutedEventArgs()); break;
+                case ImageCardAction.CopyPixels: CopyDataAddress_Click(document, new RoutedEventArgs()); break;
+                case ImageCardAction.Remove: RemoveDocument(document); break;
+            }
         }
 
         private void ImageListContextMenu_Opening(object sender, RoutedEventArgs e)
@@ -1722,7 +1745,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void CopyPointerAddress_Click(object sender, RoutedEventArgs e)
         {
-            var document = ImageList.SelectedItem as ImageDocument;
+            var document = sender as ImageDocument ?? ImageList.SelectedItem as ImageDocument;
             if (document == null || !document.HasSourcePointerAddress)
             {
                 SetTransientStatus("No pointer address is available");
@@ -1743,7 +1766,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void CopyDataAddress_Click(object sender, RoutedEventArgs e)
         {
-            var document = ImageList.SelectedItem as ImageDocument;
+            var document = sender as ImageDocument ?? ImageList.SelectedItem as ImageDocument;
             if (document == null || !document.HasDataAddress)
             {
                 SetTransientStatus("No data address is available");
@@ -3651,9 +3674,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             e.Handled = true;
         }
 
-        private void RemoveSelectedDocument()
+        private void RemoveSelectedDocument() => RemoveDocument(ImageList.SelectedItem as ImageDocument);
+
+        private void RemoveDocument(ImageDocument? document)
         {
-            var document = ImageList.SelectedItem as ImageDocument;
             if (document == null)
             {
                 return;
@@ -3883,6 +3907,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (e.Key == Key.Escape)
             {
                 AddImageButton.IsChecked = SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
+                ImageCardPopup.SetCurrentValue(System.Windows.Controls.Primitives.Popup.IsOpenProperty, false);
                 e.Handled = true;
                 return;
             }
@@ -5091,6 +5116,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _imageHeaderUpdate?.Abort();
             _imageHeaderUpdate = null;
             InspectorOverlayPopup.IsOpen = false;
+            ImageCardPopup.SetCurrentValue(System.Windows.Controls.Primitives.Popup.IsOpenProperty, false);
             ImageList.ContextMenu.IsOpen = AutomaticHelpTip.IsOpen = false;
             InterpretPixelFormatBox.IsDropDownOpen = InterpretByteOrderBox.IsDropDownOpen = false;
             AddImageButton.IsChecked = SaveMenuButton.IsChecked = MoreMenuButton.IsChecked = ZoomMenuButton.IsChecked = false;
@@ -5156,6 +5182,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UpdateStatus()
         {
+            if (_cardActions.Target != null && !_documents.Contains(_cardActions.Target)) _cardActions.Clear();
+            else _cardActions.Refresh();
             UpdateCommandState();
             if (_activeDocument == null)
             {
