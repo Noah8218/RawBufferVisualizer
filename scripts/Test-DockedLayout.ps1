@@ -52,7 +52,12 @@ $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindow
 $flags = [Reflection.BindingFlags]'Instance,NonPublic'
 $cases = @(); $sections = @(); $formats = @()
 try {
-    if ($control.FontFamily.Source -ne 'Segoe UI' -or $control.FontSize -ne 12) { throw 'View typography differs from the approved mockup' }
+    if ($control.FontFamily.Source -ne 'Segoe UI' -or $control.FontSize -ne 12 -or [Windows.Media.TextOptions]::GetTextFormattingMode($control) -ne 'Ideal') { throw 'View typography differs from the approved mockup' }
+    $captionConverter=$control.Resources['ImageObjectCaption']
+    foreach ($case in @(@('[Auto] frame',$true,'frame'),@('[Auto] snapshot',$false,'[Auto] snapshot'),@('frame',$true,'frame'))) {
+        if ($captionConverter.Convert([object[]]@($case[0],$case[1]),[string],$null,[Globalization.CultureInfo]::InvariantCulture) -ne $case[2]) { throw 'Automatic caption changed a manual name or retained its status prefix' }
+    }
+    if ($captionConverter.Convert([object[]]@([Windows.DependencyProperty]::UnsetValue,[Windows.DependencyProperty]::UnsetValue),[string],$null,[Globalization.CultureInfo]::InvariantCulture) -ne [Windows.DependencyProperty]::UnsetValue) { throw 'Caption converter lost the no-image binding fallback' }
     $palette = @{ PanelBrush='#FF252526'; InputBrush='#FF1E1E1E'; ToolbarBrush='#FF2D2D30'; BorderBrush='#FF3F3F46'; TextBrush='#FFF1F1F1'; SecondaryTextBrush='#FFA3A7AE'; FaintTextBrush='#FF6E737B'; LinkBrush='#FF3794FF' }
     foreach ($key in $palette.Keys) { if ($control.Resources[$key].Color.ToString() -ne $palette[$key]) { throw "Mockup palette mismatch: $key" } }
     if ($control.FindName('OpenGlImageView').Background.Color.ToString() -ne '#FF141414') { throw 'View canvas underlay differs from the approved background' }
@@ -193,7 +198,8 @@ try {
                 if ($caption.ActualWidth -ge 270 -and [Math]::Abs($caption.ActualHeight-33.35) -gt 0.5) { throw 'Compare caption does not wrap into the approved two lines at the full panel width' }
                 if ($slotB.TranslatePoint([Windows.Point]::new(0,0),$compare).Y -lt $slotA.ActualHeight) { throw 'Compare A/B slots are not stacked vertically' }
                 $swap=$control.FindName('SwapCompareButton')
-                if ($swap.ActualWidth -ne 28 -or $swap.ActualHeight -ne 28 -or [Math]::Abs($swap.TranslatePoint([Windows.Point]::new(0,0),$compare).X-$slotA.ActualWidth-6) -gt 0.5) { throw 'Compare Swap does not match its approved 28px column and 6px gap' }
+                # The mockup's .vs .ib rule renders 24px inside the 28px .ab-swap grid column.
+                if ($swap.ActualWidth -ne 24 -or $swap.ActualHeight -ne 24 -or $control.FindName('CompareSlots').ColumnDefinitions[2].Width.Value -ne 28 -or [Math]::Abs($swap.TranslatePoint([Windows.Point]::new(0,0),$compare).X-$slotA.ActualWidth-6) -gt 0.5) { throw 'Compare Swap does not match its approved 24px button, 28px column and 6px gap' }
                 foreach ($slot in @($slotA,$slotB)) {
                     $thumbnail=$slot.Child.Children[0]
                     if ($thumbnail.ActualWidth -ne 64 -or $thumbnail.ActualHeight -ne 48) { throw 'Compare thumbnail does not match the approved 64x48 slot' }
@@ -826,6 +832,11 @@ try {
     $imageName=$control.FindName('ImageNameText')
     if ($imageName.Text -ne 'depthMapF32' -or $imageName.ActualWidth -lt 84 -or $control.FindName('ImageTypeText').Visibility -ne 'Collapsed') { throw 'Document switch still reserves SourceType while clipping the required image name' }
     if ($control.FindName('PixelValueText').Text -ne '0.75000' -or $control.FindName('PixelNeighborhoodStatsText').Text -ne '5×5 μ 0.0833 σ 0.2357') { throw 'Float pixel bar differs from the approved precision or the fixture statistics' }
+    $scalar=$control.FindName('PixelValueText')
+    $scalar.Measure([Windows.Size]::new([double]::PositiveInfinity,[double]::PositiveInfinity))
+    $singleLineHeight=$scalar.DesiredSize.Height
+    Arrange-Control $control 1000 698
+    if ($scalar.ActualHeight -gt $singleLineHeight+0.5 -or $control.FindName('PixelBar').ActualHeight -ne 30) { throw 'Float32 value wraps despite enough room for the approved single-line pixel bar' }
     $sourceDocument=$control.GetType().GetProperty('_activeDocument',$flags).GetValue($control,$null)
     $inventory=[Collections.Generic.List[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]]::new()
     $member=[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]::new(); $member.Name='DataPointer'; $inventory.Add($member)
@@ -844,6 +855,31 @@ try {
     $sourceDocument.SetAutomaticInspection(100,'','',[Collections.Generic.List[RawBufferVisualizer.VisualStudio.ObjectSource.VisualizerMemberInventoryItem]]::new(),'',0,$false,$null)
     $control.GetType().GetMethod('UpdateAutomaticInspectionPanel',$flags).Invoke($control,[object[]]@($sourceDocument)) | Out-Null
     if ($control.FindName('EditAutomaticMappingButton').Visibility -ne 'Collapsed') { throw 'Source styling enabled mapping without member inventory' }
+    $captionPath=Join-Path $output 'caption-fixture.rbuf.json'
+    [RawBufferVisualizer.Sdk.RawBufferSnapshot]::Save($captionPath,$sourceBytes,$sourceDescriptor) | Out-Null
+    $control.GetType().GetMethod('OpenPath',$flags).Invoke($control,[object[]]@([string]$captionPath.PSObject.BaseObject,'[Auto] captionFixture','OpenCvSharp.Mat',$null,$false,0,[long]0,[long]0,$null)) | Out-Null
+    $captionDocument=$control.GetType().GetProperty('_activeDocument',$flags).GetValue($control,$null)
+    foreach ($method in @('SetCompareA_Click','SetCompareB_Click')) { $control.GetType().GetMethod($method,$flags).Invoke($control,[object[]]@($null,[Windows.RoutedEventArgs]::new())) | Out-Null }
+    $captionCases=@()
+    foreach ($automatic in @($false,$true)) {
+        if ($automatic) { $captionDocument.SetAutomaticInspection(100,'','',$inventory,'',0,$false,$null) }
+        $control.GetType().GetMethod('UpdateStatus',$flags).Invoke($control,@()) | Out-Null
+        $control.GetType().GetMethod('UpdateCompareText',$flags).Invoke($control,[object[]]@($null)) | Out-Null
+        $list=$control.FindName('ImageList'); $list.Items.Refresh()
+        $nav.Show('Compare'); Arrange-Control $control 1000 698
+        $expectedCaption=if ($automatic) { 'captionFixture' } else { '[Auto] captionFixture' }
+        $header=$control.FindName('ImageNameText')
+        $container=$list.ItemContainerGenerator.ContainerFromIndex($list.Items.IndexOf($captionDocument))
+        $presenter=Find-TemplatePresenter $container $list.ItemTemplate
+        $cardCaption=$list.ItemTemplate.FindName('CardSummary',$presenter).Children[0]
+        if ($header.Text -ne $expectedCaption -or [string]$header.ToolTip -ne $expectedCaption -or $cardCaption.Text -ne $expectedCaption) { throw 'Header or card caption lost its automatic-only presentation binding' }
+        foreach ($slot in @('CompareASlot','CompareBSlot')) {
+            if ($control.FindName($slot).Child.Children[1].Children[0].Text -ne $expectedCaption) { throw "Compare caption differs from the header and card: $slot, automatic=$automatic, expected=$expectedCaption" }
+        }
+        if ($captionDocument.ObjectName -ne '[Auto] captionFixture') { throw 'Caption presentation changed the debugger expression identity' }
+        $captionCases+=[pscustomobject]@{ Automatic=$automatic; RenderedCaption=$header.Text; ObjectName=$captionDocument.ObjectName; Consumers='header, tooltip, card, comparison A and B' }
+        Save-Render $control 1000 698 $(if ($automatic) { 'caption-automatic.png' } else { 'caption-manual.png' })
+    }
     $targetUpdated=$control.GetType().GetMethod('ImageInfoBar_TargetUpdated',$flags)
     $headerOperation=$control.GetType().GetField('_imageHeaderUpdate',$flags)
     foreach ($cleanup in @('InspectorHost_Unloaded','Dispose')) {
@@ -857,7 +893,7 @@ try {
     $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
     if ($null -ne $headerOperation.GetValue($control)) { throw 'Disposed view accepted a new header refresh' }
 
-    [pscustomobject]@{ BufferDoctor=$doctorEvidence; HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement, inactive card open/A/B/remove and popup release'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    [pscustomobject]@{ BufferDoctor=$doctorEvidence; HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; ObjectCaptions=$captionCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement, inactive card open/A/B/remove and popup release'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"

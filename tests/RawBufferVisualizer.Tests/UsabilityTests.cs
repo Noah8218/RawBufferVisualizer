@@ -196,7 +196,7 @@ namespace RawBufferVisualizer.Tests
             Check(model.Status == "Debugger paused" && model.CanScan, "Break mode updates independently of automatic scanning");
             model.Frame = "OpenVisionLab.OpenVisionLabApplication.Run";
             model.SetDetails("Auto Inspect is off and saved.");
-            Check(model.CanScan && model.Status == "Debugger paused", "Saved Auto Inspect guidance cannot override actual debugger state");
+            Check(model.CanScan && model.Status == "Paused · OpenVisionLab.OpenVisionLabApplication.Run", "Paused caption shows the current frame while saved guidance remains supplemental");
             model.IsBusy = true; Check(!model.CanScan && model.Status == "Scanning…", "Busy scan disables duplicate admission");
             model.IsBusy = false; model.SetDetails("Injected discovery failure", "Scan failed");
             Check(model.Status == "Scan failed" && model.CanScan, "Failure is visible and manual retry remains available");

@@ -20,7 +20,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public bool CanScan => _mode == InspectionDebuggerMode.Paused && !_busy;
         public string Status => _notice ?? (_imageError ? _imageStatus : _alert ?? (_busy ? "Scanning…" : ModeStatus));
         public string StatusDetails => ModeStatus + "\n" + _imageStatus + "\n" + Details + (_notice == null ? string.Empty : "\n" + _notice);
-        private string ModeStatus => _mode == InspectionDebuggerMode.Paused ? "Debugger paused"
+        private string ModeStatus => _mode == InspectionDebuggerMode.Paused
+            ? (string.IsNullOrWhiteSpace(_frame) || _frame == "Current paused stack frame" ? "Debugger paused" : "Paused · " + _frame)
             : _mode == InspectionDebuggerMode.Running ? "Debugger running" : "Debugger stopped";
 
         public void SetMode(InspectionDebuggerMode mode)
