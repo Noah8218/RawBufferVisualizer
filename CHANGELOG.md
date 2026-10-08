@@ -13,6 +13,7 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 - Assigns and swaps comparison slots from image-card actions while preserving the active image.
 - Shows histogram mean and population standard deviation from the existing bounded sample.
 - Aligns docked text metrics, inspector spacing, channel selectors and command states with the approved layout.
+- Allows mouse-wheel scrolling through Buffer Doctor candidates to reach preview actions and the descriptor.
 
 ## [2.2.3] - 2026-10-01
 

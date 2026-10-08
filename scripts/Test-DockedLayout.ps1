@@ -460,7 +460,15 @@ try {
                 }
                 Save-Render $doctorRoot ([int]$doctorRootWidth) $doctorHeight "doctor-results-scroll-$doctorWidth-$doctorHeight.png"
                 $doctorScroll.ScrollToTop();Arrange-Control $doctorRoot $doctorRootWidth $doctorHeight
-                $doctorLayouts+=[pscustomobject]@{Width=$doctorWidth;Height=$doctorHeight;Actions='candidate Apply/Cancel and Descriptor through the actual inspector ScrollViewer'}
+                if ($doctorScroll.ScrollableHeight -le 0) { throw 'Candidate wheel regression requires an overflowing inspector' }
+                $candidateRow=$candidateList.ItemContainerGenerator.ContainerFromIndex(0)
+                if ($candidateRow -eq $null) { throw 'Candidate wheel regression requires a rendered candidate row' }
+                $wheelBefore=$doctorScroll.VerticalOffset
+                $wheel=[Windows.Input.MouseWheelEventArgs]::new([Windows.Input.Mouse]::PrimaryDevice,[Environment]::TickCount,-120)
+                $wheel.RoutedEvent=[Windows.UIElement]::MouseWheelEvent;$candidateRow.RaiseEvent($wheel)
+                Arrange-Control $doctorRoot $doctorRootWidth $doctorHeight
+                if ($doctorScroll.VerticalOffset -le $wheelBefore) { throw "Candidate row consumed inspector mouse-wheel input at $doctorWidth x $doctorHeight" }
+                $doctorLayouts+=[pscustomobject]@{Width=$doctorWidth;Height=$doctorHeight;Actions='candidate Apply/Cancel and Descriptor through the actual inspector ScrollViewer';CandidateWheelBefore=$wheelBefore;CandidateWheelAfter=$doctorScroll.VerticalOffset}
             } finally { if($nav.IsNarrow){$doctorRoot.Children.Clear();$doctorPopup.Child=$doctorPanel} }
         } }
         $control.Width=1000;$control.Height=720;$nav.Show('Format');Arrange-Control $control 1000 720
