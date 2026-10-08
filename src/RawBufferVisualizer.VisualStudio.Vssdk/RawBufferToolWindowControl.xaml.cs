@@ -6119,7 +6119,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string SizeText => string.Format(CultureInfo.InvariantCulture, "{0}×{1}", Descriptor.Width, Descriptor.Height);
             public string FormatText => Descriptor.PixelFormat.ToString();
             public string StrideText => "stride " + Descriptor.Stride.ToString(CultureInfo.InvariantCulture);
-            public string StateName => AutomaticMappingRequired ? "MAP" : IsError || IsSourceUnavailable ? "FAILED" : IsPreview || Diagnosis.HasPreview && Diagnosis.IsForSource(DeclaredDescriptor) ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
+            public string CardStateName => AutomaticMappingRequired ? "MAP" : IsError || IsSourceUnavailable ? "FAILED" : IsPreview ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
+            public string StateName => (CardStateName == "LIVE" || CardStateName == "CAPTURED") && Diagnosis.HasPreview && Diagnosis.IsForSource(DeclaredDescriptor) ? "PREVIEW" : CardStateName;
             public string StateToolTip => StateName + ((StateName == "LIVE" || StateName == "CAPTURED") && DebuggeeProcessId > 0 ? " · PID " + DebuggeeProcessId.ToString(CultureInfo.InvariantCulture) : string.Empty);
             public string StateChipText => (StateName == "MAP" ? "◆ " : StateName == "FAILED" ? "× " : StateName == "PREVIEW" ? "◐ " : StateName == "LIVE" ? "● " : "■ ") + StateName;
             public string MetaText => IsError ? SourceType : SizeText + " · " + FormatText + " · " + SourceType;
