@@ -108,6 +108,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private string _lastFramebufferCapturePath = string.Empty;
         private string _lastFramebufferCaptureError = string.Empty;
         private CancellationTokenSource? _diagnosisCancellation;
+        private BufferDiagnosisViewModel<BufferDiagnosisCandidateItem>? _diagnosisModel;
+        private BufferDiagnosisViewModel<BufferDiagnosisCandidateItem>? _runningDiagnosisModel;
         private readonly List<string> _recentExpressions = new List<string>();
         private readonly AutomaticVisionInspector _automaticVisionInspector = new AutomaticVisionInspector();
         private readonly AutomaticInspectionPreferencesStore _automaticInspectionPreferencesStore =
@@ -1647,6 +1649,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _comparison.PropertyChanged -= CompareSelection_PropertyChanged;
             _cardActions.ActionRequested -= ImageCardAction_Requested;
             _cardActions.Clear();
+            BindDiagnosis(null);
             _layout.Clear();
             _comparison.A = _comparison.B = null;
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
@@ -3021,9 +3024,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             SaveActiveDocumentView();
+            CancelDiagnosis();
             _workspace.Activate(document);
+            BindDiagnosis(document);
             UpdateAutomaticInspectionPanel(document);
-            ClearDiagnosisPresentation();
 
             _syncingDocumentSelection = true;
             try
@@ -3956,36 +3960,48 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void Layout_Failed(string message) => DiagnosticsList.Items.Add("Error: reinterpret failed. " + message);
 
-        private void ApplyInterpretationDescriptor(RawImageDescriptor descriptor)
+        private void ApplyInterpretationDescriptor(RawImageDescriptor descriptor) => ApplyInterpretationDescriptorCore(descriptor, false);
+
+        private void ApplyInterpretationDescriptorCore(RawImageDescriptor descriptor, bool preview)
         {
             if (_activeDocument == null)
             {
                 return;
             }
 
+            var viewState = OpenGlImageView.GetViewState();
+            var hoverX = _lastHoverX; var hoverY = _lastHoverY;
+            var pinnedX = _pinnedInspectorX; var pinnedY = _pinnedInspectorY;
+            var hasSelection = OpenGlImageView.TryGetSelectedPixel(out var selectedX, out var selectedY) && !_measurement.IsEnabled;
             var source = _activeDocument.Source.WithDescriptor(descriptor);
             _activeDocument.ReplaceSource(source, descriptor);
+            if (viewState != null && viewState.Matches(descriptor.Width, descriptor.Height)) _activeDocument.ViewState = viewState;
+            if (!preview) _activeDocument.Diagnosis.Commit(descriptor);
             ImageList.Items.Refresh();
             DescriptorText.Text = FormatDescriptor(_activeDocument);
             UpdateInterpretationControls(descriptor);
             RenderActiveDocument();
+            if (hasSelection && selectedX >= 0 && selectedY >= 0 && selectedX < descriptor.Width && selectedY < descriptor.Height) OpenGlImageView.SelectPixelAtImagePixel(selectedX, selectedY);
+            if (hoverX >= 0 && hoverY >= 0 && hoverX < descriptor.Width && hoverY < descriptor.Height) OpenGlImageView_PixelHovered(OpenGlImageView, new RawOpenGlPixelEventArgs(hoverX, hoverY));
+            if (pinnedX >= 0 && pinnedY >= 0 && pinnedX < descriptor.Width && pinnedY < descriptor.Height) OpenGlImageView.PinMarkerAtImagePixel(pinnedX, pinnedY);
         }
 
-        private void DiagnoseBuffer_Click(object sender, RoutedEventArgs e)
+        private void DiagnoseBuffer_Click(object sender, RoutedEventArgs e) => DiagnoseBufferButton.Command?.Execute(DiagnoseBufferButton.CommandParameter);
+
+        private void DiagnoseBuffer_Requested(BufferDiagnosisViewModel<BufferDiagnosisCandidateItem> model)
         {
-            if (_activeDocument == null || _activeDocument.IsError)
+            if (_activeDocument == null || !ReferenceEquals(_activeDocument.Diagnosis, model) || _activeDocument.IsError || _activeDocument.IsSourceUnavailable)
             {
+                model.Cancelled();
                 return;
             }
 
             var document = _activeDocument;
-            CancelDiagnosis();
+            var sourceIdentity = document.DeclaredDescriptor;
+            CancelDiagnosisWork(false);
             var cancellation = new CancellationTokenSource();
             _diagnosisCancellation = cancellation;
-
-            DiagnosisPanel.Visibility = Visibility.Visible;
-            DiagnosisStatusText.Text = "Diagnosing buffer interpretations...";
-            DiagnosisCandidateList.ItemsSource = null;
+            _runningDiagnosisModel = model;
 
             var source = document.Source;
 #pragma warning disable VSTHRD110
@@ -4001,13 +4017,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     for (var i = 0; i < diagnosed.Candidates.Count; i++)
                     {
                         cancellation.Token.ThrowIfCancellationRequested();
-                        rows.Add(new BufferDiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i])));
+                        rows.Add(new BufferDiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i]), i == 0, true));
                     }
 
                     return new KeyValuePair<BufferDiagnosisResult, List<BufferDiagnosisCandidateItem>>(diagnosed, rows);
                 },
                 cancellation.Token).ContinueWith(
-                task => CompleteDiagnosis(task, document, cancellation),
+                task => CompleteDiagnosis(task, document, sourceIdentity, cancellation),
                 CancellationToken.None,
                 TaskContinuationOptions.None,
                 TaskScheduler.FromCurrentSynchronizationContext());
@@ -4017,18 +4033,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void CompleteDiagnosis(
             Task<KeyValuePair<BufferDiagnosisResult, List<BufferDiagnosisCandidateItem>>> task,
             ImageDocument document,
+            RawImageDescriptor sourceIdentity,
             CancellationTokenSource cancellation)
         {
-            if (task.IsCanceled || cancellation.IsCancellationRequested || !ReferenceEquals(_activeDocument, document))
+            var failure = task.IsFaulted ? task.Exception?.GetBaseException() : null;
+            if (task.IsCanceled || cancellation.IsCancellationRequested || !ReferenceEquals(_activeDocument, document) || !document.Diagnosis.IsForSource(sourceIdentity))
             {
                 return;
             }
 
             if (task.IsFaulted)
             {
-                var failure = task.Exception == null ? null : task.Exception.GetBaseException();
-                var failureText = "Diagnosis failed: " + (failure == null ? "unknown error." : failure.Message);
-                DiagnosisStatusText.Text = failureText;
+                if (ReferenceEquals(_diagnosisCancellation, cancellation)) { _diagnosisCancellation = null; _runningDiagnosisModel = null; cancellation.Dispose(); }
+                document.Diagnosis.Fail(failure == null ? "unknown error." : failure.Message);
                 return;
             }
 
@@ -4038,7 +4055,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var result = task.Result.Key;
             var items = task.Result.Value;
 #pragma warning restore VSTHRD002
-            DiagnosisCandidateList.ItemsSource = items;
             var errorNotes = 0;
             for (var i = 0; i < result.Notes.Count; i++)
             {
@@ -4048,47 +4064,67 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
             }
 
-            var statusText = string.Format(
-                CultureInfo.InvariantCulture,
-                "Suggests {0} ranked candidate interpretation(s); it cannot detect the correct format automatically.{1} Select a row to apply it.",
-                items.Count,
-                errorNotes > 0 ? " Buffer diagnostics report " + errorNotes + " error(s)." : string.Empty);
-            DiagnosisStatusText.Text = statusText;
+            document.Diagnosis.Complete(items, errorNotes);
+            _runningDiagnosisModel = null;
+            if (ReferenceEquals(_diagnosisCancellation, cancellation)) { _diagnosisCancellation = null; cancellation.Dispose(); }
         }
 
-        private void DiagnosisCandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        private void BindDiagnosis(ImageDocument? document)
         {
-            var listBox = sender as ListBox;
-            var item = listBox == null ? null : listBox.SelectedItem as BufferDiagnosisCandidateItem;
-            if (item == null || _activeDocument == null || _activeDocument.IsError)
+            if (_diagnosisModel != null)
             {
-                return;
+                _diagnosisModel.DiagnoseRequested -= DiagnoseBuffer_Requested;
+                _diagnosisModel.DescriptorRequested -= ApplyDiagnosisDescriptor;
+                _diagnosisModel.PropertyChanged -= Diagnosis_PropertyChanged;
+                _diagnosisModel.Failed -= Diagnosis_Failed;
             }
-
-            try
-            {
-                ApplyInterpretationDescriptor(item.Candidate.Descriptor);
-            }
-            catch (Exception ex)
-            {
-                DiagnosticsList.Items.Add("Error: candidate apply failed. " + ex.Message);
-            }
+            _diagnosisModel = document?.Diagnosis;
+            DiagnosisPanel.DataContext = _diagnosisModel;
+            if (_diagnosisModel == null) return;
+            _diagnosisModel.SetSource(document!.Descriptor, document.DeclaredDescriptor, !document.IsError && !document.IsSourceUnavailable);
+            _diagnosisModel.DiagnoseRequested += DiagnoseBuffer_Requested;
+            _diagnosisModel.DescriptorRequested += ApplyDiagnosisDescriptor;
+            _diagnosisModel.PropertyChanged += Diagnosis_PropertyChanged;
+            _diagnosisModel.Failed += Diagnosis_Failed;
         }
 
-        private void CloseDiagnosis_Click(object sender, RoutedEventArgs e)
+        private void ApplyDiagnosisDescriptor(BufferDiagnosisViewModel<BufferDiagnosisCandidateItem> model, RawImageDescriptor descriptor)
         {
-            ClearDiagnosisPresentation();
+            if (_activeDocument == null || !ReferenceEquals(_activeDocument.Diagnosis, model) || !model.IsForSource(_activeDocument.DeclaredDescriptor))
+                throw new InvalidOperationException("The selected buffer is no longer available.");
+            ApplyInterpretationDescriptorCore(descriptor, true);
         }
+
+        private void Diagnosis_PropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (_disposed || _activeDocument == null || !_documents.Contains(_activeDocument) || !ReferenceEquals(_activeDocument.Diagnosis, sender)) return;
+            foreach (var item in _activeDocument.Diagnosis.Candidates) item.IsCurrent = _activeDocument.Diagnosis.IsCurrent(item);
+            ImageList.Items.Refresh();
+            UpdateCommandState();
+            UpdateCompareText();
+        }
+
+        private void Diagnosis_Failed(BufferDiagnosisViewModel<BufferDiagnosisCandidateItem> model, string message)
+        {
+            if (ReferenceEquals(model, _diagnosisModel)) DiagnosticsList.Items.Add("Error: candidate apply failed. " + message);
+        }
+
+        private void DiagnosisCandidateList_SelectionChanged(object sender, SelectionChangedEventArgs e) => DiagnosisCandidateList.GetBindingExpression(ListBox.SelectedItemProperty)?.UpdateSource();
+
+        private void CloseDiagnosis_Click(object sender, RoutedEventArgs e) => (DiagnosisPanel.Tag as ICommand)?.Execute(null);
 
         private void ClearDiagnosisPresentation()
         {
             CancelDiagnosis();
-            DiagnosisPanel.Visibility = Visibility.Collapsed;
-            DiagnosisStatusText.Text = string.Empty;
-            DiagnosisCandidateList.ItemsSource = null;
+            BindDiagnosis(null);
         }
 
         private void CancelDiagnosis()
+        {
+            CancelDiagnosisWork(true);
+        }
+
+        private void CancelDiagnosisWork(bool resetPresentation)
         {
             if (_diagnosisCancellation != null)
             {
@@ -4096,6 +4132,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 _diagnosisCancellation.Dispose();
                 _diagnosisCancellation = null;
             }
+            if (resetPresentation) _runningDiagnosisModel?.Cancelled();
+            _runningDiagnosisModel = null;
         }
 
         private static BitmapSource? CreateCandidateThumbnail(RawImageSource source, BufferInterpretationCandidate candidate)
@@ -4501,6 +4539,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void UpdateInterpretationControls(RawImageDescriptor descriptor)
         {
             if (_activeDocument == null) return;
+            _activeDocument.Diagnosis.SetSource(descriptor, _activeDocument.DeclaredDescriptor, !_activeDocument.IsError && !_activeDocument.IsSourceUnavailable);
             _layout.SetSource(descriptor, _activeDocument.DeclaredDescriptor, _activeDocument.Source.Length);
             InterpretControls.IsEnabled = true;
         }
@@ -5184,6 +5223,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             if (_cardActions.Target != null && !_documents.Contains(_cardActions.Target)) _cardActions.Clear();
             else _cardActions.Refresh();
+            if (_activeDocument != null && _activeDocument.IsSourceUnavailable) _activeDocument.Diagnosis.Clear();
             UpdateCommandState();
             if (_activeDocument == null)
             {
@@ -6062,12 +6102,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string SizeText => string.Format(CultureInfo.InvariantCulture, "{0}×{1}", Descriptor.Width, Descriptor.Height);
             public string FormatText => Descriptor.PixelFormat.ToString();
             public string StrideText => "stride " + Descriptor.Stride.ToString(CultureInfo.InvariantCulture);
-            public string StateName => AutomaticMappingRequired ? "MAP" : IsError || IsSourceUnavailable ? "FAILED" : IsPreview ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
+            public string StateName => AutomaticMappingRequired ? "MAP" : IsError || IsSourceUnavailable ? "FAILED" : IsPreview || Diagnosis.HasPreview && Diagnosis.IsForSource(DeclaredDescriptor) ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
+            public string StateToolTip => StateName + ((StateName == "LIVE" || StateName == "CAPTURED") && DebuggeeProcessId > 0 ? " · PID " + DebuggeeProcessId.ToString(CultureInfo.InvariantCulture) : string.Empty);
             public string StateChipText => (StateName == "MAP" ? "◆ " : StateName == "FAILED" ? "× " : StateName == "PREVIEW" ? "◐ " : StateName == "LIVE" ? "● " : "■ ") + StateName;
             public string MetaText => IsError ? SourceType : SizeText + " · " + FormatText + " · " + SourceType;
             public RawImageSource Source { get; private set; }
             public RawImageDescriptor Descriptor { get; private set; }
             public RawImageDescriptor DeclaredDescriptor { get; private set; }
+            public BufferDiagnosisViewModel<BufferDiagnosisCandidateItem> Diagnosis { get; } = new BufferDiagnosisViewModel<BufferDiagnosisCandidateItem>(item => item.Candidate.Descriptor);
             public RawOpenGlViewState? ViewState { get; set; }
             public BitmapSource? Thumbnail { get; private set; }
             public string ErrorMessage { get; private set; }
@@ -6766,6 +6808,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
 
                 _disposed = true;
+                Diagnosis.Clear();
                 Source.Dispose();
                 _snapshotLeaseOwner.Dispose();
             }

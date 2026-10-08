@@ -365,6 +365,110 @@ try {
     if ($document.Descriptor.Stride -ne 56 -or $control.FindName('LayoutErrorText').Text -eq '') { throw 'Invalid layout changed the image or failed to display its error' }
     $reset.Command.Execute($reset.CommandParameter); Arrange-Control $control $control.Width $control.Height
     if ($control.FindName('InterpretStrideTextBox').Text -ne '56' -or $control.FindName('LayoutErrorText').Text -ne '') { throw 'Reset failed to recover invalid input' }
+    # Actual asynchronous Core diagnosis and bound preview workflow; no desktop Window or native GL.
+    $doctorContext=[Threading.SynchronizationContext]::Current
+    [Threading.SynchronizationContext]::SetSynchronizationContext([Windows.Threading.DispatcherSynchronizationContext]::new())
+    try {
+        $nav.Show('Format');Arrange-Control $control $control.Width $control.Height
+        $doctor=$control.FindName('DiagnosisPanel').DataContext
+        $diagnose=$control.FindName('DiagnoseBufferButton');$diagnose.Command.Execute($diagnose.CommandParameter)
+        if (-not $doctor.IsRunning -or $diagnose.IsEnabled) { throw 'Bound Diagnose action did not enter its pending/disabled state' }
+        $deadline=[DateTime]::UtcNow.AddSeconds(30)
+        while ($doctor.IsRunning) {
+            [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::Background)
+            if ([DateTime]::UtcNow -gt $deadline) { throw 'Actual Buffer Doctor timed out' }
+            [Threading.Thread]::Sleep(5)
+        }
+        Arrange-Control $control $control.Width $control.Height
+        $candidateList=$control.FindName('DiagnosisCandidateList')
+        if ($candidateList.Items.Count -eq 0 -or $doctor.Status -notlike 'Suggests * ranked interpretations.*preview*') { throw 'Core diagnosis did not bind actual candidate results' }
+        $declared=$document.Descriptor.Clone()
+        $candidateIndex=-1
+        for($i=0;$i -lt $candidateList.Items.Count;$i++) { if (-not $doctor.IsCurrent($candidateList.Items[$i])) { $candidateIndex=$i;break } }
+        if($candidateIndex -lt 0) { throw 'Fixture produced no alternate candidate to verify preview' }
+        $doctorCanvas=$control.FindName('OpenGlImageView');$doctorCanvas.SetZoomScale(2)
+        $doctorCanvas.SelectPixelAtImagePixel(8,2) | Out-Null;$doctorCanvas.PinMarkerAtImagePixel(8,2) | Out-Null
+        $beforeDoctorView=$doctorCanvas.GetViewState()
+        $candidateList.SelectedIndex=$candidateIndex;Arrange-Control $control $control.Width $control.Height
+        $previewed=$candidateList.SelectedItem.Candidate.Descriptor
+        if (-not $doctor.HasPreview -or $doctor.SelectedCandidate -ne $candidateList.SelectedItem -or $document.Descriptor.Stride -ne $previewed.Stride -or $document.Descriptor.PixelFormat -ne $previewed.PixelFormat -or $document.StateName -ne 'PREVIEW') { throw 'Rendered selection failed to preview its actual descriptor and state' }
+        if ($previewed.Width -eq $declared.Width -and $previewed.Height -eq $declared.Height -and ($doctorCanvas.GetViewState().Width -ne $beforeDoctorView.Width -or $doctorCanvas.GetViewState().Mode -ne $beforeDoctorView.Mode)) { throw 'Same-size candidate preview discarded zoom/pan state' }
+        if ($previewed.Width -gt 8 -and $previewed.Height -gt 2 -and ($control.FindName('PixelBadgeText').Text -ne 'PINNED' -or $document.StateToolTip -ne 'PREVIEW')) { throw 'Preview lost pixel pin or disagreed with its state tooltip' }
+        if ($control.FindName('InterpretStrideTextBox').Text -ne [string]$previewed.Stride) { throw 'Candidate preview did not update the bound form' }
+        $cancel=$control.FindName('CloseDiagnosisButton');$commit=$control.FindName('ApplyDiagnosisCandidateButton')
+        if (-not $cancel.IsEnabled -or -not $commit.IsEnabled) { throw 'Preview actions did not become enabled' }
+        $candidateContainer=$candidateList.ItemContainerGenerator.ContainerFromIndex($candidateIndex)
+        if ($candidateContainer.BorderBrush.Color.ToString() -ne '#FF007ACC' -or $candidateContainer.Background.Color.ToString() -ne '#FF094771' -or $candidateContainer.Padding.Left -ne 6) { throw 'Selected candidate styling differs from the approved HTML' }
+        $candidateList.BringIntoView();Arrange-Control $control $control.Width $control.Height
+        Save-Render $control $control.Width $control.Height 'doctor-preview.png'
+        $cancel.Command.Execute($cancel.CommandParameter);Arrange-Control $control $control.Width $control.Height
+        if ($doctor.HasPreview -or $document.Descriptor.Stride -ne $declared.Stride -or $document.Descriptor.PixelFormat -ne $declared.PixelFormat -or $document.StateName -eq 'PREVIEW' -or $candidateList.SelectedIndex -ne -1) { throw 'Cancel did not restore the committed layout, state and selection' }
+        $candidateList.SelectedIndex=$candidateIndex;Arrange-Control $control $control.Width $control.Height
+        $commit.Command.Execute($commit.CommandParameter);Arrange-Control $control $control.Width $control.Height
+        if ($doctor.HasPreview -or $commit.IsEnabled -or $cancel.IsEnabled -or -not $doctor.IsCurrent($candidateList.Items[$candidateIndex])) { throw 'Apply did not commit the preview and disable repeated actions' }
+        $committed=$document.Descriptor.Clone()
+        $currentIndex=-1
+        for($i=0;$i -lt $candidateList.Items.Count;$i++) { if ($candidateList.Items[$i].Candidate.Descriptor.Stride -eq $declared.Stride -and $candidateList.Items[$i].Candidate.Descriptor.PixelFormat -eq $declared.PixelFormat) {$currentIndex=$i;break} }
+        if ($currentIndex -ge 0) {
+            $candidateList.SelectedIndex=$currentIndex;Arrange-Control $control $control.Width $control.Height
+            $cancel.Command.Execute($cancel.CommandParameter);Arrange-Control $control $control.Width $control.Height
+            if ($document.Descriptor.Stride -ne $committed.Stride -or $document.Descriptor.PixelFormat -ne $committed.PixelFormat) { throw 'Later Cancel restored the original source instead of the last committed candidate' }
+        }
+        $candidateList.SelectedIndex=$candidateIndex;Arrange-Control $control $control.Width $control.Height
+        $switchFixture=Join-Path $output 'doctor-other.rbuf.json';Copy-Item -LiteralPath $fixture -Destination $switchFixture
+        $control.OpenPath($switchFixture);$otherDocument=$control.FindName('ImageList').SelectedItem;$otherDoctor=$control.FindName('DiagnosisPanel').DataContext
+        if ($otherDoctor -eq $doctor -or $otherDoctor.HasPreview -or $otherDoctor.Candidates.Count -ne 0) { throw 'A second document inherited another buffer preview or candidates' }
+        $control.FindName('ImageList').SelectedItem=$document;Arrange-Control $control $control.Width $control.Height
+        if ($control.FindName('DiagnosisPanel').DataContext -ne $doctor -or -not $doctor.HasPreview -or $candidateList.Items.Count -eq 0) { throw 'Document switch discarded its preview/results or used the wrong DataContext' }
+        if ($doctor.SelectedCandidate -ne $candidateList.SelectedItem -or $doctor.SelectedCandidate -eq $null) { throw 'Document switch lost the selected candidate radio state' }
+        $control.GetType().GetMethod('RemoveDocument',$flags).Invoke($control,[object[]]@($otherDocument)) | Out-Null
+        if ($otherDoctor.CanDiagnose -or $otherDoctor.Candidates.Count -ne 0) { throw 'Removed document retained executable diagnosis state' }
+        $cancel.Command.Execute($cancel.CommandParameter);$reset.Command.Execute($reset.CommandParameter);Arrange-Control $control $control.Width $control.Height
+        if ($document.Descriptor.Width -ne 17 -or $document.Descriptor.Stride -ne 56 -or $doctor.HasPreview) { throw 'Layout Reset did not restore the declared layout after candidate Apply' }
+        Save-Render $control $control.Width $control.Height 'doctor-applied-reset.png'
+        $doctorLayouts=@()
+        foreach ($doctorWidth in @(640,1000,1440)) { foreach ($doctorHeight in @(440,720)) {
+            $control.Width=$doctorWidth;$control.Height=$doctorHeight;$nav.Show('Format');Arrange-Control $control $doctorWidth $doctorHeight
+            $doctorPanel=$control.FindName('InspectorContainer');$doctorScroll=$control.FindName('InspectorPanel');$doctorRoot=$control
+            if($nav.IsNarrow) {
+                $doctorPopup=$control.FindName('InspectorOverlayPopup');$doctorPopup.Child=$null
+                $doctorRoot=[Windows.Controls.Grid]::new();$doctorRoot.Resources=$control.Resources
+                [Windows.Documents.TextElement]::SetForeground($doctorRoot,$control.Foreground)
+                [Windows.NameScope]::SetNameScope($doctorRoot,[Windows.NameScope]::GetNameScope($control))
+                $doctorRoot.Children.Add($doctorPanel) | Out-Null
+            }
+            try {
+                $doctorRootWidth=if($nav.IsNarrow){$doctorPanel.Width}else{$doctorWidth}
+                Arrange-Control $doctorRoot $doctorRootWidth $doctorHeight
+                foreach ($doctorTargetName in @('ApplyDiagnosisCandidateButton','CloseDiagnosisButton','DescriptorPanel')) {
+                    $doctorTarget=$control.FindName($doctorTargetName);$doctorTarget.BringIntoView();Arrange-Control $doctorRoot $doctorRootWidth $doctorHeight
+                    Assert-InBounds $doctorTarget $doctorScroll "Doctor result access $doctorTargetName at $doctorWidth x $doctorHeight"
+                }
+                Save-Render $doctorRoot ([int]$doctorRootWidth) $doctorHeight "doctor-results-scroll-$doctorWidth-$doctorHeight.png"
+                $doctorScroll.ScrollToTop();Arrange-Control $doctorRoot $doctorRootWidth $doctorHeight
+                $doctorLayouts+=[pscustomobject]@{Width=$doctorWidth;Height=$doctorHeight;Actions='candidate Apply/Cancel and Descriptor through the actual inspector ScrollViewer'}
+            } finally { if($nav.IsNarrow){$doctorRoot.Children.Clear();$doctorPopup.Child=$doctorPanel} }
+        } }
+        $control.Width=1000;$control.Height=720;$nav.Show('Format');Arrange-Control $control 1000 720
+        # Replace the owned fixture source before a queued diagnosis continuation can publish.
+        $sourceIdentity=$document.DeclaredDescriptor
+        $diagnose.Command.Execute($diagnose.CommandParameter)
+        $freshSource=$document.Source.WithDescriptor($declared)
+        $fullReplace=$document.GetType().GetMethods([Reflection.BindingFlags]'Public,Instance') | Where-Object {$_.Name -eq 'ReplaceSource' -and $_.GetParameters().Count -eq 11}
+        $fullReplace.Invoke($document,[object[]]@($document.DisplayPath,$freshSource,$declared,$document.Title,$document.SourceType,$false,$false,0,[long]0,[long]0,$null)) | Out-Null
+        $control.GetType().GetMethod('UpdateInterpretationControls',$flags).Invoke($control,[object[]]@($declared)) | Out-Null
+        $control.GetType().GetMethod('RenderActiveDocument',$flags).Invoke($control,@()) | Out-Null
+        if($doctor.IsForSource($sourceIdentity) -or $doctor.HasPreview -or $doctor.Candidates.Count -ne 0 -or $doctor.IsRunning) { throw 'Fresh source retained stale diagnosis results or preview' }
+        $diagnose.Command.Execute($diagnose.CommandParameter)
+        $deadline=[DateTime]::UtcNow.AddSeconds(30)
+        while($doctor.IsRunning) {
+            [Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([Action]{},[Windows.Threading.DispatcherPriority]::Background)
+            if([DateTime]::UtcNow -gt $deadline){throw 'Fresh-source diagnosis recovery timed out'}
+            [Threading.Thread]::Sleep(5)
+        }
+        if($doctor.Candidates.Count -eq 0 -or -not $doctor.IsForSource($document.DeclaredDescriptor)) { throw 'Fresh-source diagnosis did not recover on the current source identity' }
+        $doctorEvidence=[pscustomobject]@{ResultLayouts=$doctorLayouts;SourceReplacement='queued prior result cancelled, stale preview/results cleared, fresh Core run recovered';CandidateCount=$candidateList.Items.Count;Core='actual asynchronous bounded BufferDoctor';Preview='bound selection, descriptor, form, PREVIEW state, same-size view and in-range pixel pin';Recovery='cancel, commit, cancel after commit, per-document switch, layout Reset';Native='not exercised'}
+    } finally { [Threading.SynchronizationContext]::SetSynchronizationContext($doctorContext) }
     $nav.Show('Diagnostics')
     $control.GetType().GetMethod('UpdatePerformanceText',$flags).Invoke($control,@()) | Out-Null
     $metrics=$control.FindName('RenderingMetricsPanel')
@@ -747,7 +851,7 @@ try {
     $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
     if ($null -ne $headerOperation.GetValue($control)) { throw 'Disposed view accepted a new header refresh' }
 
-    [pscustomobject]@{ HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement, inactive card open/A/B/remove and popup release'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    [pscustomobject]@{ BufferDoctor=$doctorEvidence; HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement, inactive card open/A/B/remove and popup release'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"

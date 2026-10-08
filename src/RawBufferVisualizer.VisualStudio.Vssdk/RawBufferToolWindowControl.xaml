@@ -768,7 +768,7 @@
                             <Border x:Name="ImageSizeChip" Style="{StaticResource InfoChip}" Margin="0"><TextBlock Text="{Binding SizeText, NotifyOnTargetUpdated=True}" FontSize="11" VerticalAlignment="Center"/></Border>
                             <Border x:Name="ImageFormatChip" Style="{StaticResource InfoChip}" ToolTip="{Binding Summary}"><TextBlock Text="{Binding FormatText, NotifyOnTargetUpdated=True}" FontSize="11" VerticalAlignment="Center"/></Border>
                             <Border x:Name="ImageStrideChip" Style="{StaticResource InfoChip}" ToolTip="{Binding Summary}"><TextBlock Text="{Binding StrideText, NotifyOnTargetUpdated=True}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" VerticalAlignment="Center"/></Border>
-                            <Border x:Name="ImageStateChip" Style="{StaticResource InfoChip}" ToolTip="{Binding SourceStateText}"><StackPanel Orientation="Horizontal"><ContentControl Content="{Binding}" ContentTemplate="{StaticResource ImageStateIconTemplate}" VerticalAlignment="Center" Margin="0,0,4,0"/><TextBlock Text="{Binding StateName, NotifyOnTargetUpdated=True}" AutomationProperties.Name="{Binding StateChipText}" Style="{StaticResource ImageStateText}" FontSize="11" VerticalAlignment="Center"/></StackPanel></Border>
+                            <Border x:Name="ImageStateChip" Style="{StaticResource InfoChip}" ToolTip="{Binding StateToolTip}"><StackPanel Orientation="Horizontal"><ContentControl Content="{Binding}" ContentTemplate="{StaticResource ImageStateIconTemplate}" VerticalAlignment="Center" Margin="0,0,4,0"/><TextBlock Text="{Binding StateName, NotifyOnTargetUpdated=True}" AutomationProperties.Name="{Binding StateChipText}" Style="{StaticResource ImageStateText}" FontSize="11" VerticalAlignment="Center"/></StackPanel></Border>
                         </StackPanel>
                     </Grid>
                 </Border>
@@ -1127,42 +1127,38 @@
                     <Border Style="{StaticResource InspectorCard}" Margin="0,12,0,0"><StackPanel>
                         <TextBlock Text="BUFFER DOCTOR" Style="{StaticResource InspectorBlockHeading}"/>
                         <TextBlock Text="Ranks likely width, stride, format, valid bits and byte order from a bounded sample. Debuggee bytes are not changed." FontSize="12" LineHeight="18" TextWrapping="Wrap" Margin="0,8,0,8"/>
-                        <Button x:Name="DiagnoseBufferButton" Content="Diagnose buffer" AutomationProperties.AutomationId="DiagnoseBufferButton" Click="DiagnoseBuffer_Click" HorizontalAlignment="Left" Margin="0"/>
+                        <Button x:Name="DiagnoseBufferButton" Content="Diagnose buffer" AutomationProperties.AutomationId="DiagnoseBufferButton" Command="{Binding DataContext.DiagnoseCommand, ElementName=DiagnosisPanel}" HorizontalAlignment="Left" Margin="0"/>
                     <Border x:Name="DiagnosisPanel"
                             AutomationProperties.AutomationId="DiagnosisPanel"
-                            Visibility="Collapsed"
+                            Visibility="{Binding IsVisible, Converter={StaticResource BooleanVisibility}, FallbackValue=Collapsed}" Tag="{Binding CloseCommand}"
                             Margin="0,8,0,0">
                         <StackPanel>
-                            <DockPanel LastChildFill="True">
-                                <Button x:Name="CloseDiagnosisButton" DockPanel.Dock="Right" Content="Close" Margin="0" Click="CloseDiagnosis_Click"/>
-                                <TextBlock Text="BUFFER DOCTOR" Style="{StaticResource InspectorBlockHeading}"/>
-                            </DockPanel>
-                            <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Margin="0,6,0,6" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="11"/>
-                            <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" MaxHeight="280" SelectionChanged="DiagnosisCandidateList_SelectionChanged">
-                                <ListBox.ItemTemplate>
-                                    <DataTemplate>
-                                        <Grid Margin="0,2" ToolTip="{Binding ReasonsText}">
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="64"/>
-                                                <ColumnDefinition Width="*"/>
-                                            </Grid.ColumnDefinitions>
-                                            <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2" HorizontalAlignment="Left">
-                                                <Image Source="{Binding Thumbnail}" Stretch="Uniform"/>
-                                            </Border>
-                                            <StackPanel Grid.Column="1" Margin="8,0,0,0" VerticalAlignment="Center">
-                                                <DockPanel LastChildFill="True">
-                                                    <Border DockPanel.Dock="Right" Background="{DynamicResource StatusAccentBrush}" Padding="6,1" CornerRadius="2" VerticalAlignment="Top">
-                                                        <TextBlock Text="{Binding ScoreText}" FontSize="11" FontWeight="SemiBold"/>
-                                                    </Border>
-                                                    <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                                </DockPanel>
-                                                <TextBlock Text="{Binding Summary}" FontSize="11" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
-                                                <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" Foreground="{DynamicResource AttentionTextBrush}" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
-                                            </StackPanel>
-                                        </Grid>
-                                    </DataTemplate>
-                                </ListBox.ItemTemplate>
+                            <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Text="{Binding Status}" ToolTip="{Binding Details}" Margin="0,0,0,8" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="12" LineHeight="18" LineStackingStrategy="BlockLineHeight"/>
+                            <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" ItemsSource="{Binding Candidates}" SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}" IsEnabled="{Binding CanDiagnose}" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                                <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                                    <Setter Property="Padding" Value="6"/><Setter Property="Margin" Value="0,0,0,4"/><Setter Property="Background" Value="{DynamicResource PanelBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                    <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="2"><ContentPresenter HorizontalAlignment="Stretch"/></Border></ControlTemplate></Setter.Value></Setter>
+                                    <Style.Triggers><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="{DynamicResource CommandHoverBrush}"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="{DynamicResource CommandPressedBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger><Trigger Property="IsKeyboardFocused" Value="True"><Setter Property="BorderBrush" Value="{DynamicResource StatusAccentBrush}"/></Trigger></Style.Triggers>
+                                </Style></ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate><DataTemplate>
+                                    <Grid ToolTip="{Binding ReasonsText}" AutomationProperties.Name="{Binding AccessibleName}"><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                        <Border Width="64" Height="48" Background="{DynamicResource CanvasBrush}" CornerRadius="2" HorizontalAlignment="Left" VerticalAlignment="Top"><Image Source="{Binding Thumbnail}" Stretch="Uniform"/></Border>
+                                        <StackPanel Grid.Column="1" Margin="8,0,30,0">
+                                            <TextBlock Text="{Binding Title}" FontSize="12" FontWeight="SemiBold" LineHeight="16.2" LineStackingStrategy="BlockLineHeight" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding Summary}" FontSize="11" LineHeight="15.4" LineStackingStrategy="BlockLineHeight" Margin="0,2,0,0" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding AmbiguityNote}" FontSize="11" LineHeight="15.4" LineStackingStrategy="BlockLineHeight" Margin="0,2,0,0" Foreground="{DynamicResource AttentionTextBrush}" TextWrapping="Wrap" Visibility="{Binding AmbiguityVisibility}"/>
+                                        </StackPanel>
+                                        <Border Grid.ColumnSpan="2" Width="24" Height="18" HorizontalAlignment="Right" VerticalAlignment="Top" CornerRadius="2">
+                                            <Border.Style><Style TargetType="Border"><Setter Property="Background" Value="{DynamicResource CommandBrush}"/><Setter Property="TextElement.Foreground" Value="{DynamicResource TextBrush}"/><Style.Triggers><DataTrigger Binding="{Binding IsTop}" Value="True"><Setter Property="Background" Value="{DynamicResource StatusAccentBrush}"/><Setter Property="TextElement.Foreground" Value="White"/></DataTrigger></Style.Triggers></Style></Border.Style>
+                                            <TextBlock Text="{Binding ScoreText}" FontSize="11" FontWeight="SemiBold" FontFamily="Cascadia Mono, Consolas" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                        </Border>
+                                    </Grid>
+                                </DataTemplate></ListBox.ItemTemplate>
                             </ListBox>
+                            <WrapPanel Margin="0,4,0,0">
+                                <Button x:Name="ApplyDiagnosisCandidateButton" Content="Apply candidate" Command="{Binding ApplyCandidateCommand}" Background="{DynamicResource StatusAccentBrush}" BorderBrush="{DynamicResource StatusAccentBrush}"/>
+                                <Button x:Name="CloseDiagnosisButton" Content="Cancel preview" Margin="0" Command="{Binding CancelPreviewCommand}"/>
+                            </WrapPanel>
                         </StackPanel>
                     </Border>
                     </StackPanel></Border>
