@@ -1,6 +1,7 @@
 param(
     [string]$Configuration = "Release",
     [string]$Framework = "net472",
+    [string]$BuildRoot = "",
     [string]$OutputDir = "artifacts\ui\buffer-doctor",
     [string]$CaptureName = "after-diagnose-1160.png",
     [string]$ApplyCaptureName = "after-apply-1160.png",
@@ -11,9 +12,10 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
+$resolvedBuildRoot = if ([string]::IsNullOrWhiteSpace($BuildRoot)) { Join-Path $repoRoot ".build" } else { [IO.Path]::GetFullPath($BuildRoot) }
 
 if (-not $NoBuild) {
-    dotnet build .\RawBufferVisualizer.sln --configuration $Configuration | Out-Host
+    dotnet build .\RawBufferVisualizer.sln --configuration $Configuration "-p:RawBufferVisualizerBuildRoot=$resolvedBuildRoot" | Out-Host
     if ($LASTEXITCODE -ne 0) {
         throw "Build failed with exit code $LASTEXITCODE."
     }
@@ -127,7 +129,7 @@ function Capture-Window([IntPtr]$hwnd, [string]$path) {
     }
 }
 
-$assemblyPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
+$assemblyPath = Join-Path $resolvedBuildRoot "bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Vssdk.dll"
 [Reflection.Assembly]::LoadFrom($assemblyPath) | Out-Null
 
 $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindowControl
