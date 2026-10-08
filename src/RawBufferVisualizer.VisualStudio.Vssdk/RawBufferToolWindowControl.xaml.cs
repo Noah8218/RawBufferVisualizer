@@ -1261,7 +1261,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             TextBlock textBlock,
             VisualizerEnvironmentCheckItem item)
         {
-            textBlock.Text = (ReferenceEquals(textBlock, EnvironmentVisualStudioText) ? "Visual Studio" : item.Name) + " " + item.Detail.Replace(" - ", " — ");
+            var name = ReferenceEquals(textBlock, EnvironmentVisualStudioText) ? "Visual Studio" : ReferenceEquals(textBlock, EnvironmentTempStorageText) ? "Temp storage" : item.Name;
+            var detail = item.Detail.Replace(" - ", " — ");
+            if (item.State == VisualizerEnvironmentCheckState.Ready && _environmentCheckResult != null)
+            {
+                Version? version;
+                if (ReferenceEquals(textBlock, EnvironmentExtensionText))
+                {
+                    var value = _environmentCheckResult.Snapshot.ExtensionVersion;
+                    if (Version.TryParse(value, out version) && version != null) value = version.ToString(version.Revision > 0 ? 4 : version.Build >= 0 ? 3 : 2);
+                    detail = value + " — Classic + Concord registered";
+                }
+                else if (ReferenceEquals(textBlock, EnvironmentVisualStudioText) && Version.TryParse(_environmentCheckResult.Snapshot.VisualStudioVersion.Split(' ')[0], out version) && version != null)
+                {
+                    if (version.Major == 17) name = "Visual Studio 2022";
+                    detail = version.ToString(2) + " · x64 — supported";
+                }
+            }
+            textBlock.Text = name + " " + detail;
             textBlock.Tag = item.State.ToString();
             textBlock.ToolTip = item.Name + " — " + item.Detail;
             System.Windows.Automation.AutomationProperties.SetName(textBlock, item.Name + " — " + item.Detail);
