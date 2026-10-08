@@ -1150,7 +1150,12 @@
                             Margin="0,8,0,0">
                         <StackPanel>
                             <TextBlock x:Name="DiagnosisStatusText" AutomationProperties.AutomationId="DiagnosisStatusText" Text="{Binding Status}" ToolTip="{Binding Details}" Margin="0,0,0,8" Foreground="{DynamicResource SecondaryTextBrush}" TextWrapping="Wrap" FontSize="12" LineHeight="18" LineStackingStrategy="BlockLineHeight"/>
-                            <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" ItemsSource="{Binding Candidates}" SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}" IsEnabled="{Binding CanDiagnose}" Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+                            <ListBox x:Name="DiagnosisCandidateList" AutomationProperties.AutomationId="DiagnosisCandidateList" ItemsSource="{Binding Candidates}" SelectedItem="{Binding SelectedCandidate, Mode=TwoWay}" IsEnabled="{Binding CanDiagnose}" Background="Transparent" BorderThickness="0" Padding="0">
+                                <ListBox.Template><ControlTemplate TargetType="ListBox">
+                                    <Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}">
+                                        <ItemsPresenter/>
+                                    </Border>
+                                </ControlTemplate></ListBox.Template>
                                 <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
                                     <Setter Property="Padding" Value="6"/><Setter Property="Margin" Value="0,0,0,4"/><Setter Property="Background" Value="{DynamicResource PanelBrush}"/><Setter Property="BorderBrush" Value="{DynamicResource BorderBrush}"/><Setter Property="BorderThickness" Value="1"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="FocusVisualStyle" Value="{x:Null}"/>
                                     <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><Border Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" Padding="{TemplateBinding Padding}" CornerRadius="2"><ContentPresenter HorizontalAlignment="Stretch"/></Border></ControlTemplate></Setter.Value></Setter>
