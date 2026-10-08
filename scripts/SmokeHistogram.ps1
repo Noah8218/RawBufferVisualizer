@@ -144,10 +144,12 @@ function BoundResult($view,$vm) {
     $frequency=if ($view.Tag -eq 'Docked') { $vm.DockedFrequencyScale } else { $vm.FrequencyScale }
     Check ($view.FindName('HistogramCoverage').Text -eq $coverage -and $view.FindName('HistogramStatus').Text -eq $vm.Status) 'Rendered coverage/status match ViewModel'
     Check ($view.FindName('HistogramSourceDescription').Text -eq $vm.SourceDescription -and $view.FindName('HistogramValueRange').Text -eq $range -and $view.FindName('HistogramExclusions').Text -eq $vm.Exclusions) 'Rendered value basis/range/exclusions match current result'
-    Check ($view.FindName('HistogramLowerLabel').Text -eq $vm.LowerLabel -and $view.FindName('HistogramUpperLabel').Text -eq $vm.UpperLabel) 'Rendered axes match numeric labels'
+    $lower=if ($view.Tag -eq 'Docked') { $vm.DockedLowerLabel } else { $vm.LowerLabel }
+    $upper=if ($view.Tag -eq 'Docked') { $vm.DockedUpperLabel } else { $vm.UpperLabel }
+    Check ($view.FindName('HistogramLowerLabel').Text -eq $lower -and $view.FindName('HistogramUpperLabel').Text -eq $upper) 'Rendered axes match the consumer numeric labels'
     Check ($view.FindName('HistogramFrequencyScale').Text -eq $frequency -and $view.FindName('HistogramAxisDescription').Text -eq $vm.AxisDescription) 'Rendered frequency and value-axis explanations match the result'
     Check ($view.FindName('HistogramSamplingDescription').Text -eq $vm.SamplingDescription -and $view.FindName('HistogramChannelDescription').Text -eq $vm.ChannelDescription) 'Rendered sampling and RGB-mean explanations follow the current source/channel'
-    $textColor=$view.FindResource($(if ($view.Tag -eq 'Docked') { 'SecondaryTextBrush' } else { 'RbvTextBrush' })).Color
+    $textColor=$view.FindResource($(if ($view.Tag -eq 'Docked') { 'DockedSecondaryTextBrush' } else { 'RbvTextBrush' })).Color
     $coverageColor=$view.FindResource($(if ($view.Tag -eq 'Docked') { 'TextBrush' } else { 'RbvTextBrush' })).Color
     Check ($view.FindName('HistogramCoverage').Foreground.Color -eq $coverageColor -and $view.FindName('HistogramStatus').Foreground.Color -eq $textColor) 'Optional text preserves the rendered theme foreground'
 }

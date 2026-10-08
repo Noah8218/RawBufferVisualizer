@@ -286,11 +286,17 @@ try {
     $control.Width = $Widths[-1]; $control.Height = $Heights[-1]
     Arrange-Control $control $control.Width $control.Height
     $model = $control.FindName('PixelVisualization').DataContext
-    $popupRows=@{ AddImagePopup=3; SavePopup=2; MorePopup=4; ZoomPopup=8 }
+    $cardPopup=$control.FindName('ImageCardPopup'); $cardModel=$cardPopup.DataContext
+    $cardBinding=[Windows.Data.BindingOperations]::GetBindingBase($cardPopup,[Windows.Controls.Primitives.Popup]::IsOpenProperty)
+    if ($cardBinding.Mode -ne 'TwoWay') { throw 'Card popup lost its open/close binding' }
+    # Prevent creation of native PopupRoot while exercising the actual bound menu in-process.
+    [Windows.Data.BindingOperations]::ClearBinding($cardPopup,[Windows.Controls.Primitives.Popup]::IsOpenProperty)
+    $cardModel.OpenCommand.Execute($document)
+    $popupRows=@{ AddImagePopup=3; SavePopup=2; MorePopup=4; ZoomPopup=8; ImageCardPopup=7 }
     $control.FindName('ZoomSlider').Value=1
     foreach ($popupName in $popupRows.Keys) {
         $popup=$control.FindName($popupName); $menu=$popup.Child; $popup.Child=$null
-        $menuRoot=[Windows.Controls.Grid]::new(); $menuRoot.Resources=$control.Resources
+        $menuRoot=[Windows.Controls.Grid]::new(); $menuRoot.Resources=$control.Resources; $menuRoot.DataContext=$popup.DataContext
         [Windows.NameScope]::SetNameScope($menuRoot,[Windows.NameScope]::GetNameScope($control))
         try {
             $menuRoot.Children.Add($menu) | Out-Null
@@ -303,6 +309,14 @@ try {
                 if ($button.ActualHeight -ne 26) { throw "Popup row height differs from 26px: $popupName" }
                 Assert-InBounds $button $menu "Popup command row $popupName"
             }
+            if ($popupName -eq 'ImageCardPopup') {
+                $labels=@('Save visible PNG','Save raw snapshot…','Copy pointer address','Copy pixel address','Set as A','Set as B','Remove from list')
+                if (($buttons.Content -join '|') -ne ($labels -join '|') -or $menu.ActualHeight -ne 201) { throw 'Card menu order or height differs from the approved HTML' }
+                if ($buttons[2].IsEnabled -or $buttons[3].IsEnabled) { throw 'File card exposes unavailable pointer addresses' }
+                foreach ($button in $buttons) {
+                    if ($button.Command -ne $cardModel.ActionCommand) { throw 'Card action lost its scoped command owner' }
+                }
+            }
             if ($popupName -eq 'ZoomPopup') {
                 foreach ($button in $buttons) {
                     $selected=$button.Content.Children[0].Opacity -eq 1
@@ -313,6 +327,7 @@ try {
             Save-Render $menuRoot ([int]$menu.ActualWidth) ([int]$menu.ActualHeight) "popup-$popupName.png"
         } finally { $menuRoot.Children.Clear(); $popup.Child=$menu }
     }
+    $cardModel.Clear()
     $selector = $control.FindName('NeighborhoodChannelBox')
     $segments = $selector.Template.FindName('SegmentList', $selector)
     $segments.SelectedItem = 'R'
@@ -561,6 +576,27 @@ try {
     Assert-InBounds $cardMore $container 'Image-card More action'
     if ([Windows.Automation.AutomationProperties]::GetName($cardMore) -ne ('More actions for '+$list.SelectedItem.ObjectName)) { throw 'Image-card More accessibility lost its target image name' }
     if ($nav.IsImageStrip) { throw 'Card action test requires the expanded image list' }
+    $originalCard=$list.SelectedItem
+    $menuFixture=Join-Path $output 'menu-target.rbuf.json'
+    Copy-Item -LiteralPath $fixture -Destination $menuFixture
+    $control.OpenPath($menuFixture);$targetCard=$list.SelectedItem
+    $list.SelectedItem=$originalCard;Arrange-Control $control $control.Width $control.Height
+    $targetContainer=$list.ItemContainerGenerator.ContainerFromIndex($list.Items.IndexOf($targetCard))
+    $targetPresenter=Find-TemplatePresenter $targetContainer $list.ItemTemplate
+    $targetMore=$list.ItemTemplate.FindName('CardMoreButton',$targetPresenter)
+    if ($targetMore.Command -ne $cardModel.OpenCommand -or $targetMore.CommandParameter -ne $targetCard) { throw 'Card More lost its command target binding' }
+    Click-Button $targetMore;$targetMore.Command.Execute($targetMore.CommandParameter)
+    if ($list.SelectedItem -ne $originalCard -or $control.GetType().GetProperty('_activeDocument',$flags).GetValue($control,$null) -ne $originalCard) { throw 'Opening an inactive card menu changed active selection' }
+    if ($cardPopup.PlacementTarget -ne $targetMore -or $cardPopup.VerticalOffset -ne 2 -or $cardPopup.HorizontalOffset -ne $targetMore.ActualWidth-197) { throw 'Card menu lost its right alignment and 2px gap' }
+    $cardModel.ActionCommand.Execute('SetA')
+    if ($control.FindName('CompareASlot').DataContext -ne $targetCard -or $list.SelectedItem -ne $originalCard) { throw 'Card A action selected another image or used the wrong card' }
+    $targetMore.Command.Execute($targetMore.CommandParameter);$cardModel.ActionCommand.Execute('SetB')
+    if ($control.FindName('CompareBSlot').DataContext -ne $targetCard -or $list.SelectedItem -ne $originalCard) { throw 'Card B action lost its target or selection' }
+    $targetMore.Command.Execute($targetMore.CommandParameter);$cardModel.ActionCommand.Execute('Remove')
+    Arrange-Control $control $control.Width $control.Height
+    if ($list.Items.Contains($targetCard) -or $list.SelectedItem -ne $originalCard -or $control.FindName('CompareASlot').DataContext -ne $null -or $control.FindName('CompareBSlot').DataContext -ne $null) { throw 'Card removal left stale slots or removed the wrong image' }
+    if ($cardModel.IsOpen -or $cardModel.Target -ne $null) { throw 'Card action retained a borrowed menu target' }
+    [Windows.Data.BindingOperations]::SetBinding($cardPopup,[Windows.Controls.Primitives.Popup]::IsOpenProperty,$cardBinding) | Out-Null
     $nav.ToggleImageListCommand.Execute($null);Arrange-Control $control $control.Width $control.Height
     if ($cardMore.Visibility -ne 'Collapsed') { throw 'Image-card More action remains visible in the thumbnail strip' }
     $nav.ToggleImageListCommand.Execute($null);$nav.Show('Pixel');Arrange-Control $control $control.Width $control.Height
@@ -711,7 +747,7 @@ try {
     $targetUpdated.Invoke($control,[object[]]@($null,$null)) | Out-Null
     if ($null -ne $headerOperation.GetValue($control)) { throw 'Disposed view accepted a new header refresh' }
 
-    [pscustomobject]@{ HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
+    [pscustomobject]@{ HistogramPresentation=$histogramCases; StateIcons=$iconCases; SourcePresentation=$sourceCases; HeaderRefresh='document switch, unloaded/disposed cancellation'; Layout=$cases; InspectorSections=$sections; ChannelFormats=$formats; HeaderOverflow=$headerCases; Bindings='selector, comparison, measurement, inactive card open/A/B/remove and popup release'; Recovery='pin/hover leave, clear/cancel/confirm/reopen, scalar/measurement/scalar'; Scope='In-process WPF at 96 DPI; no desktop window, native canvas pixels, popup interaction, installed IDE or Windows DPI qualification' } |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$output\results.json" -Encoding UTF8
     Write-Output "PASS: $($cases.Count) layouts, $($sections.Count) inspector section selections, $($formats.Count) format/width cases; $($headerCases.Count) expanded-header overflow cases; bindings and recovery transitions."
     Write-Output "Evidence: $output\results.json"
