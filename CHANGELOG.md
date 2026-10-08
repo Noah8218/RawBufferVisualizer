@@ -9,6 +9,9 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 - Keeps channel values visible as the pixel bar narrows, and preserves pinned, hovered, selected and measurement states.
 - Displays pixel-colored 5×5 neighborhoods, channel statistics and 17-sample row profiles.
 - Compresses image cards and automatic-scan controls, and confirms Clear all inline before removing list entries.
+- Resets buffer-layout edits and previews Buffer Doctor candidates per image before applying or cancelling them.
+- Assigns and swaps comparison slots from image-card actions while preserving the active image.
+- Shows histogram mean and population standard deviation from the existing bounded sample.
 
 ## [2.2.3] - 2026-10-01
 
