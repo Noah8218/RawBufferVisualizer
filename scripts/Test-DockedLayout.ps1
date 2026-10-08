@@ -394,6 +394,14 @@ try {
         if (-not $doctor.HasPreview -or $doctor.SelectedCandidate -ne $candidateList.SelectedItem -or $document.Descriptor.Stride -ne $previewed.Stride -or $document.Descriptor.PixelFormat -ne $previewed.PixelFormat -or $document.StateName -ne 'PREVIEW') { throw 'Rendered selection failed to preview its actual descriptor and state' }
         if ($previewed.Width -eq $declared.Width -and $previewed.Height -eq $declared.Height -and ($doctorCanvas.GetViewState().Width -ne $beforeDoctorView.Width -or $doctorCanvas.GetViewState().Mode -ne $beforeDoctorView.Mode)) { throw 'Same-size candidate preview discarded zoom/pan state' }
         if ($previewed.Width -gt 8 -and $previewed.Height -gt 2 -and ($control.FindName('PixelBadgeText').Text -ne 'PINNED' -or $document.StateToolTip -ne 'PREVIEW')) { throw 'Preview lost pixel pin or disagreed with its state tooltip' }
+        if ($document.CardStateName -ne 'CAPTURED') { throw 'Doctor preview changed the card source provenance' }
+        $doctorCard=$control.FindName('ImageList');$doctorCardPresenter=Find-TemplatePresenter $doctorCard $doctorCard.ItemTemplate
+        $cardState=$doctorCard.ItemTemplate.FindName('CardSourceStateText',$doctorCardPresenter)
+        $cardIcon=$doctorCard.ItemTemplate.FindName('CardSourceStateIcon',$doctorCardPresenter)
+        $cardIconPresenter=Find-TemplatePresenter $cardIcon $cardIcon.ContentTemplate
+        $cardShape=$cardIcon.ContentTemplate.FindName('StateShape',$cardIconPresenter)
+        $cardRing=$cardIcon.ContentTemplate.FindName('PreviewRing',$cardIconPresenter)
+        if ($cardState.Text -ne 'CAPTURED' -or $cardState.Foreground.Color.ToString() -ne '#FF75BEFF' -or $cardShape.Fill.Color.ToString() -ne '#FF75BEFF' -or $cardRing.Visibility -ne 'Collapsed') { throw 'Rendered card source state disagrees with the approved preview behavior' }
         if ($control.FindName('InterpretStrideTextBox').Text -ne [string]$previewed.Stride) { throw 'Candidate preview did not update the bound form' }
         $cancel=$control.FindName('CloseDiagnosisButton');$commit=$control.FindName('ApplyDiagnosisCandidateButton')
         if (-not $cancel.IsEnabled -or -not $commit.IsEnabled) { throw 'Preview actions did not become enabled' }
@@ -467,7 +475,7 @@ try {
             [Threading.Thread]::Sleep(5)
         }
         if($doctor.Candidates.Count -eq 0 -or -not $doctor.IsForSource($document.DeclaredDescriptor)) { throw 'Fresh-source diagnosis did not recover on the current source identity' }
-        $doctorEvidence=[pscustomobject]@{ResultLayouts=$doctorLayouts;SourceReplacement='queued prior result cancelled, stale preview/results cleared, fresh Core run recovered';CandidateCount=$candidateList.Items.Count;Core='actual asynchronous bounded BufferDoctor';Preview='bound selection, descriptor, form, PREVIEW state, same-size view and in-range pixel pin';Recovery='cancel, commit, cancel after commit, per-document switch, layout Reset';Native='not exercised'}
+        $doctorEvidence=[pscustomobject]@{ResultLayouts=$doctorLayouts;SourceReplacement='queued prior result cancelled, stale preview/results cleared, fresh Core run recovered';CandidateCount=$candidateList.Items.Count;Core='actual asynchronous bounded BufferDoctor';Preview='bound selection, descriptor/form, header PREVIEW with card CAPTURED, same-size view and in-range pixel pin';Recovery='cancel, commit, cancel after commit, per-document switch, layout Reset';Native='not exercised'}
     } finally { [Threading.SynchronizationContext]::SetSynchronizationContext($doctorContext) }
     $nav.Show('Diagnostics')
     $control.GetType().GetMethod('UpdatePerformanceText',$flags).Invoke($control,@()) | Out-Null
@@ -572,7 +580,7 @@ try {
                 Assert-InBounds $stateBadge $viewport "Strip state badge in scroll viewport at $width x $height"
                 if ($container.Margin.Bottom -ne 4) { throw 'Thumbnail strip gap differs from the approved 4px' }
                 if ($width -in @(320,640) -and $height -eq 260) { Save-Render $control $width $height "strip-scrolled-$format-$width-$height.png" }
-                if ([string]$stateBadge.ToolTip -ne $list.SelectedItem.StateName) { throw 'State shape lost its existing state label' }
+                if ([string]$stateBadge.ToolTip -ne $list.SelectedItem.CardStateName) { throw 'State shape lost its existing state label' }
             } elseif ($stateBadge.Visibility -ne 'Collapsed') { throw 'Strip state shape remains visible in the expanded image list' }
             $formats += [pscustomobject]@{ Format=$format; Width=$width; Height=$height; ImageStrip=$strip; Value=$control.FindName('PixelValueText').Text }
         } } }
@@ -709,13 +717,11 @@ try {
     if (@($control.FindName('PixelVisualization').DataContext.Cells | Where-Object { $_.Value -eq '—' }).Count -ne 16) { throw 'Corner neighborhood lost the required out-of-image cells' }
     Save-Render $control $control.Width $control.Height 'pixel-corner-neighborhood.png'
 
-    # Exercise the reusable actual View template with isolated StateName rows, not fake live documents.
-    $stateRows=[System.Data.DataTable]::new(); $stateRows.Columns.Add('StateName',[string]) | Out-Null
+    # Exercise the actual template with explicit state values, not fake live documents.
     $iconCases=@()
     $stateColors=@{ LIVE='#FF89D185'; CAPTURED='#FF75BEFF'; PREVIEW='#FFE2C08D'; MAP='#FFE2C08D'; FAILED='#FFF48771' }
     foreach ($state in @('LIVE','CAPTURED','PREVIEW','MAP','FAILED')) {
-        $stateRows.Rows.Add($state) | Out-Null
-        $iconHost=[Windows.Controls.ContentControl]::new(); $iconHost.Content=$stateRows.DefaultView[$stateRows.Rows.Count-1]; $iconHost.ContentTemplate=$control.Resources['ImageStateIconTemplate']
+        $iconHost=[Windows.Controls.ContentControl]::new(); $iconHost.Content=$state; $iconHost.ContentTemplate=$control.Resources['ImageStateIconTemplate']
         $iconBadge=[Windows.Controls.Border]::new(); $iconBadge.Width=12; $iconBadge.Height=12; $iconBadge.CornerRadius=[Windows.CornerRadius]::new(2); $iconBadge.Background=$control.Resources['InputBrush']; $iconBadge.Child=$iconHost
         $iconHost.HorizontalAlignment='Center'; $iconHost.VerticalAlignment='Center'; $iconBadge.Resources=$control.Resources
         Arrange-Control $iconBadge 12 12
