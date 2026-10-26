@@ -71,11 +71,86 @@ namespace RawBufferVisualizer.Tests
                 model.Update(source, integerDescriptor, 0, 0, source.CreateRenderOptions());
                 Require(model.ChannelValues[0].Decimal == "-123456789" && model.ChannelValues[0].Hex == "0xF8A432EB" && model.Count == "1", "Signed decimal and raw hex remain distinct at the smallest image boundary");
             }
+            GeneratedDifferencesUseDisplayedValues();
+            RunReuseChecks();
             model.Clear();
             Require(!model.HasPixelData && model.Cells.Count == 0 && model.ChannelValues.Count == 0 && model.ProfileValue.IsEmpty() && model.ProfileRMarker.IsEmpty(), "Clear releases presentation snapshots and current points");
             Require(new PixelInspectorViewModel.NeighborhoodCell("120", Color.FromRgb(120, 120, 120), false).Foreground == Brushes.Black &&
                 new PixelInspectorViewModel.NeighborhoodCell("80", Color.FromRgb(80, 80, 80), false).Foreground == Brushes.White, "Cell text follows the approved relative-luminance contrast threshold");
             Console.WriteLine("Pixel inspector: padded RGB, channel switch, corners, 17-point profiles, float byte orders/non-finite bits, signed integer and clear passed.");
+        }
+
+        private static void GeneratedDifferencesUseDisplayedValues()
+        {
+            var mono = new RawImageDescriptor { Width = 3, Height = 2, Stride = 3, PixelFormat = RawPixelFormat.Mono8, ValidBits = 8 };
+            using (var a = RawImageSource.FromMemory(Enumerable.Repeat((byte)11, 6).ToArray(), mono))
+            using (var b = RawImageSource.FromMemory(Enumerable.Repeat((byte)201, 6).ToArray(), mono))
+            using (var diff = new RawImageDifferenceSource(a, b))
+            {
+                var model = new PixelInspectorViewModel();
+                model.Update(diff, diff.Descriptor, 1, 0, diff.CreateRenderOptions());
+                Require(model.ChannelValues.Single(value => value.Name == "GV").Decimal == "190" && model.Cells[12].Value == "190" && model.Mean == "190.00", "Difference pixels, neighborhood and statistics must agree on |201 - 11| = 190");
+                Require(model.RawBytes == "BE BE BE FF", "Generated pixel bytes describe the difference rather than an input's raw payload");
+            }
+            using (var a = RawImageSource.FromMemory(new byte[] { 11, 20, 30, 40, 50, 60 }, mono))
+            using (var b = RawImageSource.FromMemory(new byte[] { 201, 21, 20, 35, 55, 0 }, mono))
+            using (var diff = new RawImageDifferenceSource(a, b))
+            {
+                var model = new PixelInspectorViewModel();
+                model.Update(diff, diff.Descriptor, 1, 0, diff.CreateRenderOptions());
+                Require(model.Cells[12].Value == "1" && model.Minimum == "1" && model.Maximum == "190" && model.Mean == "45.17", "Nonuniform differences use their own pixel and region values, not the uniform fixture's constant");
+                model.Update(diff, diff.Descriptor, 2, 1, diff.CreateRenderOptions());
+                Require(model.Cells[12].Value == "60" && model.Mean == "45.17", "A different edge pixel retains the same independently calculated region mean");
+            }
+            var rgb = new RawImageDescriptor { Width = 3, Height = 1, Stride = 9, PixelFormat = RawPixelFormat.RGB24, ValidBits = 8 };
+            using (var a = RawImageSource.FromMemory(new byte[] { 10, 80, 170, 10, 80, 170, 10, 80, 170 }, rgb))
+            using (var b = RawImageSource.FromMemory(new byte[] { 70, 60, 20, 70, 60, 20, 70, 60, 20 }, rgb))
+            using (var diff = new RawImageDifferenceSource(a, b))
+            {
+                var model = new PixelInspectorViewModel();
+                model.Update(diff, diff.Descriptor, 0, 0, diff.CreateRenderOptions());
+                Require(model.ChannelValues[0].Decimal == "60" && model.ChannelValues[1].Decimal == "20" && model.ChannelValues[2].Decimal == "150", "Color difference channels use independent absolute differences");
+                model.SelectedChannel = "B";
+                Require(model.Cells[12].Value == "150" && model.Mean == "150.00", "Generated channel selection agrees with the rendered neighborhood at an edge");
+            }
+        }
+
+        public static void RunReuseChecks()
+        {
+            var descriptor = new RawImageDescriptor { Width = 17, Height = 5, Stride = 17, PixelFormat = RawPixelFormat.Mono8, ValidBits = 8 };
+            using (var inner = RawImageSource.FromMemory(Enumerable.Repeat((byte)11, 85).ToArray(), descriptor))
+            using (var source = new CountingSource(inner))
+            {
+                var model = new PixelInspectorViewModel();
+                model.Update(source, descriptor, 8, 2, source.CreateRenderOptions());
+                Require(source.Descriptions == 37 && source.Statistics == 1 && source.Tiles == 1, "The 25-cell neighborhood and 17-point row have 37 unique pixels; each is read once per update");
+                model.SelectedChannel = "R";
+                Require(source.Descriptions == 37 && source.Statistics == 1, "Channel changes consume the captured presentation without reading the source again");
+                Require(model.GetDescription(8, 2) == inner.DescribePixel(8, 2) && model.Statistics?.Mean == 11, "Legacy descriptions and statistics consume the same bounded snapshot");
+                using (var replacement = RawImageSource.FromMemory(Enumerable.Repeat((byte)201, 85).ToArray(), descriptor))
+                {
+                    model.Update(replacement, descriptor, 8, 2, replacement.CreateRenderOptions());
+                    Require(model.Cells[12].Value == "201" && model.Statistics?.Mean == 201 && model.GetDescription(8, 2).Contains("GV=201"), "A later update replaces the snapshot instead of caching pixels across source lifetimes");
+                }
+                model.Clear();
+                Require(model.Statistics == null && !model.HasPixelData, "Clear releases the previous presentation snapshot");
+            }
+            Console.WriteLine("Pixel reuse: 37 unique descriptions, one statistics call and one tile; channel switch, legacy snapshot and clear passed.");
+        }
+
+        private sealed class CountingSource : RawImageSource
+        {
+            private readonly RawImageSource _inner;
+            public int Descriptions, Statistics, Tiles;
+            public CountingSource(RawImageSource inner) : base(inner.Descriptor, inner.Length, inner.RawPath) { _inner = inner; }
+            public override bool IsFileBacked => _inner.IsFileBacked;
+            public override RawImageSource WithDescriptor(RawImageDescriptor descriptor) => _inner.WithDescriptor(descriptor);
+            public override RawRenderOptions CreateRenderOptions() => _inner.CreateRenderOptions();
+            public override RenderedImage RenderTile(int x, int y, int width, int height, RawRenderOptions? options) { Tiles++; return _inner.RenderTile(x, y, width, height, options); }
+            public override string DescribePixel(int x, int y) { Descriptions++; return _inner.DescribePixel(x, y); }
+            public override RawPixelStatistics GetStatistics(int x, int y, int width, int height) { Statistics++; return _inner.GetStatistics(x, y, width, height); }
+            public override byte[] ReadAllBytes() => _inner.ReadAllBytes();
+            public override void CopyRawTo(string rawPath) => _inner.CopyRawTo(rawPath);
         }
 
         private static void Require(bool value, string message)

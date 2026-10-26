@@ -13,6 +13,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     internal sealed class PixelInspectorViewModel : INotifyPropertyChanged
     {
         private readonly List<Sample> _neighborhood = new List<Sample>();
+        private readonly Dictionary<(int X, int Y), Sample> _samples = new Dictionary<(int X, int Y), Sample>();
         private RawPixelStatistics? _statistics;
         private string _selectedChannel = "GV";
         private bool _isFloat;
@@ -50,6 +51,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public Geometry ProfileBMarker { get; private set; } = Geometry.Empty;
         public Geometry ProfileValueMarker { get; private set; } = Geometry.Empty;
         public int ProfileSampleCount { get; private set; }
+        internal RawPixelStatistics? Statistics => _statistics;
         public string SelectedChannel
         {
             get => _selectedChannel;
@@ -62,16 +64,34 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
+        internal string GetDescription(int x, int y) => _samples[(x, y)].Description;
+
         public void Update(RawImageSource source, RawImageDescriptor descriptor, int x, int y, RawRenderOptions? options)
         {
+            // Reuse only this update's bounded samples; never retain the live source.
+            _samples.Clear();
+            Sample ReadPixel(int column, int row)
+            {
+                if (!_samples.TryGetValue((column, row), out var sample))
+                {
+                    var text = source.DescribePixel(column, row);
+                    sample = Read(text);
+                    sample.Description = text;
+                    _samples.Add((column, row), sample);
+                }
+                return sample;
+            }
+
             _isFloat = descriptor.PixelFormat == RawPixelFormat.Float32;
-            var current = Read(source.DescribePixel(x, y));
+            var current = ReadPixel(x, y);
             IsColor = current.IsColor;
             if (!IsColor) _selectedChannel = "GV";
             Position = string.Format(CultureInfo.InvariantCulture, "X {0}  Y {1}", x, y);
-            var description = source.DescribePixel(x, y);
+            var description = current.Description;
             var rawIndex = description.IndexOf("Raw=", StringComparison.Ordinal);
             RawBytes = rawIndex < 0 ? "—" : description.Substring(rawIndex + 4);
+            var rawEnd = RawBytes.IndexOf(',');
+            if (rawEnd >= 0) RawBytes = RawBytes.Substring(0, rawEnd);
             RawByteNote = descriptor.PixelFormat == RawPixelFormat.BGR24 ? " (B G R)" : _isFloat
                 ? descriptor.ByteOrder == RawByteOrder.LittleEndian ? " (float32, little-endian)" : " (float32, big-endian)" : string.Empty;
             int bits = descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
@@ -109,7 +129,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     var sample = new Sample { IsCenter = row == y && column == x };
                     if (column >= 0 && row >= 0 && column < descriptor.Width && row < descriptor.Height)
                     {
-                        sample = Read(source.DescribePixel(column, row));
+                        sample = ReadPixel(column, row);
                         sample.IsCenter = row == y && column == x;
                         int i = (row - top) * tile.Stride + (column - left) * 4;
                         sample.Color = Color.FromRgb(tile.Bgra32[i + 2], tile.Bgra32[i + 1], tile.Bgra32[i]);
@@ -120,7 +140,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             UpdateCells();
             var line = new List<Sample>();
-            for (int column = x - 8; column <= x + 8; column++) line.Add(column < 0 || column >= descriptor.Width ? new Sample() : Read(source.DescribePixel(column, y)));
+            for (int column = x - 8; column <= x + 8; column++) line.Add(column < 0 || column >= descriptor.Width ? new Sample() : ReadPixel(column, y));
             ProfileSampleCount = line.Count(sample => sample.IsAvailable);
             ProfileR = IsColor ? Plot(line, sample => sample.R) : Geometry.Empty;
             ProfileG = IsColor ? Plot(line, sample => sample.G) : Geometry.Empty;
@@ -143,6 +163,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public void Clear()
         {
+            _samples.Clear();
             _neighborhood.Clear();
             _statistics = null;
             ChannelValues.Clear();
@@ -246,6 +267,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private sealed class Sample
         {
+            public string Description = string.Empty;
             public double R = double.NaN, G = double.NaN, B = double.NaN, Value = double.NaN;
             public bool IsColor, IsAvailable, IsCenter;
             public Color Color = Colors.Transparent;

@@ -709,7 +709,7 @@
                                 <Style TargetType="MenuItem" BasedOn="{StaticResource ImageContextItem}"/><Style TargetType="Separator" BasedOn="{StaticResource PopupMenuSeparator}"/>
                             </ContextMenu.Resources>
                                 <MenuItem Header="Save visible PNG" Click="SaveVisiblePng_Click"/>
-                                <MenuItem Header="Save raw snapshot…" Click="SaveSnapshot_Click"/>
+                                <MenuItem x:Name="SaveRawSnapshotMenuItem" Header="Save raw snapshot…" Click="SaveSnapshot_Click"/>
                                 <MenuItem x:Name="CopyPointerAddressMenuItem"
                                           Header="Copy pointer address"
                                           IsEnabled="False"
@@ -881,7 +881,7 @@
                         <StackPanel Orientation="Horizontal">
                             <TextBlock x:Name="SaveButtonText" Text="Save visible PNG"/>
                         </StackPanel>
-                    </Button><Button Content="Save raw snapshot…" Click="SaveSnapshot_Click" AutomationProperties.AutomationId="SaveRawSnapshotButton"/></StackPanel></Border>
+                    </Button><Button x:Name="SaveRawSnapshotButton" Content="Save raw snapshot…" Click="SaveSnapshot_Click" AutomationProperties.AutomationId="SaveRawSnapshotButton"/></StackPanel></Border>
                     </Popup>
                     <Popup x:Name="MorePopup" PlacementTarget="{Binding ElementName=MoreMenuButton}" Placement="Bottom" Opened="PopupMenu_Opened" AllowsTransparency="True" StaysOpen="False" IsOpen="{Binding IsChecked, ElementName=MoreMenuButton, Mode=TwoWay}">
                         <Border Style="{StaticResource PopupMenu}"><StackPanel KeyboardNavigation.TabNavigation="Cycle" KeyboardNavigation.DirectionalNavigation="Cycle" PreviewKeyDown="PopupMenu_PreviewKeyDown" ButtonBase.Click="ViewerMenu_Click"><StackPanel.Resources>

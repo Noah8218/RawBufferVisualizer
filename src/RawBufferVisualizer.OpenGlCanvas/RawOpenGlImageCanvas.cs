@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -492,6 +493,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 return;
             }
 
+            if (double.IsNaN(blackLevel) || double.IsInfinity(blackLevel))
+                throw new ArgumentOutOfRangeException(nameof(blackLevel), "Render levels must be finite numbers.");
+            if (double.IsNaN(whiteLevel) || double.IsInfinity(whiteLevel))
+                throw new ArgumentOutOfRangeException(nameof(whiteLevel), "Render levels must be finite numbers.");
+
             _renderOptions = new RawRenderOptions
             {
                 AutoScale = false,
@@ -873,6 +879,10 @@ namespace RawBufferVisualizer.OpenGlCanvas
             catch (RawImageSourceUnavailableException ex)
             {
                 MarkSourceUnavailable(ex);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                MarkSourceUnavailable(new RawImageSourceUnavailableException(ex.Message, ex));
             }
             finally
             {
@@ -1914,6 +1924,10 @@ namespace RawBufferVisualizer.OpenGlCanvas
             {
                 MarkSourceUnavailable(ex);
             }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                MarkSourceUnavailable(new RawImageSourceUnavailableException(ex.Message, ex));
+            }
         }
 
         private void MarkSourceUnavailable(RawImageSourceUnavailableException exception)
@@ -2064,6 +2078,11 @@ namespace RawBufferVisualizer.OpenGlCanvas
             catch (RawImageSourceUnavailableException ex)
             {
                 MarkSourceUnavailable(ex);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                MarkSourceUnavailable(new RawImageSourceUnavailableException(ex.Message, ex));
                 return;
             }
 

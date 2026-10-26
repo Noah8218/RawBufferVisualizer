@@ -20,7 +20,7 @@ namespace RawBufferVisualizer.Tests
             slots.A = slots.B = null;
             Check(!slots.SwapCommand.CanExecute(null), "Cleared comparison disables Swap");
 
-            var cards = new ImageCardActionsViewModel<CardFixture>(new CompareSelectionViewModel<CardFixture>(), c => c.Pixels, c => c.Pointer, c => c.Address);
+            var cards = new ImageCardActionsViewModel<CardFixture>(new CompareSelectionViewModel<CardFixture>(), c => c.Pixels, c => c.Pointer, c => c.Address, c => c.Raw);
             Check(!cards.ActionCommand.CanExecute("Remove"), "Closed empty card menu has no target");
             cards.OpenCommand.Execute("invalid");
             Check(!cards.IsOpen && cards.Target == null, "Invalid card command cannot open a menu");
@@ -28,6 +28,9 @@ namespace RawBufferVisualizer.Tests
             cards.OpenCommand.Execute(card);
             Check(cards.IsOpen && cards.Target == card, "Open borrows its target card");
             Check(cards.ActionCommand.CanExecute("SaveSnapshot") && !cards.ActionCommand.CanExecute("CopyPointer") && cards.ActionCommand.CanExecute("CopyPixels"), "Card actions distinguish pixels and pointer provenance");
+            card.Raw = false;
+            Check(!cards.ActionCommand.CanExecute("SaveSnapshot") && cards.ActionCommand.CanExecute("SaveVisiblePng"), "Generated views disable only raw snapshot export while keeping PNG available");
+            card.Raw = true;
             Check(!cards.ActionCommand.CanExecute("Unknown") && !cards.ActionCommand.CanExecute(null), "Unknown menu actions cannot execute");
             var actions = 0; cards.ActionRequested += (target, action) => { Check(target == card && action == ImageCardAction.Remove, "Remove emits its card identity"); actions++; };
             cards.ActionCommand.Execute("Remove"); cards.ActionCommand.Execute("Remove");
@@ -139,7 +142,7 @@ namespace RawBufferVisualizer.Tests
             Console.WriteLine("Buffer Doctor presentation: preview/cancel/commit, isolation, source replacement, pending/cancel, invalid/recovery and release passed.");
         }
 
-        private sealed class CardFixture { public bool Pixels; public bool Pointer; public bool Address; }
+        private sealed class CardFixture { public bool Pixels; public bool Pointer; public bool Address; public bool Raw = true; }
 
         private static void Check(bool condition, string message) { if (!condition) throw new InvalidOperationException(message); }
     }

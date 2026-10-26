@@ -14,6 +14,16 @@ namespace RawBufferVisualizer.Core
             get { return _a.IsFileBacked || _b.IsFileBacked; }
         }
 
+        public override bool IsLiveProcessBacked
+        {
+            get { return _a.IsLiveProcessBacked || _b.IsLiveProcessBacked; }
+        }
+
+        public override bool CanExportRaw
+        {
+            get { return false; }
+        }
+
         public RawImageSplitSource(RawImageSource a, RawImageSource b)
             : base(CreateDescriptor(a, b), CreateDescriptor(a, b).GetRequiredByteCount(), null)
         {

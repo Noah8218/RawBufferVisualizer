@@ -24,6 +24,7 @@ namespace RawBufferVisualizer.Tests
             Run(nameof(FloatPixelDescriptionsRoundTrip), FloatPixelDescriptionsRoundTrip, failures);
             Run(nameof(StatisticsUseFiniteRawValues), StatisticsUseFiniteRawValues, failures);
             Run(nameof(StatisticsPreserveFormatAndGeneratedViewSemantics), StatisticsPreserveFormatAndGeneratedViewSemantics, failures);
+            Run(nameof(GeneratedViewsRetainLiveDependencies), GeneratedViewsRetainLiveDependencies, failures);
             Run(nameof(FloatRenderingDoesNotAllocatePerPixel), FloatRenderingDoesNotAllocatePerPixel, failures);
             if (failures.Count != 0) throw new AggregateException(failures);
         }
@@ -311,6 +312,32 @@ namespace RawBufferVisualizer.Tests
                     Assert(stats.Mean == int.MaxValue - 1 && Math.Abs(stats.StandardDeviation - Math.Sqrt(2.0 / 3)) < 1e-12, "Large-value variance suffered cancellation.");
                 });
             }
+        }
+
+        private static void GeneratedViewsRetainLiveDependencies()
+        {
+            var descriptor = new RawImageDescriptor { Width = 3, Height = 2, Stride = 3, PixelFormat = RawPixelFormat.Mono8, ValidBits = 8 };
+            var bytes = new byte[] { 11, 11, 11, 11, 11, 11 };
+            var pinned = GCHandle.Alloc(bytes, GCHandleType.Pinned);
+            try
+            {
+                using (var captured = RawImageSource.FromMemory(bytes, descriptor))
+                using (var live = RawImageSource.FromProcessMemory(System.Diagnostics.Process.GetCurrentProcess().Id, pinned.AddrOfPinnedObject().ToInt64(), bytes.Length, descriptor))
+                {
+                    using (var capturedDiff = new RawImageDifferenceSource(captured, captured))
+                    using (var capturedSplit = new RawImageSplitSource(captured, captured))
+                    using (var liveDiff = new RawImageDifferenceSource(live, captured))
+                    using (var liveSplit = new RawImageSplitSource(captured, live))
+                    using (var nested = new RawImageDifferenceSource(capturedSplit, liveDiff))
+                    {
+                        Assert(!capturedDiff.IsLiveProcessBacked && !capturedSplit.IsLiveProcessBacked, "Captured generated images must keep their independent captured lifetime.");
+                        Assert(liveDiff.IsLiveProcessBacked && liveSplit.IsLiveProcessBacked && nested.IsLiveProcessBacked, "Generated images must expose live dependencies on either side, including nested views.");
+                        Assert(captured.CanExportRaw && live.CanExportRaw && !capturedDiff.CanExportRaw && !capturedSplit.CanExportRaw && !nested.CanExportRaw, "Raw snapshots remain supported for actual buffers and unavailable for generated views.");
+                    }
+                    Assert(captured.DescribePixel(0, 0).Contains("GV=11") && live.DescribePixel(0, 0).Contains("GV=11"), "Disposing generated views must not dispose their borrowed parents.");
+                }
+            }
+            finally { pinned.Free(); }
         }
 
         private static void StatisticsPreserveFormatAndGeneratedViewSemantics()

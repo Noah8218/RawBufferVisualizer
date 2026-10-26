@@ -14,6 +14,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             get { return false; }
         }
 
+        public override bool CanExportRaw
+        {
+            get { return false; }
+        }
+
         public override RawImageSource WithDescriptor(RawImageDescriptor descriptor)
         {
             return this;
