@@ -14,6 +14,16 @@ namespace RawBufferVisualizer.Core
             get { return _a.IsFileBacked || _b.IsFileBacked; }
         }
 
+        public override bool IsLiveProcessBacked
+        {
+            get { return _a.IsLiveProcessBacked || _b.IsLiveProcessBacked; }
+        }
+
+        public override bool CanExportRaw
+        {
+            get { return false; }
+        }
+
         public RawImageDifferenceSource(RawImageSource a, RawImageSource b)
             : base(CreateDescriptor(a, b), CreateDescriptor(a, b).GetRequiredByteCount(), null)
         {
@@ -73,11 +83,13 @@ namespace RawBufferVisualizer.Core
 
         public override string DescribePixel(int x, int y)
         {
+            var pixel = RenderTile(x, y, 1, 1, CreateRenderOptions());
+            var descriptor = new RawImageDescriptor { Width = 1, Height = 1, Stride = 4, PixelFormat = RawPixelFormat.BGRA32, ValidBits = 8 };
             return string.Format(
                 CultureInfo.InvariantCulture,
-                "X={0}, Y={1}, A=[{2}], B=[{3}]",
-                x,
-                y,
+                "{0}, GV={1:R}, A=[{2}], B=[{3}]",
+                RawPixelInspector.Describe(pixel.Bgra32, descriptor, 0, 0, x, y),
+                (pixel.Bgra32[0] + pixel.Bgra32[1] + pixel.Bgra32[2]) / 3.0,
                 _a.DescribePixel(x, y),
                 _b.DescribePixel(x, y));
         }

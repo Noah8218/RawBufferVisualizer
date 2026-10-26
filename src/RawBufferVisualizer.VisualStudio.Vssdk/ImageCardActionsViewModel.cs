@@ -13,15 +13,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private readonly Func<T, bool> _hasPixels;
         private readonly Func<T, bool> _hasPointer;
         private readonly Func<T, bool> _hasPixelAddress;
+        private readonly Func<T, bool> _canExportRaw;
         private T? _target;
         private bool _isOpen;
 
-        public ImageCardActionsViewModel(CompareSelectionViewModel<T> comparison, Func<T, bool> hasPixels, Func<T, bool> hasPointer, Func<T, bool> hasPixelAddress)
+        public ImageCardActionsViewModel(
+            CompareSelectionViewModel<T> comparison,
+            Func<T, bool> hasPixels,
+            Func<T, bool> hasPointer,
+            Func<T, bool> hasPixelAddress,
+            Func<T, bool>? canExportRaw = null)
         {
             _comparison = comparison;
             _hasPixels = hasPixels;
             _hasPointer = hasPointer;
             _hasPixelAddress = hasPixelAddress;
+            _canExportRaw = canExportRaw ?? hasPixels;
             OpenCommand = new ViewCommand(parameter => { if (parameter is T target) { _target = target; _isOpen = true; Notify(); } }, () => true);
             ActionCommand = new ViewCommand(Execute, CanExecute);
         }
@@ -42,8 +49,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (_target == null || parameter is not string name || !Enum.TryParse(name, out ImageCardAction action)) return false;
             switch (action)
             {
+                case ImageCardAction.SaveSnapshot: return _hasPixels(_target) && _canExportRaw(_target);
                 case ImageCardAction.SaveVisiblePng:
-                case ImageCardAction.SaveSnapshot:
                 case ImageCardAction.SetA:
                 case ImageCardAction.SetB: return _hasPixels(_target);
                 case ImageCardAction.CopyPointer: return _hasPointer(_target);

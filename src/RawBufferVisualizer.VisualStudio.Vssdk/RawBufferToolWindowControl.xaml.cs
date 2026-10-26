@@ -167,7 +167,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public RawBufferToolWindowControl()
         {
             InitializeComponent();
-            _cardActions = new ImageCardActionsViewModel<ImageDocument>(_comparison, document => !document.IsError && !document.IsSourceUnavailable, document => document.HasSourcePointerAddress, document => document.HasDataAddress);
+            _cardActions = new ImageCardActionsViewModel<ImageDocument>(
+                _comparison,
+                document => !document.IsError && !document.IsSourceUnavailable,
+                document => document.HasSourcePointerAddress,
+                document => document.HasDataAddress,
+                document => document.Source.CanExportRaw);
             ImageCardPopup.DataContext = _cardActions;
             _cardActions.ActionRequested += ImageCardAction_Requested;
             PixelVisualization.DataContext = _pixelInspector;
@@ -1750,6 +1755,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void ImageListContextMenu_Opening(object sender, RoutedEventArgs e)
         {
             foreach (var item in ImageList.ContextMenu.Items.OfType<MenuItem>().Take(2)) item.IsEnabled = SaveMenuButton.IsEnabled;
+            SaveRawSnapshotMenuItem.IsEnabled = SaveMenuButton.IsEnabled && _activeDocument?.Source.CanExportRaw == true;
             UpdateMapThisTypeMenuItem();
             UpdateCopyAddressMenuItems();
         }
@@ -2953,7 +2959,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 #pragma warning disable VSTHRD100
         private async void SaveSnapshot_Click(object sender, RoutedEventArgs e)
         {
-            if (_disposed || _savingSnapshot || !CanSaveActiveImage("Save Snapshot")) return;
+            if (_disposed || _savingSnapshot || !CanSaveActiveImage("Save Snapshot") || !_activeDocument!.Source.CanExportRaw) return;
             _savingSnapshot = true;
             var document = _activeDocument!;
             var owner = Window.GetWindow(this);
@@ -3010,6 +3016,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 MessageBox.Show("Error rows cannot be saved as images.", title, MessageBoxButton.OK, MessageBoxImage.Information);
                 return false;
             }
+
+            if (_activeDocument.IsSourceUnavailable) return false;
 
             return true;
         }
@@ -4354,10 +4362,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void ShowSourceUnavailableState(string message)
         {
             _histogram.SetSource(null, unavailableReason: message);
+            var recovery = _activeDocument?.Source.IsLiveProcessBacked == true
+                ? "Warning: live debugger memory is unavailable. The viewer stopped reading this source; pause at a valid breakpoint and open the visualizer again. "
+                : "Warning: the image source is unavailable. Restore the source and open the image again. ";
             DiagnosticsList.Items.Insert(
                 0,
-                "Warning: live debugger memory is unavailable. The viewer stopped reading this source; pause at a valid breakpoint and open the visualizer again. "
-                + message);
+                recovery + message);
             _lastHoverX = -1;
             _lastHoverY = -1;
             _pinnedInspectorX = -1;
@@ -4432,13 +4442,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _pinnedInspectorX = e.X;
             _pinnedInspectorY = e.Y;
             SetInspectorPinnedState(true);
+            UpdateInspectorPixel(_activeDocument, e.X, e.Y);
             SetMarkerText(string.Format(
                 CultureInfo.InvariantCulture,
                 "X {0}  Y {1}\n{2}",
                 e.X,
                 e.Y,
-                _activeDocument.Source.DescribePixel(e.X, e.Y)));
-            UpdateInspectorPixel(_activeDocument, e.X, e.Y);
+                _pixelInspector.GetDescription(e.X, e.Y)));
         }
 
         private void PinMarker_Click(object sender, RoutedEventArgs e)
@@ -4628,6 +4638,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 throw new InvalidOperationException(name + " must be a number.");
             }
 
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                throw new InvalidOperationException(name + " must be a finite number.");
+
             return value;
         }
 
@@ -4764,13 +4777,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void UpdateInspectorPixel(ImageDocument document, int x, int y)
         {
             _pixelInspector.Update(document.Source, document.Descriptor, x, y, OpenGlImageView.GetRenderOptionsSnapshot());
-            var pixelDescription = document.Source.DescribePixel(x, y);
+            var pixelDescription = _pixelInspector.GetDescription(x, y);
+            var statistics = _pixelInspector.Statistics!;
             SetPixelDetails(
                 pixelDescription,
-                BuildPixelNeighborhood(document, x, y, 2),
-                BuildRoiStats(document, x, y, 2),
-                BuildLineProfile(document, x, y));
-            UpdatePixelStatus(document, x, y, pixelDescription);
+                BuildPixelNeighborhood(document, _pixelInspector, x, y, 2),
+                BuildRoiStats(document.Descriptor, statistics),
+                BuildLineProfile(document, _pixelInspector, x, y));
+            UpdatePixelStatus(document, x, y, pixelDescription, statistics);
         }
 
         private void SetInspectorPinnedState(bool pinned)
@@ -4791,7 +4805,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PerformanceText.Text = text;
         }
 
-        private static string BuildPixelNeighborhood(ImageDocument document, int centerX, int centerY, int radius)
+        private static string BuildPixelNeighborhood(ImageDocument document, PixelInspectorViewModel pixels, int centerX, int centerY, int radius)
         {
             var builder = new StringBuilder();
             for (var y = centerY - radius; y <= centerY + radius; y++)
@@ -4809,7 +4823,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         continue;
                     }
 
-                    builder.Append(SummarizePixelValue(document.Source.DescribePixel(x, y)).PadLeft(5)).Append(' ');
+                    builder.Append(SummarizePixelValue(pixels.GetDescription(x, y)).PadLeft(5)).Append(' ');
                 }
 
                 builder.AppendLine();
@@ -4818,19 +4832,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return builder.ToString().TrimEnd();
         }
 
-        private static string BuildRoiStats(ImageDocument document, int centerX, int centerY, int radius)
+        private static string BuildRoiStats(RawImageDescriptor descriptor, RawPixelStatistics stats)
         {
-            var left = Math.Max(0, centerX - radius);
-            var top = Math.Max(0, centerY - radius);
-            var width = Math.Min(document.Descriptor.Width, centerX + radius + 1) - left;
-            var height = Math.Min(document.Descriptor.Height, centerY + radius + 1) - top;
-            var stats = document.Source.GetStatistics(left, top, width, height);
             if (stats.Count == 0)
             {
                 return "No numeric pixels";
             }
 
-            var format = document.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "G9" : "0.###";
+            var format = descriptor.PixelFormat == RawPixelFormat.Float32 ? "G9" : "0.###";
             return string.Format(
                 CultureInfo.InvariantCulture,
                 "n={0}  min={1}  max={2}\nmean={3}  std={4}",
@@ -4841,7 +4850,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 stats.StandardDeviation.ToString(format, CultureInfo.InvariantCulture));
         }
 
-        private static string BuildLineProfile(ImageDocument document, int centerX, int y)
+        private static string BuildLineProfile(ImageDocument document, PixelInspectorViewModel pixels, int centerX, int y)
         {
             var start = Math.Max(0, centerX - 8);
             var end = Math.Min(document.Descriptor.Width - 1, centerX + 8);
@@ -4853,7 +4862,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     builder.Append(' ');
                 }
 
-                builder.Append(SummarizePixelValue(document.Source.DescribePixel(x, y)));
+                builder.Append(SummarizePixelValue(pixels.GetDescription(x, y)));
             }
 
             return builder.ToString();
@@ -4889,16 +4898,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             PixelASwatch.Background = new SolidColorBrush(Color.FromRgb(85, 85, 85));
         }
 
-        private void UpdatePixelStatus(ImageDocument document, int x, int y, string description)
+        private void UpdatePixelStatus(ImageDocument document, int x, int y, string description, RawPixelStatistics stats)
         {
             PixelReadoutWrap.Visibility = Visibility.Visible;
             PixelEmptyText.Visibility = Visibility.Collapsed;
             var bits = document.Descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : document.Descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
             var offset = (long)y * document.Descriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * document.Descriptor.GetBytesPerPixel());
             PixelOffsetText.Text = "Offset " + offset.ToString("N0", CultureInfo.InvariantCulture);
-            var left = Math.Max(0, x - 2);
-            var top = Math.Max(0, y - 2);
-            var stats = document.Source.GetStatistics(left, top, Math.Min(document.Descriptor.Width, x + 3) - left, Math.Min(document.Descriptor.Height, y + 3) - top);
             var statisticsFormat = document.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "5×5 μ {0:0.0000} σ {1:0.0000}" : "5×5 μ {0:0.0} σ {1:0.0}";
             PixelNeighborhoodStatsText.Text = string.Format(CultureInfo.InvariantCulture, statisticsFormat, stats.Mean, stats.StandardDeviation);
             PixelPositionText.Text = string.Format(CultureInfo.InvariantCulture, "X {0,4}  Y {1,4}", x, y);
@@ -4940,7 +4946,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
                 PixelSwatch.Background = new SolidColorBrush(GetPixelStatusColor(descriptor, description));
                 double gv = descriptor.PixelFormat == RawPixelFormat.BGRA32 ? (r + g + b) / 3.0 : (r + g + b) / 3;
-                if (TryReadDoubleToken(description, "GV=", out var sourceGv)) gv = (int)sourceGv;
+                if (TryReadDoubleToken(description, "GV=", out var sourceGv)) gv = sourceGv;
                 PixelGvText.Text = "GV " + gv.ToString("0.###", CultureInfo.InvariantCulture).PadLeft(3);
                 PixelRText.Text = "R " + r.ToString(CultureInfo.InvariantCulture).PadLeft(3);
                 PixelGText.Text = "G " + g.ToString(CultureInfo.InvariantCulture).PadLeft(3);
@@ -5260,7 +5266,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             if (_activeDocument.IsSourceUnavailable)
             {
-                _inspectionStatus.SetImageStatus("Live unavailable", true);
+                _inspectionStatus.SetImageStatus(_activeDocument.Source.IsLiveProcessBacked ? "Live unavailable" : "Source unavailable", true);
                 WriteSessionStateIfRequested();
                 return;
             }
@@ -5290,6 +5296,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (ClearAllConfirmation.Visibility == Visibility.Visible) ClearAllConfirmationText.Text = string.Format(CultureInfo.InvariantCulture, "Remove all {0} images from the list? Debuggee data is not changed.", _documents.Count);
             ClearButton.IsEnabled = ConfirmClearAllButton.IsEnabled = _documents.Count > 0;
             SaveVisiblePngButton.IsEnabled = hasActiveImage;
+            SaveRawSnapshotButton.IsEnabled = SaveRawSnapshotMenuItem.IsEnabled = hasActiveImage && _activeDocument!.Source.CanExportRaw;
             FitButton.IsEnabled = hasActiveImage;
             ActualSizeButton.IsEnabled = hasActiveImage;
             if (_activeDocument == null)
@@ -5748,13 +5755,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 Math.Max(1, OpenGlImageView.ActualHeight / 2)));
             var x = Math.Max(0, _activeDocument.Descriptor.Width / 2);
             var y = Math.Max(0, _activeDocument.Descriptor.Height / 2);
-            var description = _activeDocument.Source.DescribePixel(x, y);
-            UpdatePixelStatus(_activeDocument, x, y, description);
-            SetPixelDetails(
-                description,
-                BuildPixelNeighborhood(_activeDocument, x, y, 2),
-                BuildRoiStats(_activeDocument, x, y, 2),
-                BuildLineProfile(_activeDocument, x, y));
+            UpdateInspectorPixel(_activeDocument, x, y);
             OpenGlImageView.SelectPixelAtImagePixel(x, y);
             OpenGlImageView.PinMarkerAtImagePixel(x, y);
             var options = OpenGlImageView.GetRenderOptionsSnapshot();

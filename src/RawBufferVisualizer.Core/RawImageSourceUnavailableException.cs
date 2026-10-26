@@ -12,5 +12,10 @@ namespace RawBufferVisualizer.Core
         {
             NativeErrorCode = nativeErrorCode;
         }
+
+        public RawImageSourceUnavailableException(string message, Exception innerException)
+            : base(message, innerException)
+        {
+        }
     }
 }

@@ -24,6 +24,10 @@ namespace RawBufferVisualizer.Core
         public long Length { get; private set; }
         public string? RawPath { get; private set; }
         public abstract bool IsFileBacked { get; }
+        public virtual bool CanExportRaw
+        {
+            get { return true; }
+        }
         public virtual bool IsLiveProcessBacked
         {
             get { return false; }

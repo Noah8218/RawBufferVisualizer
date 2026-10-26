@@ -30,6 +30,11 @@ namespace RawBufferVisualizer.Tests
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--pixel-reuse")
+                {
+                    PixelInspectorTests.RunReuseChecks();
+                    return 0;
+                }
                 if (args.Length == 1 && args[0] == "--docked-layout")
                 {
                     InspectorNavigationTests.RunAll();
