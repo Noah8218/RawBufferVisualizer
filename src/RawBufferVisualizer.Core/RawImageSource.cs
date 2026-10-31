@@ -87,6 +87,13 @@ namespace RawBufferVisualizer.Core
         public abstract RawImageSource WithDescriptor(RawImageDescriptor descriptor);
         public abstract RawRenderOptions CreateRenderOptions();
         public abstract RenderedImage RenderTile(int x, int y, int width, int height, RawRenderOptions? options);
+        /// <summary>Gets the layout of the bytes and numeric value returned by DescribePixel.</summary>
+        public virtual RawImageDescriptor GetPixelDescriptor(int x, int y)
+        {
+            EnsureTileBounds(SourceDescriptor, x, y, 1, 1);
+            return Descriptor;
+        }
+
         public abstract string DescribePixel(int x, int y);
         public abstract byte[] ReadAllBytes();
         public abstract void CopyRawTo(string rawPath);

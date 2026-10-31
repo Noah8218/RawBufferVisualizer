@@ -30,6 +30,11 @@ namespace RawBufferVisualizer.Tests
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--split-pixel-inspection")
+                {
+                    SplitPixelInspectionTests.RunAll();
+                    return 0;
+                }
                 if (args.Length == 1 && args[0] == "--pixel-reuse")
                 {
                     PixelInspectorTests.RunReuseChecks();
@@ -187,6 +192,7 @@ namespace RawBufferVisualizer.Tests
                 InspectorNavigationTests.RunAll();
                 InspectorActionTests.RunAll();
                 PixelInspectorTests.RunAll();
+                SplitPixelInspectionTests.RunAll();
                 MappingSaveTests.RunAll();
                 PixelCorrectnessTests.RunAll();
                 HistogramTests.RunAll();

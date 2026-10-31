@@ -5071,17 +5071,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void UpdatePixelStatus(ImageDocument document, int x, int y, string description, RawPixelStatistics stats)
         {
+            var pixelDescriptor = document.Source.GetPixelDescriptor(x, y);
             PixelReadoutWrap.Visibility = Visibility.Visible;
             PixelEmptyText.Visibility = Visibility.Collapsed;
-            var bits = document.Descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : document.Descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
-            var offset = (long)y * document.Descriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * document.Descriptor.GetBytesPerPixel());
+            var bits = pixelDescriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : pixelDescriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
+            var offset = (long)y * pixelDescriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * pixelDescriptor.GetBytesPerPixel());
             PixelOffsetText.Text = "Offset " + offset.ToString("N0", CultureInfo.InvariantCulture);
             var statisticsFormat = document.Descriptor.PixelFormat == RawPixelFormat.Float32 ? "5×5 μ {0:0.0000} σ {1:0.0000}" : "5×5 μ {0:0.0} σ {1:0.0}";
             PixelNeighborhoodStatsText.Text = string.Format(CultureInfo.InvariantCulture, statisticsFormat, stats.Mean, stats.StandardDeviation);
             PixelPositionText.Text = string.Format(CultureInfo.InvariantCulture, "X {0,4}  Y {1,4}", x, y);
-            PixelColorText.Text = BuildPixelColorStatus(document.Descriptor, description);
+            PixelColorText.Text = BuildPixelColorStatus(pixelDescriptor, description);
             PixelRawText.Text = BuildPixelByteStatus(description);
-            UpdatePixelChannelStatus(document.Descriptor, description);
+            UpdatePixelChannelStatus(pixelDescriptor, description);
             StylePixelReadout(PixelPositionText, "X", "Y");
             foreach (var text in new[] { PixelValueText, PixelRText, PixelGText, PixelBText, PixelAText, PixelGvText, PixelRawText, PixelOffsetText, PixelNeighborhoodStatsText })
                 StylePixelReadout(text, "Value", "GV", "R", "G", "B", "A", "Raw", "Offset", "5×5", "μ", "σ");
@@ -5242,33 +5243,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static string? ReadToken(string text, string key)
         {
-            var index = text.IndexOf(key, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                return null;
-            }
-
-            var start = index + key.Length;
-            var end = start;
-            while (end < text.Length && text[end] != ',' && !char.IsWhiteSpace(text[end]))
-            {
-                end++;
-            }
-
-            return text.Substring(start, end - start).Trim();
+            return RawPixelInspector.ReadDescriptionToken(text, key);
         }
 
         private static string? ReadTailToken(string text, string key)
         {
-            var index = text.IndexOf(key, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                return null;
-            }
-
-            var start = index + key.Length;
-            var end = text.IndexOf(',', start);
-            return (end < 0 ? text.Substring(start) : text.Substring(start, end - start)).Trim();
+            return RawPixelInspector.ReadDescriptionToken(text, key, allowSpaces: true);
         }
 
         private static byte ScaleGray(RawImageDescriptor descriptor, double value)
@@ -5309,16 +5289,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             foreach (var key in new[] { "GV=", "Value=", "R=", "Bayer R=", "Bayer G=", "Bayer B=" })
             {
-                var index = description.IndexOf(key, StringComparison.Ordinal);
-                if (index < 0)
-                {
-                    continue;
-                }
-
-                var start = index + key.Length;
-                var end = description.IndexOf(',', start);
-                var value = end < 0 ? description.Substring(start) : description.Substring(start, end - start);
-                return value.Trim();
+                var value = RawPixelInspector.ReadDescriptionToken(description, key);
+                if (value != null) return value;
             }
 
             return description.Length <= 8 ? description : description.Substring(0, 8);

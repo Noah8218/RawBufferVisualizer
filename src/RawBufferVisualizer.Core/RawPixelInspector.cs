@@ -1,9 +1,33 @@
+using System;
 using System.Globalization;
 
 namespace RawBufferVisualizer.Core
 {
     public static class RawPixelInspector
     {
+        /// <summary>Reads pixel fields without treating split-view A/B wrappers as channel values.</summary>
+        public static string? ReadDescriptionToken(string? text, string key, bool allowSpaces = false)
+        {
+            if (text == null || string.IsNullOrEmpty(key)) return null;
+            var search = 0;
+            while (search < text.Length)
+            {
+                var index = text.IndexOf(key, search, StringComparison.Ordinal);
+                if (index < 0) return null;
+                var start = index + key.Length;
+                if (start < text.Length && text[start] == '[')
+                {
+                    search = start + 1;
+                    continue;
+                }
+                var end = start;
+                while (end < text.Length && text[end] != ',' && text[end] != ']'
+                    && (allowSpaces || !char.IsWhiteSpace(text[end]))) end++;
+                return text.Substring(start, end - start).Trim();
+            }
+            return null;
+        }
+
         internal static double ReadNumericValue(byte[] buffer, RawImageDescriptor descriptor, int x, int y)
         {
             var row = y * descriptor.Stride;

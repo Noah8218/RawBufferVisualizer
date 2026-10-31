@@ -82,20 +82,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return sample;
             }
 
-            _isFloat = descriptor.PixelFormat == RawPixelFormat.Float32;
+            var pixelDescriptor = source.GetPixelDescriptor(x, y);
+            _isFloat = pixelDescriptor.PixelFormat == RawPixelFormat.Float32;
             var current = ReadPixel(x, y);
             IsColor = current.IsColor;
             if (!IsColor) _selectedChannel = "GV";
             Position = string.Format(CultureInfo.InvariantCulture, "X {0}  Y {1}", x, y);
             var description = current.Description;
-            var rawIndex = description.IndexOf("Raw=", StringComparison.Ordinal);
-            RawBytes = rawIndex < 0 ? "—" : description.Substring(rawIndex + 4);
-            var rawEnd = RawBytes.IndexOf(',');
-            if (rawEnd >= 0) RawBytes = RawBytes.Substring(0, rawEnd);
-            RawByteNote = descriptor.PixelFormat == RawPixelFormat.BGR24 ? " (B G R)" : _isFloat
-                ? descriptor.ByteOrder == RawByteOrder.LittleEndian ? " (float32, little-endian)" : " (float32, big-endian)" : string.Empty;
-            int bits = descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
-            long offset = (long)y * descriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * descriptor.GetBytesPerPixel());
+            RawBytes = RawPixelInspector.ReadDescriptionToken(description, "Raw=", allowSpaces: true) ?? "—";
+            RawByteNote = pixelDescriptor.PixelFormat == RawPixelFormat.BGR24 ? " (B G R)" : _isFloat
+                ? pixelDescriptor.ByteOrder == RawByteOrder.LittleEndian ? " (float32, little-endian)" : " (float32, big-endian)" : string.Empty;
+            int bits = pixelDescriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : pixelDescriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb ? 12 : 0;
+            long offset = (long)y * pixelDescriptor.Stride + (bits > 0 ? (long)x * bits / 8 : (long)x * pixelDescriptor.GetBytesPerPixel());
             ByteOffset = string.Format(CultureInfo.InvariantCulture, "{0:N0} (0x{0:X})", offset);
             ChannelValues.Clear();
             if (IsColor)
@@ -112,11 +110,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var parts = RawBytes.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
                 if (parts.Length == 4)
                 {
-                    if (descriptor.ByteOrder == RawByteOrder.LittleEndian) Array.Reverse(parts);
+                    if (pixelDescriptor.ByteOrder == RawByteOrder.LittleEndian) Array.Reverse(parts);
                     floatHex = "0x" + string.Concat(parts);
                 }
             }
-            ChannelValues.Add(new ChannelValue(_isFloat || descriptor.PixelFormat == RawPixelFormat.Int32 ? "Value" : "GV", current.Value, _isFloat, floatHex));
+            ChannelValues.Add(new ChannelValue(_isFloat || pixelDescriptor.PixelFormat == RawPixelFormat.Int32 ? "Value" : "GV", current.Value, _isFloat, floatHex));
             int left = Math.Max(0, x - 2), top = Math.Max(0, y - 2);
             int width = Math.Min(descriptor.Width, x + 3) - left, height = Math.Min(descriptor.Height, y + 3) - top;
             var tile = source.RenderTile(left, top, width, height, options);
@@ -265,11 +263,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static double ReadToken(string description, string key)
         {
-            int start = description.IndexOf(key, StringComparison.Ordinal);
-            if (start < 0) return double.NaN;
-            start += key.Length;
-            int end = description.IndexOfAny(new[] { ',', ' ', '\n', '\r' }, start);
-            string token = end < 0 ? description.Substring(start) : description.Substring(start, end - start);
+            var token = RawPixelInspector.ReadDescriptionToken(description, key);
             return double.TryParse(token, NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : double.NaN;
         }
 

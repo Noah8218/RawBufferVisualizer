@@ -2418,16 +2418,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
             foreach (var key in new[] { "GV=", "Value=", "R=", "Bayer R=", "Bayer G=", "Bayer B=" })
             {
-                var index = description.IndexOf(key, StringComparison.Ordinal);
-                if (index < 0)
-                {
-                    continue;
-                }
-
-                var start = index + key.Length;
-                var end = description.IndexOf(',', start);
-                var value = end < 0 ? description.Substring(start) : description.Substring(start, end - start);
-                return value.Trim();
+                var value = RawPixelInspector.ReadDescriptionToken(description, key);
+                if (value != null) return value;
             }
 
             return description.Length <= 16 ? description : description.Substring(0, 16);
@@ -2435,20 +2427,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         private static string? ReadToken(string text, string key)
         {
-            var index = text.IndexOf(key, StringComparison.Ordinal);
-            if (index < 0)
-            {
-                return null;
-            }
-
-            var start = index + key.Length;
-            var end = start;
-            while (end < text.Length && text[end] != ',' && !char.IsWhiteSpace(text[end]))
-            {
-                end++;
-            }
-
-            return text.Substring(start, end - start).Trim();
+            return RawPixelInspector.ReadDescriptionToken(text, key);
         }
 
         private void RecordFrame(double milliseconds)
