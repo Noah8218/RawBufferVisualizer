@@ -348,7 +348,7 @@ namespace RawBufferVisualizer.Tests
             {
                 var bgra = format == RawPixelFormat.BGRA32;
                 WithSources(bgra ? new byte[] { 1, 2, 2, 0 } : new byte[] { 1, 2, 2 }, Descriptor(1, 1, format, bgra ? 4 : 3),
-                    source => Assert(source.GetStatistics(0, 0, 1, 1).Mean == (bgra ? 5.0 / 3 : 1), "Existing color scalar semantics changed."));
+                    source => Assert(source.GetStatistics(0, 0, 1, 1).Mean == 5.0 / 3, "Color statistics must preserve fractional channel averages for RGB, BGR and BGRA."));
             }
             foreach (var bits in new[] { 10, 12 })
             {
