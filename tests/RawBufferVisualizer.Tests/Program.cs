@@ -47,6 +47,16 @@ namespace RawBufferVisualizer.Tests
                     PixelMeasurementTests.RunAll();
                     return 0;
                 }
+                if (args.Length == 1 && args[0] == "--inspector-preferences")
+                {
+                    InspectorNavigationPersistenceTests.RunAll();
+                    return 0;
+                }
+                if (args.Length == 1 && args[0] == "--inspector-navigation-intent")
+                {
+                    InspectorNavigationIntentTests.RunAll();
+                    return 0;
+                }
                 if (args.Length == 1 && args[0] == "--debugger-routing")
                 {
                     DebuggerRoutingTests.RunAll();
