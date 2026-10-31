@@ -192,14 +192,14 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(metadataPath);
                 }
 
-                requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                VisualizerHandoffInbox.TryPublishErrorRequest(requestPaths, () => VisualizerHandoffInbox.WriteErrorRequest(
                     visualStudioProcessId,
                     displayName,
                     sourceType,
                     ex.Message,
                     ex.GetType().FullName,
                     ex.ToString(),
-                    originSessionToken: originSessionToken));
+                    originSessionToken: originSessionToken), ex);
             }
 
             ScheduleTerminalCleanup(requestPaths);

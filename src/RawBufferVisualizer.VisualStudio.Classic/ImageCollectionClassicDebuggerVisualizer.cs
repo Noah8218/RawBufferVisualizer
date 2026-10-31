@@ -70,6 +70,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
 
                 sourceType = string.IsNullOrWhiteSpace(summary.SourceType) ? sourceType : summary.SourceType;
                 if (summary.TotalCount <= 0) throw new InvalidOperationException("Collection contains no items.");
+                var errorPublicationFailed = false;
                 for (var index = 0; index < summary.ItemCount; index++)
                 {
                     VisualizerCollectionItemMetadata? item = null;
@@ -161,7 +162,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     catch (Exception ex)
                     {
                         if (metadataPath != null) VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(metadataPath);
-                        requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                        if (!VisualizerHandoffInbox.TryPublishErrorRequest(requestPaths, () => VisualizerHandoffInbox.WriteErrorRequest(
                             visualStudioProcessId, displayName,
                             item == null || string.IsNullOrWhiteSpace(item.ItemTypeName) ? summary.SourceType : item.ItemTypeName,
                             ex.Message, ex.GetType().FullName, ex.ToString(),
@@ -170,14 +171,18 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                             debuggeeProcessId: item?.DebuggeeProcessId ?? 0,
                             expressionIdentityHash: summary.ExpressionIdentityHash,
                             expressionSourceType: summary.SourceType,
-                            originSessionToken: originSessionToken));
+                            originSessionToken: originSessionToken), ex))
+                        {
+                            errorPublicationFailed = true;
+                            break;
+                        }
                         if (ex is VisualizerObjectSourceException) break;
                     }
                 }
 
-                if (summary.TotalCount > summary.ItemCount)
+                if (!errorPublicationFailed && summary.TotalCount > summary.ItemCount)
                 {
-                    requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                    VisualizerHandoffInbox.TryPublishErrorRequest(requestPaths, () => VisualizerHandoffInbox.WriteErrorRequest(
                         visualStudioProcessId, "Image collection", summary.SourceType,
                         "Collection contains " + summary.TotalCount + " items; only the first " + summary.ItemCount + " are shown.",
                         originSessionToken: originSessionToken));
@@ -185,14 +190,14 @@ namespace RawBufferVisualizer.VisualStudio.Classic
             }
             catch (Exception ex)
             {
-                requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
+                VisualizerHandoffInbox.TryPublishErrorRequest(requestPaths, () => VisualizerHandoffInbox.WriteErrorRequest(
                     visualStudioProcessId,
                     "Image collection",
                     sourceType,
                     ex.Message,
                     ex.GetType().FullName,
                     ex.ToString(),
-                    originSessionToken: originSessionToken));
+                    originSessionToken: originSessionToken), ex);
             }
 
             RawBufferClassicDebuggerVisualizer.ScheduleTerminalCleanup(requestPaths);
