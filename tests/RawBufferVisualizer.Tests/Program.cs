@@ -66,6 +66,18 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                if (args.Length == 1 && args[0] == "--handoff-inbox")
+                {
+                    VisualizerHandoffInboxRequiresPausedSession();
+                    VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance();
+                    VisualizerHandoffInboxPublishesRequestsAtomically();
+                    VisualizerHandoffInboxClaimsRequestExactlyOnce();
+                    VisualizerHandoffInboxClaimsLongRequestPathWithoutGrowingIt();
+                    VisualizerHandoffInboxTracksExplicitCompletion();
+                    Console.WriteLine("Handoff inbox: 6 session/publication/claim/completion checks passed.");
+                    return 0;
+                }
+
                 if (args.Length == 1 && args[0] == "--histogram")
                 {
                     HistogramTests.RunAll();
@@ -219,6 +231,7 @@ namespace RawBufferVisualizer.Tests
                 VisualizerBridgePreparesChunkedLaunchSnapshot();
                 VisualizerBridgePreparesMultiLaunchSnapshots();
                 ViewerPathResolverFindsConfiguredViewer();
+                VisualizerHandoffInboxRequiresPausedSession();
                 VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance();
                 VisualizerHandoffInboxPublishesRequestsAtomically();
                 VisualizerHandoffInboxClaimsRequestExactlyOnce();
@@ -2742,11 +2755,45 @@ namespace RawBufferVisualizer.Tests
             }
         }
 
+        private static void VisualizerHandoffInboxRequiresPausedSession()
+        {
+            var visualStudioProcessId = CreateVisualizerTestProcessId();
+            var inboxDirectory = VisualizerHandoffInbox.GetInboxDirectory(visualStudioProcessId);
+            try
+            {
+                Assert(!VisualizerHandoffInbox.TryCaptureDebuggerSession(visualStudioProcessId, out _),
+                    "An unpublished debugger session must not be admitted.");
+                foreach (var invalidToken in new[] { string.Empty, "not-a-session" })
+                {
+                    VisualizerHandoffInbox.PublishDebuggerSession(visualStudioProcessId, invalidToken);
+                    var rejected = false;
+                    try
+                    {
+                        VisualizerHandoffInbox.WriteSnapshotRequest(
+                            visualStudioProcessId, Path.Combine(inboxDirectory, "not-opened.rbuf.json"));
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        rejected = true;
+                    }
+
+                    Assert(rejected, "A request without a valid paused session must be rejected.");
+                    Assert(Directory.GetFiles(inboxDirectory, "*.rbuf-handoff").Length == 0,
+                        "A rejected session must not publish a handoff request.");
+                }
+            }
+            finally
+            {
+                if (Directory.Exists(inboxDirectory))
+                    Directory.Delete(inboxDirectory, true);
+            }
+        }
+
         private static void VisualizerHandoffInboxRoutesRequestsByVisualStudioInstance()
         {
             var directory = Path.Combine(Path.GetTempPath(), "RawBufferVisualizerTests", Guid.NewGuid().ToString("N"));
-            const int firstVisualStudioProcessId = int.MaxValue;
-            const int secondVisualStudioProcessId = int.MaxValue - 1;
+            var firstVisualStudioProcessId = CreateVisualizerTestProcessId();
+            var secondVisualStudioProcessId = CreateVisualizerTestProcessId();
             var firstInbox = VisualizerHandoffInbox.GetInboxDirectory(firstVisualStudioProcessId);
             var secondInbox = VisualizerHandoffInbox.GetInboxDirectory(secondVisualStudioProcessId);
             try
@@ -2754,6 +2801,10 @@ namespace RawBufferVisualizer.Tests
                 Directory.CreateDirectory(directory);
                 var metadataPath = Path.Combine(directory, "camera.rbuf.json");
                 File.WriteAllText(metadataPath, "{}");
+                var firstSession = Guid.NewGuid().ToString("N");
+                var secondSession = Guid.NewGuid().ToString("N");
+                VisualizerHandoffInbox.PublishDebuggerSession(firstVisualStudioProcessId, firstSession);
+                VisualizerHandoffInbox.PublishDebuggerSession(secondVisualStudioProcessId, secondSession);
 
                 var requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(firstVisualStudioProcessId, metadataPath);
                 var restored = VisualizerHandoffInbox.ReadSnapshotRequest(requestPath);
@@ -2807,6 +2858,12 @@ namespace RawBufferVisualizer.Tests
                 Assert(!string.Equals(firstInbox, secondInbox, StringComparison.OrdinalIgnoreCase), "Visual Studio inboxes must be isolated.");
                 Assert(restored == Path.GetFullPath(metadataPath), "Handoff metadata path roundtrip failed.");
                 Assert(request.MetadataPath == Path.GetFullPath(metadataPath), "Handoff request info metadata path failed.");
+                Assert(request.OriginSessionToken == firstSession,
+                    "Snapshot handoff must capture its originating paused session.");
+                Assert(typedRequest.OriginSessionToken == secondSession
+                    && errorRequest.OriginSessionToken == secondSession
+                    && liveRequest.OriginSessionToken == secondSession,
+                    "Snapshot, error and live requests must retain the target host's paused session.");
                 Assert(typedRequest.DisplayName == "bitmapBgr24", "Handoff display name roundtrip failed.");
                 Assert(typedRequest.SourceType == "System.Drawing.Bitmap", "Handoff source type roundtrip failed.");
                 Assert(typedRequest.HandoffId == "handoff-42" && typedRequest.IsPreview, "Preview handoff identity roundtrip failed.");
@@ -2903,6 +2960,7 @@ namespace RawBufferVisualizer.Tests
                 Directory.CreateDirectory(inboxDirectory);
                 var metadataPath = Path.Combine(directory, "atomic.rbuf.json");
                 File.WriteAllText(metadataPath, "{}");
+                VisualizerHandoffInbox.PublishDebuggerSession(visualStudioProcessId, Guid.NewGuid().ToString("N"));
 
                 var observer = Task.Run(() =>
                 {
@@ -3052,6 +3110,7 @@ namespace RawBufferVisualizer.Tests
                 Directory.CreateDirectory(directory);
                 var metadataPath = Path.Combine(directory, "claim.rbuf.json");
                 File.WriteAllText(metadataPath, "{}");
+                VisualizerHandoffInbox.PublishDebuggerSession(visualStudioProcessId, Guid.NewGuid().ToString("N"));
                 requestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
                     visualStudioProcessId,
                     metadataPath,
@@ -3195,6 +3254,7 @@ namespace RawBufferVisualizer.Tests
                 Directory.CreateDirectory(directory);
                 var metadataPath = Path.Combine(directory, "completion.rbuf.json");
                 File.WriteAllText(metadataPath, "{}");
+                VisualizerHandoffInbox.PublishDebuggerSession(visualStudioProcessId, Guid.NewGuid().ToString("N"));
 
                 var acknowledgedRequestPath = VisualizerHandoffInbox.WriteSnapshotRequest(
                     visualStudioProcessId,
