@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Runtime.Serialization;
@@ -182,6 +183,30 @@ namespace RawBufferVisualizer.VisualStudio
                     expressionIdentityHash: expressionIdentityHash,
                     expressionSourceType: expressionSourceType,
                     originSessionToken: originSessionToken ?? CaptureDebuggerSession(visualStudioProcessId)));
+        }
+
+        public static bool TryPublishErrorRequest(
+            List<string> requestPaths,
+            Func<string> publish,
+            Exception? originalError = null)
+        {
+            if (requestPaths == null) throw new ArgumentNullException(nameof(requestPaths));
+            if (publish == null) throw new ArgumentNullException(nameof(publish));
+            try
+            {
+                requestPaths.Add(publish());
+                return true;
+            }
+            catch (Exception reportingError)
+            {
+                try
+                {
+                    Trace.TraceError("Raw Buffer Visualizer could not publish an error. Original: {0}; Reporting: {1}",
+                        originalError, reportingError);
+                }
+                catch { /* A failed trace listener must not escape the error-reporting boundary. */ }
+                return false;
+            }
         }
 
         public static string WriteLiveMemoryRequest(

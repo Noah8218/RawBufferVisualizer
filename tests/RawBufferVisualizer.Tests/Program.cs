@@ -76,6 +76,12 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                if (args.Length == 1 && args[0] == "--handoff-error-publication")
+                {
+                    HandoffErrorPublicationTests.RunAll();
+                    return 0;
+                }
+
                 if (args.Length == 1 && args[0] == "--handoff-inbox")
                 {
                     VisualizerHandoffInboxRequiresPausedSession();
@@ -176,6 +182,7 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                HandoffErrorPublicationTests.RunAll();
                 DebuggerRoutingTests.RunAll();
                 InspectorNavigationTests.RunAll();
                 InspectorActionTests.RunAll();
