@@ -40,7 +40,8 @@ namespace RawBufferVisualizer.BitmapAdapter
                     Height = bitmap.Height,
                     Stride = stride,
                     PixelFormat = format,
-                    ValidBits = bytesPerPixel == 1 ? 8 : bytesPerPixel * 8,
+                    // Supported Bitmap formats have 8-bit components; PixelFormat owns pixel storage width.
+                    ValidBits = RawImageDescriptor.GetDefaultValidBits(format),
                     ByteOrder = RawByteOrder.LittleEndian
                 });
             }

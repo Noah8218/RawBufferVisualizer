@@ -9,8 +9,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class BitmapVisualizerObjectSource : VisualizerObjectSource
     {
-        private object? _cachedBitmap;
-        private BitmapVisualizerView? _cachedView;
+        private readonly VisualizerViewCache<BitmapVisualizerView> _viewCache =
+            new VisualizerViewCache<BitmapVisualizerView>(target => BitmapVisualizerTransfer.CreateView(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
@@ -40,13 +40,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private BitmapVisualizerView GetView(object target)
         {
-            if (!ReferenceEquals(target, _cachedBitmap))
-            {
-                _cachedBitmap = target;
-                _cachedView = BitmapVisualizerTransfer.CreateView(target);
-            }
-
-            return _cachedView ?? throw new InvalidOperationException("Bitmap view was not created.");
+            return _viewCache.GetOrCreate(target);
         }
     }
 
@@ -110,7 +104,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 Height = height,
                 Stride = palette == null ? stride : checked(width * 4),
                 PixelFormat = format,
-                ValidBits = bytesPerPixel == 1 ? 8 : bytesPerPixel * 8,
+                // Supported Bitmap formats have 8-bit components; PixelFormat owns pixel storage width.
+                ValidBits = RawImageDescriptor.GetDefaultValidBits(format),
                 ByteOrder = RawByteOrder.LittleEndian
             };
 
@@ -225,6 +220,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             BitmapVisualizerView view,
             VisualizerSnapshotChunkRequest request)
         {
+            return CreateChunk(view, request, null);
+        }
+
+        internal static VisualizerSnapshotChunk CreateChunk(
+            BitmapVisualizerView view,
+            VisualizerSnapshotChunkRequest request,
+            byte[]? reusableBuffer)
+        {
             if (view == null)
             {
                 throw new ArgumentNullException(nameof(view));
@@ -247,7 +250,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             var remaining = view.BufferLength - request.Offset;
             var length = (int)Math.Min(request.Count, remaining);
-            var buffer = new byte[length];
+            var buffer = reusableBuffer != null && reusableBuffer.Length == length
+                ? reusableBuffer : new byte[length];
+            VisualizerTransferTrace.Write("bitmap buffer reused=" + ReferenceEquals(buffer, reusableBuffer) + " bytes=" + length);
             if (length == 0)
             {
                 return new VisualizerSnapshotChunk
@@ -259,20 +264,25 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 };
             }
 
+            VisualizerTransferTrace.Write("bitmap lock begin offset=" + request.Offset + " count=" + request.Count);
             var bitmapData = LockBits(
                 view.Bitmap,
                 view.Descriptor.Width,
                 view.Descriptor.Height,
                 view.PixelFormat);
+            VisualizerTransferTrace.Write("bitmap lock acquired");
             try
             {
                 var dataStride = Get<int>(bitmapData, "Stride");
                 EnsureStrideMatches(view, dataStride);
+                VisualizerTransferTrace.Write("bitmap native copy begin");
                 CopyNormalizedChunk(view, bitmapData, dataStride, request.Offset, buffer);
+                VisualizerTransferTrace.Write("bitmap native copy end");
             }
             finally
             {
                 UnlockBits(view.Bitmap, bitmapData);
+                VisualizerTransferTrace.Write("bitmap unlock completed");
             }
 
             return new VisualizerSnapshotChunk
@@ -309,9 +319,10 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 var row = checked((int)(logicalOffset / stride));
                 var column = checked((int)(logicalOffset % stride));
                 var segmentLength = Math.Min(target.Length - copied, stride - column);
+                var copyLength = 0;
                 if (column < pixelBytes)
                 {
-                    var copyLength = Math.Min(segmentLength, pixelBytes - column);
+                    copyLength = Math.Min(segmentLength, pixelBytes - column);
                     var rowOffset = dataStride >= 0
                         ? checked((long)row * dataStride)
                         : checked((long)(view.Descriptor.Height - 1 - row) * view.SourceStride);
@@ -332,6 +343,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     }
                 }
 
+                Array.Clear(target, copied + copyLength, segmentLength - copyLength);
                 copied += segmentLength;
             }
         }

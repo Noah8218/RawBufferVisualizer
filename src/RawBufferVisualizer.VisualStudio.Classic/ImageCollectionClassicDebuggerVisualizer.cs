@@ -51,16 +51,21 @@ namespace RawBufferVisualizer.VisualStudio.Classic
         {
             var visualStudioProcessId = Process.GetCurrentProcess().Id;
             var sourceType = "Image collection";
+            var originSessionToken = string.Empty;
             var requestPaths = new List<string>();
 
             try
             {
+                if (!VisualizerHandoffInbox.TryCaptureDebuggerSession(visualStudioProcessId, out originSessionToken))
+                {
+                    _wakeDockedToolWindow(visualStudioProcessId);
+                    originSessionToken = VisualizerHandoffInbox.CaptureDebuggerSession(visualStudioProcessId);
+                }
                 var objectProvider2 = objectProvider as IVisualizerObjectProvider2
                     ?? throw new NotSupportedException("The Visual Studio object provider does not support JSON data.");
                 var mappings = _getMappings(visualStudioProcessId);
-                var summary = objectProvider2.TransferDeserializableObject(
+                var summary = TransferResponse<VisualizerCollectionSummary>(objectProvider2,
                         new VisualizerCollectionItemRequest { Operation = VisualizerCollectionOperation.ConfigureMappings, Mappings = mappings })
-                    .ToObject<VisualizerCollectionSummary>()
                     ?? throw new InvalidDataException("The debugger visualizer returned no collection summary.");
 
                 sourceType = string.IsNullOrWhiteSpace(summary.SourceType) ? sourceType : summary.SourceType;
@@ -72,11 +77,11 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     var displayName = "[" + index + "]";
                     try
                     {
-                        item = objectProvider2.TransferDeserializableObject(new VisualizerCollectionItemRequest
+                        item = TransferResponse<VisualizerCollectionItemMetadata>(objectProvider2, new VisualizerCollectionItemRequest
                         {
                             Operation = VisualizerCollectionOperation.Metadata,
                             Index = index
-                        }).ToObject<VisualizerCollectionItemMetadata>();
+                        });
                         if (item != null && !string.IsNullOrWhiteSpace(item.DisplayName)) displayName = item.DisplayName;
                         var metadata = item?.Metadata ?? throw new InvalidOperationException(
                             string.IsNullOrWhiteSpace(item?.Error) ? "Collection item returned no metadata." : item!.Error);
@@ -86,13 +91,13 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                         {
                             try
                             {
-                                var preview = objectProvider2.TransferDeserializableObject(new VisualizerCollectionItemRequest
+                                var preview = TransferResponse<VisualizerSnapshotTransfer>(objectProvider2, new VisualizerCollectionItemRequest
                                 {
                                     Operation = VisualizerCollectionOperation.Preview,
                                     Index = index,
                                     MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
                                     MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
-                                }).ToObject<VisualizerSnapshotTransfer>();
+                                });
                                 if (preview?.Descriptor != null && preview.Buffer != null
                                     && preview.Descriptor.Width > 0 && preview.Descriptor.Height > 0
                                     && preview.Buffer.LongLength >= preview.Descriptor.GetRequiredByteCount())
@@ -107,7 +112,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                                             metadata.SourceType + " (sampled preview of " + metadata.Descriptor.Width + "x" + metadata.Descriptor.Height + ")",
                                             handoffId, true, metadata.ProcessId, metadata.BufferAddress,
                                             metadata.SourcePointerAddress, metadata.SourcePointerLabel,
-                                            summary.ExpressionIdentityHash, summary.SourceType));
+                                            summary.ExpressionIdentityHash, summary.SourceType, originSessionToken));
                                     }
                                     catch
                                     {
@@ -115,6 +120,10 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                                         throw;
                                     }
                                 }
+                            }
+                            catch (VisualizerObjectSourceException)
+                            {
+                                throw;
                             }
                             catch (Exception ex)
                             {
@@ -129,24 +138,24 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                                 visualStudioProcessId, metadata.ProcessId, metadata.BufferAddress,
                                 metadata.BufferLength, metadata.Descriptor, displayName, metadata.SourceType, handoffId,
                                 metadata.SourcePointerAddress, metadata.SourcePointerLabel,
-                                summary.ExpressionIdentityHash, summary.SourceType));
+                                summary.ExpressionIdentityHash, summary.SourceType, originSessionToken));
                         }
                         else
                         {
                             metadataPath = VisualizerSnapshotStore.WriteSnapshot(metadata, request =>
-                                objectProvider2.TransferDeserializableObject(new VisualizerCollectionItemRequest
+                                TransferResponse<VisualizerSnapshotChunk>(objectProvider2, new VisualizerCollectionItemRequest
                                 {
                                     Operation = VisualizerCollectionOperation.Chunk,
                                     Index = index,
                                     Offset = request.Offset,
                                     Count = request.Count
-                                }).ToObject<VisualizerSnapshotChunk>()
+                                })
                                 ?? throw new InvalidDataException("The debugger visualizer returned an invalid collection chunk."));
                             requestPaths.Add(VisualizerHandoffInbox.WriteSnapshotRequest(
                                 visualStudioProcessId, metadataPath, displayName, metadata.SourceType, handoffId,
                                 false, metadata.ProcessId, metadata.BufferAddress,
                                 metadata.SourcePointerAddress, metadata.SourcePointerLabel,
-                                summary.ExpressionIdentityHash, summary.SourceType));
+                                summary.ExpressionIdentityHash, summary.SourceType, originSessionToken));
                         }
                     }
                     catch (Exception ex)
@@ -160,7 +169,9 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                             itemAssemblyName: item?.ItemAssemblyName,
                             debuggeeProcessId: item?.DebuggeeProcessId ?? 0,
                             expressionIdentityHash: summary.ExpressionIdentityHash,
-                            expressionSourceType: summary.SourceType));
+                            expressionSourceType: summary.SourceType,
+                            originSessionToken: originSessionToken));
+                        if (ex is VisualizerObjectSourceException) break;
                     }
                 }
 
@@ -168,7 +179,8 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                 {
                     requestPaths.Add(VisualizerHandoffInbox.WriteErrorRequest(
                         visualStudioProcessId, "Image collection", summary.SourceType,
-                        "Collection contains " + summary.TotalCount + " items; only the first " + summary.ItemCount + " are shown."));
+                        "Collection contains " + summary.TotalCount + " items; only the first " + summary.ItemCount + " are shown.",
+                        originSessionToken: originSessionToken));
                 }
             }
             catch (Exception ex)
@@ -179,7 +191,8 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     sourceType,
                     ex.Message,
                     ex.GetType().FullName,
-                    ex.ToString()));
+                    ex.ToString(),
+                    originSessionToken: originSessionToken));
             }
 
             RawBufferClassicDebuggerVisualizer.ScheduleTerminalCleanup(requestPaths);
@@ -191,6 +204,43 @@ namespace RawBufferVisualizer.VisualStudio.Classic
             var dte = VisualStudioInstance.GetDte(visualStudioProcessId)
                 ?? throw new InvalidOperationException("The hosting Visual Studio solution context is unavailable.");
             return TypeMappingStore.ForSolution(VisualStudioInstance.GetSolutionPath(dte)).ExportEffectiveMappings();
+        }
+
+        private static T? TransferResponse<T>(IVisualizerObjectProvider2 provider, VisualizerCollectionItemRequest request)
+            where T : class
+        {
+            var operation = request.Operation + " index=" + request.Index + " offset=" + request.Offset + " count=" + request.Count;
+            WriteTransferTrace("host begin " + operation);
+            try
+            {
+                var response = provider.TransferDeserializableObject(request);
+                WriteTransferTrace("host response " + operation);
+                if (response == null)
+                    throw new VisualizerObjectSourceException(typeof(InvalidDataException).FullName, string.Empty,
+                        "The debugger visualizer returned no collection response. Resume debugging before trying again.");
+                var value = response.ToObject<T>();
+                WriteTransferTrace("host converted " + operation);
+                return value;
+            }
+            catch (Exception ex)
+            {
+                WriteTransferTrace("host failure " + operation + " type=" + ex.GetType().Name);
+                throw;
+            }
+        }
+
+        private static void WriteTransferTrace(string stage)
+        {
+            var prefix = Environment.GetEnvironmentVariable("RAWBUFFERVISUALIZER_TRANSFER_TRACE");
+            if (string.IsNullOrWhiteSpace(prefix)) return;
+            try
+            {
+                using (var process = Process.GetCurrentProcess())
+                    File.AppendAllText(prefix + "-" + process.Id + ".log",
+                        DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture) + " " + stage
+                        + " GC=" + GC.CollectionCount(0) + "/" + GC.CollectionCount(1) + "/" + GC.CollectionCount(2) + Environment.NewLine);
+            }
+            catch { /* Optional diagnostics must not affect a debugger evaluation. */ }
         }
     }
 }

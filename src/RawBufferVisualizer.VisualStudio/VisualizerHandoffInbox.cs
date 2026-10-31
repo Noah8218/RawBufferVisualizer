@@ -36,6 +36,34 @@ namespace RawBufferVisualizer.VisualStudio
                 visualStudioProcessId.ToString(CultureInfo.InvariantCulture));
         }
 
+        public static void PublishDebuggerSession(int visualStudioProcessId, string token)
+        {
+            var directory = GetInboxDirectory(visualStudioProcessId);
+            Directory.CreateDirectory(directory);
+            var path = Path.Combine(directory, "debugger-session.txt");
+            // Session admission is ephemeral, not a durable user save. Reuse the
+            // bounded atomic publication without a synchronous disk-flush barrier.
+            WriteTextAtomically(path, token, true);
+        }
+
+        public static string CaptureDebuggerSession(int visualStudioProcessId)
+        {
+            string token;
+            if (!TryCaptureDebuggerSession(visualStudioProcessId, out token))
+                throw new InvalidOperationException("The docked debugger session is not available. Pause again and reopen the visualizer.");
+            return token;
+        }
+
+        public static bool TryCaptureDebuggerSession(int visualStudioProcessId, out string token)
+        {
+            var path = Path.Combine(GetInboxDirectory(visualStudioProcessId), "debugger-session.txt");
+            try { token = File.ReadAllText(path, Encoding.UTF8).Trim(); }
+            catch (FileNotFoundException) { token = string.Empty; }
+            catch (DirectoryNotFoundException) { token = string.Empty; }
+            Guid parsed;
+            return Guid.TryParseExact(token, "N", out parsed);
+        }
+
         public static string WriteSnapshotRequest(
             int visualStudioProcessId,
             string metadataPath,
@@ -71,7 +99,8 @@ namespace RawBufferVisualizer.VisualStudio
             long sourcePointerAddress = 0,
             string? sourcePointerLabel = null,
             int expressionIdentityHash = 0,
-            string? expressionSourceType = null)
+            string? expressionSourceType = null,
+            string? originSessionToken = null)
         {
             if (string.IsNullOrWhiteSpace(metadataPath))
             {
@@ -108,7 +137,8 @@ namespace RawBufferVisualizer.VisualStudio
                     sourcePointerAddress: sourcePointerAddress,
                     sourcePointerLabel: sourcePointerLabel,
                     expressionIdentityHash: expressionIdentityHash,
-                    expressionSourceType: expressionSourceType));
+                    expressionSourceType: expressionSourceType,
+                    originSessionToken: originSessionToken ?? CaptureDebuggerSession(visualStudioProcessId)));
         }
 
         public static string WriteErrorRequest(
@@ -123,7 +153,8 @@ namespace RawBufferVisualizer.VisualStudio
             string? itemAssemblyName = null,
             int debuggeeProcessId = 0,
             int expressionIdentityHash = 0,
-            string? expressionSourceType = null)
+            string? expressionSourceType = null,
+            string? originSessionToken = null)
         {
             if (string.IsNullOrWhiteSpace(errorMessage))
             {
@@ -149,7 +180,8 @@ namespace RawBufferVisualizer.VisualStudio
                     itemAssemblyName,
                     debuggeeProcessId,
                     expressionIdentityHash: expressionIdentityHash,
-                    expressionSourceType: expressionSourceType));
+                    expressionSourceType: expressionSourceType,
+                    originSessionToken: originSessionToken ?? CaptureDebuggerSession(visualStudioProcessId)));
         }
 
         public static string WriteLiveMemoryRequest(
@@ -164,7 +196,8 @@ namespace RawBufferVisualizer.VisualStudio
             long sourcePointerAddress = 0,
             string? sourcePointerLabel = null,
             int expressionIdentityHash = 0,
-            string? expressionSourceType = null)
+            string? expressionSourceType = null,
+            string? originSessionToken = null)
         {
             if (debuggeeProcessId <= 0)
             {
@@ -199,7 +232,8 @@ namespace RawBufferVisualizer.VisualStudio
                     sourcePointerAddress: sourcePointerAddress,
                     sourcePointerLabel: sourcePointerLabel,
                     expressionIdentityHash: expressionIdentityHash,
-                    expressionSourceType: expressionSourceType));
+                    expressionSourceType: expressionSourceType,
+                    originSessionToken: originSessionToken ?? CaptureDebuggerSession(visualStudioProcessId)));
         }
 
         public static string ReadSnapshotRequest(string requestPath)
@@ -282,7 +316,8 @@ namespace RawBufferVisualizer.VisualStudio
                     loaded.SourcePointerAddress,
                     loaded.SourcePointerLabel,
                     loaded.ExpressionIdentityHash,
-                    loaded.ExpressionSourceType);
+                    loaded.ExpressionSourceType,
+                    loaded.OriginSessionToken);
             }
         }
 
@@ -441,6 +476,8 @@ namespace RawBufferVisualizer.VisualStudio
             TryDeleteRequest(GetRejectionReasonPath(fullRequestPath));
             TryDeleteRequest(fullRequestPath + ClaimSuffix);
             TryDeleteRequest(GetProcessingPath(fullRequestPath));
+            TryDeleteRequest(Path.ChangeExtension(fullRequestPath, ".tmp"));
+            TryDeleteRequest(Path.ChangeExtension(GetRejectionReasonPath(fullRequestPath), ".tmp"));
             TryDeleteMatchingFiles(fullRequestPath + PublishingSuffix + "*");
             TryDeleteMatchingFiles(
                 GetRejectionReasonPath(fullRequestPath) + PublishingSuffix + "*");
@@ -588,20 +625,12 @@ namespace RawBufferVisualizer.VisualStudio
         {
             var inboxDirectory = GetInboxDirectory(visualStudioProcessId);
             Directory.CreateDirectory(inboxDirectory);
-            var fileName = Guid.NewGuid().ToString("N").Substring(0, 24) + RequestSuffix;
+            // Keep the full GUID while leaving room for terminal markers under
+            // the legacy debugger host's path limit. Readers only require the suffix.
+            var fileName = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+                .TrimEnd('=').Replace('+', '-').Replace('/', '_') + RequestSuffix;
             var requestPath = Path.Combine(inboxDirectory, fileName);
-            var publishingPath = requestPath
-                + PublishingSuffix
-                + Guid.NewGuid().ToString("N");
-            try
-            {
-                WriteRequestFile(publishingPath, request);
-                File.Move(publishingPath, requestPath);
-            }
-            finally
-            {
-                TryDeleteRequest(publishingPath);
-            }
+            WriteRequestFile(requestPath, request);
 
             return requestPath;
         }
@@ -634,14 +663,15 @@ namespace RawBufferVisualizer.VisualStudio
                 SourcePointerAddress = request.SourcePointerAddress,
                 SourcePointerLabel = request.SourcePointerLabel,
                 ExpressionIdentityHash = request.ExpressionIdentityHash,
-                ExpressionSourceType = request.ExpressionSourceType
+                ExpressionSourceType = request.ExpressionSourceType,
+                OriginSessionToken = request.OriginSessionToken
             };
 
             using (var stream = new MemoryStream())
             {
                 var serializer = new DataContractJsonSerializer(typeof(VisualizerHandoffRequestDto));
                 serializer.WriteObject(stream, dto);
-                File.WriteAllText(requestPath, Encoding.UTF8.GetString(stream.ToArray()));
+                WriteTextAtomically(requestPath, Encoding.UTF8.GetString(stream.ToArray()));
             }
         }
 
@@ -740,13 +770,9 @@ namespace RawBufferVisualizer.VisualStudio
 
         private static bool TryWriteTextAtomically(string path, string text)
         {
-            var publishingPath = path
-                + PublishingSuffix
-                + Guid.NewGuid().ToString("N");
             try
             {
-                File.WriteAllText(publishingPath, text, new UTF8Encoding(false));
-                File.Move(publishingPath, path);
+                WriteTextAtomically(path, text);
                 return true;
             }
             catch (IOException)
@@ -761,9 +787,38 @@ namespace RawBufferVisualizer.VisualStudio
                 // invalidate completion if security software temporarily owns it.
                 return false;
             }
+        }
+
+        private static void WriteTextAtomically(string path, string text, bool replaceExisting = false)
+        {
+            // Replacing the extension also bounds rejection-reason staging paths.
+            // Exclusive creation preserves an in-flight writer on a conflicting retry.
+            var publishingPath = Path.ChangeExtension(path, ".tmp");
+            var ownsPublishingFile = false;
+            try
+            {
+                using (var stream = new FileStream(
+                    publishingPath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    ownsPublishingFile = true;
+                    using (var writer = new StreamWriter(stream, new UTF8Encoding(false)))
+                    {
+                        writer.Write(text);
+                    }
+                }
+
+                if (replaceExisting && File.Exists(path)) File.Replace(publishingPath, path, null);
+                else File.Move(publishingPath, path);
+                // A later writer can now create this staging name. It no longer
+                // belongs to this publication, so do not clean it in finally.
+                ownsPublishingFile = false;
+            }
             finally
             {
-                TryDeleteRequest(publishingPath);
+                if (ownsPublishingFile)
+                {
+                    TryDeleteRequest(publishingPath);
+                }
             }
         }
 
@@ -825,6 +880,7 @@ namespace RawBufferVisualizer.VisualStudio
         public string SourcePointerLabel { get; private set; }
         public int ExpressionIdentityHash { get; private set; }
         public string ExpressionSourceType { get; private set; }
+        public string OriginSessionToken { get; private set; }
 
         public bool IsError
         {
@@ -901,7 +957,8 @@ namespace RawBufferVisualizer.VisualStudio
             long sourcePointerAddress = 0,
             string? sourcePointerLabel = null,
             int expressionIdentityHash = 0,
-            string? expressionSourceType = null)
+            string? expressionSourceType = null,
+            string? originSessionToken = null)
         {
             var hasLiveMemory = liveProcessId > 0
                 && liveBufferAddress != 0
@@ -940,6 +997,7 @@ namespace RawBufferVisualizer.VisualStudio
                 : string.IsNullOrWhiteSpace(sourcePointerLabel) ? "Ptr" : sourcePointerLabel!.Trim();
             ExpressionIdentityHash = expressionIdentityHash;
             ExpressionSourceType = expressionSourceType ?? string.Empty;
+            OriginSessionToken = originSessionToken ?? string.Empty;
         }
     }
 
@@ -1020,5 +1078,8 @@ namespace RawBufferVisualizer.VisualStudio
 
         [DataMember(Name = "expressionSourceType", EmitDefaultValue = false)]
         public string? ExpressionSourceType { get; set; }
+
+        [DataMember(Name = "originSessionToken", EmitDefaultValue = false)]
+        public string? OriginSessionToken { get; set; }
     }
 }

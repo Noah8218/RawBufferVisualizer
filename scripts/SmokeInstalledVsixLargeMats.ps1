@@ -224,8 +224,8 @@ public static class RawBufferInstalledVsixRot {
                 continue;
             }
 
-            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                displayName.IndexOf("VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+            if (string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase)) {
                 object dte;
                 table.GetObject(monikers[0], out dte);
                 return dte;

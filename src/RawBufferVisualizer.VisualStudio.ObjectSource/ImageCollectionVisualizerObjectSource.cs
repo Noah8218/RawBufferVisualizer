@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using System.Threading;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Sdk;
 
@@ -12,8 +13,18 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class ImageCollectionVisualizerObjectSource : VisualizerObjectSource
     {
-        private object? _cachedTarget;
-        private ImageCollectionVisualizerView? _cachedView;
+        private readonly VisualizerViewCache<ImageCollectionVisualizerView> _viewCache;
+        private byte[]? _serializedChunkBuffer;
+
+        public ImageCollectionVisualizerObjectSource()
+        {
+            _viewCache = new VisualizerViewCache<ImageCollectionVisualizerView>(target =>
+            {
+                var view = ImageCollectionVisualizerTransfer.CreateView(target);
+                Interlocked.Exchange(ref _serializedChunkBuffer, null);
+                return view;
+            });
+        }
 
         public override void GetData(object target, Stream outgoingData)
         {
@@ -24,40 +35,68 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
+            VisualizerTransferTrace.Write("target deserialize begin");
             var request = DeserializeFromJson<VisualizerCollectionItemRequest>(incomingData);
             if (request == null)
             {
                 throw new InvalidDataException("Collection item request is required.");
             }
+            VisualizerTransferTrace.Write("target request " + request.Operation + " index=" + request.Index + " offset=" + request.Offset + " count=" + request.Count);
 
             if (request.Operation == VisualizerCollectionOperation.ConfigureMappings)
             {
-                _cachedView = ImageCollectionVisualizerTransfer.CreateView(target,
-                    TypeMappingStore.FromSnapshot(request.Mappings ?? throw new InvalidDataException("Mapping context is required.")));
-                _cachedTarget = target;
-                _cachedView.Summary.ExpressionIdentityHash = RuntimeHelpers.GetHashCode(target);
-                SerializeAsJson(outgoingData, _cachedView.Summary);
+                var configuredView = _viewCache.Replace(target, value =>
+                    ImageCollectionVisualizerTransfer.CreateView(value,
+                        TypeMappingStore.FromSnapshot(request.Mappings ?? throw new InvalidDataException("Mapping context is required."))));
+                Interlocked.Exchange(ref _serializedChunkBuffer, null);
+                configuredView.Summary.ExpressionIdentityHash = RuntimeHelpers.GetHashCode(target);
+                SerializeAsJson(outgoingData, configuredView.Summary);
+                VisualizerTransferTrace.Write("target configure serialized");
                 return;
             }
 
             var view = GetView(target);
             if (request.Operation == VisualizerCollectionOperation.Metadata)
             {
-                SerializeAsJson(outgoingData, view.GetMetadata(request.Index));
+                var metadata = view.GetMetadata(request.Index);
+                VisualizerTransferTrace.Write("target metadata ready index=" + request.Index);
+                SerializeAsJson(outgoingData, metadata);
+                VisualizerTransferTrace.Write("target metadata serialized index=" + request.Index);
                 return;
             }
 
             if (request.Operation == VisualizerCollectionOperation.Chunk)
             {
-                SerializeAsJson(
-                    outgoingData,
-                    view.GetChunk(
+                var reusableBuffer = Interlocked.Exchange(ref _serializedChunkBuffer, null);
+                VisualizerSnapshotChunk? chunk = null;
+                try
+                {
+                    VisualizerTransferTrace.Write("target chunk read begin index=" + request.Index);
+                    chunk = view.GetChunk(
                         request.Index,
                         new VisualizerSnapshotChunkRequest
                         {
                             Offset = request.Offset,
                             Count = request.Count
-                        }));
+                        }, reusableBuffer);
+                    VisualizerTransferTrace.Write("target chunk read end index=" + request.Index + " bytes=" + chunk.Buffer.Length);
+                    SerializeAsJson(outgoingData, chunk);
+                    VisualizerTransferTrace.Write("target chunk serialized index=" + request.Index);
+                }
+                finally
+                {
+                    var completed = chunk != null && request.Index == view.Summary.ItemCount - 1
+                        && chunk.Buffer.LongLength >= chunk.TotalLength - chunk.Offset;
+                    if (completed) Interlocked.Exchange(ref _serializedChunkBuffer, null);
+                    else
+                    {
+                        var retained = chunk?.Buffer;
+                        if (reusableBuffer != null && (retained == null || reusableBuffer.Length > retained.Length))
+                            retained = reusableBuffer;
+                        if (retained != null && retained.Length <= VisualizerChunkedTransfer.DefaultChunkSize)
+                            Interlocked.CompareExchange(ref _serializedChunkBuffer, retained, null);
+                    }
+                }
                 return;
             }
 
@@ -81,13 +120,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private ImageCollectionVisualizerView GetView(object target)
         {
-            if (!ReferenceEquals(target, _cachedTarget))
-            {
-                _cachedTarget = target;
-                _cachedView = ImageCollectionVisualizerTransfer.CreateView(target);
-            }
-
-            return _cachedView ?? throw new InvalidOperationException("Collection view was not created.");
+            return _viewCache.GetOrCreate(target);
         }
     }
 
@@ -161,6 +194,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         public VisualizerSnapshotChunk GetChunk(int index, VisualizerSnapshotChunkRequest request)
         {
+            return GetChunk(index, request, null);
+        }
+
+        internal VisualizerSnapshotChunk GetChunk(int index, VisualizerSnapshotChunkRequest request, byte[]? reusableBuffer)
+        {
             var item = GetItem(index);
             item.EnsureTransfer();
             if (item.Transfer == null)
@@ -168,7 +206,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new NotSupportedException(item.Error);
             }
 
-            var chunk = item.Transfer.CreateChunk(request);
+            var chunk = item.Transfer.CreateChunk(request, reusableBuffer);
             if (chunk.Buffer.LongLength >= chunk.TotalLength - chunk.Offset)
             {
                 item.ReleaseTransfer();
@@ -313,7 +351,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                     return new ImageCollectionItemTransfer(
                         BitmapVisualizerTransfer.CreateMetadata(bitmapView),
                         request => BitmapVisualizerTransfer.CreateChunk(bitmapView, request),
-                        request => BitmapVisualizerTransfer.CreatePreview(bitmapView, request));
+                        request => BitmapVisualizerTransfer.CreatePreview(bitmapView, request),
+                        (request, buffer) => BitmapVisualizerTransfer.CreateChunk(bitmapView, request, buffer));
 
                 case "OpenCvSharp.Mat":
                     var openCvView = OpenCvSharpMatVisualizerTransfer.CreateView(value, displayName);
@@ -452,22 +491,25 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         private readonly Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> _createChunk;
         private readonly Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> _createPreview;
+        private readonly Func<VisualizerSnapshotChunkRequest, byte[]?, VisualizerSnapshotChunk>? _createReusableChunk;
 
         public ImageCollectionItemTransfer(
             VisualizerSnapshotMetadata metadata,
             Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> createChunk,
-            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> createPreview)
+            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> createPreview,
+            Func<VisualizerSnapshotChunkRequest, byte[]?, VisualizerSnapshotChunk>? createReusableChunk = null)
         {
             Metadata = metadata;
             _createChunk = createChunk;
             _createPreview = createPreview;
+            _createReusableChunk = createReusableChunk;
         }
 
         public VisualizerSnapshotMetadata Metadata { get; }
 
-        public VisualizerSnapshotChunk CreateChunk(VisualizerSnapshotChunkRequest request)
+        public VisualizerSnapshotChunk CreateChunk(VisualizerSnapshotChunkRequest request, byte[]? reusableBuffer = null)
         {
-            return _createChunk(request);
+            return _createReusableChunk == null ? _createChunk(request) : _createReusableChunk(request, reusableBuffer);
         }
 
         public VisualizerSnapshotTransfer CreatePreview(VisualizerSnapshotChunkRequest request)

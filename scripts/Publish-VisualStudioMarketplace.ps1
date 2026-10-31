@@ -12,6 +12,10 @@ param(
     [string]$RepositoryUrl = 'https://github.com/Noah8218/RawBufferVisualizer',
     [string]$PublishManifestPath,
     [string]$VsixPublisherPath,
+    [string]$BuildRoot = '',
+    [string]$Configuration = 'Release',
+    [string]$VerifiedVsixSha256 = '',
+    [string]$VerifiedSourceRevision = '',
     [switch]$Private,
     [switch]$DisableQna,
     [switch]$DryRun
@@ -189,7 +193,27 @@ function Get-AssetFiles {
 
 Assert-FileExists -Path $VsixPath -Message 'VSIX payload was not found'
 $VsixPath = (Resolve-Path -LiteralPath $VsixPath).Path
+$candidateSha256 = (Get-FileHash -LiteralPath $VsixPath -Algorithm SHA256).Hash
+if ([string]::IsNullOrWhiteSpace($VerifiedVsixSha256)) {
+    if (-not [string]::IsNullOrWhiteSpace($VerifiedSourceRevision)) { throw 'Verified source revision requires the verified VSIX SHA256.' }
+    $validation = & (Join-Path $PSScriptRoot 'Publish-VisualStudioExtension.ps1') -Configuration $Configuration -BuildRoot $BuildRoot -NoBuild -ValidateOnly -CandidateVsixPath $VsixPath
+    if ($null -eq $validation -or $validation.Sha256 -cne $candidateSha256) { throw 'The Marketplace candidate is not the verified VSIX.' }
+}
+else {
+    # The package job already ran the fresh routed payload/registration verifier.
+    # Its immutable job outputs bind those checks to this downloaded artifact and checkout.
+    if ($env:GITHUB_ACTIONS -ne 'true' -or $VerifiedSourceRevision -notmatch '^[0-9a-fA-F]{40}$' -or
+        -not [string]::Equals($env:GITHUB_SHA, $VerifiedSourceRevision, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'A verified CI candidate requires the matching source revision from the package job.'
+    }
+    if ($VerifiedVsixSha256 -notmatch '^[0-9a-fA-F]{64}$' -or
+        -not [string]::Equals($VerifiedVsixSha256, $candidateSha256, [StringComparison]::OrdinalIgnoreCase)) {
+        throw 'The downloaded VSIX does not match the exact package verified by the package job.'
+    }
+}
 $metadata = Get-VsixMetadata -Path $VsixPath
+[xml]$sourceManifest = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\source.extension.vsixmanifest')
+if ($metadata.Id -cne [string]$sourceManifest.PackageManifest.Metadata.Identity.Id) { throw 'The Marketplace candidate has a different extension identity.' }
 $sourceVersion = Get-SourceReleaseVersion -ProjectPath $sourceProjectPath
 $expectedManifestVersion = ConvertTo-FourPartVersion -Version $sourceVersion -Label 'Source release version'
 $actualManifestVersion = ConvertTo-FourPartVersion -Version $metadata.Version -Label 'VSIX manifest version'
@@ -317,6 +341,7 @@ if ([string]::IsNullOrWhiteSpace($PersonalAccessToken)) {
     throw 'PersonalAccessToken is required when not using -DryRun.'
 }
 
+if ((Get-FileHash -LiteralPath $VsixPath -Algorithm SHA256).Hash -cne $candidateSha256) { throw 'The verified Marketplace candidate changed before publish.' }
 & $publisherExe publish `
     -payload $VsixPath `
     -publishManifest $PublishManifestPath `

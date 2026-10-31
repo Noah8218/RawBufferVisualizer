@@ -7,11 +7,14 @@ param(
     [string]$VisualStudioInstanceId = '',
     [string]$VsixInstallerPath = '',
     [string]$VsixPath = '',
+    [string]$BuildRoot = '',
+    [string]$DirectoryBuildPropsPath = '',
     [switch]$NoBuild,
     [switch]$NoViewerEnv,
     [switch]$Reinstall,
     [switch]$AllowRunningVisualStudio,
-    [switch]$RepairRegistrationOnly
+    [switch]$RepairRegistrationOnly,
+    [switch]$AllowDowngrade
 )
 
 $ErrorActionPreference = 'Stop'
@@ -21,9 +24,10 @@ $toolWindowExtensionId = 'RawBufferVisualizer.VisualStudio.Vssdk'
 $minimumVisualStudioVersion = [Version]'17.9.0'
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
 $publishScript = Join-Path $repoRoot 'scripts\Publish-VisualStudioExtension.ps1'
-$repairScript = Join-Path $repoRoot 'scripts\Repair-VisualStudioExtensionRegistration.ps1'
+if ([string]::IsNullOrWhiteSpace($BuildRoot)) { $BuildRoot = Join-Path $repoRoot '.build' }
+$BuildRoot = [IO.Path]::GetFullPath($BuildRoot)
 if ([string]::IsNullOrWhiteSpace($VsixPath)) {
-    $VsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
+    $VsixPath = Join-Path $BuildRoot "bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
 }
 else {
     $VsixPath = [IO.Path]::GetFullPath($VsixPath)
@@ -130,30 +134,6 @@ function Find-VisualStudioInstanceId {
     ''
 }
 
-function Stop-IdleVisualStudioServiceHubController {
-    if (Get-Process -Name devenv -ErrorAction SilentlyContinue) {
-        return
-    }
-
-    $controllers = @(Get-Process -Name 'Microsoft.ServiceHub.Controller' -ErrorAction SilentlyContinue)
-    if ($controllers.Count -eq 0) {
-        return
-    }
-
-    foreach ($controller in $controllers) {
-        Stop-Process -Id $controller.Id -Force -ErrorAction SilentlyContinue
-    }
-
-    Start-Sleep -Milliseconds 500
-    $remaining = @(Get-Process -Name 'Microsoft.ServiceHub.Controller' -ErrorAction SilentlyContinue)
-    if ($remaining.Count -gt 0) {
-        $processIds = ($remaining | ForEach-Object { $_.Id }) -join ', '
-        throw "Visual Studio ServiceHub Controller did not stop. Remaining PID(s): $processIds"
-    }
-
-    Write-Host "Stopped $($controllers.Count) idle Visual Studio ServiceHub Controller process(es)."
-}
-
 function Invoke-VsixInstaller {
     param(
         [string]$InstallerPath,
@@ -166,12 +146,11 @@ function Invoke-VsixInstaller {
         return
     }
 
-    Stop-IdleVisualStudioServiceHubController
 
     # Start-Process -Wait also waits for descendant processes. VSIXInstaller can
     # leave ServiceHub.Controller running after it has already exited, which made
     # quiet reinstall automation wait forever. Wait for the installer process
-    # itself, then let the next operation clean up any idle controller.
+    # itself; unrelated controller processes are not owned by this install.
     $process = Start-Process -FilePath $InstallerPath -ArgumentList $Arguments -PassThru -WindowStyle Hidden
     $process.WaitForExit()
     $exitCode = $process.ExitCode
@@ -361,50 +340,16 @@ function Test-DebuggerVisualizerVsixInstall {
     Write-Host "Validated debugger visualizer VSIX metadata: $extensionPath"
 }
 
-function Stop-DotNetBuildServers {
-    try {
-        & dotnet build-server shutdown | Out-Null
-    }
-    catch {
-        Write-Warning "Could not stop dotnet build servers. Continuing. $($_.Exception.Message)"
-    }
-
-    $orphanedMsBuildNodes = @(Get-CimInstance Win32_Process -Filter "Name='MSBuild.exe'" -ErrorAction SilentlyContinue |
-        Where-Object {
-            $_.CommandLine -match '/nodemode:\d+' -and
-            $null -eq (Get-Process -Id $_.ParentProcessId -ErrorAction SilentlyContinue)
-        })
-    foreach ($node in $orphanedMsBuildNodes) {
-        Stop-Process -Id $node.ProcessId -Force -ErrorAction SilentlyContinue
-    }
-
-    if ($orphanedMsBuildNodes.Count -gt 0) {
-        Write-Host "Stopped $($orphanedMsBuildNodes.Count) orphaned Visual Studio MSBuild node(s)."
-    }
-}
-
 if ($RepairRegistrationOnly) {
-    $instanceId = Find-VisualStudioInstanceId
-    if ([string]::IsNullOrWhiteSpace($instanceId)) {
-        throw 'A supported Visual Studio instance was not found.'
-    }
-
-    & powershell -ExecutionPolicy Bypass -File $repairScript -VisualStudioInstanceId $instanceId
-    if ($LASTEXITCODE -ne 0) {
-        throw "Registration repair failed with exit code $LASTEXITCODE"
-    }
-    return
+    throw 'Manual registration repair is retired. Use the verified single hybrid VSIX; its generated registration is authoritative.'
 }
 
 Push-Location $repoRoot
 try {
-    Assert-VisualStudioNotRunning
+    if (-not $WhatIfPreference) { Assert-VisualStudioNotRunning }
 
-    if (-not $NoBuild) {
-        & powershell -ExecutionPolicy Bypass -File $publishScript -Framework $Framework -Configuration $Configuration -ViewerFramework $ViewerFramework -NoZip
-        if ($LASTEXITCODE -ne 0) {
-            throw "Visual Studio extension publish failed with exit code $LASTEXITCODE"
-        }
+    if (-not $NoBuild -and -not $WhatIfPreference) {
+        & $publishScript -Framework $Framework -Configuration $Configuration -ViewerFramework $ViewerFramework -BuildRoot $BuildRoot -DirectoryBuildPropsPath $DirectoryBuildPropsPath -NoZip
     }
 }
 finally {
@@ -415,10 +360,20 @@ if (-not (Test-Path -LiteralPath $vsixPath)) {
     throw "VSIX was not found: $vsixPath"
 }
 
-Stop-DotNetBuildServers
+$validation = & $publishScript -Framework $Framework -Configuration $Configuration -ViewerFramework $ViewerFramework -BuildRoot $BuildRoot -DirectoryBuildPropsPath $DirectoryBuildPropsPath -NoBuild -ValidateOnly -CandidateVsixPath $vsixPath
+if ($null -eq $validation -or $validation.ValidatedVsixPath -cne $vsixPath) { throw 'VSIX validation did not return the exact installation candidate.' }
+$verifiedSha256 = $validation.Sha256
+Write-Host "Verified candidate: $vsixPath SHA256 $verifiedSha256"
 
 $installer = Find-VsixInstaller -ExplicitPath $VsixInstallerPath
 $instanceId = Find-VisualStudioInstanceId
+$installedFolder = Find-InstalledExtensionFolder -InstanceId $instanceId
+if (-not [string]::IsNullOrWhiteSpace($installedFolder)) {
+    [xml]$installedManifest = Get-Content -Raw -LiteralPath (Join-Path $installedFolder 'extension.vsixmanifest')
+    if ([version]$installedManifest.PackageManifest.Metadata.Identity.Version -gt [version]$validation.SourceVersion -and -not $AllowDowngrade) {
+        throw 'The installed extension is newer than this candidate. Explicit AllowDowngrade is required.'
+    }
+}
 Write-Host "VSIXInstaller: $installer"
 if (-not [string]::IsNullOrWhiteSpace($instanceId)) {
     Write-Host "Visual Studio instance: $instanceId"
@@ -438,6 +393,7 @@ if ($perMachineInstalls.Count -gt 0) {
     throw "A per-machine Raw Buffer Visualizer installation already owns this extension ID for Visual Studio instance '$instanceId': $($details -join '; '). Do not delete Program Files content manually. Remove or update that installation through Visual Studio Manage Extensions/Installer with administrator rights, then retry the per-user VSIX install."
 }
 
+if ((Get-FileHash -LiteralPath $vsixPath -Algorithm SHA256).Hash -cne $verifiedSha256) { throw 'The verified VSIX changed before installation.' }
 if ($Reinstall) {
     $uninstallArguments = @('/quiet')
     if (-not [string]::IsNullOrWhiteSpace($instanceId)) {
@@ -453,6 +409,7 @@ if (-not [string]::IsNullOrWhiteSpace($instanceId)) {
     $installArguments += "/instanceIds:$instanceId"
 }
 
+if ((Get-FileHash -LiteralPath $vsixPath -Algorithm SHA256).Hash -cne $verifiedSha256) { throw 'The verified VSIX changed before installation.' }
 Invoke-VsixInstaller -InstallerPath $installer -Arguments ($installArguments + @($vsixPath)) -Action 'Install Raw Buffer Visualizer VSIX'
 Remove-LegacyClassicVisualizer
 if ($WhatIfPreference) {

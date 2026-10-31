@@ -47,10 +47,12 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                     DkmEvaluationResult replacement = success;
                     try
                     {
-                        string? source = GetObjectSource(value, inspectionContext, out bool collection);
+                        bool collection = false;
+                        bool canPrepend = !workList.IsCanceled && CanPrependVisualizer(success.CustomUIVisualizers);
+                        string? source = canPrepend ? GetObjectSource(value, inspectionContext, out collection, workList) : null;
                         bool ownsCandidate = success.CustomUIVisualizers != null
                             && System.Linq.Enumerable.Any(success.CustomUIVisualizers, candidate => ImageVisualizerTypePolicy.IsOwnedObjectSource(candidate.DebuggeeSideVisualizerAssemblyName));
-                        if ((source != null || ownsCandidate) && CanPrependVisualizer(success.CustomUIVisualizers))
+                        if ((source != null || ownsCandidate) && canPrepend && !workList.IsCanceled)
                         {
                             var candidates = new List<DkmCustomUIVisualizerInfo>();
                             // CLR visualizer IDs must match the array indexes used for invocation.
@@ -76,11 +78,14 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                                 }
                             }
 
-                            replacement = DkmSuccessEvaluationResult.Create(success.InspectionContext, success.StackFrame,
-                                success.Name, success.FullName, success.Flags, success.Value, success.EditableValue,
-                                success.Type, success.Category, success.Access, success.StorageType, success.TypeModifierFlags,
-                                success.Address, candidates.AsReadOnly(), success.ExternalModules, success.RefreshButtonText,
-                                new OriginalResult(success));
+                            if (!workList.IsCanceled)
+                            {
+                                replacement = DkmSuccessEvaluationResult.Create(success.InspectionContext, success.StackFrame,
+                                    success.Name, success.FullName, success.Flags, success.Value, success.EditableValue,
+                                    success.Type, success.Category, success.Access, success.StorageType, success.TypeModifierFlags,
+                                    success.Address, candidates.AsReadOnly(), success.ExternalModules, success.RefreshButtonText,
+                                    new OriginalResult(success));
+                            }
                         }
                     }
                     catch (Exception ex) when (ex is DkmException || ex is ArgumentException || ex is InvalidOperationException || ex is OverflowException || ex is IOException || ex is BadImageFormatException)
@@ -111,10 +116,10 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
             return true;
         }
 
-        private static string? GetObjectSource(DkmClrValue value, DkmInspectionContext context, out bool collection)
+        private static string? GetObjectSource(DkmClrValue value, DkmInspectionContext context, out bool collection, DkmWorkList workList)
         {
             collection = false;
-            if (value.Type == null) return null;
+            if (workList.IsCanceled || value.Type == null) return null;
             var metadata = value.Type.GetLmrType();
             var imageType = metadata;
             string? containerName = null;
@@ -144,14 +149,16 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
 
             string? source = imageType == null ? null : ImageVisualizerTypePolicy.GetObjectSource(imageType.FullName, imageType.Assembly.GetName().Name);
             if (source == null && collection && (imageType == null || (!imageType.IsValueType && !imageType.IsSealed))
-                && ContainsImage(value, containerName, context)) source = "ImageCollectionVisualizerObjectSource";
+                && ContainsImage(value, containerName, context, workList)) source = "ImageCollectionVisualizerObjectSource";
             return source == null ? null : collection ? "ImageCollectionVisualizerObjectSource" : source;
         }
 
-        private static bool ContainsImage(DkmClrValue value, string? containerName, DkmInspectionContext context)
+        private static bool ContainsImage(DkmClrValue value, string? containerName, DkmInspectionContext context, DkmWorkList workList)
         {
             // Inspect storage fields only: no getters, debug proxies or target-side enumeration.
-            if (containerName == null) return ArrayContainsImage(value, 256, null, false, context);
+            // Cancellation stops subsequent reads; an in-flight debugger call cannot be interrupted here.
+            if (workList.IsCanceled) return false;
+            if (containerName == null) return ArrayContainsImage(value, 256, null, false, context, workList);
 
             DkmClrValue? storage = null;
             DkmClrValue? tables = null;
@@ -162,21 +169,21 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                 {
                     case "System.Collections.Generic.List`1":
                     case "System.Collections.ArrayList":
-                        size = ReadField(value, context, "_size");
+                        size = ReadField(value, context, workList, "_size");
                         if (!(size?.HostObjectValue is int count) || count <= 0) return false;
-                        storage = ReadField(value, context, "_items");
-                        return storage != null && ArrayContainsImage(storage, Math.Min(count, 256), null, false, context);
+                        storage = ReadField(value, context, workList, "_items");
+                        return storage != null && ArrayContainsImage(storage, Math.Min(count, 256), null, false, context, workList);
                     case "System.Collections.Generic.Dictionary`2":
-                        storage = ReadField(value, context, "_entries", "entries");
-                        return storage != null && ArrayContainsImage(storage, 4096, "value", false, context);
+                        storage = ReadField(value, context, workList, "_entries", "entries");
+                        return storage != null && ArrayContainsImage(storage, 4096, "value", false, context, workList);
                     case "System.Collections.Hashtable":
-                        storage = ReadField(value, context, "_buckets", "buckets");
-                        return storage != null && ArrayContainsImage(storage, 4096, "val", false, context);
+                        storage = ReadField(value, context, workList, "_buckets", "buckets");
+                        return storage != null && ArrayContainsImage(storage, 4096, "val", false, context, workList);
                     case "System.Collections.Concurrent.ConcurrentDictionary`2":
-                        tables = ReadField(value, context, "_tables", "m_tables");
+                        tables = ReadField(value, context, workList, "_tables", "m_tables");
                         if (tables == null || tables.IsNull) return false;
-                        storage = ReadField(tables, context, "_buckets", "m_buckets");
-                        return storage != null && ArrayContainsImage(storage, 4096, null, true, context);
+                        storage = ReadField(tables, context, workList, "_buckets", "m_buckets");
+                        return storage != null && ArrayContainsImage(storage, 4096, null, true, context, workList);
                     default:
                         return false;
                 }
@@ -189,29 +196,31 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
             }
         }
 
-        private static bool ArrayContainsImage(DkmClrValue array, int maximumSlots, string? valueField, bool linkedBuckets, DkmInspectionContext context)
+        private static bool ArrayContainsImage(DkmClrValue array, int maximumSlots, string? valueField, bool linkedBuckets, DkmInspectionContext context, DkmWorkList workList)
         {
-            if (array.IsNull || array.ArrayDimensions == null || array.ArrayDimensions.Count != 1) return false;
+            if (workList.IsCanceled || array.IsNull || array.ArrayDimensions == null || array.ArrayDimensions.Count != 1) return false;
             int count = Math.Min(array.ArrayDimensions[0], maximumSlots);
             int first = array.ArrayLowerBounds == null ? 0 : array.ArrayLowerBounds[0];
             int remaining = 256;
             // ponytail: cap sparse storage scans at 4096 slots and 256 values to keep Locals bounded.
             // Larger object-valued sparse tables retain the built-in viewer if no image is found.
-            for (int offset = 0; offset < count && remaining > 0; offset++)
+            for (int offset = 0; offset < count && remaining > 0 && !workList.IsCanceled; offset++)
             {
                 var item = array.GetArrayElement(new[] { first + offset }, context);
                 DkmClrValue? field = null;
                 try
                 {
+                    if (workList.IsCanceled) return false;
                     if (item.IsNull) continue;
                     if (linkedBuckets)
                     {
-                        field = ReadField(item, context, "_node"); // .NET 8 VolatileNode; Framework has Node[].
-                        if (NodeContainsImage(field ?? item, context, ref remaining)) return true;
+                        field = ReadField(item, context, workList, "_node"); // .NET 8 VolatileNode; Framework has Node[].
+                        if (NodeContainsImage(field ?? item, context, ref remaining, workList)) return true;
                     }
                     else
                     {
-                        field = valueField == null ? null : ReadField(item, context, valueField);
+                        field = valueField == null ? null : ReadField(item, context, workList, valueField);
+                        if (workList.IsCanceled) return false;
                         var candidate = valueField == null ? item : field;
                         if (candidate == null || candidate.IsNull) continue;
                         remaining--;
@@ -227,17 +236,17 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
             return false;
         }
 
-        private static bool NodeContainsImage(DkmClrValue node, DkmInspectionContext context, ref int remaining)
+        private static bool NodeContainsImage(DkmClrValue node, DkmInspectionContext context, ref int remaining, DkmWorkList workList)
         {
-            if (node.IsNull || remaining-- <= 0) return false;
+            if (workList.IsCanceled || node.IsNull || remaining-- <= 0) return false;
             DkmClrValue? value = null;
             DkmClrValue? next = null;
             try
             {
-                value = ReadField(node, context, "_value", "m_value");
-                if (value != null && IsImageValue(value)) return true;
-                next = ReadField(node, context, "_next", "m_next");
-                return next != null && NodeContainsImage(next, context, ref remaining);
+                value = ReadField(node, context, workList, "_value", "m_value");
+                if (!workList.IsCanceled && value != null && IsImageValue(value)) return true;
+                next = ReadField(node, context, workList, "_next", "m_next");
+                return next != null && NodeContainsImage(next, context, ref remaining, workList);
             }
             finally
             {
@@ -253,14 +262,15 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
             return ImageVisualizerTypePolicy.GetObjectSource(type.FullName, type.Assembly.GetName().Name) != null;
         }
 
-        private static DkmClrValue? ReadField(DkmClrValue value, DkmInspectionContext context, params string[] names)
+        private static DkmClrValue? ReadField(DkmClrValue value, DkmInspectionContext context, DkmWorkList workList, params string[] names)
         {
-            if (value.IsNull || value.Type == null) return null;
+            if (workList.IsCanceled || value.IsNull || value.Type == null) return null;
             var type = value.Type.GetLmrType();
             foreach (string name in names)
             {
+                if (workList.IsCanceled) return null;
                 if (type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic) != null)
-                    return value.GetMemberValue(name, (int)MemberTypes.Field, null, context);
+                    return workList.IsCanceled ? null : value.GetMemberValue(name, (int)MemberTypes.Field, null, context);
             }
             return null;
         }

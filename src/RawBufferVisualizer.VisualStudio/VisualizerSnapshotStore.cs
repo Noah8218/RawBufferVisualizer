@@ -117,7 +117,7 @@ namespace RawBufferVisualizer.VisualStudio
             try
             {
                 EnsureTempDiskSpace(snapshotDirectory, metadata.BufferLength);
-                var metadataPath = Path.Combine(snapshotDirectory, "snapshot_" + DateTime.UtcNow.Ticks + ".rbuf.json");
+                var metadataPath = Path.Combine(snapshotDirectory, "snapshot.rbuf.json");
                 var rawPath = RawBufferSnapshot.SaveMetadata(metadataPath, metadata.Descriptor);
 
                 using (var stream = File.Create(rawPath))

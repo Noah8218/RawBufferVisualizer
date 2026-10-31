@@ -8,7 +8,10 @@ param(
     [string]$BuildRoot = '',
     [string]$DirectoryBuildPropsPath = '',
     [switch]$NoBuild,
-    [switch]$NoZip
+    [switch]$NoZip,
+    [switch]$ValidateOnly,
+    [string]$CandidateVsixPath = '',
+    [string]$IlDasmPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -39,6 +42,9 @@ $zipPath = Join-Path $publishRoot "$packageName.zip"
 $buildOutput = Join-Path $buildRoot "bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework"
 $providerOutput = Join-Path $buildRoot "bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\net8.0-windows8.0"
 $vsixPath = Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Extensibility.vsix'
+if (-not $ValidateOnly -and -not [string]::IsNullOrWhiteSpace($CandidateVsixPath)) {
+    throw 'CandidateVsixPath is supported only with ValidateOnly.'
+}
 
 function Get-VsixEntryNames {
     param([string]$Path)
@@ -243,10 +249,152 @@ function Assert-ModernCollectionRegistrationsOpen {
     }
 }
 
+function Remove-IlDasmTokenComments {
+    param([string]$Text)
+    return [regex]::Replace($Text, '/\*\s*[0-9a-fA-F:]+\s*\*/', '')
+}
+
+function Get-IlDasmAssemblyText {
+    param([string]$AssemblyPath)
+
+    $tool = $IlDasmPath
+    if ([string]::IsNullOrWhiteSpace($tool)) {
+        $tool = Join-Path ([Environment]::GetEnvironmentVariable('ProgramFiles(x86)')) 'Microsoft SDKs\Windows\v10.0A\bin\NETFX 4.8 Tools\x64\ildasm.exe'
+    }
+    Assert-FileExists -Path $tool -Message 'Supply -IlDasmPath pointing to an existing Microsoft SDK Ildasm; no tool is downloaded'
+    $signature = Get-AuthenticodeSignature -LiteralPath $tool
+    if ($signature.Status -ne 'Valid' -or $null -eq $signature.SignerCertificate -or
+        $signature.SignerCertificate.Subject -notlike '*O=Microsoft Corporation*') {
+        throw "Package inspection requires a valid Microsoft-signed Ildasm: $tool"
+    }
+
+    $arguments = @('/text', '/nobar', '/utf8', '/caverbal')
+    $arguments += [IO.Path]::GetFullPath($AssemblyPath)
+    $output = @(& $tool @arguments 2>&1)
+    if ($LASTEXITCODE -ne 0 -or @($output | Where-Object { $_ -is [Management.Automation.ErrorRecord] }).Count -ne 0) {
+        throw "Read-only Ildasm inspection failed for $AssemblyPath. $($output -join [Environment]::NewLine)"
+    }
+    return Remove-IlDasmTokenComments -Text ($output -join [Environment]::NewLine)
+}
+
+function Assert-IlDasmThreadingReference {
+    param([string]$Text, [string]$AssemblyPath, [Version]$ExpectedVersion)
+
+    $text = Remove-IlDasmTokenComments -Text $Text
+    $blocks = [regex]::Matches($text, '(?ms)^[ \t]*\.assembly\s+extern\s+Microsoft\.VisualStudio\.Threading\s*\r?\n\{(?<body>.*?)^[ \t]*\}')
+    $versionPattern = '(?m)^[ \t]*\.ver\s+' + [regex]::Escape($ExpectedVersion.ToString(4).Replace('.', ':')) + '\s*$'
+    if ($blocks.Count -ne 1 -or $blocks[0].Groups['body'].Value -notmatch $versionPattern) {
+        throw ('VSSDK package must reference exactly one Microsoft.VisualStudio.Threading {0}: {1}' -f $ExpectedVersion, $AssemblyPath)
+    }
+}
+
+function Get-IlDasmMethods {
+    param([string]$Text)
+
+    $text = Remove-IlDasmTokenComments -Text $Text
+    foreach ($method in [regex]::Matches($text, '(?ms)^(?<indent>[ ]*)\.method\b(?<header>.*?)^[ \t]*\{(?<body>.*?)^[ \t]*\}[ \t]*// end of method (?<owner>[^\r\n]+?)::(?<name>[^\r\n]+)')) {
+        [pscustomobject]@{
+            Indent = $method.Groups['indent'].Value.Length
+            Header = $method.Groups['header'].Value
+            Body = $method.Groups['body'].Value
+            Owner = $method.Groups['owner'].Value.Trim()
+            Name = $method.Groups['name'].Value.Trim()
+        }
+    }
+}
+
+function Get-IlDasmInstructions {
+    param([string]$Body)
+
+    foreach ($instruction in [regex]::Matches($Body, '(?ms)^[ \t]*IL_[0-9a-fA-F]+:[ \t]*(?<code>[a-zA-Z0-9.]+)[ \t]*(?<operand>.*?)(?=^[ \t]*IL_[0-9a-fA-F]+:|\z)')) {
+        [pscustomobject]@{ Code = $instruction.Groups['code'].Value; Operand = $instruction.Groups['operand'].Value.Trim() }
+    }
+}
+
+function Assert-IlDasmClassicContract {
+    param([string]$DebuggerText, [string]$ClassicText, [hashtable]$ExpectedTypes)
+
+    $debuggerText = Remove-IlDasmTokenComments -Text $DebuggerText
+    $classicText = Remove-IlDasmTokenComments -Text $ClassicText
+    $providerName = 'RawBufferVisualizer.VisualStudio.Debugger.ImageVisualizerResultProvider'
+    $provider = [regex]::Match($debuggerText, '(?ms)^\.class\b[^\r\n]*\b' + [regex]::Escape($providerName) + '\s*\r?\n[ \t]*extends\b.*?^\}[ \t]*// end of class ' + [regex]::Escape($providerName) + '[ \t]*\r?$')
+    $debuggerText = $provider.Value
+    if (-not $provider.Success -or
+        $debuggerText -notmatch '(?m)^[ \t]*\.field\b[^\r\n]*\bprivate\b[^\r\n]*\bstatic\b[^\r\n]*\bClassicAssemblyIdentity\s*$') {
+        throw 'Compiled provider or full Classic assembly identity field was not found in the selected type.'
+    }
+    $methods = @(Get-IlDasmMethods -Text $debuggerText)
+    $readers = @($methods | Where-Object { $_.Owner -eq 'ImageVisualizerResultProvider' -and $_.Name -eq 'ReadClassicAssemblyIdentity' })
+    if ($readers.Count -ne 1 -or $readers[0].Header -notmatch '\bprivate\b' -or $readers[0].Header -notmatch '\bstatic\b') {
+        throw 'Compiled Classic identity reader must be uniquely private and static.'
+    }
+    $readerOps = @(Get-IlDasmInstructions -Body $readers[0].Body)
+    foreach ($required in @('System.Reflection.AssemblyName::GetAssemblyName', 'System.Reflection.AssemblyName::get_FullName', 'System.Reflection.Assembly::get_Location', 'System.IO.Path::Combine')) {
+        if (@($readerOps | Where-Object { $_.Code -in @('call','callvirt') -and $_.Operand -match ([regex]::Escape($required) + '\s*\(') }).Count -eq 0) {
+            throw "Compiled Classic identity reader is missing $required."
+        }
+    }
+    if (@($readerOps | Where-Object { $_.Code -eq 'ldstr' -and $_.Operand -match '^"RawBufferVisualizer\.VisualStudio\.Classic\.dll"\s*$' }).Count -eq 0) {
+        throw 'Compiled identity reader must use the adjacent Classic DLL.'
+    }
+    $initializers = @($methods | Where-Object { $_.Owner -eq 'ImageVisualizerResultProvider' -and $_.Name -eq '.cctor' })
+    if ($initializers.Count -ne 1) { throw 'Compiled provider initializer was not found uniquely.' }
+    $initializerOps = @(Get-IlDasmInstructions -Body $initializers[0].Body)
+    $readerPattern = [regex]::Escape($providerName + '::ReadClassicAssemblyIdentity') + '\s*\('
+    $fieldPattern = [regex]::Escape($providerName + '::ClassicAssemblyIdentity') + '(?:\s|$)'
+    if (@($initializerOps | Where-Object { $_.Code -eq 'ldftn' -and $_.Operand -match $readerPattern }).Count -ne 1 -or
+        @($initializerOps | Where-Object { $_.Code -eq 'stsfld' -and $_.Operand -match $fieldPattern }).Count -ne 1) {
+        throw 'Compiled Classic identity cache is not bound to its reader.'
+    }
+    $candidateReads = 0
+    $createPattern = 'Microsoft\.VisualStudio\.Debugger\.Evaluation\.DkmCustomUIVisualizerInfo::Create\s*\((?<parameters>[^)]*)\)'
+    foreach ($method in @($methods | Where-Object { $_.Indent -in @(2,4) })) {
+        $ops = @(Get-IlDasmInstructions -Body $method.Body)
+        $creates = @($ops | Where-Object {
+            $_.Code -eq 'call' -and $_.Operand -match $createPattern -and
+                $Matches['parameters'].Split(',').Length -eq 9
+        })
+        if ($creates.Count -gt 0) {
+            if (@($ops | Where-Object { $_.Code -eq 'ldsfld' -and $_.Operand -match $fieldPattern }).Count -ne 1) {
+                throw 'Compiled owned candidate must use the full Classic identity cache.'
+            }
+            $candidateReads += $creates.Count
+        }
+    }
+    if ($candidateReads -ne 1) { throw 'Could not verify exactly one compiled owned-candidate identity route.' }
+
+    $assembly = [regex]::Match($classicText, '(?ms)^[ \t]*\.assembly\s+RawBufferVisualizer\.VisualStudio\.Classic\s*\r?\n\{(?<body>.*?)^[ \t]*\}')
+    if (-not $assembly.Success) { throw 'Compiled Classic assembly metadata was not found.' }
+    $attributes = [regex]::Matches($assembly.Groups['body'].Value, '(?s)\.custom\b[^\r\n]*System\.Diagnostics\.DebuggerVisualizerAttribute::\.ctor\((?<ctor>.*?)\)\s*=\s*\{(?<value>.*?)\}')
+    if ($attributes.Count -ne 2) { throw 'Compiled Classic DLL must register exactly two self-targeted UI IDs.' }
+    $remaining = $ExpectedTypes.Clone()
+    foreach ($attribute in $attributes) {
+        if ($attribute.Groups['ctor'].Value.Split(',').Length -ne 2 -or
+            [regex]::Matches($attribute.Groups['ctor'].Value, 'System\.Type\b').Count -ne 2) {
+            throw 'Compiled Classic visualizer registration must use two Type constructor arguments.'
+        }
+        $value = $attribute.Groups['value'].Value
+        $arguments = [regex]::Match($value, '^\s*type\((?<ui>[^)]+)\)\s+type\((?<source>[^)]+)\)')
+        $targets = [regex]::Matches($value, "property\s+type\s+'?Target'?\s*=\s*type\((?<type>[^)]+)\)")
+        $ui = [regex]::Replace($arguments.Groups['ui'].Value, '^\[[^\]]+\]', '')
+        $source = [regex]::Replace($arguments.Groups['source'].Value, '^\[[^\]]+\]', '')
+        if (-not $arguments.Success -or $targets.Count -ne 1 -or -not $remaining.ContainsKey($ui) -or
+            $remaining[$ui] -ne $source -or [regex]::Replace($targets[0].Groups['type'].Value, '^\[[^\]]+\]', '') -ne $ui) {
+            throw "Invalid compiled Classic installation-path registration: $ui"
+        }
+        $remaining.Remove($ui)
+    }
+    if ($remaining.Count -ne 0) { throw 'A compiled Classic UI installation-path registration is missing.' }
+}
+
 function Assert-VssdkReferenceCompatibility {
     param([string]$AssemblyPath)
 
     $qualifiedThreadingVersion = [Version]'17.9.0.0'
+    if ($PSVersionTable.PSEdition -eq 'Core') {
+        Assert-IlDasmThreadingReference -Text (Get-IlDasmAssemblyText -AssemblyPath $AssemblyPath) -AssemblyPath $AssemblyPath -ExpectedVersion $qualifiedThreadingVersion
+        return
+    }
     $references = [Reflection.Assembly]::ReflectionOnlyLoadFrom($AssemblyPath).GetReferencedAssemblies()
     $threading = $references | Where-Object { $_.Name -eq 'Microsoft.VisualStudio.Threading' } | Select-Object -First 1
     if ($null -eq $threading) {
@@ -409,6 +557,17 @@ function Assert-ClassicVisualizerInstallPathContract {
         }
     }
 
+    $expected = @{
+        'RawBufferVisualizer.VisualStudio.Classic.RawBufferClassicDebuggerVisualizer' = 'RawBufferVisualizer.VisualStudio.ObjectSource.RawBufferSnapshotVisualizerObjectSource'
+        'RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer' = 'RawBufferVisualizer.VisualStudio.ObjectSource.ImageCollectionVisualizerObjectSource'
+    }
+    if ($PSVersionTable.PSEdition -eq 'Core') {
+        $providerText = Get-IlDasmAssemblyText -AssemblyPath $DebuggerAssemblyPath
+        $classicText = Get-IlDasmAssemblyText -AssemblyPath $ClassicAssemblyPath
+        Assert-IlDasmClassicContract -DebuggerText $providerText -ClassicText $classicText -ExpectedTypes $expected
+        return
+    }
+
     # SDK packages contain reference assemblies, so inspect compiled IL without executing them.
     [void][Reflection.Assembly]::ReflectionOnlyLoadFrom($MetadataReferencePath)
     [void][Reflection.Assembly]::ReflectionOnlyLoadFrom($EngineReferencePath)
@@ -460,10 +619,6 @@ function Assert-ClassicVisualizerInstallPathContract {
         $classic = [Reflection.Assembly]::ReflectionOnlyLoadFrom($ClassicAssemblyPath)
         $attributes = @($classic.GetCustomAttributesData() | Where-Object { $_.AttributeType.FullName -eq 'System.Diagnostics.DebuggerVisualizerAttribute' })
         if ($attributes.Count -ne 2) { throw 'Compiled Classic DLL must register exactly two self-targeted UI IDs for installation-path lookup.' }
-        $expected = @{
-            'RawBufferVisualizer.VisualStudio.Classic.RawBufferClassicDebuggerVisualizer' = 'RawBufferVisualizer.VisualStudio.ObjectSource.RawBufferSnapshotVisualizerObjectSource'
-            'RawBufferVisualizer.VisualStudio.Classic.ImageCollectionClassicDebuggerVisualizer' = 'RawBufferVisualizer.VisualStudio.ObjectSource.ImageCollectionVisualizerObjectSource'
-        }
         foreach ($attribute in $attributes) {
             # Invoke getters explicitly: PowerShell can suppress a property-getter load failure.
             $arguments = $attribute.GetType().GetProperty('ConstructorArguments').GetValue($attribute, $null)
@@ -558,17 +713,17 @@ if ($ViewerFramework -ne 'net472') {
     throw 'The Visual Studio ToolWindow is packaged into the single net472 hybrid VSIX. Use -ViewerFramework net472 or omit it.'
 }
 
-if (Test-Path -LiteralPath $publishDir) {
-    Remove-Item -LiteralPath $publishDir -Recurse -Force
+if (-not $ValidateOnly) {
+    if (Test-Path -LiteralPath $publishDir) {
+        Remove-Item -LiteralPath $publishDir -Recurse -Force
+    }
+    if (Test-Path -LiteralPath $zipPath) {
+        Remove-Item -LiteralPath $zipPath -Force
+    }
+    New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
 }
 
-if (Test-Path -LiteralPath $zipPath) {
-    Remove-Item -LiteralPath $zipPath -Force
-}
-
-New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
-
-if (-not $NoBuild) {
+if (-not $NoBuild -and -not $ValidateOnly) {
     Push-Location $repoRoot
     try {
         $buildArguments = @(
@@ -698,6 +853,17 @@ if ($entryNames -contains 'RawBufferVisualizer.VisualStudio.Extensibility.pkgdef
     throw 'VSIX must not contain the obsolete Extensibility-owned VSSDK pkgdef.'
 }
 
+foreach ($entryName in @($entryNames | Where-Object { $_ -match '^(?:OutOfProc/)?RawBufferVisualizer\.[^/]+\.dll$' })) {
+    $output = if ($entryName.StartsWith('OutOfProc/', [StringComparison]::Ordinal)) { $providerOutput } else { $buildOutput }
+    $builtPath = Join-Path $output ([IO.Path]::GetFileName($entryName))
+    Assert-FileExists -Path $builtPath -Message 'Fresh product assembly was not found'
+    $builtHash = (Get-FileHash -LiteralPath $builtPath -Algorithm SHA256).Hash
+    $packagedHash = Get-VsixEntrySha256 -Path $vsixPath -EntryName $entryName
+    if (-not [string]::Equals($builtHash, $packagedHash, [StringComparison]::OrdinalIgnoreCase)) {
+        throw "VSIX contains a stale product assembly: $entryName"
+    }
+}
+
 [xml]$packagedManifest = Get-VsixEntryText -Path $vsixPath -EntryName 'extension.vsixmanifest'
 Assert-VisualStudioCompatibilityContract -Manifest $packagedManifest
 $classicAssets = @($packagedManifest.PackageManifest.Assets.Asset | Where-Object {
@@ -710,6 +876,30 @@ if ($classicAssets.Count -ne 1) {
 $packagedVersion = [string]$packagedManifest.PackageManifest.Metadata.Identity.Version
 if ($packagedVersion -ne $sourceVersion) {
     throw "Packaged VSIX manifest version $packagedVersion does not match source manifest version $sourceVersion. Do not publish or install the stale VSIX."
+}
+
+$sourceId = [string]$sourceManifest.PackageManifest.Metadata.Identity.Id
+if ([string]$manifest.PackageManifest.Metadata.Identity.Id -cne $sourceId -or
+    [string]$packagedManifest.PackageManifest.Metadata.Identity.Id -cne $sourceId) {
+    throw 'The source, generated, and packaged VSIX identities must match.'
+}
+foreach ($registration in @('extension.vsixmanifest', 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef')) {
+    $builtRegistrationHash = (Get-FileHash -LiteralPath (Join-Path $buildOutput $registration) -Algorithm SHA256).Hash
+    $packagedRegistrationHash = Get-VsixEntrySha256 -Path $vsixPath -EntryName $registration
+    if ($builtRegistrationHash -cne $packagedRegistrationHash) {
+        throw "Packaged registration differs from the checked build output: $registration"
+    }
+}
+$canonicalSha256 = (Get-FileHash -LiteralPath $vsixPath -Algorithm SHA256).Hash
+if ($ValidateOnly) {
+    $candidatePath = if ([string]::IsNullOrWhiteSpace($CandidateVsixPath)) { $vsixPath } else { [IO.Path]::GetFullPath($CandidateVsixPath) }
+    Assert-FileExists -Path $candidatePath -Message 'Candidate VSIX was not found'
+    $candidateSha256 = (Get-FileHash -LiteralPath $candidatePath -Algorithm SHA256).Hash
+    if ($candidateSha256 -cne $canonicalSha256) {
+        throw "Candidate VSIX differs from the checked canonical VSIX. Candidate $candidateSha256; canonical $canonicalSha256."
+    }
+    [pscustomobject]@{ ValidatedVsixPath = $candidatePath; Sha256 = $candidateSha256; SourceVersion = $sourceVersion; ExtensionId = $sourceId; RoutedBuildRoot = $buildRoot }
+    return
 }
 
 Get-ChildItem -LiteralPath $buildOutput -Force |

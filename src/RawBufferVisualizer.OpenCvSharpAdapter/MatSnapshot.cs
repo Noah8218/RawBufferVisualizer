@@ -37,8 +37,15 @@ namespace RawBufferVisualizer.OpenCvSharpAdapter
                 ByteOrder = RawByteOrder.LittleEndian
             };
 
-            var byteCount = checked(stride * mat.Rows);
-            return RawBufferSnapshot.FromIntPtr(mat.Data, byteCount, descriptor);
+            var byteCount = checked((int)descriptor.GetRequiredByteCount());
+            try
+            {
+                return RawBufferSnapshot.FromIntPtr(mat.Data, byteCount, descriptor);
+            }
+            finally
+            {
+                GC.KeepAlive(mat);
+            }
         }
 
         private static RawPixelFormat ToRawPixelFormat(MatType type)

@@ -29,7 +29,7 @@ namespace RawBufferVisualizer.Core
                 throw new ArgumentException(string.Join(Environment.NewLine, ToStrings(diagnostics)));
             }
 
-            if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > descriptor.Width || y + height > descriptor.Height)
+            if (x < 0 || y < 0 || width <= 0 || height <= 0 || (long)x + width > descriptor.Width || (long)y + height > descriptor.Height)
             {
                 throw new ArgumentOutOfRangeException("x", "Tile bounds must be inside the image.");
             }
@@ -513,9 +513,9 @@ namespace RawBufferVisualizer.Core
 
         internal static int ReadPackedLsb(byte[] buffer, int rowOffset, int x, int bitsPerPixel)
         {
-            var bitOffset = x * bitsPerPixel;
-            var byteOffset = rowOffset + (bitOffset / 8);
-            var shift = bitOffset % 8;
+            var bitOffset = (long)x * bitsPerPixel;
+            var byteOffset = checked((int)(rowOffset + (bitOffset / 8)));
+            var shift = (int)(bitOffset % 8);
             var value = 0;
             var bytesToRead = (shift + bitsPerPixel + 7) / 8;
             for (var i = 0; i < bytesToRead; i++)
@@ -526,9 +526,13 @@ namespace RawBufferVisualizer.Core
             return (value >> shift) & ((1 << bitsPerPixel) - 1);
         }
 
-        private static byte ToByte(double raw, double black, double white)
+        internal static byte ToByte(double raw, double black, double white)
         {
-            var normalized = (raw - black) / (white - black);
+            var range = white - black;
+            // Finite bounds can span more than double.MaxValue; halve before subtracting.
+            var normalized = double.IsPositiveInfinity(range)
+                ? (raw * 0.5 - black * 0.5) / (white * 0.5 - black * 0.5)
+                : (raw - black) / range;
             if (normalized <= 0)
             {
                 return 0;

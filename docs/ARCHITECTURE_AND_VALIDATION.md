@@ -2,6 +2,8 @@
 
 This owner map describes the current source tree. Source changes affecting ownership must update this map; exact test execution belongs in the result for the tested source snapshot.
 
+The cache owner and Inspector focus check below were updated for source 2.2.3.0 on 2026-10-31; installed-IDE qualification remains specific to the tested binary and host.
+
 ## Runtime Routes
 
 Registered variable -> VisualStudio.Debugger result provider routes supported image values/collections -> VisualStudio.Classic transfer entry -> VisualStudio.ObjectSource metadata/chunks or live-memory descriptor -> VisualStudio handoff/session admission -> Vssdk docked ToolWindow -> Core image source and canvas. The Extensibility providers remain registered; the result provider chooses the docked entry for supported images and preserves other visualizers for non-image values.
@@ -18,6 +20,7 @@ Standalone file -> ViewerFiles/ViewerViewModel -> ViewerDocument -> Core source 
 | Registered providers | `VisualStudio.Extensibility/DebuggerVisualizerLaunch.cs` -> `VisualStudio.ObjectSource` | Out-of-process provider hands data to the in-process VSSDK package |
 | Image-only debugger routing | `VisualStudio.Debugger/ImageVisualizerResultProvider.cs` -> `ImageVisualizerTypePolicy.cs` -> `VisualStudio.Classic/RawBufferClassicDebuggerVisualizer.cs` or `ImageCollectionClassicDebuggerVisualizer.cs` | Concord preserves unrelated candidates; Classic owns request publication and never opens a helper dialog; Vssdk owns handoff admission and document lifetime |
 | Transfer validation | `VisualStudio.ObjectSource/VisualizerChunkedTransfer.cs`, `CurrentProcessMemoryReader.cs`; `Core/RawBufferDiagnostics.cs` | Layout validation precedes transfer; native reads must complete fully |
+| ObjectSource view reuse | `VisualStudio.ObjectSource/VisualizerViewCache.cs` and the existing image ObjectSources | Reference identity selects the cached target/view pair; a replacement is published only after its factory succeeds |
 | Session and document admission | `VisualStudio/ClaimedHandoffOpenCoordinator.cs`, `RawBufferDocumentWorkspace.cs` | Own admission and workspace lifetime; delayed work cannot reopen an obsolete session |
 | Automatic scan | `VisualStudio.Vssdk/AutomaticVisionInspector.cs` | Owns bounded discovery/cache behavior; caller coordinates cancellation and debugger state |
 | Mode/status presentation | `VisualStudio.Vssdk/AutomaticInspectionStatusViewModel.cs` | Owns frame/mode/detail/busy/image status; control wires scoped XAML bindings and its lifetime |
@@ -94,6 +97,8 @@ Build once using [development prerequisites](development-prerequisites.md), then
 | `--pixel-measurement` | Two-point coordinate distances, image bounds and measurement command/reset transitions |
 
 Use the group required by the change. With no argument, the runner executes the aggregate suite; CI uses that route. `scripts/SmokeAutomaticScanResponsiveness.ps1 -SkipWindow` exercises scanner scheduling without its desktop window. UI smoke scripts require matching built binaries and host prerequisites; they do not replace interaction with the installed extension.
+
+`scripts/Test-InspectorFocusObservation.ps1 -OutputPath <isolated-results.json>` runs in PowerShell Core and checks the actual Inspector popup-open handler with a task-backed queue double. It covers deferred focus, closed/disposed state, and observed failure/cancellation without creating a window. It does not qualify WPF focus behavior or an installed IDE.
 
 Run `scripts/Test-DockedPreviewOrder.ps1` in Windows PowerShell with `-STA`, supplying `-BuildRoot`, `-VisualStudioRoot` and `-OutputRoot`. It checks preview/full admission, late-preview acknowledgement and cleanup, and independent image identities through the built docked control without launching a desktop window. Use a D-drive output root on this workstation; this component check does not qualify an installed IDE.
 

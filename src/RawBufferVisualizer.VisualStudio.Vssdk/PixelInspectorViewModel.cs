@@ -146,14 +146,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ProfileG = IsColor ? Plot(line, sample => sample.G) : Geometry.Empty;
             ProfileB = IsColor ? Plot(line, sample => sample.B) : Geometry.Empty;
             var levels = options ?? source.CreateRenderOptions();
-            ProfileValue = IsColor ? Geometry.Empty : Plot(line, sample => (sample.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
+            var range = Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel);
+            double ProfileLevel(Sample sample)
+            {
+                var normalized = double.IsPositiveInfinity(range)
+                    ? (sample.Value * 0.5 - levels.BlackLevel * 0.5) / (levels.WhiteLevel * 0.5 - levels.BlackLevel * 0.5)
+                    : (sample.Value - levels.BlackLevel) / range;
+                return normalized * 255;
+            }
+            ProfileValue = IsColor ? Geometry.Empty : Plot(line, ProfileLevel);
             ProfileLowLabel = _isFloat ? Format(levels.BlackLevel, 2) : "0";
-            ProfileMiddleLabel = _isFloat ? Format((levels.BlackLevel + levels.WhiteLevel) / 2, 2) : "128";
+            ProfileMiddleLabel = _isFloat ? Format(levels.BlackLevel * 0.5 + levels.WhiteLevel * 0.5, 2) : "128";
             ProfileHighLabel = _isFloat ? Format(levels.WhiteLevel, 2) : "255";
             ProfileRMarker = IsColor ? Marker(current.R) : Geometry.Empty;
             ProfileGMarker = IsColor ? Marker(current.G) : Geometry.Empty;
             ProfileBMarker = IsColor ? Marker(current.B) : Geometry.Empty;
-            ProfileValueMarker = IsColor ? Geometry.Empty : Marker((current.Value - levels.BlackLevel) * 255 / Math.Max(double.Epsilon, levels.WhiteLevel - levels.BlackLevel));
+            ProfileValueMarker = IsColor ? Geometry.Empty : Marker(ProfileLevel(current));
             ProfileStart = x >= 8 ? (x - 8).ToString(CultureInfo.InvariantCulture) : string.Empty;
             ProfileCenter = x.ToString(CultureInfo.InvariantCulture);
             ProfileEnd = x + 8 < descriptor.Width ? (x + 8).ToString(CultureInfo.InvariantCulture) : string.Empty;

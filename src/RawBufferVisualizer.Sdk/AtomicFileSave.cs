@@ -28,7 +28,11 @@ namespace RawBufferVisualizer.Sdk
             using (var mutex = new Mutex(false, mutexName))
             {
                 var acquired = false;
-                var temporaryPath = Path.Combine(Path.GetDirectoryName(fullPath)!, ".rbv-" + Guid.NewGuid().ToString("N") + ".tmp");
+                // Preserve the full GUID without pushing a valid destination's
+                // temporary sibling past the legacy debugger host's path limit.
+                var temporaryName = Convert.ToBase64String(Guid.NewGuid().ToByteArray())
+                    .TrimEnd('=').Replace('+', '-').Replace('/', '_') + ".tmp";
+                var temporaryPath = Path.Combine(Path.GetDirectoryName(fullPath)!, temporaryName);
                 try
                 {
                     cancellationToken.ThrowIfCancellationRequested();

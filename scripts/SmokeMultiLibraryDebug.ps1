@@ -170,7 +170,8 @@ public static class RawBufferMultiLibraryRot {
                 continue;
             }
 
-            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+            if (string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase)) {
                 object dte;
                 table.GetObject(monikers[0], out dte);
                 return dte;
@@ -583,6 +584,8 @@ function Invoke-MultiLibraryScenario(
             pixelFormatExpression = $null
         }
 
+        if (-not $foundItem) { throw "Expected image candidate was not found: $name" }
+
         if ($foundItem) {
             Select-AutomationItem $foundItem
             Start-Sleep -Milliseconds 500
@@ -597,7 +600,9 @@ function Invoke-MultiLibraryScenario(
             foreach ($key in @("Data", "Width", "Height", "Stride", "PixelFormat")) {
                 $expression = $expected[$key]
                 if (-not [string]::IsNullOrWhiteSpace($expression)) {
-                    $result[(($key.Substring(0, 1).ToLower()) + $key.Substring(1) + "Expression")] = $itemText.Contains($expression)
+                    $matchesExpression = $itemText.Contains($expression)
+                    $result[(($key.Substring(0, 1).ToLower()) + $key.Substring(1) + "Expression")] = $matchesExpression
+                    if (-not $matchesExpression) { throw "Candidate $name does not expose the expected $key mapping: $expression" }
                 }
             }
         }

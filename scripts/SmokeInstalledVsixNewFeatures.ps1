@@ -7,8 +7,8 @@ param(
     [string]$VisualStudioInstanceId = "",
     [string]$OutputRoot = "",
     [string]$TestBuildRoot = "",
-    [ValidatePattern('^\d+\.\d+\.\d+$')]
-    [string]$ExpectedReleaseVersion = "2.0.0",
+    [ValidatePattern('^(?:\d+\.\d+\.\d+)?$')]
+    [string]$ExpectedReleaseVersion = "",
     [switch]$NoBuild,
     [switch]$NoInstall,
     [switch]$KeepVisualStudio,
@@ -24,6 +24,27 @@ $ErrorActionPreference = "Stop"
 
 $repoRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot "..")).Path
 Set-Location $repoRoot
+
+if ([string]::IsNullOrWhiteSpace($ExpectedReleaseVersion)) {
+    [xml]$sourceManifest = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'src\RawBufferVisualizer.VisualStudio.Vssdk\source.extension.vsixmanifest')
+    $sourceVersion = [version]$sourceManifest.PackageManifest.Metadata.Identity.Version
+    $ExpectedReleaseVersion = '{0}.{1}.{2}' -f $sourceVersion.Major, $sourceVersion.Minor, $sourceVersion.Build
+}
+
+function Restore-IsolatedPreference {
+    param([string]$Path, [string]$BackupPath, [bool]$Existed)
+    if ($Existed) {
+        if (-not (Test-Path -LiteralPath $BackupPath -PathType Leaf)) {
+            throw "Required preference backup is missing; preserving current file: $Path"
+        }
+        New-Item -ItemType Directory -Path (Split-Path -Parent $Path) -Force | Out-Null
+        Copy-Item -LiteralPath $BackupPath -Destination $Path -Force
+        Remove-Item -LiteralPath $BackupPath -Force
+    }
+    elseif (Test-Path -LiteralPath $Path) {
+        Remove-Item -LiteralPath $Path -Force
+    }
+}
 
 $defaultOutputRoot = Join-Path $repoRoot "artifacts\ui\installed-vsix-new-features"
 if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
@@ -227,8 +248,8 @@ public static class RawBufferInstalledVsixRot {
                 continue;
             }
 
-            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0 ||
-                displayName.IndexOf("VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+            if (string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase)) {
                 object dte;
                 table.GetObject(monikers[0], out dte);
                 return dte;
@@ -4361,11 +4382,11 @@ $scenarioArgument = switch ($Scenario) {
 
 try {
     if ($Scenario -eq "SmartTypeMapper") {
-        $userMappingIsolated = $true
         $userMappingExisted = Test-Path -LiteralPath $userMappingPath
         if ($userMappingExisted) {
             Copy-Item -LiteralPath $userMappingPath -Destination $userMappingBackupPath -Force
         }
+        $userMappingIsolated = $true
         Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
     }
     if ($Scenario -eq "MultiLibraryHybrid" -or
@@ -4377,11 +4398,11 @@ try {
         $Scenario -eq "IndustrialDataTip" -or
         $Scenario -eq "Int32Industrial" -or
         $Scenario -eq "Int32IndustrialAutomatic") {
-        $automaticPreferenceIsolated = $true
         $automaticPreferenceExisted = Test-Path -LiteralPath $automaticPreferencePath
         if ($automaticPreferenceExisted) {
             Copy-Item -LiteralPath $automaticPreferencePath -Destination $automaticPreferenceBackupPath -Force
         }
+        $automaticPreferenceIsolated = $true
 
         $automaticPreferenceDirectory = Split-Path -Parent $automaticPreferencePath
         New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
@@ -4401,11 +4422,11 @@ try {
             (New-Object Text.UTF8Encoding($false)))
     }
     if ($Scenario -eq "ReleaseAnnouncement" -or $Scenario -eq "DockRetention") {
-        $releaseAnnouncementPreferenceIsolated = $true
         $releaseAnnouncementPreferenceExisted = Test-Path -LiteralPath $releaseAnnouncementPreferencePath
         if ($releaseAnnouncementPreferenceExisted) {
             Copy-Item -LiteralPath $releaseAnnouncementPreferencePath -Destination $releaseAnnouncementPreferenceBackupPath -Force
         }
+        $releaseAnnouncementPreferenceIsolated = $true
         Remove-Item -LiteralPath $releaseAnnouncementPreferencePath -Force -ErrorAction SilentlyContinue
     }
 
@@ -4650,37 +4671,16 @@ finally {
     }
 
     if ($userMappingIsolated) {
-        if ($userMappingExisted -and (Test-Path -LiteralPath $userMappingBackupPath)) {
-            $mappingDirectory = Split-Path -Parent $userMappingPath
-            New-Item -ItemType Directory -Path $mappingDirectory -Force | Out-Null
-            Copy-Item -LiteralPath $userMappingBackupPath -Destination $userMappingPath -Force
-            Remove-Item -LiteralPath $userMappingBackupPath -Force
-        }
-        else {
-            Remove-Item -LiteralPath $userMappingPath -Force -ErrorAction SilentlyContinue
-        }
+        try { Restore-IsolatedPreference $userMappingPath $userMappingBackupPath $userMappingExisted }
+        catch { $completed = $false; Write-Warning $_ }
     }
     if ($automaticPreferenceIsolated) {
-        if ($automaticPreferenceExisted -and (Test-Path -LiteralPath $automaticPreferenceBackupPath)) {
-            $automaticPreferenceDirectory = Split-Path -Parent $automaticPreferencePath
-            New-Item -ItemType Directory -Path $automaticPreferenceDirectory -Force | Out-Null
-            Copy-Item -LiteralPath $automaticPreferenceBackupPath -Destination $automaticPreferencePath -Force
-            Remove-Item -LiteralPath $automaticPreferenceBackupPath -Force
-        }
-        else {
-            Remove-Item -LiteralPath $automaticPreferencePath -Force -ErrorAction SilentlyContinue
-        }
+        try { Restore-IsolatedPreference $automaticPreferencePath $automaticPreferenceBackupPath $automaticPreferenceExisted }
+        catch { $completed = $false; Write-Warning $_ }
     }
     if ($releaseAnnouncementPreferenceIsolated) {
-        if ($releaseAnnouncementPreferenceExisted -and (Test-Path -LiteralPath $releaseAnnouncementPreferenceBackupPath)) {
-            $releaseAnnouncementPreferenceDirectory = Split-Path -Parent $releaseAnnouncementPreferencePath
-            New-Item -ItemType Directory -Path $releaseAnnouncementPreferenceDirectory -Force | Out-Null
-            Copy-Item -LiteralPath $releaseAnnouncementPreferenceBackupPath -Destination $releaseAnnouncementPreferencePath -Force
-            Remove-Item -LiteralPath $releaseAnnouncementPreferenceBackupPath -Force
-        }
-        else {
-            Remove-Item -LiteralPath $releaseAnnouncementPreferencePath -Force -ErrorAction SilentlyContinue
-        }
+        try { Restore-IsolatedPreference $releaseAnnouncementPreferencePath $releaseAnnouncementPreferenceBackupPath $releaseAnnouncementPreferenceExisted }
+        catch { $completed = $false; Write-Warning $_ }
     }
 }
 

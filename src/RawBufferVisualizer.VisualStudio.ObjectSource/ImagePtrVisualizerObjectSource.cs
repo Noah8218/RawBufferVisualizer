@@ -9,8 +9,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class ImagePtrVisualizerObjectSource : VisualizerObjectSource
     {
-        private object? _cachedTarget;
-        private ImagePtrView? _cachedView;
+        private readonly VisualizerViewCache<ImagePtrView> _viewCache =
+            new VisualizerViewCache<ImagePtrView>(target => ImagePtrVisualizerTransfer.CreateView(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
@@ -40,13 +40,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private ImagePtrView GetView(object target)
         {
-            if (!ReferenceEquals(target, _cachedTarget))
-            {
-                _cachedTarget = target;
-                _cachedView = ImagePtrVisualizerTransfer.CreateView(target);
-            }
-
-            return _cachedView ?? throw new InvalidOperationException("ImagePtr view was not created.");
+            return _viewCache.GetOrCreate(target);
         }
     }
 

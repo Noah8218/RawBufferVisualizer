@@ -138,9 +138,10 @@ namespace RawBufferVisualizer.VisualStudio
         {
             try
             {
+                foreach (var pattern in new[] { ".rbuf-active-*.lease", "??????????????????????.rbl" })
                 foreach (var leasePath in Directory.EnumerateFiles(
                     directory,
-                    ".rbuf-active-*.lease",
+                    pattern,
                     SearchOption.TopDirectoryOnly))
                 {
                     try

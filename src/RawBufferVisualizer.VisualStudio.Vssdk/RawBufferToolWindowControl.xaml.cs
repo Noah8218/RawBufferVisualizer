@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -108,6 +108,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private string _lastFramebufferCapturePath = string.Empty;
         private string _lastFramebufferCaptureError = string.Empty;
         private CancellationTokenSource? _diagnosisCancellation;
+        private bool _runningDiagnosisIsLive;
         private BufferDiagnosisViewModel<BufferDiagnosisCandidateItem>? _diagnosisModel;
         private BufferDiagnosisViewModel<BufferDiagnosisCandidateItem>? _runningDiagnosisModel;
         private readonly List<string> _recentExpressions = new List<string>();
@@ -570,6 +571,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ThreadHelper.ThrowIfNotOnUIThread();
             _snapshotExport.CancelLiveExport();
             _histogram.OnDebuggerResumed();
+            if (_runningDiagnosisIsLive) CancelDiagnosisWork(true);
             CancelAutomaticInspectionWork(true);
             SetAutomaticScanBusy(false, string.Empty);
             _inspectionStatus.SetMode(InspectionDebuggerMode.Running);
@@ -1052,20 +1054,32 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             AutomaticBatchSummaryText.Inlines.Add(new System.Windows.Documents.Run(summary.Substring(offset)));
         }
 
-        private void SetAutomaticScanStatus(string text, string? alert = null)
+        private void SetAutomaticScanStatus(string text, string? alert = null, bool clearOnImageUpdate = false)
         {
-            _inspectionStatus.SetDetails(text, alert);
+            _inspectionStatus.SetDetails(text, alert, clearOnImageUpdate);
         }
 
         private void AutomaticHelp_Click(object sender, RoutedEventArgs e)
         {
+            AutomaticHelpButton.Focus();
             AutomaticHelpTip.PlacementTarget = AutomaticInspectionActions;
             AutomaticHelpTip.IsOpen = !AutomaticHelpTip.IsOpen;
         }
 
+        private void AutomaticHelp_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            AutomaticHelpTip.IsOpen = false;
+        }
+
+        private void Root_PreviewMouseDown(object sender, MouseButtonEventArgs e)
+        {
+            if (AutomaticHelpTip.IsOpen && !AutomaticHelpButton.IsMouseOver)
+                AutomaticHelpTip.IsOpen = false;
+        }
+
         private void AutomaticHelp_PreviewKeyDown(object sender, KeyEventArgs e)
         {
-            if (e.Key == Key.Escape) { AutomaticHelpTip.IsOpen = false; e.Handled = true; }
+            if (AutomaticHelpTip.IsOpen && e.Key == Key.Escape) { AutomaticHelpTip.IsOpen = false; e.Handled = true; }
         }
 
         private void ScanNow_Click(object sender, RoutedEventArgs e)
@@ -1320,7 +1334,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
-                OpenClaimedHandoffRequest(requestPath, processingPath);
+                InvokeHandoffOnUiThread(() =>
+                {
+                    ThreadHelper.ThrowIfNotOnUIThread();
+                    return OpenClaimedHandoffRequest(requestPath, processingPath);
+                });
             }
             finally
             {
@@ -1332,7 +1350,46 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public bool OpenClaimedHandoffRequest(
             string requestPath,
-            string processingPath)
+            string processingPath,
+            Func<VisualizerHandoffRequest, bool>? isCurrentRequest = null)
+        {
+            return InvokeHandoffOnUiThread(() =>
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                try
+                {
+                    SetTransientStatus("Loading handoff...");
+                    var outcome = _handoffCoordinator.Open(
+                        requestPath,
+                        processingPath,
+                        request =>
+                        {
+                            ThreadHelper.ThrowIfNotOnUIThread();
+                            return OpenClaimedHandoff(request, isCurrentRequest);
+                        });
+                    if (!outcome.Succeeded && outcome.Exception != null)
+                    {
+                        var ex = outcome.Exception;
+                        if (ex is OperationCanceledException) return false;
+                        AddErrorDocument(
+                            requestPath,
+                            "Debugger handoff",
+                            ex.GetType().FullName ?? ex.GetType().Name,
+                            ex.Message,
+                            ex.ToString());
+                        WriteAutomationProbeFailureIfRequested(requestPath, ex);
+                    }
+
+                    return outcome.Succeeded;
+                }
+                finally
+                {
+                    UpdateTempUsageStatus();
+                }
+            });
+        }
+
+        private bool InvokeHandoffOnUiThread(Func<bool> openOnUiThread)
         {
             if (!Dispatcher.CheckAccess())
             {
@@ -1340,46 +1397,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 // VSTHRD001: Dispatcher.Invoke is intentional here. This WPF control is also
                 // hosted outside Visual Studio (layout smoke host), where JoinableTaskFactory
                 // and Shell assemblies are unavailable, so the vs-threading JTF pattern cannot
-                // be used. Callers hold no locks and the UI thread never waits on these
-                // background handoff threads, so the synchronous marshal cannot deadlock.
-                return Dispatcher.Invoke(() => OpenClaimedHandoffRequest(
-                    requestPath,
-                    processingPath));
+                // be used. Callers must hold no locks while waiting, and the owner
+                // dispatcher must keep pumping until the handoff returns.
+                return Dispatcher.Invoke(openOnUiThread);
 #pragma warning restore VSTHRD001
             }
 
-            try
-            {
-                SetTransientStatus("Loading handoff...");
-                var outcome = _handoffCoordinator.Open(
-                    requestPath,
-                    processingPath,
-                    OpenClaimedHandoff);
-                if (!outcome.Succeeded && outcome.Exception != null)
-                {
-                    var ex = outcome.Exception;
-                    AddErrorDocument(
-                        requestPath,
-                        "Debugger handoff",
-                        ex.GetType().FullName ?? ex.GetType().Name,
-                        ex.Message,
-                        ex.ToString());
-                    WriteAutomationProbeFailureIfRequested(requestPath, ex);
-                }
-
-                return outcome.Succeeded;
-            }
-            finally
-            {
-                UpdateTempUsageStatus();
-            }
+            return openOnUiThread();
         }
 
         private ClaimedHandoffOpenResult OpenClaimedHandoff(
-            VisualizerHandoffRequest request)
+            VisualizerHandoffRequest request,
+            Func<VisualizerHandoffRequest, bool>? isCurrentRequest)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            var resolvedDisplayName = DebuggerExpressionDisplayNameResolver.Resolve(_dte, request);
+            Func<bool>? isCurrent = isCurrentRequest == null ? null : () => isCurrentRequest(request);
+            if (isCurrent != null && !isCurrent()) throw new OperationCanceledException("The debugger continued before this handoff could be opened.");
+            RawBufferVisualizerPackageLog.Write("Handoff naming start");
+            var resolvedDisplayName = DebuggerExpressionDisplayNameResolver.Resolve(_dte, request, isCurrent);
+            RawBufferVisualizerPackageLog.Write("Handoff naming end");
+            if (isCurrent != null && !isCurrent()) throw new OperationCanceledException("The debugger continued before this handoff could be opened.");
             if (request.IsError)
             {
                 var displayName = string.IsNullOrWhiteSpace(resolvedDisplayName)
@@ -1406,6 +1443,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var documentCountBeforeOpen = _documents.Count;
+            RawBufferVisualizerPackageLog.Write("Handoff snapshot open start");
             OpenPath(
                 request.MetadataPath,
                 resolvedDisplayName,
@@ -1416,6 +1454,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 request.DebuggeeBufferAddress,
                 request.SourcePointerAddress,
                 request.SourcePointerLabel);
+            RawBufferVisualizerPackageLog.Write("Handoff snapshot open end");
             ImageDocument? openedDocument;
             if (!string.IsNullOrWhiteSpace(request.HandoffId))
             {
@@ -1639,7 +1678,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _compareB = null;
             _blinkTimer.Stop();
             ClearDocumentPresentation();
-            SetAutomaticScanStatus("All loaded images were cleared. Scan Now remains available in Break Mode.");
+            SetAutomaticScanStatus("All loaded images were cleared. Scan Now remains available in Break Mode.", clearOnImageUpdate: true);
             UpdateTempUsageStatus();
         }
 
@@ -1697,31 +1736,36 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void SaveVisiblePng_Click(object sender, RoutedEventArgs e)
         {
+            SaveVisiblePng();
+        }
+
+        private enum ImageSaveOutcome { NotStarted, Cancelled, Saved, Failed }
+
+        private ImageSaveOutcome SaveVisiblePng()
+        {
             if (!CanSaveActiveImage("Save PNG"))
             {
-                return;
-            }
-
-            var dialog = new SaveFileDialog
-            {
-                Filter = "PNG Image (*.png)|*.png",
-                FileName = GetDefaultExportName("-view.png")
-            };
-
-            if (dialog.ShowDialog() != true)
-            {
-                return;
+                return ImageSaveOutcome.NotStarted;
             }
 
             try
             {
+                var dialog = new SaveFileDialog
+                {
+                    Filter = "PNG Image (*.png)|*.png",
+                    FileName = GetDefaultExportName("-view.png")
+                };
+                if (dialog.ShowDialog() != true) return ImageSaveOutcome.Cancelled;
+                if (_disposed) return ImageSaveOutcome.NotStarted;
                 OpenGlImageView.SaveFramebufferPng(dialog.FileName);
                 DiagnosticsList.Items.Add("Info: saved visible PNG to " + dialog.FileName);
+                return ImageSaveOutcome.Saved;
             }
             catch (Exception ex)
             {
                 DiagnosticsList.Items.Add("Error: PNG export failed. " + ex.Message);
                 MessageBox.Show(ex.Message, "Save PNG failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                return ImageSaveOutcome.Failed;
             }
         }
 
@@ -1733,23 +1777,58 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             e.Handled = true;
         }
 
-        private void ImageCardAction_Requested(ImageDocument document, ImageCardAction action)
+        // Event boundary: await RAW export so only cancellation restores the prior view.
+#pragma warning disable VSTHRD100
+        private async void ImageCardAction_Requested(ImageDocument document, ImageCardAction action)
         {
             if (_disposed || !_documents.Contains(document)) return;
+            if (action == ImageCardAction.SaveVisiblePng || action == ImageCardAction.SaveSnapshot)
+            {
+                try
+                {
+                    var previousDocument = _activeDocument;
+                    var previousView = previousDocument == null ? null : OpenGlImageView.GetViewState();
+                    var previousLinkedView = _linkedViewState;
+                    // Preserve the existing rendering lead time before the PNG picker.
+                    ActivateDocument(document);
+                    var outcome = action == ImageCardAction.SaveVisiblePng
+                        ? SaveVisiblePng()
+                        : await SaveSnapshotAsync();
+                    if (outcome == ImageSaveOutcome.Cancelled)
+                        RestoreCancelledCardSave(document, previousDocument, previousView, previousLinkedView);
+                }
+                catch (Exception ex)
+                {
+                    if (!_disposed)
+                    {
+                        var title = action == ImageCardAction.SaveVisiblePng ? "Save PNG failed" : "Save Snapshot failed";
+                        DiagnosticsList.Items.Add("Error: " + title + ". " + ex.Message);
+                        MessageBox.Show(ex.Message, title, MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
+                return;
+            }
             switch (action)
             {
-                case ImageCardAction.SaveVisiblePng:
-                    ActivateDocument(document);
-                    SaveVisiblePng_Click(document, new RoutedEventArgs());
-                    break;
-                case ImageCardAction.SaveSnapshot:
-                    ActivateDocument(document);
-                    SaveSnapshot_Click(document, new RoutedEventArgs());
-                    break;
                 case ImageCardAction.CopyPointer: CopyPointerAddress_Click(document, new RoutedEventArgs()); break;
                 case ImageCardAction.CopyPixels: CopyDataAddress_Click(document, new RoutedEventArgs()); break;
                 case ImageCardAction.Remove: RemoveDocument(document); break;
             }
+        }
+#pragma warning restore VSTHRD100
+
+        private void RestoreCancelledCardSave(ImageDocument target, ImageDocument? previousDocument,
+            RawOpenGlViewState? previousView, RawOpenGlViewState? previousLinkedView)
+        {
+            if (_disposed || previousDocument == null || !_documents.Contains(previousDocument)
+                || !ReferenceEquals(_activeDocument, target)) return;
+            previousDocument.ViewState = previousView;
+            _linkedViewState = previousLinkedView;
+            ActivateDocument(previousDocument);
+            if (!previousDocument.IsError && !previousDocument.IsSourceUnavailable)
+                ApplyRestoredView(previousView);
+            _linkedViewState = previousLinkedView;
+            UpdateZoomStatus();
         }
 
         private void ImageListContextMenu_Opening(object sender, RoutedEventArgs e)
@@ -2061,6 +2140,19 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string? handoffId = null)
         {
             error = string.Empty;
+            var scanGeneration = _automaticScanSessionGate.Capture();
+            var selectedThread = debugger.CurrentThread;
+            var selectedThreadId = selectedThread == null ? 0U : unchecked((uint)selectedThread.ID);
+            bool IsCurrentContext() => !_disposed && selectedThreadId != 0
+                && _automaticScanSessionGate.IsCurrent(scanGeneration)
+                && debugger.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode
+                && debugger.CurrentThread != null && unchecked((uint)debugger.CurrentThread.ID) == selectedThreadId
+                && string.Equals(debugger.CurrentStackFrame?.FunctionName, frameFunctionName, StringComparison.Ordinal);
+            if (!IsCurrentContext())
+            {
+                error = "The selected debugger context changed before the managed array could be read.";
+                return false;
+            }
             var members = mapping.Members;
             if (members == null || string.IsNullOrWhiteSpace(members.Data))
             {
@@ -2128,14 +2220,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             byte[] buffer;
             var firstElementExpression = "(" + baseExpression + "." + members.Data + ")[0]";
-            if (!VisualStudioDebugFrameContext.TryReadArrayBytes(
+            var nativeReadSucceeded = VisualStudioDebugFrameContext.TryReadArrayBytes(
                 frameFunctionName,
                 baseExpression + "." + members.Data,
                 firstElementExpression,
                 dataTypeName,
                 checked((int)requiredByteCount),
                 out buffer,
-                out error))
+                out error,
+                selectedThreadId,
+                IsCurrentContext);
+            if (!IsCurrentContext())
+            {
+                error = "The selected debugger context changed while the managed array was being read.";
+                return false;
+            }
+            if (!nativeReadSucceeded)
             {
                 var nativeReadError = error;
                 if (!TryCopyManagedArrayFromDebugger(
@@ -2150,6 +2250,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
             }
 
+            if (!IsCurrentContext())
+            {
+                error = "The selected debugger context changed before the managed array could be opened.";
+                return false;
+            }
             try
             {
                 OpenManagedArrayBuffer(
@@ -2397,9 +2502,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
 
                 var rawValue = (formatExpression.Value ?? string.Empty).Trim();
-                var normalized = rawValue.Contains(".")
-                    ? rawValue.Substring(rawValue.LastIndexOf('.') + 1)
-                    : rawValue;
+                var formatValue = rawValue;
+                if (formatValue.Length >= 2 && formatValue[0] == '"'
+                    && formatValue[formatValue.Length - 1] == '"')
+                {
+                    formatValue = formatValue.Substring(1, formatValue.Length - 2);
+                }
+                var normalized = formatValue.Contains(".")
+                    ? formatValue.Substring(formatValue.LastIndexOf('.') + 1)
+                    : formatValue;
                 var formatName = normalized;
                 string? mappedName;
                 if (mapping.PixelFormatMap != null
@@ -2959,7 +3070,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 #pragma warning disable VSTHRD100
         private async void SaveSnapshot_Click(object sender, RoutedEventArgs e)
         {
-            if (_disposed || _savingSnapshot || !CanSaveActiveImage("Save Snapshot") || !_activeDocument!.Source.CanExportRaw) return;
+            try { await SaveSnapshotAsync(); }
+            catch (Exception ex)
+            {
+                if (!_disposed)
+                {
+                    DiagnosticsList.Items.Add("Error: snapshot export failed. " + ex.Message);
+                    MessageBox.Show(ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+            }
+        }
+#pragma warning restore VSTHRD100
+
+        private async Task<ImageSaveOutcome> SaveSnapshotAsync()
+        {
+            if (_disposed || _savingSnapshot || !CanSaveActiveImage("Save Snapshot") || !_activeDocument!.Source.CanExportRaw)
+                return ImageSaveOutcome.NotStarted;
             _savingSnapshot = true;
             var document = _activeDocument!;
             var owner = Window.GetWindow(this);
@@ -2975,11 +3101,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     Filter = "Raw Buffer Metadata (*.rbuf.json)|*.rbuf.json",
                     FileName = GetDefaultExportName(".rbuf.json")
                 };
-                if ((owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) != true || _disposed) return;
+                if ((owner == null ? dialog.ShowDialog() : dialog.ShowDialog(owner)) != true)
+                    return ImageSaveOutcome.Cancelled;
+                if (_disposed) return ImageSaveOutcome.NotStarted;
                 var model = new SnapshotExportViewModel(_snapshotExport, dialog.FileName, source, descriptor);
                 var result = await SnapshotExportDialog.ShowAsync(owner, model);
                 if (!_disposed)
                     DiagnosticsList.Items.Add(result != null ? "Info: saved raw snapshot to " + result.MetadataPath : model.Status);
+                return result != null ? ImageSaveOutcome.Saved
+                    : model.Error == null ? ImageSaveOutcome.Cancelled : ImageSaveOutcome.Failed;
             }
             catch (Exception ex)
             {
@@ -2988,20 +3118,22 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     DiagnosticsList.Items.Add("Error: snapshot export failed. " + ex.Message);
                     if (owner != null) MessageBox.Show(owner, ex.Message, "Save Snapshot failed", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
+                return ImageSaveOutcome.Failed;
             }
             finally
             {
-                if (exportLease != null)
+                try
                 {
-                    var directory = exportLease.DirectoryPath;
-                    exportLease.Dispose();
-                    VisualStudioTempStore.TryDeleteDirectory(directory);
+                    if (exportLease != null)
+                    {
+                        var directory = exportLease.DirectoryPath;
+                        exportLease.Dispose();
+                        VisualStudioTempStore.TryDeleteDirectory(directory);
+                    }
                 }
-                _savingSnapshot = false;
+                finally { _savingSnapshot = false; }
             }
         }
-
-#pragma warning restore VSTHRD100
 
         private bool CanSaveActiveImage(string title)
         {
@@ -3590,31 +3722,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private static string GetLatestActivityLogPath()
         {
-            try
-            {
-                var root = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                    "Microsoft",
-                    "VisualStudio");
-                if (Directory.Exists(root))
-                {
-                    var latest = Directory.GetDirectories(root, "17.0_*")
-                        .Select(directory => Path.Combine(directory, "ActivityLog.xml"))
-                        .Where(File.Exists)
-                        .OrderByDescending(File.GetLastWriteTimeUtc)
-                        .FirstOrDefault();
-                    if (!string.IsNullOrWhiteSpace(latest))
-                    {
-                        return latest!;
-                    }
-                }
-
-                return Path.Combine(root, "17.0_*", "ActivityLog.xml");
-            }
-            catch
-            {
-                return "%APPDATA%\\Microsoft\\VisualStudio\\17.0_*\\ActivityLog.xml";
-            }
+            return VisualizerSupportReport.FindLatestActivityLogPath(
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Microsoft", "VisualStudio"),
+                GetVisualStudioVersion());
         }
 
         private void UpdateHistogramSource()
@@ -3754,6 +3864,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ClearDocumentPresentation();
             }
 
+            UpdateCommandState();
             UpdateTempUsageStatus();
         }
 
@@ -3856,10 +3967,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var available = Math.Max(0, ImageInfoBar.ActualWidth - 20);
                 var widths = new double[chips.Length];
                 var infinite = new Size(double.PositiveInfinity, double.PositiveInfinity);
-                var hasImage = ImageInfoBar.DataContext != null;
+                var document = ImageInfoBar.DataContext as ImageDocument;
+                var hasImage = document != null;
+                var hasDescriptor = hasImage && !document!.IsError;
                 for (var i = 0; i < chips.Length; i++)
                 {
-                    chips[i].Visibility = hasImage ? Visibility.Visible : Visibility.Collapsed;
+                    chips[i].Visibility = (i == 3 ? hasImage : hasDescriptor) ? Visibility.Visible : Visibility.Collapsed;
                     chips[i].Measure(infinite);
                     widths[i] = chips[i].DesiredSize.Width - chips[i].Margin.Left;
                 }
@@ -4025,10 +4138,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var sourceIdentity = document.DeclaredDescriptor;
             CancelDiagnosisWork(false);
             var cancellation = new CancellationTokenSource();
+            var cancellationToken = cancellation.Token;
             _diagnosisCancellation = cancellation;
             _runningDiagnosisModel = model;
 
             var source = document.Source;
+            _runningDiagnosisIsLive = source.IsLiveProcessBacked;
 #pragma warning disable VSTHRD110
             // VSTHRD110: the ContinueWith continuation observes every completion state
             // (RanToCompletion/Canceled/Faulted) on the UI thread scheduler, so no
@@ -4037,17 +4152,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             Task.Run(
                 delegate
                 {
-                    var diagnosed = BufferDoctor.Diagnose(source, cancellation.Token);
+                    var diagnosed = BufferDoctor.Diagnose(source, cancellationToken);
                     var rows = new List<BufferDiagnosisCandidateItem>(diagnosed.Candidates.Count);
                     for (var i = 0; i < diagnosed.Candidates.Count; i++)
                     {
-                        cancellation.Token.ThrowIfCancellationRequested();
-                        rows.Add(new BufferDiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i]), i == 0, true));
+                        cancellationToken.ThrowIfCancellationRequested();
+                        rows.Add(new BufferDiagnosisCandidateItem(diagnosed.Candidates[i], CreateCandidateThumbnail(source, diagnosed.Candidates[i], cancellationToken), i == 0, true));
                     }
 
                     return new KeyValuePair<BufferDiagnosisResult, List<BufferDiagnosisCandidateItem>>(diagnosed, rows);
                 },
-                cancellation.Token).ContinueWith(
+                cancellationToken).ContinueWith(
                 task => CompleteDiagnosis(task, document, sourceIdentity, cancellation),
                 CancellationToken.None,
                 TaskContinuationOptions.None,
@@ -4061,37 +4176,49 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             RawImageDescriptor sourceIdentity,
             CancellationTokenSource cancellation)
         {
-            var failure = task.IsFaulted ? task.Exception?.GetBaseException() : null;
-            if (task.IsCanceled || cancellation.IsCancellationRequested || !ReferenceEquals(_activeDocument, document) || !document.Diagnosis.IsForSource(sourceIdentity))
+            try
             {
-                return;
-            }
+                var failure = task.IsFaulted ? task.Exception?.GetBaseException() : null;
+                if (_disposed || task.IsCanceled || cancellation.IsCancellationRequested
+                    || !ReferenceEquals(_diagnosisCancellation, cancellation)
+                    || !ReferenceEquals(_activeDocument, document) || !document.Diagnosis.IsForSource(sourceIdentity))
+                {
+                    return;
+                }
 
-            if (task.IsFaulted)
-            {
-                if (ReferenceEquals(_diagnosisCancellation, cancellation)) { _diagnosisCancellation = null; _runningDiagnosisModel = null; cancellation.Dispose(); }
-                document.Diagnosis.Fail(failure == null ? "unknown error." : failure.Message);
-                return;
-            }
+                if (task.IsFaulted)
+                {
+                    document.Diagnosis.Fail(failure == null ? "unknown error." : failure.Message);
+                    return;
+                }
 
 #pragma warning disable VSTHRD002
             // VSTHRD002: this continuation only runs after the task completed, so
             // reading task.Result cannot block the UI thread.
-            var result = task.Result.Key;
-            var items = task.Result.Value;
+                var result = task.Result.Key;
+                var items = task.Result.Value;
 #pragma warning restore VSTHRD002
-            var errorNotes = 0;
-            for (var i = 0; i < result.Notes.Count; i++)
-            {
-                if (result.Notes[i].Severity == RawDiagnosticSeverity.Error)
+                var errorNotes = 0;
+                for (var i = 0; i < result.Notes.Count; i++)
                 {
-                    errorNotes++;
+                    if (result.Notes[i].Severity == RawDiagnosticSeverity.Error)
+                    {
+                        errorNotes++;
+                    }
                 }
-            }
 
-            document.Diagnosis.Complete(items, errorNotes);
-            _runningDiagnosisModel = null;
-            if (ReferenceEquals(_diagnosisCancellation, cancellation)) { _diagnosisCancellation = null; cancellation.Dispose(); }
+                document.Diagnosis.Complete(items, errorNotes);
+            }
+            finally
+            {
+                if (ReferenceEquals(_diagnosisCancellation, cancellation))
+                {
+                    _diagnosisCancellation = null;
+                    _runningDiagnosisModel = null;
+                    _runningDiagnosisIsLive = false;
+                }
+                cancellation.Dispose();
+            }
         }
 
         private void BindDiagnosis(ImageDocument? document)
@@ -4154,21 +4281,30 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (_diagnosisCancellation != null)
             {
                 _diagnosisCancellation.Cancel();
-                _diagnosisCancellation.Dispose();
                 _diagnosisCancellation = null;
             }
             if (resetPresentation) _runningDiagnosisModel?.Cancelled();
             _runningDiagnosisModel = null;
+            _runningDiagnosisIsLive = false;
         }
 
-        private static BitmapSource? CreateCandidateThumbnail(RawImageSource source, BufferInterpretationCandidate candidate)
+        private static BitmapSource? CreateCandidateThumbnail(RawImageSource source, BufferInterpretationCandidate candidate, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             try
             {
                 using (var interpreted = source.WithDescriptor(candidate.Descriptor))
+                using (cancellationToken.Register(interpreted.Dispose))
                 {
-                    return CreateThumbnailSource(interpreted, candidate.Descriptor);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var thumbnail = CreateThumbnailSource(interpreted, candidate.Descriptor, cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return thumbnail;
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch
             {
@@ -4361,6 +4497,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ShowSourceUnavailableState(string message)
         {
+            CancelDiagnosisWork(true);
             _histogram.SetSource(null, unavailableReason: message);
             var recovery = _activeDocument?.Source.IsLiveProcessBacked == true
                 ? "Warning: live debugger memory is unavailable. The viewer stopped reading this source; pause at a valid breakpoint and open the visualizer again. "
@@ -4511,6 +4648,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             if (ZoomText == null || ZoomSlider == null || OpenGlImageView == null)
             {
+                return;
+            }
+
+            if (_activeDocument == null || _activeDocument.IsError || _activeDocument.IsSourceUnavailable)
+            {
+                _lastZoomStatus = double.NaN;
+                ZoomText.Text = "—";
                 return;
             }
 
@@ -5104,6 +5248,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             if (descriptor.PixelFormat == RawPixelFormat.Float32)
             {
+                if (double.IsNaN(value) || double.IsInfinity(value) || value <= 0) return 0;
+                if (value >= 1) return 255;
                 return ToByte((int)Math.Round(value * 255.0));
             }
 
@@ -5153,6 +5299,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void Root_PreviewKeyDown(object sender, KeyEventArgs e)
         {
+            if (AutomaticHelpTip.IsOpen && e.Key == Key.Escape)
+            {
+                AutomaticHelpTip.IsOpen = false;
+                e.Handled = true;
+                return;
+            }
+            if (InspectorOverlayPopup.IsOpen && e.Key == Key.Escape)
+            {
+                InspectorOverlay_PreviewKeyDown(sender, e);
+                if (e.Handled) return;
+            }
             if (Keyboard.Modifiers != ModifierKeys.None || Keyboard.FocusedElement is System.Windows.Controls.Primitives.TextBoxBase || Keyboard.FocusedElement is ComboBox) return;
             if (e.Key == Key.M && _measurement.CanMeasure) MeasureButton.IsChecked = !_measurement.IsEnabled;
             else if (e.Key == Key.F && FitButton.IsEnabled) Fit_Click(sender, e);
@@ -5160,6 +5317,48 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             else if (e.Key == Key.Escape && IsInspectorPinned) ClearMarker_Click(sender, e);
             else return;
             e.Handled = true;
+        }
+
+        private void InspectorOverlay_Opened(object sender, EventArgs e)
+        {
+            try
+            {
+                var operation = Dispatcher.InvokeAsync(() =>
+                {
+                    if (_disposed || !InspectorOverlayPopup.IsOpen) return;
+                    var focused = CollapseInspectorButton.Focus();
+                    RawBufferVisualizerPackageLog.Write("Inspector overlay initial focus=" + focused);
+                }, DispatcherPriority.Input);
+
+                // Observe completion off the UI context so dispatcher shutdown cannot strand
+                // fault reporting. The completion callback only uses the existing safe logger.
+                operation.Task.ConfigureAwait(false).GetAwaiter().OnCompleted(() =>
+                {
+                    if (operation.Task.IsCanceled)
+                        RawBufferVisualizerPackageLog.Write("Inspector overlay initial focus canceled before execution.");
+                    else if (operation.Task.Exception is Exception failure)
+                        RawBufferVisualizerPackageLog.Write("Inspector overlay initial focus failed: " + failure);
+                });
+            }
+            catch (Exception ex)
+            {
+                RawBufferVisualizerPackageLog.Write("Inspector overlay initial focus scheduling failed: " + ex);
+            }
+        }
+
+        private void InspectorOverlay_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Key != Key.Escape || Keyboard.Modifiers != ModifierKeys.None
+                || Keyboard.FocusedElement is ComboBox combo && combo.IsDropDownOpen) return;
+            e.Handled = true;
+            _inspector.Close();
+            var target = _inspector.Section == "Histogram" ? InspectorHistogramButton
+                : _inspector.Section == "Format" ? InspectorFormatButton
+                : _inspector.Section == "Compare" ? InspectorCompareButton
+                : _inspector.Section == "Diagnostics" ? InspectorDiagnosticsButton
+                : InspectorPixelButton;
+            var focused = target.Focus();
+            RawBufferVisualizerPackageLog.Write("Inspector overlay restored focus=" + focused);
         }
 
         private void Root_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -5317,6 +5516,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 ZoomText.Text = "—";
                 _lastZoomStatus = double.NaN;
             }
+            UpdateZoomStatus();
         }
 
         private void VSColorTheme_ThemeChanged(ThemeChangedEventArgs e)
@@ -5984,7 +6184,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             return VisualStudioTempStore.TryGetOwnedSnapshotDirectory(metadataPath, out snapshotDirectory);
         }
 
-        internal static BitmapSource? CreateThumbnailSource(RawImageSource source, RawImageDescriptor descriptor)
+        internal static BitmapSource? CreateThumbnailSource(RawImageSource source, RawImageDescriptor descriptor, CancellationToken cancellationToken = default(CancellationToken))
         {
             try
             {
@@ -5999,7 +6199,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var stepX = Math.Max(1, (int)Math.Ceiling(descriptor.Width / (double)targetWidth));
                 var stepY = Math.Max(1, (int)Math.Ceiling(descriptor.Height / (double)targetHeight));
                 var sampleStep = Math.Max(stepX, stepY);
-                var rendered = source.RenderTileSampled(0, 0, descriptor.Width, descriptor.Height, sampleStep, source.CreateRenderOptions());
+                cancellationToken.ThrowIfCancellationRequested();
+                var rendered = source.RenderTileSampled(0, 0, descriptor.Width, descriptor.Height, sampleStep, source.CreateRenderOptions(), cancellationToken);
                 var bitmap = BitmapSource.Create(
                     rendered.Width,
                     rendered.Height,
@@ -6017,6 +6218,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 // A live debugger source must prove that its current process/address
                 // can be read before the handoff is accepted. Other thumbnail-only
                 // failures may still fall back to a blank list thumbnail.
+                throw;
+            }
+            catch (OperationCanceledException)
+            {
                 throw;
             }
             catch
@@ -6119,14 +6324,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             public string Title { get; private set; }
             public string ObjectName { get; private set; }
             public string SourceType { get; private set; }
-            public string SizeText => string.Format(CultureInfo.InvariantCulture, "{0}×{1}", Descriptor.Width, Descriptor.Height);
-            public string FormatText => Descriptor.PixelFormat.ToString();
-            public string StrideText => "stride " + Descriptor.Stride.ToString(CultureInfo.InvariantCulture);
-            public string CardStateName => AutomaticMappingRequired ? "MAP" : IsError || IsSourceUnavailable ? "FAILED" : IsPreview ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
+            public string SizeText => IsError ? "Image unavailable" : string.Format(CultureInfo.InvariantCulture, "{0}×{1}", Descriptor.Width, Descriptor.Height);
+            public string FormatText => IsError ? string.Empty : Descriptor.PixelFormat.ToString();
+            public string StrideText => IsError ? string.Empty : "stride " + Descriptor.Stride.ToString(CultureInfo.InvariantCulture);
+            public string HeaderSourceType => IsError ? "Image unavailable" : SourceType;
+            public string CardStateName => AutomaticMappingRequired ? "MAP" : IsError ? "FAILED" : IsSourceUnavailable ? (Source.IsLiveProcessBacked ? "UNAVAILABLE" : "FAILED") : IsPreview ? "PREVIEW" : Source.IsLiveProcessBacked ? "LIVE" : "CAPTURED";
             public string StateName => (CardStateName == "LIVE" || CardStateName == "CAPTURED") && Diagnosis.HasPreview && Diagnosis.IsForSource(DeclaredDescriptor) ? "PREVIEW" : CardStateName;
             public string StateToolTip => StateName + ((StateName == "LIVE" || StateName == "CAPTURED") && DebuggeeProcessId > 0 ? " · PID " + DebuggeeProcessId.ToString(CultureInfo.InvariantCulture) : string.Empty);
             public string StateChipText => (StateName == "MAP" ? "◆ " : StateName == "FAILED" ? "× " : StateName == "PREVIEW" ? "◐ " : StateName == "LIVE" ? "● " : "■ ") + StateName;
-            public string MetaText => IsError ? SourceType : SizeText + " · " + FormatText + " · " + SourceType;
+            public string MetaText => IsError ? "Image unavailable" : SizeText + " · " + FormatText + " · " + SourceType;
             public RawImageSource Source { get; private set; }
             public RawImageDescriptor Descriptor { get; private set; }
             public RawImageDescriptor DeclaredDescriptor { get; private set; }

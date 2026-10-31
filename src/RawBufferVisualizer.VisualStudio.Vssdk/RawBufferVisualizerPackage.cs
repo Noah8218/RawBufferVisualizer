@@ -63,15 +63,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
-                await RegisterCommandsAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                WriteAutomationLog("RegisterCommands error " + ex);
-            }
-
-            try
-            {
                 var dte = await GetServiceAsync(typeof(EnvDTE.DTE)) as EnvDTE80.DTE2;
                 if (dte != null)
                 {
@@ -86,6 +77,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         {
                             _handoffSessionGate.EnterBreakMode();
                         }
+                        PublishHandoffSession();
                     }
                     catch (Exception ex)
                     {
@@ -110,6 +102,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             catch (Exception ex)
             {
                 WriteAutomationLog("Native debugger callback subscribe error " + ex);
+            }
+
+            // A cold visualizer may wake this command before transferring data.
+            // Register it only after debugger-session observation is initialized.
+            try
+            {
+                await RegisterCommandsAsync(cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("RegisterCommands error " + ex);
             }
 
             // The out-of-process debugger visualizer can block DTE command
@@ -245,6 +248,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 _handoffSessionGate.EnterBreakMode();
+                PublishHandoffSession();
                 WriteAutomationLog("Break mode entered");
                 var window = FindToolWindow(typeof(RawBufferToolWindow), 0, false) as RawBufferToolWindow;
                 if (window == null)
@@ -285,6 +289,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             _handoffSessionGate.EnterRunMode();
+            PublishHandoffSession();
             VisualStudioDebugFrameContext.SetCurrentThread(null);
             try
             {
@@ -453,6 +458,18 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             });
         }
 
+        private void PublishHandoffSession()
+        {
+            try
+            {
+                VisualizerHandoffInbox.PublishDebuggerSession(Process.GetCurrentProcess().Id, _handoffSessionGate.CaptureToken());
+            }
+            catch (Exception ex)
+            {
+                WriteAutomationLog("Debugger session publication failed " + ex);
+            }
+        }
+
         private void PollInbox()
         {
             if (Interlocked.Exchange(ref _inboxPollActive, 1) == 1)
@@ -576,7 +593,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            if (!window.OpenClaimedHandoffRequest(requestPath, processingPath))
+            if (!window.OpenClaimedHandoffRequest(requestPath, processingPath, request => _handoffSessionGate.IsCurrent(handoffSession) && _handoffSessionGate.IsCurrentToken(request.OriginSessionToken)))
             {
                 WriteAutomationLog("Open rejected " + requestPath);
                 var state = VisualizerHandoffInbox.GetRequestState(requestPath);

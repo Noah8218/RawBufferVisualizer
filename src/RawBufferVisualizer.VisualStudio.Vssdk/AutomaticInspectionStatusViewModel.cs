@@ -11,7 +11,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private string _imageStatus = "0 images";
         private string? _alert;
         private string? _notice;
-        private bool _imageError, _busy;
+        private bool _imageError, _busy, _clearDetailsOnImageUpdate;
 
         public event PropertyChangedEventHandler? PropertyChanged;
         public string Frame { get => _frame; set { _frame = value; Notify(); } }
@@ -24,28 +24,37 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             ? (string.IsNullOrWhiteSpace(_frame) || _frame == "Current paused stack frame" ? "Debugger paused" : "Paused · " + _frame)
             : _mode == InspectionDebuggerMode.Running ? "Debugger running" : "Debugger stopped";
 
+        private string ModeDetails => _mode == InspectionDebuggerMode.Paused ? "Scan Now is available. Auto Inspect controls refresh on the next Break."
+            : _mode == InspectionDebuggerMode.Running ? "Pause the debugger to inspect the current frame. Captured images remain available."
+            : "No active debug session. Captured images remain available.";
+
         public void SetMode(InspectionDebuggerMode mode)
         {
             _mode = mode;
             _alert = null;
             _notice = null;
             _frame = mode == InspectionDebuggerMode.Paused ? "Current paused stack frame" : "No paused stack frame";
-            Details = mode == InspectionDebuggerMode.Paused ? "Scan Now is available. Auto Inspect controls refresh on the next Break."
-                : mode == InspectionDebuggerMode.Running ? "Pause the debugger to inspect the current frame. Captured images remain available."
-                : "No active debug session. Captured images remain available.";
+            Details = ModeDetails;
+            _clearDetailsOnImageUpdate = false;
             Notify();
         }
 
-        public void SetDetails(string text, string? alert = null)
+        public void SetDetails(string text, string? alert = null, bool clearOnImageUpdate = false)
         {
             Details = text;
             _alert = alert;
             _notice = null;
+            _clearDetailsOnImageUpdate = clearOnImageUpdate;
             Notify();
         }
 
         public void SetImageStatus(string text, bool isError = false)
         {
+            if (_clearDetailsOnImageUpdate)
+            {
+                Details = ModeDetails;
+                _clearDetailsOnImageUpdate = false;
+            }
             _imageStatus = text;
             _imageError = isError;
             _notice = null;
