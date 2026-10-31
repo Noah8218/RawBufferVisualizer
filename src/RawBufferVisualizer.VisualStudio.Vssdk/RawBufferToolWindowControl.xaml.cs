@@ -181,6 +181,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             InspectorRail.DataContext = _inspector;
             ImageList.DataContext = ImageListHeader.DataContext = ImageStripHeader.DataContext = _inspector;
             _inspector.PropertyChanged += InspectorNavigation_PropertyChanged;
+            _inspector.OpenStateChanged += InspectorNavigation_OpenStateChanged;
             Loaded += InspectorHost_Loaded;
             Unloaded += InspectorHost_Unloaded;
             AutomaticInspectionBar.DataContext = _inspectionStatus;
@@ -1122,6 +1123,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private void LoadAutomaticInspectionPreferences()
         {
             _automaticInspectionPreferences = _automaticInspectionPreferencesStore.Load();
+            _inspector.RestoreOpenState(
+                _automaticInspectionPreferences.DockedInspectorOpen,
+                _automaticInspectionPreferences.OverlayInspectorOpen);
             AutoInspectBox.IsChecked = _automaticInspectionPreferences.AutoScanOnBreak;
             _loadingAutomaticInspectionPreferences = false;
             if (!string.IsNullOrWhiteSpace(_automaticInspectionPreferencesStore.LastLoadError))
@@ -1134,6 +1138,28 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     _automaticInspectionPreferences.AutoScanOnBreak
                         ? "Auto Inspect is on. This choice is saved."
                         : "Auto Inspect is off. This choice is saved.");
+            }
+        }
+
+        private void InspectorNavigation_OpenStateChanged(object? sender, EventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (_loadingAutomaticInspectionPreferences || _disposed) return;
+
+            var updated = new AutomaticInspectionPreferences
+            {
+                AutoScanOnBreak = _automaticInspectionPreferences.AutoScanOnBreak,
+                DockedInspectorOpen = _inspector.DockedOpen,
+                OverlayInspectorOpen = _inspector.OverlayOpen
+            };
+            string saveError;
+            if (_automaticInspectionPreferencesStore.TrySave(updated, out saveError))
+            {
+                _automaticInspectionPreferences = updated;
+            }
+            else
+            {
+                SetAutomaticScanStatus("Inspector state was not saved. " + saveError, "Setting not saved");
             }
         }
 
@@ -1716,6 +1742,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             _measurement.PropertyChanged -= Measurement_PropertyChanged;
             VSColorTheme.ThemeChanged -= VSColorTheme_ThemeChanged;
             _inspector.PropertyChanged -= InspectorNavigation_PropertyChanged;
+            _inspector.OpenStateChanged -= InspectorNavigation_OpenStateChanged;
             SavePopup.IsOpen = MorePopup.IsOpen = ZoomPopup.IsOpen = AddImagePopup.IsOpen = ReleaseAnnouncementPopup.IsOpen = false;
             ImageList.ContextMenu.IsOpen = AutomaticHelpTip.IsOpen = false;
             InterpretPixelFormatBox.IsDropDownOpen = InterpretByteOrderBox.IsDropDownOpen = false;

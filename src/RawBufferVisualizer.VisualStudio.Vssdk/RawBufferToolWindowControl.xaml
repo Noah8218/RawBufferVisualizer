@@ -1295,23 +1295,23 @@
                 </Border>
             </ContentControl>
             <StackPanel x:Name="InspectorRail" Grid.Column="5" Background="{DynamicResource ToolbarBrush}">
-                <ToggleButton x:Name="InspectorPixelButton" IsChecked="{Binding IsPixelSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
+                <ToggleButton x:Name="InspectorPixelButton" IsChecked="{Binding IsPixelSelected, Mode=OneWay}" Command="{Binding ToggleSectionCommand}" CommandParameter="Pixel" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Pixel" AutomationProperties.Name="Pixel" AutomationProperties.AutomationId="InspectorPixelButton">
                     <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconCrosshairGeometry}"/></Canvas></Viewbox><TextBlock Text="Pixel" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
-                <ToggleButton x:Name="InspectorHistogramButton" IsChecked="{Binding IsHistogramSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
+                <ToggleButton x:Name="InspectorHistogramButton" IsChecked="{Binding IsHistogramSelected, Mode=OneWay}" Command="{Binding ToggleSectionCommand}" CommandParameter="Histogram" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Histogram" AutomationProperties.Name="Histogram" AutomationProperties.AutomationId="InspectorHistogramButton">
                     <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconBarChartGeometry}"/></Canvas></Viewbox><TextBlock Text="Histo" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
-                <ToggleButton x:Name="InspectorFormatButton" IsChecked="{Binding IsFormatSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
+                <ToggleButton x:Name="InspectorFormatButton" IsChecked="{Binding IsFormatSelected, Mode=OneWay}" Command="{Binding ToggleSectionCommand}" CommandParameter="Format" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Buffer format" AutomationProperties.Name="Buffer format" AutomationProperties.AutomationId="InspectorFormatButton">
                     <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSlidersGeometry}"/></Canvas></Viewbox><TextBlock Text="Format" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
-                <ToggleButton x:Name="InspectorCompareButton" IsChecked="{Binding IsCompareSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
+                <ToggleButton x:Name="InspectorCompareButton" IsChecked="{Binding IsCompareSelected, Mode=OneWay}" Command="{Binding ToggleSectionCommand}" CommandParameter="Compare" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Compare" AutomationProperties.Name="Compare" AutomationProperties.AutomationId="InspectorCompareButton">
                     <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconSplitGeometry}"/></Canvas></Viewbox><TextBlock Text="Compare" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>
-                <ToggleButton x:Name="InspectorDiagnosticsButton" IsChecked="{Binding IsDiagnosticsSelected, Mode=TwoWay}" Style="{StaticResource InspectorRailButtonStyle}"
+                <ToggleButton x:Name="InspectorDiagnosticsButton" IsChecked="{Binding IsDiagnosticsSelected, Mode=OneWay}" Command="{Binding ToggleSectionCommand}" CommandParameter="Diagnostics" Style="{StaticResource InspectorRailButtonStyle}"
                               ToolTip="Diagnostics" AutomationProperties.Name="Diagnostics" AutomationProperties.AutomationId="InspectorDiagnosticsButton">
                     <StackPanel><Viewbox Width="18" Height="18" HorizontalAlignment="Center"><Canvas Width="16" Height="16"><Path Style="{StaticResource PrototypeIcon}" Data="{StaticResource IconPulseGeometry}"/></Canvas></Viewbox><TextBlock Text="Diag" FontSize="10" Margin="0,3,0,0" HorizontalAlignment="Center"/></StackPanel>
                 </ToggleButton>

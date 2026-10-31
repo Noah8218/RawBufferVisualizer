@@ -158,7 +158,9 @@ try {
         $cases += [pscustomobject]@{ Width=$width; Height=$height; Toolbar=$orientation; Overlay=$nav.IsNarrow; Evidence=$image }
         foreach ($section in @('Pixel', 'Histogram', 'Format', 'Compare', 'Diagnostics')) {
             $button = $control.FindName("Inspector${section}Button")
-            $button.IsChecked = $true
+            if (-not $nav.IsOpen -or $nav.Section -ne $section) {
+                $button.Command.Execute($button.CommandParameter)
+            }
             Arrange-Control $control $width $height
             $panel = $control.FindName('InspectorContainer')
             if ($nav.Section -ne $section -or -not $nav.IsOpen -or $control.FindName("${section}Section").Visibility -ne 'Visible') { throw "Rail binding did not display $section at $width x $height" }

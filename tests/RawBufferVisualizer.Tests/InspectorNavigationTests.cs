@@ -23,26 +23,28 @@ namespace RawBufferVisualizer.Tests
                     model.CloseCommand.Execute(null);
                     Require(!model.IsOpen && !model.CloseCommand.CanExecute(null), "Collapse at " + width);
                 }
-                model.IsCompareSelected = true;
+                model.ToggleSectionCommand.Execute("Compare");
                 Require(model.IsCompareSelected && !model.IsPixelSelected, "Select one section");
-                model.IsCompareSelected = false;
+                model.ToggleSectionCommand.Execute("Compare");
                 Require(!model.IsOpen, "Repeat active rail button collapses");
                 model.SetWidth(width == 759 ? 758 : width + 1);
                 Require(!model.IsOpen, "Resize preserves user collapse");
             }
             var navigation = new InspectorNavigationViewModel();
             navigation.SetWidth(1000);
-            navigation.IsFormatSelected = true;
+            navigation.ToggleSectionCommand.Execute("Format");
             Require(navigation.Title == "Buffer format", "Format title");
             navigation.Close();
             navigation.SetWidth(640);
             Require(!navigation.IsOpen, "Overlay starts closed");
-            navigation.IsHistogramSelected = true;
+            navigation.ToggleSectionCommand.Execute("Histogram");
             navigation.SetWidth(1440);
             Require(!navigation.IsOpen && navigation.Section == "Histogram", "Docked collapse survives overlay use");
             navigation.SetWidth(640);
             Require(navigation.IsHistogramSelected, "Overlay selection survives a width round trip");
             Console.WriteLine("Inspector navigation: five widths, all sections, collapse and resize transitions passed.");
+            InspectorNavigationPersistenceTests.RunAll();
+            InspectorNavigationIntentTests.RunAll();
         }
 
         private static void Require(bool condition, string message)

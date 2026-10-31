@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Windows.Input;
 using RawBufferVisualizer.Presentation;
@@ -14,22 +15,42 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         public InspectorNavigationViewModel()
         {
             CloseCommand = new ViewCommand(_ => Close(), () => IsOpen);
+            ToggleSectionCommand = new ViewCommand(parameter =>
+            {
+                if (parameter is string section)
+                {
+                    if (IsOpen && Section == section) Close();
+                    else Show(section);
+                }
+            }, parameter => parameter is string);
             ToggleImageListCommand = new ViewCommand(_ => { _imageStripOverride = !IsImageStrip; Notify(); }, () => true);
         }
 
         public event PropertyChangedEventHandler? PropertyChanged;
+        public event EventHandler? OpenStateChanged;
         public string Section { get; private set; } = "Pixel";
         public string Title => Section == "Format" ? "Buffer format" : Section;
         public bool IsNarrow { get; private set; }
         public bool IsOpen { get; private set; }
-        public bool IsPixelSelected { get => IsOpen && Section == "Pixel"; set => Select("Pixel", value); }
-        public bool IsHistogramSelected { get => IsOpen && Section == "Histogram"; set => Select("Histogram", value); }
-        public bool IsFormatSelected { get => IsOpen && Section == "Format"; set => Select("Format", value); }
-        public bool IsCompareSelected { get => IsOpen && Section == "Compare"; set => Select("Compare", value); }
-        public bool IsDiagnosticsSelected { get => IsOpen && Section == "Diagnostics"; set => Select("Diagnostics", value); }
+        public bool DockedOpen => _dockedOpen;
+        public bool OverlayOpen => _overlayOpen;
+        public bool IsPixelSelected => IsOpen && Section == "Pixel";
+        public bool IsHistogramSelected => IsOpen && Section == "Histogram";
+        public bool IsFormatSelected => IsOpen && Section == "Format";
+        public bool IsCompareSelected => IsOpen && Section == "Compare";
+        public bool IsDiagnosticsSelected => IsOpen && Section == "Diagnostics";
         public ICommand CloseCommand { get; }
+        public ICommand ToggleSectionCommand { get; }
         public bool IsImageStrip => _imageStripOverride ?? IsNarrow;
         public ICommand ToggleImageListCommand { get; }
+
+        public void RestoreOpenState(bool? dockedOpen, bool? overlayOpen)
+        {
+            _dockedOpen = dockedOpen ?? true;
+            _overlayOpen = overlayOpen ?? false;
+            if (_hasWidth) IsOpen = IsNarrow ? _overlayOpen : _dockedOpen;
+            Notify();
+        }
 
         public void SetWidth(double width)
         {
@@ -51,18 +72,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public void Close() => SetOpen(false);
 
-        private void Select(string section, bool selected)
-        {
-            if (selected) Show(section);
-            else if (Section == section) Close();
-        }
-
         private void SetOpen(bool open)
         {
+            var changed = (IsNarrow ? _overlayOpen : _dockedOpen) != open;
             IsOpen = open;
             if (IsNarrow) _overlayOpen = open;
             else _dockedOpen = open;
             Notify();
+            if (changed) OpenStateChanged?.Invoke(this, EventArgs.Empty);
         }
 
         private void Notify()

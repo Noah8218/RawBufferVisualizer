@@ -13,6 +13,12 @@ namespace RawBufferVisualizer.VisualStudio
 
         [DataMember(Name = "autoScanOnBreak", Order = 1)]
         public bool AutoScanOnBreak { get; set; } = true;
+
+        [DataMember(Name = "dockedInspectorOpen", Order = 2, EmitDefaultValue = false)]
+        public bool? DockedInspectorOpen { get; set; }
+
+        [DataMember(Name = "overlayInspectorOpen", Order = 3, EmitDefaultValue = false)]
+        public bool? OverlayInspectorOpen { get; set; }
     }
 
     public sealed class AutomaticInspectionPreferencesStore
