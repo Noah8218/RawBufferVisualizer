@@ -209,7 +209,7 @@ namespace RawBufferVisualizer.Core
 
         protected static void EnsureTileBounds(RawImageDescriptor descriptor, int x, int y, int width, int height)
         {
-            if (x < 0 || y < 0 || width <= 0 || height <= 0 || x + width > descriptor.Width || y + height > descriptor.Height)
+            if (x < 0 || y < 0 || width <= 0 || height <= 0 || (long)x + width > descriptor.Width || (long)y + height > descriptor.Height)
             {
                 throw new ArgumentOutOfRangeException("x", "Tile bounds must be inside the image.");
             }
@@ -218,18 +218,7 @@ namespace RawBufferVisualizer.Core
         protected static byte ScaleToByte(double raw, RawRenderOptions options)
         {
             var white = options.WhiteLevel <= options.BlackLevel ? options.BlackLevel + 1 : options.WhiteLevel;
-            var normalized = (raw - options.BlackLevel) / (white - options.BlackLevel);
-            if (normalized <= 0)
-            {
-                return 0;
-            }
-
-            if (normalized >= 1)
-            {
-                return 255;
-            }
-
-            return (byte)Math.Round(normalized * 255);
+            return RawBufferRenderer.ToByte(raw, options.BlackLevel, white);
         }
 
         protected static void EnsureParentDirectory(string path)
@@ -325,8 +314,8 @@ namespace RawBufferVisualizer.Core
             EnsureTileBounds(SourceDescriptor, x, y, width, height);
             options = options ?? CreateRenderOptions();
 
-            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
-            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var sampledWidth = (int)Math.Max(1L, ((long)width + sampleStep - 1) / sampleStep);
+            var sampledHeight = (int)Math.Max(1L, ((long)height + sampleStep - 1) / sampleStep);
             var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
 
             for (var sampledY = 0; sampledY < sampledHeight; sampledY++)
@@ -369,8 +358,8 @@ namespace RawBufferVisualizer.Core
                 || offset < 0
                 || offsetInDestination < 0
                 || count < 0
-                || offsetInDestination + count > destination.Length
-                || offset + count > _buffer.Length)
+                || (long)offsetInDestination + count > destination.Length
+                || offset > _buffer.LongLength - count)
             {
                 return false;
             }
@@ -518,8 +507,8 @@ namespace RawBufferVisualizer.Core
                 return RenderBayerTileSampled(x, y, width, height, sampleStep, cancellationToken);
 
             var bytesPerPixel = GetStreamableBytesPerPixel(SourceDescriptor.PixelFormat);
-            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
-            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var sampledWidth = (int)Math.Max(1L, ((long)width + sampleStep - 1) / sampleStep);
+            var sampledHeight = (int)Math.Max(1L, ((long)height + sampleStep - 1) / sampleStep);
             var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
             var rowByteCount = checked(width * bytesPerPixel);
             var rowBuffer = new byte[rowByteCount];
@@ -608,7 +597,7 @@ namespace RawBufferVisualizer.Core
                         ReadExactly(stream, window, 0, windowLength);
                     }
                     var localOffset = (int)(offset - windowStart);
-                    if (packed) return ReadPackedBits(window, localOffset * 8 + firstBit, bits);
+                    if (packed) return ReadPackedBits(window, (long)localOffset * 8 + firstBit, bits);
                     Buffer.BlockCopy(window, localOffset, pixel, 0, count);
                     return ReadHistogramValue(pixel, SourceDescriptor, 0, 0, channel);
                 }, cancellationToken);
@@ -637,8 +626,8 @@ namespace RawBufferVisualizer.Core
                 || offset < 0
                 || offsetInDestination < 0
                 || count < 0
-                || offsetInDestination + count > destination.Length
-                || offset + count > Length)
+                || (long)offsetInDestination + count > destination.Length
+                || offset > Length - count)
             {
                 return false;
             }
@@ -743,8 +732,8 @@ namespace RawBufferVisualizer.Core
                     windowY--;
                 }
 
-                windowRight = Math.Min(SourceDescriptor.Width, x + width + 1);
-                windowBottom = Math.Min(SourceDescriptor.Height, y + height + 1);
+                windowRight = (int)Math.Min(SourceDescriptor.Width, (long)x + width + 1);
+                windowBottom = (int)Math.Min(SourceDescriptor.Height, (long)y + height + 1);
             }
 
             var windowWidth = windowRight - windowX;
@@ -794,8 +783,9 @@ namespace RawBufferVisualizer.Core
                     var targetRow = row * localStride;
                     for (var tileX = 0; tileX < width; tileX++)
                     {
-                        var value = ReadPackedBits(sourceRow, firstBitOffset + (tileX * bitsPerPixel), bitsPerPixel);
-                        WritePackedBits(buffer, targetRow + (tileX * bitsPerPixel / 8), (tileX * bitsPerPixel) % 8, bitsPerPixel, value);
+                        var tileBitOffset = (long)tileX * bitsPerPixel;
+                        var value = ReadPackedBits(sourceRow, firstBitOffset + tileBitOffset, bitsPerPixel);
+                        WritePackedBits(buffer, checked((int)(targetRow + tileBitOffset / 8)), (int)(tileBitOffset % 8), bitsPerPixel, value);
                     }
                 }
             }
@@ -819,8 +809,8 @@ namespace RawBufferVisualizer.Core
             CancellationToken cancellationToken)
         {
             var bitsPerPixel = GetPackedBitsPerPixel(SourceDescriptor.PixelFormat);
-            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
-            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var sampledWidth = (int)Math.Max(1L, ((long)width + sampleStep - 1) / sampleStep);
+            var sampledHeight = (int)Math.Max(1L, ((long)height + sampleStep - 1) / sampleStep);
             var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
 
             using (var stream = OpenRawReadStream())
@@ -835,7 +825,7 @@ namespace RawBufferVisualizer.Core
                     for (var sampledX = 0; sampledX < sampledWidth; sampledX++)
                     {
                         var tileX = sampledX * sampleStep;
-                        var value = ReadPackedBits(sourceRow, firstBitOffset + (tileX * bitsPerPixel), bitsPerPixel);
+                        var value = ReadPackedBits(sourceRow, firstBitOffset + ((long)tileX * bitsPerPixel), bitsPerPixel);
                         var byteValue = ScaleToByte(value, options);
                         WriteBgra(pixels, targetRow + (sampledX * 4), byteValue, byteValue, byteValue, 255);
                     }
@@ -887,8 +877,8 @@ namespace RawBufferVisualizer.Core
 
         private RenderedImage RenderBayerTileSampled(int x, int y, int width, int height, int sampleStep, CancellationToken cancellationToken)
         {
-            var sampledWidth = Math.Max(1, (width + sampleStep - 1) / sampleStep);
-            var sampledHeight = Math.Max(1, (height + sampleStep - 1) / sampleStep);
+            var sampledWidth = (int)Math.Max(1L, ((long)width + sampleStep - 1) / sampleStep);
+            var sampledHeight = (int)Math.Max(1L, ((long)height + sampleStep - 1) / sampleStep);
             var pixels = new byte[checked(sampledWidth * sampledHeight * 4)];
             var windowX = Math.Max(0, x - 1) & ~1;
             var windowWidth = (int)Math.Min(SourceDescriptor.Width, (long)x + width + 1) - windowX;
@@ -932,15 +922,15 @@ namespace RawBufferVisualizer.Core
 
         private byte[] ReadPackedRowWindow(Stream stream, int y, int x, int width, int bitsPerPixel, out int firstBitOffset)
         {
-            var startBit = checked(x * bitsPerPixel);
-            var endBit = checked((x + width) * bitsPerPixel);
+            var startBit = (long)x * bitsPerPixel;
+            var endBit = ((long)x + width) * bitsPerPixel;
             var startByte = startBit / 8;
             var endByte = (endBit + 7) / 8;
-            var byteCount = endByte - startByte;
+            var byteCount = checked((int)(endByte - startByte));
             var buffer = new byte[byteCount];
             stream.Position = checked(((long)y * SourceDescriptor.Stride) + startByte);
             ReadExactly(stream, buffer, 0, byteCount);
-            firstBitOffset = startBit - (startByte * 8);
+            firstBitOffset = (int)(startBit - (startByte * 8));
             return buffer;
         }
 
@@ -1021,10 +1011,10 @@ namespace RawBufferVisualizer.Core
             return (int)(((long)width * bitsPerPixel + 7) / 8);
         }
 
-        private static int ReadPackedBits(byte[] buffer, int bitOffset, int bitsPerPixel)
+        private static int ReadPackedBits(byte[] buffer, long bitOffset, int bitsPerPixel)
         {
-            var byteOffset = bitOffset / 8;
-            var shift = bitOffset % 8;
+            var byteOffset = checked((int)(bitOffset / 8));
+            var shift = (int)(bitOffset % 8);
             var value = 0;
             var bytesToRead = (shift + bitsPerPixel + 7) / 8;
             for (var i = 0; i < bytesToRead; i++)

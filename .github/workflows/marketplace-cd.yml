@@ -37,6 +37,8 @@ jobs:
 
     outputs:
       vsix_version: ${{ steps.inspect.outputs.vsix_version }}
+      vsix_sha256: ${{ steps.inspect.outputs.vsix_sha256 }}
+      verified_source_revision: ${{ steps.inspect.outputs.verified_source_revision }}
 
     steps:
       - name: Checkout
@@ -89,6 +91,9 @@ jobs:
           }
 
           "vsix_version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          $sha256 = (Get-FileHash -LiteralPath $vsixPath -Algorithm SHA256).Hash
+          "vsix_sha256=$sha256" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "verified_source_revision=$env:GITHUB_SHA" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           Write-Host "VSIX version: $version"
 
       - name: Validate Marketplace publish manifest
@@ -168,5 +173,7 @@ jobs:
             -VsixPath .\artifacts\publish\RawBufferVisualizer-VisualStudioExtensibility-net472\RawBufferVisualizer.VisualStudio.Extensibility.vsix `
             -Publisher $publisher `
             -PersonalAccessToken $env:VS_MARKETPLACE_TOKEN `
+            -VerifiedVsixSha256 '${{ needs.package.outputs.vsix_sha256 }}' `
+            -VerifiedSourceRevision '${{ needs.package.outputs.verified_source_revision }}' `
             -InternalName '${{ inputs.internal_name }}' `
             -Categories '${{ inputs.categories }}'

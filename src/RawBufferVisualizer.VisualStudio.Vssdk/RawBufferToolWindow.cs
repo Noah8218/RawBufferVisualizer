@@ -27,12 +27,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         public void OpenHandoffRequest(string requestPath)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             _control.OpenHandoffRequest(requestPath);
         }
 
-        public bool OpenClaimedHandoffRequest(string requestPath, string processingPath)
+        public bool OpenClaimedHandoffRequest(string requestPath, string processingPath, System.Func<RawBufferVisualizer.VisualStudio.VisualizerHandoffRequest, bool>? isCurrentRequest = null)
         {
-            return _control.OpenClaimedHandoffRequest(requestPath, processingPath);
+            ThreadHelper.ThrowIfNotOnUIThread();
+            return _control.OpenClaimedHandoffRequest(requestPath, processingPath, isCurrentRequest);
         }
 
         public void ScanLocals()

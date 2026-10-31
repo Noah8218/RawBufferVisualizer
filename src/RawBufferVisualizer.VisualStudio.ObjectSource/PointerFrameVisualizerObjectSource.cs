@@ -9,8 +9,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class PointerFrameVisualizerObjectSource : VisualizerObjectSource
     {
-        private object? _cachedTarget;
-        private PointerFrameView? _cachedView;
+        private readonly VisualizerViewCache<PointerFrameView> _viewCache =
+            new VisualizerViewCache<PointerFrameView>(target => PointerFrameVisualizerTransfer.CreateView(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
@@ -40,13 +40,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private PointerFrameView GetView(object target)
         {
-            if (!ReferenceEquals(target, _cachedTarget))
-            {
-                _cachedTarget = target;
-                _cachedView = PointerFrameVisualizerTransfer.CreateView(target);
-            }
-
-            return _cachedView ?? throw new InvalidOperationException("PointerFrame view was not created.");
+            return _viewCache.GetOrCreate(target);
         }
     }
 

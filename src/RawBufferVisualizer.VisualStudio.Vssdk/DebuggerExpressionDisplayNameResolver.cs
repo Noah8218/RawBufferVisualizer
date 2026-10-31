@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using Microsoft.VisualStudio.Shell;
 using RawBufferVisualizer.VisualStudio;
@@ -9,14 +10,17 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
     /// <summary>
     /// Correlates an out-of-process debugger-visualizer handoff with the expression
     /// that is still present in the current stack frame. Visual Studio 17.9 does not
-    /// expose OriginalVisualizedExpression, so object identity is the compatibility
-    /// fallback for reference types and pointer/type matching covers value wrappers.
+    /// expose OriginalVisualizedExpression, so bounded object-hash matching is the compatibility
+    /// fallback for reference types. A shared address alone does not identify an object.
     /// </summary>
     internal static class DebuggerExpressionDisplayNameResolver
     {
-        private const int EvaluationTimeoutMilliseconds = 1000;
+        private const int EvaluationTimeoutMilliseconds = 100;
+        private const int TotalBudgetMilliseconds = 200;
+        private const int MaximumExpressionsPerScope = 64;
+        private const int MaximumCompatibleExpressions = 4;
 
-        public static string Resolve(EnvDTE80.DTE2? dte, VisualizerHandoffRequest request)
+        public static string Resolve(EnvDTE80.DTE2? dte, VisualizerHandoffRequest request, Func<bool>? isCurrent = null)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (dte == null || request == null || request.ExpressionIdentityHash == 0)
@@ -24,12 +28,24 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return request == null ? string.Empty : request.DisplayName;
             }
 
+            var expressionSourceType = string.IsNullOrWhiteSpace(request.ExpressionSourceType)
+                ? request.SourceType : request.ExpressionSourceType;
+            var displayRoot = request.DisplayName.Split('[')[0].Trim();
+            var typeStem = GetTypeStem(expressionSourceType);
+            var shortType = typeStem.Substring(typeStem.LastIndexOf('.') + 1);
+            if (displayRoot.Length != 0 && !string.Equals(displayRoot, shortType, StringComparison.Ordinal))
+                return request.DisplayName;
+
+            var watch = Stopwatch.StartNew();
+            bool CanContinue() => watch.ElapsedMilliseconds < TotalBudgetMilliseconds && (isCurrent == null || isCurrent());
             EnvDTE.Debugger? debugger;
             EnvDTE.StackFrame? frame;
+            RawBufferVisualizerPackageLog.Write("Handoff naming frame read start");
             try
             {
                 debugger = dte.Debugger;
                 frame = debugger?.CurrentStackFrame;
+                RawBufferVisualizerPackageLog.Write("Handoff naming frame read end");
             }
             catch
             {
@@ -42,11 +58,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var candidates = new List<EnvDTE.Expression>();
-            var expressionSourceType = string.IsNullOrWhiteSpace(request.ExpressionSourceType)
-                ? request.SourceType
-                : request.ExpressionSourceType;
-            AddCompatibleExpressions(candidates, TryGetExpressions(frame, true), expressionSourceType);
-            AddCompatibleExpressions(candidates, TryGetExpressions(frame, false), expressionSourceType);
+            RawBufferVisualizerPackageLog.Write("Handoff naming locals read start");
+            if (!CanContinue() || !AddCompatibleExpressions(candidates, TryGetExpressions(frame, true), expressionSourceType, CanContinue))
+                return request.DisplayName;
+            RawBufferVisualizerPackageLog.Write("Handoff naming locals read end");
+            RawBufferVisualizerPackageLog.Write("Handoff naming arguments read start");
+            if (!CanContinue() || !AddCompatibleExpressions(candidates, TryGetExpressions(frame, false), expressionSourceType, CanContinue))
+                return request.DisplayName;
+            RawBufferVisualizerPackageLog.Write("Handoff naming arguments read end; candidates="
+                + candidates.Count.ToString(CultureInfo.InvariantCulture));
             if (candidates.Count == 0)
             {
                 return request.DisplayName;
@@ -55,37 +75,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var identityMatches = new List<EnvDTE.Expression>();
             for (var index = 0; index < candidates.Count; index++)
             {
+                if (!CanContinue()) return request.DisplayName;
                 int identityHash;
-                if (TryReadIdentityHash(debugger, candidates[index], out identityHash)
-                    && identityHash == request.ExpressionIdentityHash)
+                if (!TryReadIdentityHash(debugger, candidates[index], RemainingTimeout(watch), out identityHash) || !CanContinue())
+                    return request.DisplayName;
+                if (identityHash == request.ExpressionIdentityHash)
                 {
                     identityMatches.Add(candidates[index]);
                 }
             }
 
             var resolved = GetUniqueExpressionName(identityMatches);
-            if (string.IsNullOrWhiteSpace(resolved))
-            {
-                var pointerMatches = new List<EnvDTE.Expression>();
-                for (var index = 0; index < candidates.Count; index++)
-                {
-                    if (MatchesPointer(debugger, candidates[index], request))
-                    {
-                        pointerMatches.Add(candidates[index]);
-                    }
-                }
 
-                resolved = GetUniqueExpressionName(pointerMatches);
-            }
-
-            if (string.IsNullOrWhiteSpace(resolved) && candidates.Count == 1)
-            {
-                resolved = ReadName(candidates[0]);
-            }
-
-            return string.IsNullOrWhiteSpace(resolved)
+            return !CanContinue() || string.IsNullOrWhiteSpace(resolved)
                 ? request.DisplayName
                 : ApplyExpressionName(resolved!, request.DisplayName);
+        }
+
+        private static int RemainingTimeout(Stopwatch watch)
+        {
+            return (int)Math.Max(1, Math.Min(EvaluationTimeoutMilliseconds, TotalBudgetMilliseconds - watch.ElapsedMilliseconds));
         }
 
         private static EnvDTE.Expressions? TryGetExpressions(EnvDTE.StackFrame frame, bool locals)
@@ -101,15 +110,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private static void AddCompatibleExpressions(
+        private static bool AddCompatibleExpressions(
             List<EnvDTE.Expression> destination,
             EnvDTE.Expressions? expressions,
-            string sourceType)
+            string sourceType,
+            Func<bool> canContinue)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (expressions == null)
             {
-                return;
+                return true;
             }
 
             int count;
@@ -119,11 +129,13 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             catch
             {
-                return;
+                return false;
             }
 
+            if (count > MaximumExpressionsPerScope) return false;
             for (var index = 1; index <= count; index++)
             {
+                if (!canContinue()) return false;
                 EnvDTE.Expression? expression;
                 try
                 {
@@ -147,13 +159,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                         StringComparison.Ordinal)))
                 {
                     destination.Add(expression);
+                    if (destination.Count > MaximumCompatibleExpressions) return false;
                 }
             }
+            return true;
         }
 
         private static bool TryReadIdentityHash(
             EnvDTE.Debugger debugger,
             EnvDTE.Expression expression,
+            int timeoutMilliseconds,
             out int identityHash)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
@@ -169,7 +184,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 var evaluated = debugger.GetExpression(
                     "System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode((object)(" + name + "))",
                     true,
-                    EvaluationTimeoutMilliseconds);
+                    timeoutMilliseconds);
                 return evaluated != null
                     && IsValid(evaluated)
                     && int.TryParse(
@@ -182,90 +197,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             {
                 return false;
             }
-        }
-
-        private static bool MatchesPointer(
-            EnvDTE.Debugger debugger,
-            EnvDTE.Expression expression,
-            VisualizerHandoffRequest request)
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            if (request.SourcePointerAddress == 0
-                || !IsSimpleIdentifier(request.SourcePointerLabel))
-            {
-                return false;
-            }
-
-            var name = ReadName(expression);
-            if (string.IsNullOrWhiteSpace(name))
-            {
-                return false;
-            }
-
-            try
-            {
-                var evaluated = debugger.GetExpression(
-                    "(" + name + ")." + request.SourcePointerLabel,
-                    true,
-                    EvaluationTimeoutMilliseconds);
-                long pointer;
-                return evaluated != null
-                    && IsValid(evaluated)
-                    && TryParsePointer(evaluated.Value, out pointer)
-                    && pointer == request.SourcePointerAddress;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool IsSimpleIdentifier(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value)
-                || !(char.IsLetter(value[0]) || value[0] == '_'))
-            {
-                return false;
-            }
-
-            for (var index = 1; index < value.Length; index++)
-            {
-                if (!(char.IsLetterOrDigit(value[index]) || value[index] == '_'))
-                {
-                    return false;
-                }
-            }
-
-            return true;
-        }
-
-        private static bool TryParsePointer(string? value, out long pointer)
-        {
-            pointer = 0;
-            var text = (value ?? string.Empty).Trim();
-            var marker = text.IndexOf("0x", StringComparison.OrdinalIgnoreCase);
-            if (marker >= 0)
-            {
-                var end = marker + 2;
-                while (end < text.Length && Uri.IsHexDigit(text[end]))
-                {
-                    end++;
-                }
-
-                ulong unsigned;
-                if (ulong.TryParse(
-                    text.Substring(marker + 2, end - marker - 2),
-                    NumberStyles.AllowHexSpecifier,
-                    CultureInfo.InvariantCulture,
-                    out unsigned))
-                {
-                    pointer = unchecked((long)unsigned);
-                    return pointer != 0;
-                }
-            }
-
-            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out pointer)
-                && pointer != 0;
         }
 
         private static bool IsCompatibleType(string expressionType, string sourceType)

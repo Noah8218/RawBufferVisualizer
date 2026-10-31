@@ -205,7 +205,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 }
                 else if (hasRange)
                 {
-                    gray = ScaleToByte((value - minimum) / (maximum - minimum));
+                    gray = ScaleToByte(((double)value - minimum) / ((double)maximum - minimum));
                 }
                 else
                 {

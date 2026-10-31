@@ -89,6 +89,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 descriptor.Height = Positive(Height, "Height");
                 descriptor.Stride = Positive(Stride, "Stride");
                 descriptor.ValidBits = Positive(ValidBits, "Valid bits");
+                var maximumValidBits = RawImageDescriptor.GetDefaultValidBits(descriptor.PixelFormat);
+                // Preserve the exact declaration from older color snapshots that stored total pixel bits.
+                var isDeclaredColorStorageDepth = _declared != null
+                    && descriptor.PixelFormat == _declared.PixelFormat
+                    && descriptor.ValidBits == _declared.ValidBits
+                    && (descriptor.PixelFormat == RawPixelFormat.RGB24 || descriptor.PixelFormat == RawPixelFormat.BGR24 || descriptor.PixelFormat == RawPixelFormat.BGRA32)
+                    && descriptor.ValidBits == descriptor.GetBytesPerPixel() * 8;
+                if (descriptor.ValidBits > maximumValidBits && !isDeclaredColorStorageDepth)
+                    throw new InvalidOperationException(string.Format(CultureInfo.InvariantCulture,
+                        "Valid bits must be between 1 and {0} for {1}.", maximumValidBits, descriptor.PixelFormat));
                 Applied?.Invoke(descriptor);
                 _current = descriptor.Clone();
                 Fill(descriptor);

@@ -26,6 +26,11 @@ function Arrange-Control($element, [double]$width, [double]$height) {
 function Save-Render($element, [int]$width, [int]$height, [string]$name) {
     $bitmap = [Windows.Media.Imaging.RenderTargetBitmap]::new($width, $height, 96, 96, [Windows.Media.PixelFormats]::Pbgra32)
     $bitmap.Render($element)
+    $pixels = New-Object byte[] ($width * $height * 4)
+    $bitmap.CopyPixels($pixels, $width * 4, 0)
+    $visible = $false
+    for ($i = 3; $i -lt $pixels.Length; $i += 4) { if ($pixels[$i] -ne 0) { $visible = $true; break } }
+    if (-not $visible) { throw "Rendered evidence is fully transparent: $name" }
     $encoder = [Windows.Media.Imaging.PngBitmapEncoder]::new()
     $encoder.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($bitmap))
     $stream = [IO.File]::Create((Join-Path $output $name))
@@ -52,6 +57,23 @@ $control = New-Object RawBufferVisualizer.VisualStudio.Vssdk.RawBufferToolWindow
 $flags = [Reflection.BindingFlags]'Instance,NonPublic'
 $cases = @(); $sections = @(); $formats = @()
 try {
+    $pixelReadout = $null; $readOnlyRuns = 0
+    $pending = [Collections.Generic.Queue[Windows.DependencyObject]]::new()
+    $pending.Enqueue($control.FindName('PixelVisualization'))
+    while ($pending.Count -gt 0) {
+        $node = $pending.Dequeue()
+        if ($node -is [Windows.Controls.TextBlock]) {
+            foreach ($inline in $node.Inlines) {
+                $binding = [Windows.Data.BindingOperations]::GetBinding($inline, [Windows.Documents.Run]::TextProperty)
+                if ($null -ne $binding -and $binding.Path.Path -in @('RawBytes', 'RawByteNote')) {
+                    if ($binding.Mode -ne [Windows.Data.BindingMode]::OneWay) { throw "Read-only pixel display must not write back: $($binding.Path.Path)" }
+                    $pixelReadout = $node; $readOnlyRuns++
+                }
+            }
+        }
+        foreach ($child in [Windows.LogicalTreeHelper]::GetChildren($node)) { if ($child -is [Windows.DependencyObject]) { $pending.Enqueue($child) } }
+    }
+    if ($readOnlyRuns -ne 2) { throw 'Both compiled raw-byte display bindings must be checked.' }
     if ($control.FontFamily.Source -ne 'Segoe UI' -or $control.FontSize -ne 12 -or [Windows.Media.TextOptions]::GetTextFormattingMode($control) -ne 'Ideal') { throw 'View typography differs from the approved mockup' }
     $captionConverter=$control.Resources['ImageObjectCaption']
     foreach ($case in @(@('[Auto] frame',$true,'frame'),@('[Auto] snapshot',$false,'[Auto] snapshot'),@('frame',$true,'frame'))) {
@@ -121,6 +143,7 @@ try {
         }
         $nav.Show('Pixel')
         Arrange-Control $control $width $height
+        if ($pixelReadout.Text -ne 'A4 A5 9B (B G R)') { throw 'Compiled pixel inspector did not display the raw bytes and BGR note.' }
         $headerName=$control.FindName('ImageNameText'); $headerType=$control.FindName('ImageTypeText')
         if ($control.FindName('PixelPositionText').Text -ne 'X    8  Y    2') { throw 'Pixel coordinates lost the approved minimum four-character columns' }
         if ($headerType.Visibility -eq 'Visible') {

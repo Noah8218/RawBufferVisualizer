@@ -1,7 +1,7 @@
 param(
     [string[]]$Sizes = @("100000", "200000"),
     [string[]]$PixelFormat = @("Mono8"),
-    [string]$OutputDir = "artifacts\large-samples",
+    [string]$OutputDir = "",
     [int]$RowInterval = 512,
     [string]$Configuration = "Debug",
     [string]$ViewerFramework = "net472",
@@ -15,7 +15,12 @@ $ErrorActionPreference = "Stop"
 
 $scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $repoRoot = Split-Path -Parent $scriptRoot
-$outputRoot = Join-Path $repoRoot $OutputDir
+if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+    $OutputDir = if (Get-PSDrive -Name D -ErrorAction SilentlyContinue) {
+        'D:\OpenVisionLab-TestData\RawBufferVisualizer\large-samples'
+    } else { Join-Path $repoRoot 'artifacts\large-samples' }
+}
+$outputRoot = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path $repoRoot $OutputDir }))
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
 $requestedSizes = New-Object System.Collections.Generic.List[int]

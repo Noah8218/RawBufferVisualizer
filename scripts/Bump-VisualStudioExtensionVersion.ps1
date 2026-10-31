@@ -101,27 +101,27 @@ Assert-FileExists -Path $PackageSourcePath -Message 'Hybrid VSSDK package source
 
 $versions = Get-NormalizedVersion -Value $Version
 
+$paths = @($ProjectPath, $ProviderProjectPath, $ClassicProjectPath, $ManifestPath, $PackageSourcePath)
+$originalBytes = @{}
+foreach ($path in $paths) { $originalBytes[$path] = [IO.File]::ReadAllBytes($path) }
+
 $project = Get-Content -Raw -LiteralPath $ProjectPath
 $project = Replace-One -Content $project -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'AssemblyVersion'
 $project = Replace-One -Content $project -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'FileVersion'
 $project = Replace-One -Content $project -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'Version'
-Write-Utf8NoBom -Path $ProjectPath -Content $project
 
 $providerProject = Get-Content -Raw -LiteralPath $ProviderProjectPath
 $providerProject = Replace-One -Content $providerProject -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'provider AssemblyVersion'
 $providerProject = Replace-One -Content $providerProject -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'provider FileVersion'
 $providerProject = Replace-One -Content $providerProject -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'provider Version'
-Write-Utf8NoBom -Path $ProviderProjectPath -Content $providerProject
 
 $classicProject = Get-Content -Raw -LiteralPath $ClassicProjectPath
 $classicProject = Replace-One -Content $classicProject -Pattern '<AssemblyVersion>[^<]+</AssemblyVersion>' -Replacement "<AssemblyVersion>$($versions.Assembly)</AssemblyVersion>" -Description 'classic AssemblyVersion'
 $classicProject = Replace-One -Content $classicProject -Pattern '<FileVersion>[^<]+</FileVersion>' -Replacement "<FileVersion>$($versions.Assembly)</FileVersion>" -Description 'classic FileVersion'
 $classicProject = Replace-One -Content $classicProject -Pattern '<Version>[^<]+</Version>' -Replacement "<Version>$($versions.Package)</Version>" -Description 'classic Version'
-Write-Utf8NoBom -Path $ClassicProjectPath -Content $classicProject
 
 $manifest = Get-Content -Raw -LiteralPath $ManifestPath
 $manifest = Replace-One -Content $manifest -Pattern '(<Identity\b[^>]*\bVersion=")[^"]+(")' -Replacement "`${1}$($versions.Assembly)`${2}" -Description 'VSIX Identity Version'
-Write-Utf8NoBom -Path $ManifestPath -Content $manifest
 
 $packageSource = Get-Content -Raw -LiteralPath $PackageSourcePath
 $packageSource = Replace-One `
@@ -129,7 +129,39 @@ $packageSource = Replace-One `
     -Pattern '(\[InstalledProductRegistration\("[^"]+",\s*"[^"]+",\s*")[^"]+("\)\])' `
     -Replacement "`${1}$($versions.Package)`${2}" `
     -Description 'InstalledProductRegistration version'
-Write-Utf8NoBom -Path $PackageSourcePath -Content $packageSource
+
+$updates = @(
+    @{ Path = $ProjectPath; Content = $project },
+    @{ Path = $ProviderProjectPath; Content = $providerProject },
+    @{ Path = $ClassicProjectPath; Content = $classicProject },
+    @{ Path = $ManifestPath; Content = $manifest },
+    @{ Path = $PackageSourcePath; Content = $packageSource }
+)
+$backupRoot = Join-Path $repoRoot ('artifacts\version-bump-backups\' + [Guid]::NewGuid().ToString('N'))
+New-Item -ItemType Directory -Path $backupRoot -Force | Out-Null
+$backupIndex = @()
+for ($index = 0; $index -lt $updates.Count; $index++) {
+    $update = $updates[$index]
+    $backup = Join-Path $backupRoot ($index.ToString() + '.original')
+    [IO.File]::WriteAllBytes($backup, $originalBytes[$update.Path])
+    $backupIndex += [pscustomobject]@{ Path = [IO.Path]::GetFullPath($update.Path); Backup = $backup }
+}
+$backupIndex | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $backupRoot 'index.json') -Encoding UTF8
+$written = New-Object 'System.Collections.Generic.List[object]'
+try {
+    foreach ($update in $updates) {
+        $written.Add($update) | Out-Null
+        Write-Utf8NoBom -Path $update.Path -Content $update.Content
+    }
+}
+catch {
+    $writeFailure = $_
+    foreach ($update in $written) {
+        try { [IO.File]::WriteAllBytes($update.Path, $originalBytes[$update.Path]) }
+        catch { Write-Warning "Could not restore $($update.Path); preserved backup: $backupRoot. $_" }
+    }
+    throw $writeFailure
+}
 
 $generatedManifestRoot = Join-Path $repoRoot '.build\intermediate\RawBufferVisualizer.VisualStudio.Vssdk'
 if (Test-Path -LiteralPath $generatedManifestRoot -PathType Container) {

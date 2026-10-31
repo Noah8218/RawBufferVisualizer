@@ -27,6 +27,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             var session = new DockedVisualizerSession();
             var visualStudioProcessId = 0;
             var displayName = visualizerTarget.TargetTypeFullName ?? "Debugger visualizer";
+            var originSessionToken = string.Empty;
             var sourceType = displayName;
             var closeWhenLoaded = false;
             string? snapshotDirectory = null;
@@ -37,6 +38,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             try
             {
                 visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
+                originSessionToken = await CaptureDebuggerSessionAsync(visualStudioProcessId, cancellationToken);
                 var metadata = await visualizerTarget.ObjectSource.RequestDataAsync<VisualizerSnapshotMetadata>(
                     jsonSerializer: null,
                     cancellationToken);
@@ -70,7 +72,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             metadata.SourcePointerAddress,
                             metadata.SourcePointerLabel,
                             metadata.ExpressionIdentityHash,
-                            metadata.ExpressionSourceType);
+                            metadata.ExpressionSourceType, originSessionToken);
                         publishedRequestPaths.Add(previewRequestPath);
                         var previewCompletion = await TryCompleteHandoffAsync(
                             visualStudioProcessId,
@@ -84,7 +86,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 string requestPath;
                 if (ShouldUseDirectMemory(metadata))
                 {
-                    requestPath = WriteLiveMemoryRequest(visualStudioProcessId, metadata, handoffId);
+                    requestPath = WriteLiveMemoryRequest(visualStudioProcessId, metadata, handoffId, originSessionToken);
                 }
                 else
                 {
@@ -104,7 +106,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                         metadata.SourcePointerAddress,
                         metadata.SourcePointerLabel,
                         metadata.ExpressionIdentityHash,
-                        metadata.ExpressionSourceType);
+                        metadata.ExpressionSourceType, originSessionToken);
                 }
 
                 publishedRequestPaths.Add(requestPath);
@@ -165,7 +167,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     cancellationToken,
                     errorType: ex.GetType().FullName,
                     errorDetails: ex.ToString(),
-                    handoffId: handoffId);
+                    handoffId: handoffId,
+                    originSessionToken: originSessionToken);
                 if (!closeWhenLoaded)
                 {
                     session.ReportFailure(errorMessage);
@@ -182,11 +185,13 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             var session = new DockedVisualizerSession();
             var visualStudioProcessId = 0;
             var sourceType = visualizerTarget.TargetTypeFullName ?? "Image collection";
+            var originSessionToken = string.Empty;
             var closeWhenLoaded = false;
             var requestPaths = new List<string>();
             try
             {
                 visualStudioProcessId = VisualStudioInstance.GetCurrentProcessId();
+                originSessionToken = await CaptureDebuggerSessionAsync(visualStudioProcessId, cancellationToken);
                 var dte = VisualStudioInstance.GetDte(visualStudioProcessId)
                     ?? throw new InvalidOperationException("The hosting Visual Studio solution context is unavailable.");
                 var mappings = TypeMappingStore.ForSolution(VisualStudioInstance.GetSolutionPath(dte)).ExportEffectiveMappings();
@@ -235,7 +240,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             itemAssemblyName: item == null ? summary.SourceType : item.ItemAssemblyName,
                             debuggeeProcessId: item == null ? 0 : item.DebuggeeProcessId,
                             expressionIdentityHash: summary.ExpressionIdentityHash,
-                            expressionSourceType: summary.SourceType));
+                            expressionSourceType: summary.SourceType,
+                            originSessionToken: originSessionToken));
                         continue;
                     }
 
@@ -273,7 +279,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                     metadata.SourcePointerAddress,
                                     metadata.SourcePointerLabel,
                                     metadata.ExpressionIdentityHash,
-                                    metadata.ExpressionSourceType);
+                                    metadata.ExpressionSourceType, originSessionToken);
                                 itemPublishedRequestPaths.Add(previewRequestPath);
                                 var previewCompletion = await TryCompleteHandoffAsync(
                                     visualStudioProcessId,
@@ -289,7 +295,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             var liveRequestPath = WriteLiveMemoryRequest(
                                 visualStudioProcessId,
                                 metadata,
-                                handoffId);
+                                handoffId,
+                                originSessionToken);
                             requestPaths.Add(liveRequestPath);
                             itemPublishedRequestPaths.Add(liveRequestPath);
                             if (!previewForwarded && snapshotDirectory != null)
@@ -322,7 +329,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                                 metadata.SourcePointerAddress,
                                 metadata.SourcePointerLabel,
                                 metadata.ExpressionIdentityHash,
-                                metadata.ExpressionSourceType);
+                                metadata.ExpressionSourceType, originSessionToken);
                             requestPaths.Add(snapshotRequestPath);
                             itemPublishedRequestPaths.Add(snapshotRequestPath);
                         }
@@ -367,7 +374,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                             ex.ToString(),
                             handoffId,
                             expressionIdentityHash: summary.ExpressionIdentityHash,
-                            expressionSourceType: summary.SourceType));
+                            expressionSourceType: summary.SourceType,
+                            originSessionToken: originSessionToken));
                     }
                 }
 
@@ -416,7 +424,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     cancellationToken,
                     requestPaths,
                     ex.GetType().FullName,
-                    ex.ToString());
+                    ex.ToString(),
+                    originSessionToken: originSessionToken);
                 if (!closeWhenLoaded)
                 {
                     session.ReportFailure(errorMessage);
@@ -436,6 +445,21 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             return publishedRequestPaths.Count == 0;
         }
 
+        private static async Task<string> CaptureDebuggerSessionAsync(int visualStudioProcessId, CancellationToken cancellationToken)
+        {
+            string token;
+            if (VisualizerHandoffInbox.TryCaptureDebuggerSession(visualStudioProcessId, out token)) return token;
+            TryWakeDockedToolWindow(visualStudioProcessId);
+            var deadline = DateTime.UtcNow + HandoffAcknowledgementTimeout;
+            while (DateTime.UtcNow < deadline)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (VisualizerHandoffInbox.TryCaptureDebuggerSession(visualStudioProcessId, out token)) return token;
+                await Task.Delay(50, cancellationToken);
+            }
+            return VisualizerHandoffInbox.CaptureDebuggerSession(visualStudioProcessId);
+        }
+
         private static async Task<bool> TryForwardFailureAsync(
             int visualStudioProcessId,
             string displayName,
@@ -445,7 +469,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             List<string>? requestPaths = null,
             string? errorType = null,
             string? errorDetails = null,
-            string? handoffId = null)
+            string? handoffId = null,
+            string? originSessionToken = null)
         {
             if (visualStudioProcessId <= 0)
             {
@@ -462,7 +487,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                     errorMessage,
                     errorType,
                     errorDetails,
-                    handoffId));
+                    handoffId,
+                    originSessionToken: originSessionToken));
                 var completion = await TryCompleteHandoffAsync(
                     visualStudioProcessId,
                     requestPaths,
@@ -523,7 +549,8 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
         private static string WriteLiveMemoryRequest(
             int visualStudioProcessId,
             VisualizerSnapshotMetadata metadata,
-            string handoffId)
+            string handoffId,
+            string originSessionToken)
         {
             return VisualizerHandoffInbox.WriteLiveMemoryRequest(
                 visualStudioProcessId,
@@ -537,7 +564,7 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
                 metadata.SourcePointerAddress,
                 metadata.SourcePointerLabel,
                 metadata.ExpressionIdentityHash,
-                metadata.ExpressionSourceType);
+                metadata.ExpressionSourceType, originSessionToken);
         }
 
         private static string ResolveDisplayName(
@@ -589,25 +616,21 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             VisualizerSnapshotMetadata metadata,
             CancellationToken cancellationToken)
         {
+            var preview = await objectSource.RequestDataAsync<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer>(
+                new VisualizerSnapshotChunkRequest
+                {
+                    Operation = VisualizerSnapshotOperation.Preview,
+                    MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
+                    MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
+                },
+                jsonSerializer: null,
+                cancellationToken);
             try
             {
-                var preview = await objectSource.RequestDataAsync<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer>(
-                    new VisualizerSnapshotChunkRequest
-                    {
-                        Operation = VisualizerSnapshotOperation.Preview,
-                        MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
-                        MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
-                    },
-                    jsonSerializer: null,
-                    cancellationToken);
                 ValidatePreview(preview);
                 return preview;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch
+            catch (InvalidDataException)
             {
                 return null;
             }
@@ -619,26 +642,22 @@ namespace RawBufferVisualizer.VisualStudio.Extensibility
             VisualizerSnapshotMetadata metadata,
             CancellationToken cancellationToken)
         {
+            var preview = await objectSource.RequestDataAsync<VisualizerCollectionItemRequest, VisualizerSnapshotTransfer>(
+                new VisualizerCollectionItemRequest
+                {
+                    Operation = VisualizerCollectionOperation.Preview,
+                    Index = index,
+                    MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
+                    MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
+                },
+                jsonSerializer: null,
+                cancellationToken);
             try
             {
-                var preview = await objectSource.RequestDataAsync<VisualizerCollectionItemRequest, VisualizerSnapshotTransfer>(
-                    new VisualizerCollectionItemRequest
-                    {
-                        Operation = VisualizerCollectionOperation.Preview,
-                        Index = index,
-                        MaximumWidth = VisualizerSampledPreview.DefaultMaximumDimension,
-                        MaximumHeight = VisualizerSampledPreview.DefaultMaximumDimension
-                    },
-                    jsonSerializer: null,
-                    cancellationToken);
                 ValidatePreview(preview);
                 return preview;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw;
-            }
-            catch
+            catch (InvalidDataException)
             {
                 return null;
             }

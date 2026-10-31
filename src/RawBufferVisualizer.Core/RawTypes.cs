@@ -37,8 +37,30 @@ namespace RawBufferVisualizer.Core
         public int Height { get; set; }
         public int Stride { get; set; }
         public RawPixelFormat PixelFormat { get; set; }
+        // Significant bits per component/sample, not the total RGB/BGRA storage width.
+        // Zero retains format-default behavior where supported; legacy color snapshots may store 24/32.
         public int ValidBits { get; set; }
         public RawByteOrder ByteOrder { get; set; }
+
+        public static int GetDefaultValidBits(RawPixelFormat pixelFormat)
+        {
+            switch (pixelFormat)
+            {
+                case RawPixelFormat.Mono16:
+                    return 16;
+                case RawPixelFormat.Mono10PackedLsb:
+                    return 10;
+                case RawPixelFormat.Mono12PackedLsb:
+                    return 12;
+                case RawPixelFormat.Binary:
+                    return 1;
+                case RawPixelFormat.Float32:
+                case RawPixelFormat.Int32:
+                    return 32;
+                default:
+                    return 8;
+            }
+        }
 
         public int GetBytesPerPixel()
         {

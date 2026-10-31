@@ -57,7 +57,8 @@ namespace RawBufferVisualizer.VisualStudio
             IEnumMoniker monikerEnumerator;
             runningObjectTable.EnumRunning(out monikerEnumerator);
             var monikers = new IMoniker[1];
-            var expectedName = "VisualStudio.DTE.17.0:" + processId;
+            var vs17Name = "VisualStudio.DTE.17.0:" + processId;
+            var vs18Name = "VisualStudio.DTE.18.0:" + processId;
             while (monikerEnumerator.Next(1, monikers, IntPtr.Zero) == 0)
             {
                 string displayName;
@@ -70,7 +71,8 @@ namespace RawBufferVisualizer.VisualStudio
                     continue;
                 }
 
-                if (!displayName.EndsWith(expectedName, StringComparison.OrdinalIgnoreCase))
+                if (!displayName.EndsWith(vs17Name, StringComparison.OrdinalIgnoreCase)
+                    && !displayName.EndsWith(vs18Name, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }

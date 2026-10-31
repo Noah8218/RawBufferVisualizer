@@ -22,7 +22,7 @@ namespace RawBufferVisualizer.Core
                 case RawPixelFormat.RGB24:
                 case RawPixelFormat.BGR24:
                     var rgb = row + x * 3;
-                    return (buffer[rgb] + buffer[rgb + 1] + buffer[rgb + 2]) / 3;
+                    return (buffer[rgb] + buffer[rgb + 1] + buffer[rgb + 2]) / 3.0;
                 case RawPixelFormat.BGRA32:
                     var bgra = row + x * 4;
                     return (buffer[bgra] + buffer[bgra + 1] + buffer[bgra + 2]) / 3.0;
@@ -124,16 +124,16 @@ namespace RawBufferVisualizer.Core
                 return "-";
             }
 
-            var row = y * descriptor.Stride;
-            var start = row + (x * descriptor.GetBytesPerPixel());
+            var row = (long)y * descriptor.Stride;
+            var start = row + ((long)x * descriptor.GetBytesPerPixel());
             var count = descriptor.GetBytesPerPixel();
             if (descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb || descriptor.PixelFormat == RawPixelFormat.Mono12PackedLsb)
             {
                 var bitsPerPixel = descriptor.PixelFormat == RawPixelFormat.Mono10PackedLsb ? 10 : 12;
-                var startBit = x * bitsPerPixel;
+                var startBit = (long)x * bitsPerPixel;
                 var endBit = startBit + bitsPerPixel;
                 start = row + (startBit / 8);
-                count = ((endBit + 7) / 8) - (startBit / 8);
+                count = checked((int)(((endBit + 7) / 8) - (startBit / 8)));
             }
 
             if (start < 0 || start >= buffer.Length)
@@ -141,8 +141,9 @@ namespace RawBufferVisualizer.Core
                 return "-";
             }
 
-            count = System.Math.Min(count, buffer.Length - start);
-            return FormatBytes(buffer, start, count);
+            var offset = checked((int)start);
+            count = System.Math.Min(count, buffer.Length - offset);
+            return FormatBytes(buffer, offset, count);
         }
 
         private static string DescribeRgb(byte[] buffer, int offset, int x, int y, bool sourceIsRgb)
@@ -150,7 +151,7 @@ namespace RawBufferVisualizer.Core
             var c0 = buffer[offset];
             var c1 = buffer[offset + 1];
             var c2 = buffer[offset + 2];
-            var gv = (c0 + c1 + c2) / 3;
+            var gv = (c0 + c1 + c2) / 3.0;
             return sourceIsRgb
                 ? string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, R={2}, G={3}, B={4}, GV={5}, Raw={6:X2} {7:X2} {8:X2}", x, y, c0, c1, c2, gv, c0, c1, c2)
                 : string.Format(CultureInfo.InvariantCulture, "X={0}, Y={1}, B={2}, G={3}, R={4}, GV={5}, Raw={6:X2} {7:X2} {8:X2}", x, y, c0, c1, c2, gv, c0, c1, c2);

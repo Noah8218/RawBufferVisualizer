@@ -295,7 +295,8 @@ public static class RawBufferVsDockedPerfRot {
                 continue;
             }
 
-            if (displayName.IndexOf("VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) >= 0) {
+            if (string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.17.0:" + processId, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(displayName.TrimStart('!'), "VisualStudio.DTE.18.0:" + processId, StringComparison.OrdinalIgnoreCase)) {
                 object dte;
                 rot.GetObject(monikers[0], out dte);
                 return dte;
@@ -583,7 +584,7 @@ if (-not $NoBuild) {
     }
 }
 
-$vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Extensibility\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
+$vsixPath = Join-Path $repoRoot ".build\bin\RawBufferVisualizer.VisualStudio.Vssdk\$Configuration\$Framework\RawBufferVisualizer.VisualStudio.Extensibility.vsix"
 if (-not (Test-Path -LiteralPath $vsixPath)) {
     throw "VSIX was not found: $vsixPath"
 }

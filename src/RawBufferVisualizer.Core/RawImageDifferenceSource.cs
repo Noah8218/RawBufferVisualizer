@@ -8,6 +8,7 @@ namespace RawBufferVisualizer.Core
     {
         private readonly RawImageSource _a;
         private readonly RawImageSource _b;
+        private Tuple<RawRenderOptions, RawRenderOptions>? _inputOptions;
 
         public override bool IsFileBacked
         {
@@ -38,7 +39,20 @@ namespace RawBufferVisualizer.Core
 
         public override RawRenderOptions CreateRenderOptions()
         {
+            Volatile.Write(ref _inputOptions, CreateInputOptions());
             return new RawRenderOptions { AutoScale = false, BlackLevel = 0, WhiteLevel = 255 };
+        }
+
+        private Tuple<RawRenderOptions, RawRenderOptions> CreateInputOptions()
+        {
+            var left = CopyOptions(_a.CreateRenderOptions());
+            var right = CopyOptions(_b.CreateRenderOptions());
+            return Tuple.Create(left, right);
+        }
+
+        private static RawRenderOptions CopyOptions(RawRenderOptions options)
+        {
+            return new RawRenderOptions { AutoScale = options.AutoScale, BlackLevel = options.BlackLevel, WhiteLevel = options.WhiteLevel };
         }
 
         public override RenderedImage RenderTile(int x, int y, int width, int height, RawRenderOptions? options)
@@ -60,10 +74,15 @@ namespace RawBufferVisualizer.Core
             RawRenderOptions? options,
             CancellationToken cancellationToken)
         {
-            var aOptions = _a.CreateRenderOptions();
-            var bOptions = _b.CreateRenderOptions();
-            var left = _a.RenderTileSampled(x, y, width, height, sampleStep, aOptions, cancellationToken);
-            var right = _b.RenderTileSampled(x, y, width, height, sampleStep, bOptions, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
+            var inputOptions = Volatile.Read(ref _inputOptions);
+            if (inputOptions == null)
+            {
+                var created = CreateInputOptions();
+                inputOptions = Interlocked.CompareExchange(ref _inputOptions, created, null) ?? created;
+            }
+            var left = _a.RenderTileSampled(x, y, width, height, sampleStep, CopyOptions(inputOptions.Item1), cancellationToken);
+            var right = _b.RenderTileSampled(x, y, width, height, sampleStep, CopyOptions(inputOptions.Item2), cancellationToken);
             var diff = new byte[left.Bgra32.Length];
             for (var i = 0; i < diff.Length; i += 4)
             {
@@ -83,7 +102,7 @@ namespace RawBufferVisualizer.Core
 
         public override string DescribePixel(int x, int y)
         {
-            var pixel = RenderTile(x, y, 1, 1, CreateRenderOptions());
+            var pixel = RenderTile(x, y, 1, 1, null);
             var descriptor = new RawImageDescriptor { Width = 1, Height = 1, Stride = 4, PixelFormat = RawPixelFormat.BGRA32, ValidBits = 8 };
             return string.Format(
                 CultureInfo.InvariantCulture,
@@ -104,6 +123,14 @@ namespace RawBufferVisualizer.Core
                 var b = right(x, y).Bgra32;
                 return new RenderedImage(1, 1, new[] { AbsByte(a[0], b[0]), AbsByte(a[1], b[1]), AbsByte(a[2], b[2]), (byte)255 });
             };
+        }
+
+        public override RawPixelStatistics GetStatistics(int x, int y, int width, int height)
+        {
+            EnsureTileBounds(SourceDescriptor, x, y, width, height);
+            var rendered = RenderTile(x, y, width, height, null);
+            var descriptor = new RawImageDescriptor { Width = width, Height = height, Stride = checked(width * 4), PixelFormat = RawPixelFormat.BGRA32, ValidBits = 8 };
+            return RawPixelStatistics.Calculate(rendered.Bgra32, descriptor, 0, 0, width, height);
         }
 
         public override byte[] ReadAllBytes()

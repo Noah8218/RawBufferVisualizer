@@ -268,6 +268,11 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private static TypeMappingFile Deserialize(byte[] bytes)
         {
+            // The serializer accepts EOF after the mappings array without the root closing brace.
+            // Ignore JSON whitespace and UTF-16 padding; the serializer still validates the original bytes.
+            var end = bytes.Length - 1;
+            while (end >= 0 && (bytes[end] == 0 || bytes[end] == ' ' || bytes[end] == '\t' || bytes[end] == '\r' || bytes[end] == '\n')) end--;
+            if (end < 0 || bytes[end] != '}') throw new InvalidDataException("Mapping file is incomplete.");
             var offset = bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF ? 3 : 0;
             using (var stream = new MemoryStream(bytes, offset, bytes.Length - offset))
             {

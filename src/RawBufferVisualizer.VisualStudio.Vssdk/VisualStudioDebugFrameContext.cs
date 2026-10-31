@@ -25,7 +25,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string dataTypeName,
             int byteCount,
             out byte[] buffer,
-            out string error)
+            out string error,
+            uint selectedThreadId = 0,
+            Func<bool>? isCurrent = null)
         {
             buffer = Array.Empty<byte>();
             error = string.Empty;
@@ -47,8 +49,15 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return false;
             }
 
+            uint nativeThreadId;
+            if (selectedThreadId == 0 || ErrorHandler.Failed(thread.GetThreadId(out nativeThreadId))
+                || nativeThreadId != selectedThreadId || (isCurrent != null && !isCurrent()))
+            {
+                error = "The native debugger thread does not match the selected debugger context.";
+                return false;
+            }
             IDebugStackFrame2? frame;
-            if (!TryFindFrame(thread, frameFunctionName, out frame, out error) || frame == null)
+            if (!TryFindFrame(thread, frameFunctionName, out frame, out error, isCurrent) || frame == null)
             {
                 return false;
             }
@@ -64,11 +73,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             IDebugProperty2? arrayProperty;
             if (TryEvaluateProperty(expressionContext, arrayExpressionText, out arrayProperty, out error)
                 && arrayProperty != null
-                && TryEnumerateArrayBytes(arrayProperty, dataTypeName, byteCount, out buffer, out error))
+                && TryEnumerateArrayBytes(arrayProperty, dataTypeName, byteCount, out buffer, out error, isCurrent))
             {
-                return true;
+                return isCurrent == null || isCurrent();
             }
 
+            if (isCurrent != null && !isCurrent()) return false;
             IDebugExpression2 expression;
             string parseError;
             uint errorIndex;
@@ -115,10 +125,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var bytes = new byte[byteCount];
+            if (isCurrent != null && !isCurrent()) return false;
             uint bytesRead;
             uint unreadableBytes = 0;
             hr = memoryBytes.ReadAt(memoryContext, (uint)byteCount, bytes, out bytesRead, ref unreadableBytes);
-            if (ErrorHandler.Failed(hr) || bytesRead != (uint)byteCount || unreadableBytes != 0)
+            if (ErrorHandler.Failed(hr) || bytesRead != (uint)byteCount || unreadableBytes != 0
+                || (isCurrent != null && !isCurrent()))
             {
                 error = string.Format(
                     System.Globalization.CultureInfo.InvariantCulture,
@@ -179,7 +191,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             string dataTypeName,
             int byteCount,
             out byte[] buffer,
-            out string error)
+            out string error,
+            Func<bool>? isCurrent)
         {
             buffer = Array.Empty<byte>();
             error = string.Empty;
@@ -191,6 +204,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
 
             var requiredElements = byteCount / elementSize;
+            if (requiredElements > 256 || (isCurrent != null && !isCurrent()))
+            {
+                error = "Safe native element enumeration is limited to 256 elements; contiguous memory is required for larger arrays.";
+                return false;
+            }
             var filter = Guid.Empty;
             IEnumDebugPropertyInfo2 children;
             const enum_DEBUGPROP_INFO_FLAGS fields = enum_DEBUGPROP_INFO_FLAGS.DEBUGPROP_INFO_NAME
@@ -227,6 +245,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var batch = new DEBUG_PROPERTY_INFO[Math.Min(256, requiredElements)];
             while (writtenElements < requiredElements)
             {
+                if (isCurrent != null && !isCurrent()) return false;
                 var requested = Math.Min(batch.Length, requiredElements - writtenElements);
                 uint fetched = 0;
                 hr = children.Next((uint)requested, batch, out fetched);
@@ -384,7 +403,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             IDebugThread2 thread,
             string frameFunctionName,
             out IDebugStackFrame2? frame,
-            out string error)
+            out string error,
+            Func<bool>? isCurrent)
         {
             frame = null;
             error = string.Empty;
@@ -398,37 +418,39 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return false;
             }
 
-            IDebugStackFrame2? firstFrame = null;
             var info = new FRAMEINFO[1];
-            while (true)
+            for (var index = 0; index < 128; index++)
             {
+                if (isCurrent != null && !isCurrent()) return false;
                 uint fetched = 0;
                 hr = frameEnumerator.Next(1, info, ref fetched);
-                if (ErrorHandler.Failed(hr) || fetched == 0)
+                if (ErrorHandler.Failed(hr))
                 {
-                    break;
+                    frame = null;
+                    error = "The debugger could not complete stack-frame identity validation.";
+                    return false;
                 }
-
-                if (firstFrame == null)
+                if (fetched == 0)
                 {
-                    firstFrame = info[0].m_pFrame;
+                    error = frame == null ? "The selected debugger frame was not found." : string.Empty;
+                    return frame != null;
                 }
 
                 if (info[0].m_pFrame != null
                     && FrameNamesMatch(frameFunctionName, info[0].m_bstrFuncName))
                 {
+                    if (frame != null)
+                    {
+                        frame = null;
+                        error = "The selected function has multiple native frames; exact frame identity is required.";
+                        return false;
+                    }
                     frame = info[0].m_pFrame;
-                    return true;
                 }
             }
 
-            frame = firstFrame;
-            if (frame != null)
-            {
-                return true;
-            }
-
-            error = "The debugger did not return a readable stack frame.";
+            frame = null;
+            error = "Stack-frame identity validation exceeded its 128-frame bound.";
             return false;
         }
 
@@ -439,8 +461,14 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return false;
             }
 
-            return dteName.IndexOf(nativeName, StringComparison.OrdinalIgnoreCase) >= 0
-                || nativeName.IndexOf(dteName, StringComparison.OrdinalIgnoreCase) >= 0;
+            return string.Equals(NormalizeFrameName(dteName), NormalizeFrameName(nativeName), StringComparison.Ordinal);
+        }
+
+        private static string NormalizeFrameName(string name)
+        {
+            var arguments = name.IndexOf('(');
+            var function = arguments < 0 ? name : name.Substring(0, arguments);
+            return function.Substring(function.LastIndexOf('!') + 1).Trim();
         }
     }
 }

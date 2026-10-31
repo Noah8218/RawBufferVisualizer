@@ -9,8 +9,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class OpenCvSharpMatVisualizerObjectSource : VisualizerObjectSource
     {
-        private object? _cachedMat;
-        private OpenCvSharpMatView? _cachedView;
+        private readonly VisualizerViewCache<OpenCvSharpMatView> _viewCache =
+            new VisualizerViewCache<OpenCvSharpMatView>(target => OpenCvSharpMatVisualizerTransfer.CreateView(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
@@ -40,13 +40,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private OpenCvSharpMatView GetView(object target)
         {
-            if (!ReferenceEquals(target, _cachedMat))
-            {
-                _cachedMat = target;
-                _cachedView = OpenCvSharpMatVisualizerTransfer.CreateView(target);
-            }
-
-            return _cachedView ?? throw new InvalidOperationException("Mat view was not created.");
+            return _viewCache.GetOrCreate(target);
         }
     }
 

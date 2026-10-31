@@ -15,7 +15,7 @@ namespace RawBufferVisualizer.VisualStudio
             DirectoryPath = directoryPath;
             _leasePath = Path.Combine(
                 directoryPath,
-                ".rbuf-active-" + Guid.NewGuid().ToString("N") + ".lease");
+                Convert.ToBase64String(Guid.NewGuid().ToByteArray()).TrimEnd('=').Replace('+', '-').Replace('/', '_') + ".rbl");
             _stream = new FileStream(
                 _leasePath,
                 FileMode.CreateNew,

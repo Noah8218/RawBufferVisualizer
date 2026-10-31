@@ -9,8 +9,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class EmguCvMatVisualizerObjectSource : VisualizerObjectSource
     {
-        private object? _cachedMat;
-        private EmguCvMatView? _cachedView;
+        private readonly VisualizerViewCache<EmguCvMatView> _viewCache =
+            new VisualizerViewCache<EmguCvMatView>(target => EmguCvMatVisualizerTransfer.CreateView(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
@@ -40,13 +40,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
         private EmguCvMatView GetView(object target)
         {
-            if (!ReferenceEquals(target, _cachedMat))
-            {
-                _cachedMat = target;
-                _cachedView = EmguCvMatVisualizerTransfer.CreateView(target);
-            }
-
-            return _cachedView ?? throw new InvalidOperationException("Emgu Mat view was not created.");
+            return _viewCache.GetOrCreate(target);
         }
     }
 

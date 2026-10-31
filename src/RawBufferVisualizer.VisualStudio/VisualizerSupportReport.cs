@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
+using System.Linq;
 using System.Text;
 
 namespace RawBufferVisualizer.VisualStudio
@@ -31,6 +33,29 @@ namespace RawBufferVisualizer.VisualStudio
         private const int MaxDetailLength = 32768;
         private const int MaxDiagnosticCount = 128;
         private const int MaxDiagnosticLength = 2048;
+
+        public static string FindLatestActivityLogPath(string root, string visualStudioVersion)
+        {
+            var profilePattern = visualStudioVersion.StartsWith("18.", StringComparison.Ordinal) ? "18.0_*" : "17.0_*";
+            try
+            {
+                if (Directory.Exists(root))
+                {
+                    var latest = Directory.GetDirectories(root, profilePattern)
+                        .Select(directory => Path.Combine(directory, "ActivityLog.xml"))
+                        .Where(File.Exists)
+                        .OrderByDescending(File.GetLastWriteTimeUtc)
+                        .FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(latest)) return latest!;
+                }
+
+                return Path.Combine(root, profilePattern, "ActivityLog.xml");
+            }
+            catch
+            {
+                return "%APPDATA%\\Microsoft\\VisualStudio\\" + profilePattern + "\\ActivityLog.xml";
+            }
+        }
 
         public static string Create(VisualizerSupportReportData data)
         {

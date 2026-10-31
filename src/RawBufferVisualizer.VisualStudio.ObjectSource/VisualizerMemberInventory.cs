@@ -100,7 +100,20 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return "0x" + pointer.ToString("X", CultureInfo.InvariantCulture);
             }
 
-            var text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+            if (Type.GetTypeCode(value.GetType()) == TypeCode.Object && !(value is Guid))
+            {
+                return GetFriendlyTypeName(memberType);
+            }
+
+            string text;
+            try
+            {
+                text = Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+            }
+            catch
+            {
+                return "<unreadable>";
+            }
             if (text.Length > MaxSampleValueLength)
             {
                 text = text.Substring(0, MaxSampleValueLength) + "...";

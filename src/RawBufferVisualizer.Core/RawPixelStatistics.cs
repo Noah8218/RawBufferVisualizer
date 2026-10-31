@@ -16,12 +16,18 @@ namespace RawBufferVisualizer.Core
         {
             var result = new RawPixelStatistics { Minimum = double.PositiveInfinity, Maximum = double.NegativeInfinity };
             var sumSquaredDeviations = 0.0;
+            var sum = 0.0;
+            var correction = 0.0;
             for (var row = y; row < y + height; row++)
             {
                 for (var column = x; column < x + width; column++)
                 {
                     var value = RawPixelInspector.ReadNumericValue(buffer, descriptor, column, row);
                     if (double.IsNaN(value) || double.IsInfinity(value)) continue;
+                    // Compensate the mean's sum when large opposite values hide a small residue.
+                    var total = sum + value;
+                    correction += Math.Abs(sum) >= Math.Abs(value) ? (sum - total) + value : (value - total) + sum;
+                    sum = total;
                     result.Count++;
                     result.Minimum = Math.Min(result.Minimum, value);
                     result.Maximum = Math.Max(result.Maximum, value);
@@ -39,6 +45,7 @@ namespace RawBufferVisualizer.Core
             else
             {
                 result.StandardDeviation = Math.Sqrt(Math.Max(0, sumSquaredDeviations / result.Count));
+                result.Mean = (sum + correction) / result.Count;
             }
             return result;
         }

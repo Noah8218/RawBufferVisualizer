@@ -510,14 +510,25 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
         public void ResetRenderLevels()
         {
-            if (_descriptor == null || _imageSource == null)
+            if (_descriptor == null || _imageSource == null || _sourceUnavailable)
             {
                 return;
             }
 
-            _renderOptions = _imageSource.CreateRenderOptions();
-            InvalidateTextureCache();
-            RequestRender();
+            try
+            {
+                _renderOptions = _imageSource.CreateRenderOptions();
+                InvalidateTextureCache();
+                RequestRender();
+            }
+            catch (RawImageSourceUnavailableException ex)
+            {
+                MarkSourceUnavailable(ex);
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                MarkSourceUnavailable(new RawImageSourceUnavailableException(ex.Message, ex));
+            }
         }
 
         public RawRenderOptions? GetRenderOptionsSnapshot()
@@ -792,6 +803,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
 
                 if (_tiles.Count == 0 && !_useProgressiveViewportRendering)
                 {
+                    gl.Flush();
                     return;
                 }
 
@@ -1657,6 +1669,12 @@ namespace RawBufferVisualizer.OpenGlCanvas
                 if (result.Error is RawImageSourceUnavailableException sourceUnavailable)
                 {
                     MarkSourceUnavailable(sourceUnavailable);
+                    return;
+                }
+
+                if (result.Error is IOException || result.Error is UnauthorizedAccessException)
+                {
+                    MarkSourceUnavailable(new RawImageSourceUnavailableException(result.Error.Message, result.Error));
                     return;
                 }
 

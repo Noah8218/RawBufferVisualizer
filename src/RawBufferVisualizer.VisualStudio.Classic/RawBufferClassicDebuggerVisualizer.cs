@@ -97,11 +97,17 @@ namespace RawBufferVisualizer.VisualStudio.Classic
             var visualStudioProcessId = Process.GetCurrentProcess().Id;
             var displayName = "Raw buffer";
             var sourceType = "Debugger visualizer";
+            var originSessionToken = string.Empty;
             string? metadataPath = null;
             var requestPaths = new List<string>();
 
             try
             {
+                if (!VisualizerHandoffInbox.TryCaptureDebuggerSession(visualStudioProcessId, out originSessionToken))
+                {
+                    _wakeDockedToolWindow(visualStudioProcessId);
+                    originSessionToken = VisualizerHandoffInbox.CaptureDebuggerSession(visualStudioProcessId);
+                }
                 var objectProvider2 = objectProvider as IVisualizerObjectProvider2
                     ?? throw new NotSupportedException("The Visual Studio object provider does not support JSON data.");
                 var metadata = objectProvider2.GetDeserializableObject()
@@ -137,7 +143,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                                     sourceType + " (sampled preview of " + metadata.Descriptor.Width + "x" + metadata.Descriptor.Height + ")",
                                     handoffId, true, metadata.ProcessId, metadata.BufferAddress,
                                     metadata.SourcePointerAddress, metadata.SourcePointerLabel,
-                                    metadata.ExpressionIdentityHash, metadata.ExpressionSourceType));
+                                    metadata.ExpressionIdentityHash, metadata.ExpressionSourceType, originSessionToken));
                             }
                             catch
                             {
@@ -145,6 +151,10 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                                 throw;
                             }
                         }
+                    }
+                    catch (VisualizerObjectSourceException)
+                    {
+                        throw;
                     }
                     catch (Exception ex)
                     {
@@ -159,7 +169,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                         visualStudioProcessId, metadata.ProcessId, metadata.BufferAddress,
                         metadata.BufferLength, metadata.Descriptor, displayName, sourceType, handoffId,
                         metadata.SourcePointerAddress, metadata.SourcePointerLabel,
-                        metadata.ExpressionIdentityHash, metadata.ExpressionSourceType));
+                        metadata.ExpressionIdentityHash, metadata.ExpressionSourceType, originSessionToken));
                 }
                 else
                 {
@@ -172,7 +182,7 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                         visualStudioProcessId, metadataPath, displayName, sourceType, handoffId,
                         false, metadata.ProcessId, metadata.BufferAddress,
                         metadata.SourcePointerAddress, metadata.SourcePointerLabel,
-                        metadata.ExpressionIdentityHash, metadata.ExpressionSourceType));
+                        metadata.ExpressionIdentityHash, metadata.ExpressionSourceType, originSessionToken));
                 }
             }
             catch (Exception ex)
@@ -188,7 +198,8 @@ namespace RawBufferVisualizer.VisualStudio.Classic
                     sourceType,
                     ex.Message,
                     ex.GetType().FullName,
-                    ex.ToString()));
+                    ex.ToString(),
+                    originSessionToken: originSessionToken));
             }
 
             ScheduleTerminalCleanup(requestPaths);

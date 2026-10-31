@@ -202,12 +202,15 @@ namespace RawBufferVisualizer.Sdk
                 Directory.CreateDirectory(directory);
             }
 
-            var rawPath = string.IsNullOrWhiteSpace(rawFileName)
+            var requestedRawFileName = rawFileName ?? string.Empty;
+            var rawPath = string.IsNullOrWhiteSpace(requestedRawFileName)
                 ? GetDefaultRawPath(fullMetadataPath)
-                : Path.GetFullPath(Path.Combine(directory ?? string.Empty, rawFileName));
+                : Path.GetFullPath(Path.Combine(directory ?? string.Empty, requestedRawFileName));
 
             var dto = RawBufferSnapshotDto.From(descriptor);
-            dto.RawFile = Path.GetFileName(rawPath);
+            dto.RawFile = string.IsNullOrWhiteSpace(requestedRawFileName)
+                ? Path.GetFileName(rawPath)
+                : Path.IsPathRooted(requestedRawFileName) ? rawPath : requestedRawFileName;
             var expected = AtomicFileSave.ReadExisting(fullMetadataPath);
             AtomicFileSave.Write(fullMetadataPath, SerializeDto(dto), expected);
 
@@ -240,10 +243,10 @@ namespace RawBufferVisualizer.Sdk
 
         private static RawBufferSnapshotDto LoadDto(string fullMetadataPath)
         {
-            var bytes = File.ReadAllBytes(fullMetadataPath);
-            var offset = HasUtf8Bom(bytes) ? 3 : 0;
-            using (var stream = new MemoryStream(bytes, offset, bytes.Length - offset))
+            using (var stream = new FileStream(fullMetadataPath, FileMode.Open, FileAccess.Read, FileShare.Read))
             {
+                if (stream.ReadByte() != 0xEF || stream.ReadByte() != 0xBB || stream.ReadByte() != 0xBF)
+                    stream.Position = 0;
                 var serializer = new DataContractJsonSerializer(typeof(RawBufferSnapshotDto));
                 var loaded = serializer.ReadObject(stream);
                 if (loaded == null)
@@ -253,14 +256,6 @@ namespace RawBufferVisualizer.Sdk
 
                 return (RawBufferSnapshotDto)loaded;
             }
-        }
-
-        private static bool HasUtf8Bom(byte[] bytes)
-        {
-            return bytes.Length >= 3
-                && bytes[0] == 0xEF
-                && bytes[1] == 0xBB
-                && bytes[2] == 0xBF;
         }
 
         private static string GetDefaultRawPath(string metadataPath)

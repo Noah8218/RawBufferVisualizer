@@ -32,7 +32,7 @@ namespace RawBufferVisualizer.Sdk
                 Height = Height,
                 Stride = Stride,
                 PixelFormat = PixelFormat,
-                ValidBits = BitDepth > 0 ? BitDepth : GetDefaultBitDepth(PixelFormat),
+                ValidBits = BitDepth > 0 ? BitDepth : RawImageDescriptor.GetDefaultValidBits(PixelFormat),
                 ByteOrder = ByteOrder
             };
 
@@ -101,24 +101,5 @@ namespace RawBufferVisualizer.Sdk
             }
         }
 
-        private static int GetDefaultBitDepth(RawPixelFormat pixelFormat)
-        {
-            switch (pixelFormat)
-            {
-                case RawPixelFormat.Mono16:
-                    return 16;
-                case RawPixelFormat.Mono10PackedLsb:
-                    return 10;
-                case RawPixelFormat.Mono12PackedLsb:
-                    return 12;
-                case RawPixelFormat.Binary:
-                    return 1;
-                case RawPixelFormat.Float32:
-                case RawPixelFormat.Int32:
-                    return 32;
-                default:
-                    return 8;
-            }
-        }
     }
 }

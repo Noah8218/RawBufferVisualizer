@@ -6,7 +6,8 @@ param(
     [int]$Height = 100000,
     [ValidateSet("Mono8", "Mono10PackedLsb", "Mono12PackedLsb")]
     [string]$PixelFormat = "Mono8",
-    [string]$OutputDir = "artifacts\ui\large-file-backed",
+    [string]$OutputDir = "",
+    [string]$SampleRoot = "",
     [string]$CaptureFileName = "",
     [switch]$Dense,
     [int]$DenseBlockRows = 64,
@@ -31,10 +32,16 @@ if (-not $NoBuild) {
     }
 }
 
-$outputRoot = Join-Path $repoRoot $OutputDir
+if ([string]::IsNullOrWhiteSpace($OutputDir)) {
+    $OutputDir = if (Get-PSDrive -Name D -ErrorAction SilentlyContinue) {
+        'D:\OpenVisionLab-TestData\RawBufferVisualizer\large-file-backed'
+    } else { Join-Path $repoRoot 'artifacts\ui\large-file-backed' }
+}
+$outputRoot = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($OutputDir)) { $OutputDir } else { Join-Path $repoRoot $OutputDir }))
 New-Item -ItemType Directory -Force -Path $outputRoot | Out-Null
 
-$sampleRoot = Join-Path $repoRoot "artifacts\large-file-backed"
+if ([string]::IsNullOrWhiteSpace($SampleRoot)) { $SampleRoot = Join-Path $outputRoot 'samples' }
+$sampleRoot = [IO.Path]::GetFullPath($(if ([IO.Path]::IsPathRooted($SampleRoot)) { $SampleRoot } else { Join-Path $repoRoot $SampleRoot }))
 New-Item -ItemType Directory -Force -Path $sampleRoot | Out-Null
 $mode = if ($Dense) { "dense" } else { "sparse" }
 $sampleName = "huge-$($Width)x$($Height)-$($PixelFormat.ToLowerInvariant())-$mode"

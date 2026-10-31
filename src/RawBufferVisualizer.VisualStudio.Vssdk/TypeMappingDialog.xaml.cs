@@ -137,7 +137,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             SelectRole(HeightBox, FirstAvailable(preferredMembers?.Height, PreselectByName(HeightNameCandidates, "height", "sizey")));
             SelectRole(StrideBox, FirstAvailable(preferredMembers?.Stride, PreselectByName(StrideNameCandidates, "stride", "pitch", "step")));
             SelectRole(PixelFormatBox, FirstAvailable(preferredMembers?.PixelFormat, PreselectPixelFormatMember()));
-            SelectRole(ValidBitsBox, FirstAvailable(preferredMembers?.ValidBits, PreselectByName(ValidBitsNameCandidates, "validbits", "bitdepth", "depth")));
+            SelectRole(ValidBitsBox, FirstAvailable(FirstAvailable(preferredMembers?.ValidBits, preferredMembers?.BitDepth), PreselectByName(ValidBitsNameCandidates, "validbits", "bitdepth", "depth")));
             SelectRole(BufferLengthBox, FirstAvailable(preferredMembers?.BufferLength, PreselectByName(BufferLengthNameCandidates, "bufferlength", "bytelength", "length")));
             RebuildEnumMappingRows();
         }
@@ -315,7 +315,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             out string error)
         {
             PreviewImage.Source = null;
-            if (!TryCreateLiveSource(descriptor, dataMember, false, out var source, out error))
+            if (!TryCreateLiveSource(descriptor, dataMember, out var source, out error))
             {
                 return false;
             }
@@ -346,7 +346,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool TryCreateLiveSource(
             RawImageDescriptor descriptor,
             VisualizerMemberInventoryItem? dataMember,
-            bool includeFullStrideSpan,
             out RawImageSource source,
             out string error)
         {
@@ -379,18 +378,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
 
                 bufferLength = parsedLength;
-            }
-            else if (includeFullStrideSpan)
-            {
-                try
-                {
-                    bufferLength = Math.Max(bufferLength, checked((long)descriptor.Stride * descriptor.Height));
-                }
-                catch (OverflowException)
-                {
-                    error = "the selected stride and height exceed the supported buffer range.";
-                    return false;
-                }
             }
 
             try
@@ -481,6 +468,12 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
             }
 
+            sample = (sample ?? string.Empty).Trim();
+            if (sample.Length >= 2 && sample[0] == '"' && sample[sample.Length - 1] == '"')
+            {
+                sample = sample.Substring(1, sample.Length - 2);
+            }
+
             return Enum.TryParse(sample, true, out pixelFormat);
         }
 
@@ -506,7 +499,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return;
             }
 
-            if (!TryCreateLiveSource(descriptor, dataMember, true, out var source, out var sourceError))
+            if (!TryCreateLiveSource(descriptor, dataMember, out var source, out var sourceError))
             {
                 DiagnosisStatusText.Text = "Diagnosis unavailable: " + sourceError;
                 return;
@@ -523,7 +516,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     {
                         return BufferDoctor.Diagnose(source, diagnosisToken);
                     }
-                }, diagnosisToken).ContinueWith(
+                }, CancellationToken.None).ContinueWith(
                 task => CompleteDiagnosis(task, cancellation),
                 CancellationToken.None,
                 TaskContinuationOptions.None,
@@ -535,6 +528,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             Task<BufferDiagnosisResult> task,
             CancellationTokenSource cancellation)
         {
+            var failure = task.IsFaulted ? task.Exception?.GetBaseException() : null;
             if (!ReferenceEquals(_diagnosisCancellation, cancellation))
             {
                 return;
@@ -549,7 +543,6 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             if (task.IsFaulted)
             {
-                var failure = task.Exception == null ? null : task.Exception.GetBaseException();
                 DiagnosisStatusText.Text = failure is RawImageSourceUnavailableException
                     ? "Live source unavailable. Pause at a valid breakpoint and diagnose again."
                     : "Diagnosis unavailable: " + (failure == null ? "unknown error." : failure.Message);

@@ -33,9 +33,15 @@ namespace RawBufferVisualizer.Core
             var finite = 0;
             var mean = 0.0;
             var sumSquaredDelta = 0.0;
+            var sum = 0.0;
+            var correction = 0.0;
             foreach (var value in values)
             {
                 if (double.IsNaN(value) || double.IsInfinity(value)) { excluded++; continue; }
+                // Keep Welford variance, but preserve small residues in the reported mean.
+                var total = sum + value;
+                correction += Math.Abs(sum) >= Math.Abs(value) ? (sum - total) + value : (value - total) + sum;
+                sum = total;
                 minimum = Math.Min(minimum, value);
                 maximum = Math.Max(maximum, value);
                 var delta = value - mean;
@@ -46,7 +52,7 @@ namespace RawBufferVisualizer.Core
             ExcludedCount = excluded;
             Minimum = FiniteCount == 0 ? double.NaN : minimum;
             Maximum = FiniteCount == 0 ? double.NaN : maximum;
-            Mean = finite == 0 ? double.NaN : mean;
+            Mean = finite == 0 ? double.NaN : (sum + correction) / finite;
             StandardDeviation = finite == 0 ? double.NaN : Math.Sqrt(Math.Max(0, sumSquaredDelta / finite));
             var numericRange = usesRawValues && (descriptor.PixelFormat == RawPixelFormat.Float32 || descriptor.PixelFormat == RawPixelFormat.Int32);
             LowerBound = numericRange && FiniteCount > 0 ? minimum : 0;
