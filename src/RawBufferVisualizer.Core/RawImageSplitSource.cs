@@ -104,6 +104,12 @@ namespace RawBufferVisualizer.Core
             return new RenderedImage(left.Width, left.Height, output);
         }
 
+        public override RawImageDescriptor GetPixelDescriptor(int x, int y)
+        {
+            EnsureTileBounds(SourceDescriptor, x, y, 1, 1);
+            return (x < SourceDescriptor.Width / 2 ? _a : _b).GetPixelDescriptor(x, y);
+        }
+
         public override string DescribePixel(int x, int y)
         {
             var split = SourceDescriptor.Width / 2;
