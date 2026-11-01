@@ -84,6 +84,10 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             new DebuggerHandoffSessionGate();
         private AutomaticVisionScanResult? _automaticScanResult;
         private long _automaticScanGeneration = -1;
+        private long _automaticFrameGeneration = -1;
+        private int _automaticFrameProcessId;
+        private int _automaticFrameThreadId;
+        private uint _automaticFrameDepth;
         private int _automaticScanCursor;
         private int _automaticRefreshedCount;
         private int _automaticMappingCount;
@@ -259,7 +263,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 #pragma warning disable VSTHRD109
             ThreadHelper.ThrowIfNotOnUIThread();
 #pragma warning restore VSTHRD109
-            if (_automaticScanRunning || !IsAutomaticScanCurrent(generation))
+            if (_automaticScanRunning || !IsAutomaticScanCurrent(generation, false))
             {
                 return;
             }
@@ -272,11 +276,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             try
             {
                 await Dispatcher.Yield(DispatcherPriority.Render);
-                if (!IsAutomaticScanCurrent(generation))
+                if (!IsAutomaticScanCurrent(generation, false)
+                    || !TryCaptureAutomaticScanFrame(generation))
                 {
                     return;
                 }
 
+                // A new discovery owns a new batch; already opened documents remain available.
+                _automaticScanResult = null;
+                _automaticScanGeneration = -1;
+                _automaticScanCursor = 0;
                 var scan = await _automaticVisionInspector.ScanAsync(
                     _dte!.Debugger, () => ContinueAutomaticDiscoveryAsync(generation), true, GetMappingStore());
                 if (!IsAutomaticScanCurrent(generation))
@@ -390,7 +399,8 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                     break;
                 }
 
-                ProcessAutomaticInspection(scan, scan.Inspections[_automaticScanCursor]);
+                ProcessAutomaticInspection(scan, scan.Inspections[_automaticScanCursor], generation);
+                if (!IsAutomaticScanCurrent(generation)) break;
                 _automaticScanCursor++;
                 processedInBatch++;
                 UpdateAutomaticBatchUi();
@@ -400,9 +410,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
         private void ProcessAutomaticInspection(
             AutomaticVisionScanResult scan,
-            AutomaticVisionInspection inspection)
+            AutomaticVisionInspection inspection,
+            long generation)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
+            if (!IsAutomaticScanCurrent(generation)) return;
             var collectionSummary = scan.FindCollectionSummary(inspection.CollectionRootExpression);
             try
             {
@@ -421,7 +433,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 if (inspection.KnownImageKind != AutomaticKnownImageKind.None)
                 {
                     string knownOpenError;
-                    if (TryOpenKnownRegisteredImage(_dte!.Debugger, inspection, out knownOpenError))
+                    var knownOpened = TryOpenKnownRegisteredImage(_dte!.Debugger, inspection, generation, out knownOpenError);
+                    if (!IsAutomaticScanCurrent(generation)) return;
+                    if (knownOpened)
                     {
                         var knownDocument = FindHandoffDocument(inspection.StableKey);
                         if (knownDocument != null)
@@ -480,7 +494,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                             mapping,
                             inspection.RuntimeTypeName,
                             out openError,
-                            inspection.StableKey);
+                            inspection.StableKey,
+                            generation);
+                    if (!IsAutomaticScanCurrent(generation)) return;
                     if (openedSuccessfully)
                     {
                         var document = FindHandoffDocument(inspection.StableKey);
@@ -549,6 +565,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
             catch (Exception ex)
             {
+                if (!IsAutomaticScanCurrent(generation)) return;
                 if (!inspection.UsesSavedMapping
                     && inspection.KnownImageKind == AutomaticKnownImageKind.None)
                 {
@@ -829,7 +846,34 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             }
         }
 
-        private bool IsAutomaticScanCurrent(long generation)
+        private bool TryCaptureAutomaticScanFrame(long generation)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            _automaticFrameGeneration = -1;
+            try
+            {
+                var debugger = _dte?.Debugger;
+                var process = debugger?.CurrentProcess;
+                var thread = debugger?.CurrentThread;
+                var frame = debugger?.CurrentStackFrame as EnvDTE90a.StackFrame2;
+                if (process == null || thread == null || frame == null) return false;
+                var processId = process.ProcessID;
+                var threadId = thread.ID;
+                var depth = frame.Depth;
+                if (processId <= 0 || threadId == 0 || depth == 0) return false;
+                _automaticFrameProcessId = processId;
+                _automaticFrameThreadId = threadId;
+                _automaticFrameDepth = depth;
+                _automaticFrameGeneration = generation;
+                return IsAutomaticScanCurrent(generation);
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private bool IsAutomaticScanCurrent(long generation, bool validateFrame = true)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             if (_disposed || !_automaticScanSessionGate.IsCurrent(generation))
@@ -839,10 +883,26 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
-                return _dte?.Debugger?.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode;
+                var debugger = _dte?.Debugger;
+                if (debugger == null || debugger.CurrentMode != EnvDTE.dbgDebugMode.dbgBreakMode)
+                {
+                    if (validateFrame) _automaticFrameGeneration = -1;
+                    return false;
+                }
+                if (!validateFrame) return true;
+                if (_automaticFrameGeneration != generation) return false;
+                var frame = debugger.CurrentStackFrame as EnvDTE90a.StackFrame2;
+                var matches = frame != null && frame.Depth == _automaticFrameDepth
+                    && debugger.CurrentThread?.ID == _automaticFrameThreadId
+                    && debugger.CurrentProcess?.ProcessID == _automaticFrameProcessId;
+                // Check at work boundaries, not in context-change callbacks during function evaluation.
+                // Once a different frame is observed, returning to the old frame cannot revive this work.
+                if (!matches) _automaticFrameGeneration = -1;
+                return matches;
             }
             catch
             {
+                if (validateFrame) _automaticFrameGeneration = -1;
                 return false;
             }
         }
@@ -1943,9 +2003,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         private bool TryOpenKnownRegisteredImage(
             EnvDTE.Debugger debugger,
             AutomaticVisionInspection inspection,
+            long generation,
             out string error)
         {
             error = string.Empty;
+            if (!IsAutomaticScanCurrent(generation)) return false;
             KnownRegisteredImageBuffer buffer;
             if (!KnownRegisteredImageCapture.TryCreateBuffer(
                 debugger,
@@ -1966,6 +2028,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
+                if (!IsAutomaticScanCurrent(generation)) return false;
                 OpenLiveMemory(new VisualizerHandoffRequest(
                     string.Empty,
                     inspection.RootExpression,
@@ -2073,9 +2136,11 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             TypeMapping mapping,
             string typeName,
             out string error,
-            string? handoffId = null)
+            string? handoffId = null,
+            long? automaticGeneration = null)
         {
             error = string.Empty;
+            if (automaticGeneration.HasValue && !IsAutomaticScanCurrent(automaticGeneration.Value)) return false;
             var members = mapping.Members;
             if (members == null)
             {
@@ -2130,6 +2195,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
 
             try
             {
+                if (automaticGeneration.HasValue && !IsAutomaticScanCurrent(automaticGeneration.Value)) return false;
                 OpenLiveMemory(new VisualizerHandoffRequest(
                     string.Empty,
                     baseExpression,
@@ -2171,7 +2237,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             var selectedThread = debugger.CurrentThread;
             var selectedThreadId = selectedThread == null ? 0U : unchecked((uint)selectedThread.ID);
             bool IsCurrentContext() => !_disposed && selectedThreadId != 0
-                && _automaticScanSessionGate.IsCurrent(scanGeneration)
+                && IsAutomaticScanCurrent(scanGeneration)
                 && debugger.CurrentMode == EnvDTE.dbgDebugMode.dbgBreakMode
                 && debugger.CurrentThread != null && unchecked((uint)debugger.CurrentThread.ID) == selectedThreadId
                 && string.Equals(debugger.CurrentStackFrame?.FunctionName, frameFunctionName, StringComparison.Ordinal);
