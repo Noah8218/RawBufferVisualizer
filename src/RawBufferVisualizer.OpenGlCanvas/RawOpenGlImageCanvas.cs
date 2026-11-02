@@ -64,6 +64,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
         private long _frameSerial;
         private string _pixelOverlayText = string.Empty;
         private Point? _pinnedMarker;
+        private bool _pinnedEscapePendingKeyDown;
         private Point? _selectedPixel;
         private Point? _hoverPixel;
         private Point? _measurementStart;
@@ -414,6 +415,8 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _openGlControl.MouseDoubleClick += OpenGlMouseDoubleClick;
             _openGlControl.MouseEnter += OpenGlMouseEnter;
             _openGlControl.MouseLeave += OpenGlMouseLeave;
+            _openGlControl.PreviewKeyDown += OpenGlPreviewKeyDown;
+            _openGlControl.KeyDown += OpenGlKeyDown;
         }
 
         public void LoadRawBuffer(byte[] buffer, RawImageDescriptor descriptor)
@@ -471,6 +474,7 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _sourceUnavailable = false;
             _pinnedMarker = null;
             _selectedPixel = null;
+            _pinnedEscapePendingKeyDown = false;
             _hoverPixel = null;
             _measurementStart = null;
             _measurementEnd = null;
@@ -929,10 +933,36 @@ namespace RawBufferVisualizer.OpenGlCanvas
             _renderQueued = false;
         }
 
+        private void OpenGlPreviewKeyDown(object? sender, Forms.PreviewKeyDownEventArgs e)
+        {
+            _pinnedEscapePendingKeyDown = _pinnedMarker.HasValue
+                && e.KeyCode == Forms.Keys.Escape && e.Modifiers == Forms.Keys.None;
+            if (!_pinnedEscapePendingKeyDown) return;
+            // The VS/WPF host can consume Escape after native preprocessing, without
+            // delivering KeyDown. Apply the canvas action at this observed boundary.
+            e.IsInputKey = true;
+            ClearPinnedMarker();
+        }
+
+        private void OpenGlKeyDown(object? sender, Forms.KeyEventArgs e)
+        {
+            if (e.KeyCode != Forms.Keys.Escape || e.Modifiers != Forms.Keys.None)
+            {
+                _pinnedEscapePendingKeyDown = false;
+                return;
+            }
+            if (!_pinnedEscapePendingKeyDown && !_pinnedMarker.HasValue) return;
+            _pinnedEscapePendingKeyDown = false;
+            if (_pinnedMarker.HasValue) ClearPinnedMarker();
+            e.Handled = true;
+            e.SuppressKeyPress = true;
+        }
+
         private void OpenGlMouseDown(object? sender, Forms.MouseEventArgs e)
         {
             if (e.Button == Forms.MouseButtons.Right)
             {
+                _openGlControl.Focus();
                 PinMarkerAtScreenPoint(ToPoint(e));
                 return;
             }
