@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Microsoft.VisualStudio.Shell;
+using Forms = System.Windows.Forms;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
@@ -70,6 +71,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             _control.EndAutomaticInspectionSession();
+        }
+
+        protected override bool PreProcessMessage(ref Forms.Message message)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            var key = message.WParam.ToInt64();
+            // WindowPane offers navigation messages before the VS shell consumes them.
+            if (message.Msg == 0x0100 && (key == 0x1B || key == 0x09)
+                && _control != null && _control.TryHandleInspectorNavigationBeforeShell((int)key)) return true;
+            return base.PreProcessMessage(ref message);
         }
 
         protected override void Dispose(bool disposing)

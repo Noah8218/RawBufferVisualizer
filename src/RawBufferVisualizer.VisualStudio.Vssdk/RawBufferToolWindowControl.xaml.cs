@@ -5416,6 +5416,29 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             if (e.Key != Key.Escape || Keyboard.Modifiers != ModifierKeys.None
                 || Keyboard.FocusedElement is ComboBox combo && combo.IsDropDownOpen) return;
             e.Handled = true;
+            CloseInspectorOverlayAndRestoreFocus();
+        }
+
+        internal bool TryHandleInspectorNavigationBeforeShell(int key)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            if (_disposed || !InspectorOverlayPopup.IsOpen || !InspectorContainer.IsKeyboardFocusWithin) return false;
+            if (key == 0x09 && (Keyboard.Modifiers == ModifierKeys.None || Keyboard.Modifiers == ModifierKeys.Shift)
+                && Keyboard.FocusedElement is UIElement focused)
+            {
+                var direction = Keyboard.Modifiers == ModifierKeys.Shift
+                    ? FocusNavigationDirection.Previous : FocusNavigationDirection.Next;
+                focused.MoveFocus(new TraversalRequest(direction));
+                return true;
+            }
+            if (key != 0x1B || Keyboard.Modifiers != ModifierKeys.None
+                || Keyboard.FocusedElement is ComboBox combo && combo.IsDropDownOpen) return false;
+            CloseInspectorOverlayAndRestoreFocus();
+            return true;
+        }
+
+        private void CloseInspectorOverlayAndRestoreFocus()
+        {
             _inspector.Close();
             var target = _inspector.Section == "Histogram" ? InspectorHistogramButton
                 : _inspector.Section == "Format" ? InspectorFormatButton
@@ -5481,6 +5504,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 InspectorContainer.Width = Math.Min(300, Math.Max(0, width - 44));
                 if (_inspector.IsNarrow)
                 {
+                    KeyboardNavigation.SetTabNavigation(InspectorContainer, KeyboardNavigationMode.Cycle);
                     if (DockedInspectorHost.Content != null)
                     {
                         DockedInspectorHost.Content = null;
@@ -5492,6 +5516,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 }
                 else
                 {
+                    InspectorContainer.ClearValue(KeyboardNavigation.TabNavigationProperty);
                     InspectorOverlayPopup.IsOpen = false;
                     if (InspectorOverlayPopup.Child != null || DockedInspectorHost.Content == null)
                     {
