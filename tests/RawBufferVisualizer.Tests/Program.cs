@@ -79,6 +79,12 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                if (args.Length == 1 && args[0] == "--histogram-cancel-boundary")
+                {
+                    UsabilityTests.RunHistogramCancellationBoundary();
+                    return 0;
+                }
+
                 if (args.Length == 1 && args[0] == "--release-announcement")
                 {
                     ReleaseAnnouncementTests.RunAll();
