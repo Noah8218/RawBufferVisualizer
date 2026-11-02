@@ -208,6 +208,7 @@ namespace RawBufferVisualizer.Tests
                 MappingSaveTests.RunAll();
                 PixelCorrectnessTests.RunAll();
                 HistogramTests.RunAll();
+                UsabilityTests.RunHistogramCancellationBoundary();
                 Mono8RendersToBgra();
                 Mono10PackedLsbRenders();
                 Mono12PackedLsbInspects();
