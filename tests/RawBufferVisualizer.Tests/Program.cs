@@ -85,6 +85,12 @@ namespace RawBufferVisualizer.Tests
                     return 0;
                 }
 
+                if (args.Length == 1 && args[0] == "--canvas-native-escape")
+                {
+                    NativeCanvasEscapeTests.RunAll();
+                    return 0;
+                }
+
                 if (args.Length == 1 && args[0] == "--release-announcement")
                 {
                     ReleaseAnnouncementTests.RunAll();
@@ -209,6 +215,7 @@ namespace RawBufferVisualizer.Tests
                 PixelCorrectnessTests.RunAll();
                 HistogramTests.RunAll();
                 UsabilityTests.RunHistogramCancellationBoundary();
+                NativeCanvasEscapeTests.RunAll();
                 Mono8RendersToBgra();
                 Mono10PackedLsbRenders();
                 Mono12PackedLsbInspects();
