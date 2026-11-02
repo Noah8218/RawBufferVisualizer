@@ -1,10 +1,10 @@
-Raw Buffer Visualizer 2.2.3
+Raw Buffer Visualizer 2.2.4
 
-- Clears the extension's Preview label so supported Visual Studio Marketplace searches can include it when Preview extensions are excluded.
-- Keeps the existing extension identity and the VS2022 17.9+ x64 installation contract. VS2022 17.8 and earlier remain unsupported.
+- Keeps the inspector's last open or closed state across reopening and IDE restarts.
+- Improves compact pixel and row-profile readouts, per-channel valid-bit validation and retained layout compatibility.
+- Strengthens cancellation, session replacement, cache ownership, safe saving and error-report recovery boundaries.
+- Reduces MemoryStream growth in the existing JSON chunk-transfer path. Transfer size limits and debugger timeouts are unchanged.
 
-Includes the 2.2.2 viewer-position preservation and 2.2.1 visualizer-loading fixes. Dialog-free docked image opening, image-only collection routing and horizontal/vertical pixel measurement remain available.
+Retains the existing docked image workflow, Classic installation-path registration and checked live-pointer lifetimes. Continue, disposal or process exit can invalidate live sources; captured snapshots have a separate lifetime.
 
-Update the extension and restart Visual Studio. No manual DLL copy to Visual Studio's global Visualizers directory is required.
-
-Supported targets remain Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x.
+Supported installation targets are Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x. Update the extension and restart Visual Studio; do not copy DLLs into the IDE's global Visualizers directory.

@@ -80,7 +80,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                             Count = request.Count
                         }, reusableBuffer);
                     VisualizerTransferTrace.Write("target chunk read end index=" + request.Index + " bytes=" + chunk.Buffer.Length);
-                    SerializeAsJson(outgoingData, chunk);
+                    VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, chunk);
                     VisualizerTransferTrace.Write("target chunk serialized index=" + request.Index);
                 }
                 finally

@@ -35,7 +35,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
-            SerializeAsJson(outgoingData, PointerFrameVisualizerTransfer.CreateChunk(GetView(target), request));
+            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, PointerFrameVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
         private PointerFrameView GetView(object target)

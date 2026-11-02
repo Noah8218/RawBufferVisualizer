@@ -1,5 +1,7 @@
 using System;
+using System.IO;
 using System.Runtime.CompilerServices;
+using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
@@ -46,6 +48,26 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     public static class VisualizerChunkedTransfer
     {
         public const int DefaultChunkSize = 4 * 1024 * 1024;
+
+        internal static void SerializeChunkAsJson(Stream outgoingData, VisualizerSnapshotChunk chunk)
+        {
+            ReserveJsonChunkCapacity(outgoingData, chunk.Buffer.Length);
+            VisualizerObjectSource.SerializeAsJson(outgoingData, chunk);
+        }
+
+        internal static void ReserveJsonChunkCapacity(Stream outgoingData, int bufferLength)
+        {
+            if (bufferLength < 0) throw new ArgumentOutOfRangeException(nameof(bufferLength));
+            if (!(outgoingData is MemoryStream memory) || memory.GetType() != typeof(MemoryStream) || !memory.CanWrite
+                || memory.Position != 0 || memory.Length != 0) return;
+
+            // Reserve the base64 payload plus a small JSON header, avoiding repeated stream growth.
+            // This is a capacity hint; the SDK serializer and its final array copy remain unchanged.
+            var capacity = ((long)bufferLength + 2) / 3 * 4 + 256;
+            if (capacity > int.MaxValue || capacity <= memory.Capacity) return;
+            try { memory.Capacity = (int)capacity; }
+            catch (NotSupportedException) { /* A fixed buffer can still fit the actual JSON payload. */ }
+        }
 
         public static VisualizerSnapshotMetadata AttachExpressionIdentity(
             VisualizerSnapshotMetadata metadata,

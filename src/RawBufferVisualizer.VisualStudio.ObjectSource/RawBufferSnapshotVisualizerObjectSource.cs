@@ -50,7 +50,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
-            SerializeAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request));
+            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request));
         }
     }
 }
