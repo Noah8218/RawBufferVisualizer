@@ -2,7 +2,7 @@
 
 This owner map describes the current source tree. Source changes affecting ownership must update this map; exact test execution belongs in the result for the tested source snapshot.
 
-The cache owner and Inspector focus check below were updated for source 2.2.3.0 on 2026-10-31; installed-IDE qualification remains specific to the tested binary and host.
+The Inspector keyboard boundary below was updated for source 2.2.4.0 on 2026-11-02; installed-IDE qualification remains specific to the tested binary and host.
 
 ## Runtime Routes
 
@@ -42,7 +42,7 @@ Paths in this table are relative to `src/` and use the `RawBufferVisualizer.` pr
 
 The control constructor supplies navigation DataContexts to the rail, inspector container and image-list surfaces, and supplies the pixel presentation model to `PixelVisualization`. The existing automatic-status, measurement and histogram contexts remain scoped to their controls. Read the XAML, the two presentation models, and then the control pixel-event/layout methods; `docs/README.md` remains the Start Here route.
 
-Rail selection is a one-way display binding; the rail toggle command and collapse command change navigation state. Display binding teardown, initial restore and responsive placement must not become persisted user choices. Channel selection writes only the pixel presentation model; its source input is a bounded snapshot through existing Core APIs and is not retained. Pixel hover, selection and pin coordinates still originate in the canvas. Source leases, document admission, saving and measurement commands keep their existing owners. View-specific size, scrolling, shortcut, theme, popup and reparenting handlers remain in the control; its `Dispose` releases subscriptions and closes popups.
+Rail selection is a one-way display binding; the rail toggle command and collapse command change navigation state. Display binding teardown, initial restore and responsive placement must not become persisted user choices. `RawBufferToolWindow.PreProcessMessage` admits plain Escape, Tab and Shift+Tab before Visual Studio navigation only while the control's Inspector popup owns keyboard focus. The control owns popup focus traversal, closing and focus restoration; other keys, modifiers and focus targets retain the host's handling. Channel selection writes only the pixel presentation model; its source input is a bounded snapshot through existing Core APIs and is not retained. Pixel hover, selection and pin coordinates still originate in the canvas. Source leases, document admission, saving and measurement commands keep their existing owners. View-specific size, scrolling, shortcut, theme, popup and reparenting handlers remain in the control; its `Dispose` releases subscriptions and closes popups.
 
 `ImageObjectCaptionConverter` is a stateless, View-owned resource used by the header, image cards and comparison slots. Its one-way `ObjectName`/`IsAutomaticInspection` bindings remove the automatic status prefix only from displayed captions. They never write the debugger expression or document identity. Follow the XAML resource to the converter and `Test-DockedLayout.ps1` for rendered caption and identity checks.
 
