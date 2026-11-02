@@ -17,7 +17,11 @@ namespace RawBufferVisualizer.Tests
     {
         private static int _checks;
 
-        public static void RunAll()
+        public static void RunAll() => Run(false);
+
+        public static void RunHistogramCancellationBoundary() => Run(true);
+
+        private static void Run(bool cancellationBoundaryOnly)
         {
             Exception? failure = null;
             var thread = new Thread(() =>
@@ -25,6 +29,12 @@ namespace RawBufferVisualizer.Tests
                 try
                 {
                     SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext());
+                    if (cancellationBoundaryOnly)
+                    {
+                        HistogramCancellationBoundary();
+                        Console.WriteLine($"Histogram cancellation boundary: {_checks} assertions passed (one pixel; no files or windows).");
+                        return;
+                    }
                     var root = Path.Combine(Path.GetTempPath(), "usability-" + Guid.NewGuid().ToString("N"));
                     Directory.CreateDirectory(root);
                     RawInput();
@@ -239,6 +249,56 @@ namespace RawBufferVisualizer.Tests
                 document.Dispose(); Check(source.Disposals == 1, "Document disposal is idempotent");
             }
             source.Gate.Dispose(); source.Entered.Dispose();
+        }
+
+        private static void HistogramCancellationBoundary()
+        {
+            var source = new GatedSource();
+            var document = new ViewerDocument(null, source);
+            var model = new ViewerViewModel(new TestCanvas(), new TestDialogs());
+            try
+            {
+                model.Documents.Add(document);
+                model.SelectedDocument = document;
+                PumpUntil(() => source.Entered.IsSet);
+                Check(model.Histogram.IsRunning, "Histogram worker is active before cancellation");
+                model.Histogram.ActionCommand.Execute(null);
+                Check(model.Histogram.Status == "Cancelled." && model.Histogram.Result == null,
+                    "Active cancellation is visible before the old read returns");
+                Check(!model.Histogram.ActionCommand.CanExecute(null) && source.Disposals == 0,
+                    "Cancellation blocks reentry and retains the borrowed source until the read settles");
+                source.Gate.Set();
+                PumpUntil(() => model.Histogram.Completion.IsCompleted);
+                Check(!model.Histogram.IsRunning && model.Histogram.Result == null && model.Histogram.Status == "Cancelled.",
+                    "A read that ignores cancellation cannot publish its late histogram result");
+                Check(model.Histogram.ActionCommand.CanExecute(null) && model.Histogram.ActionText == "Refresh",
+                    "Settled cancellation enables a fresh request");
+
+                source.Gate.Reset();
+                source.Entered.Reset();
+                model.Histogram.ActionCommand.Execute(null);
+                PumpUntil(() => source.Entered.IsSet);
+                Check(model.Histogram.IsRunning && model.Histogram.Status == "Calculating...",
+                    "A new request starts normally after cancellation");
+                source.Gate.Set();
+                PumpUntil(() => model.Histogram.Completion.IsCompleted);
+                var result = model.Histogram.Result;
+                Check(result != null && result.Minimum == 42 && result.Maximum == 42
+                    && !model.Histogram.IsRunning && model.Histogram.Error == null,
+                    "The fresh request publishes the correct one-pixel result without the cancelled state");
+            }
+            finally
+            {
+                source.Gate.Set();
+                try { PumpUntil(() => model.Histogram.Completion.IsCompleted); }
+                finally
+                {
+                    model.Dispose();
+                    source.Gate.Dispose();
+                    source.Entered.Dispose();
+                }
+            }
+            Check(source.Disposals == 1, "Normal cleanup releases the borrowed source exactly once");
         }
 
         private static void PumpUntil(Func<bool> condition)
