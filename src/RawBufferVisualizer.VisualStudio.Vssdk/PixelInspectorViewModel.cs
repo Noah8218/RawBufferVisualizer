@@ -153,9 +153,9 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 return normalized * 255;
             }
             ProfileValue = IsColor ? Geometry.Empty : Plot(line, ProfileLevel);
-            ProfileLowLabel = _isFloat ? Format(levels.BlackLevel, 2) : "0";
-            ProfileMiddleLabel = _isFloat ? Format(levels.BlackLevel * 0.5 + levels.WhiteLevel * 0.5, 2) : "128";
-            ProfileHighLabel = _isFloat ? Format(levels.WhiteLevel, 2) : "255";
+            ProfileLowLabel = _isFloat ? Format(levels.BlackLevel, 2, 5) : "0";
+            ProfileMiddleLabel = _isFloat ? Format(levels.BlackLevel * 0.5 + levels.WhiteLevel * 0.5, 2, 5) : "128";
+            ProfileHighLabel = _isFloat ? Format(levels.WhiteLevel, 2, 5) : "255";
             ProfileRMarker = IsColor ? Marker(current.R) : Geometry.Empty;
             ProfileGMarker = IsColor ? Marker(current.G) : Geometry.Empty;
             ProfileBMarker = IsColor ? Marker(current.B) : Geometry.Empty;
@@ -191,7 +191,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
             foreach (var sample in _neighborhood)
             {
                 double value = Value(sample);
-                Cells.Add(new NeighborhoodCell(sample.IsAvailable ? Format(value) : "—", sample.Color, sample.IsCenter));
+                Cells.Add(new NeighborhoodCell(sample.IsAvailable ? Format(value, maximumCharacters: 6) : "—", sample.Color, sample.IsCenter));
             }
             if (_statistics == null) return;
             if (_selectedChannel == "GV")
@@ -214,10 +214,16 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
         }
 
         private double Value(Sample sample) => _selectedChannel == "R" ? sample.R : _selectedChannel == "G" ? sample.G : _selectedChannel == "B" ? sample.B : sample.Value;
-        private string Format(double value, int decimals = 3)
+        private string Format(double value, int decimals = 3, int maximumCharacters = 0)
         {
             if (!_isFloat) return value.ToString("0.###", CultureInfo.InvariantCulture);
-            return value.ToString(Math.Abs(value) >= 1e21 ? "G9" : "F" + decimals, CultureInfo.InvariantCulture);
+            var text = value.ToString(Math.Abs(value) >= 1e21 ? "G9" : "F" + decimals, CultureInfo.InvariantCulture);
+            if (maximumCharacters <= 0) return text;
+            if (double.IsNaN(value)) return "NaN";
+            if (double.IsPositiveInfinity(value)) return "+Inf";
+            if (double.IsNegativeInfinity(value)) return "-Inf";
+            if (text.Length <= maximumCharacters && text.IndexOf('E') < 0) return text;
+            return value.ToString("0.##E0", CultureInfo.InvariantCulture).Replace("E", "\nE");
         }
         private string FormatStatistic(double value, int decimals) => value.ToString(_isFloat && Math.Abs(value) >= 1e21 ? "G9" : "F" + (_isFloat ? 3 : decimals), CultureInfo.InvariantCulture);
         private void Notify() => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));

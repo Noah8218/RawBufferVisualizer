@@ -35,7 +35,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
-            SerializeAsJson(outgoingData, BitmapVisualizerTransfer.CreateChunk(GetView(target), request));
+            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, BitmapVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
         private BitmapVisualizerView GetView(object target)

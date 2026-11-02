@@ -7,9 +7,9 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.2.3";
+        public const string CurrentVersion = "2.2.4";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#223";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#224";
 
         public const string HighlightEnvironmentCheck =
             "Fix debugger visualizer loading for images and collections";

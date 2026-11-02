@@ -1,0 +1,10 @@
+# Raw Buffer Visualizer 2.2.4
+
+- Keeps the inspector's last open or closed state across reopening and IDE restarts.
+- Improves compact pixel and row-profile readouts, per-channel valid-bit validation and retained layout compatibility.
+- Strengthens cancellation, session replacement, cache ownership, safe saving and error-report recovery boundaries.
+- Reduces MemoryStream growth in the existing JSON chunk-transfer path. Transfer size limits and debugger timeouts are unchanged.
+
+Retains the existing docked image workflow, Classic installation-path registration and checked live-pointer lifetimes. Continue, disposal or process exit can invalidate live sources; captured snapshots have a separate lifetime.
+
+Supported installation targets are Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x. Update the extension and restart Visual Studio; do not copy DLLs into the IDE's global Visualizers directory.

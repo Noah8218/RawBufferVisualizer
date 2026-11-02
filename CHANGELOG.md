@@ -4,6 +4,15 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
+## [2.2.4] - 2026-11-02
+
+- Preserves the inspector's last user-selected open or closed state for narrow and wide layouts across reopening and IDE restarts.
+- Preserves per-channel valid-bit semantics, including existing exact legacy color declarations, when editing, resetting and applying layouts.
+- Observes asynchronous focus failures and keeps cancelled, replaced or closed sessions from publishing stale results.
+- Keeps the original transfer failure when writing its diagnostic report also fails.
+- Reserves capacity for the existing JSON chunk format to reduce repeated MemoryStream growth, without raising transfer limits or debugger timeouts.
+- Keeps large floating-point pixel and profile readouts legible in narrow docked panels without changing raw bytes or calculations.
+
 - Places image information, viewer commands and pixel values directly above the docked image; short windows use a side toolbar.
 - Uses one collapsible inspector with Pixel, Histogram, Buffer format, Compare and Diagnostics at every window width.
 - Keeps channel values visible as the pixel bar narrows, and preserves pinned, hovered, selected and measurement states.

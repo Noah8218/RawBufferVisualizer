@@ -35,7 +35,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
-            SerializeAsJson(outgoingData, ImagePtrVisualizerTransfer.CreateChunk(GetView(target), request));
+            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, ImagePtrVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
         private ImagePtrView GetView(object target)

@@ -5,6 +5,8 @@
     <ImplicitUsings>disable</ImplicitUsings>
     <Deterministic>true</Deterministic>
     <RawBufferVisualizerBuildRoot Condition="'$(RawBufferVisualizerBuildRoot)' == ''">$(MSBuildThisFileDirectory).build</RawBufferVisualizerBuildRoot>
+    <!-- Keep production symbols useful without embedding a developer's checkout or build directory. Debug builds and caller-supplied maps are unchanged. -->
+    <PathMap Condition="'$(Configuration)' == 'Release' and '$(PathMap)' == ''">$(RawBufferVisualizerBuildRoot)=/_/build,$(MSBuildThisFileDirectory)=/_/</PathMap>
     <BaseIntermediateOutputPath>$(RawBufferVisualizerBuildRoot)\intermediate\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
     <BaseOutputPath>$(RawBufferVisualizerBuildRoot)\bin\$(MSBuildProjectName)\</BaseOutputPath>
     <Authors>Noah Choi</Authors>

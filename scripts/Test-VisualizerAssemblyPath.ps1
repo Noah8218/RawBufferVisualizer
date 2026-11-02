@@ -67,6 +67,7 @@ using System.Linq;
 using System.Reflection;
 using System.Reflection.Emit;
 using System.Text;
+using System.Threading;
 using System.Web.Script.Serialization;
 using System.Xml;
 
@@ -87,6 +88,20 @@ internal static class AssemblyPathProbe
     private static int Main(string[] args)
     {
         Console.OutputEncoding = new UTF8Encoding(false);
+        var exitCode = 124;
+        var worker = new Thread(() => exitCode = Run(args));
+        worker.IsBackground = true;
+        worker.Start();
+        if (!worker.Join(TimeSpan.FromSeconds(20)))
+        {
+            Console.WriteLine("{\"Passed\":false,\"Timeout\":true,\"LimitSeconds\":20}");
+            return 124;
+        }
+        return exitCode;
+    }
+
+    private static int Run(string[] args)
+    {
         string mode = args[0], vs = args[1], stage = args[2];
         Result["Mode"] = mode;
         Result["Runtime"] = Environment.Version.ToString();
@@ -114,6 +129,21 @@ internal static class AssemblyPathProbe
     }
 
     private static void CheckRegistration(string vs, string extensionRoot, string stage, string cachePath)
+    {
+        Assembly sdk = Assembly.LoadFrom(Path.Combine(vs, "Common7", "IDE", "PublicAssemblies", "Microsoft.VisualStudio.DebuggerVisualizers.dll"));
+        Assembly host = Assembly.LoadFrom(Path.Combine(vs, "Common7", "IDE", "PrivateAssemblies", "ClrCustomVisualizerVSHost.dll"));
+        Type resolverType = host.GetType("ClrCustomVisualizerVSHost.AssemblyResolver", true);
+        object resolver = resolverType.GetMethod("Create").Invoke(null, new object[] { null, extensionRoot });
+        try
+        {
+            Result["RegistrationUiAssemblyResolver"] = host.Location;
+            Result["HostDebuggerVisualizersAssembly"] = sdk.FullName;
+            CheckRegistrationWithHostResolver(vs, extensionRoot, stage, cachePath);
+        }
+        finally { ((IDisposable)resolver).Dispose(); }
+    }
+
+    private static void CheckRegistrationWithHostResolver(string vs, string extensionRoot, string stage, string cachePath)
     {
         Assembly.LoadFrom(Path.Combine(vs, "Common7", "IDE", "PublicAssemblies", "Microsoft.VisualStudio.DebuggerVisualizers.dll"));
         Assembly.LoadFrom(Path.Combine(vs, "Common7", "IDE", "Microsoft.VisualStudio.Debugger.Engine.dll"));
@@ -389,6 +419,25 @@ internal static class AssemblyPathProbe
 & $compiler /nologo /target:exe /platform:x64 /r:System.Drawing.dll /r:System.Web.Extensions.dll /r:System.Xml.dll "/out:$probeExe" $probeSource
 if ($LASTEXITCODE -ne 0) { throw 'The isolated assembly-path probe did not compile.' }
 
+# The compiled candidate references the supported VS2022 SDK. Read the selected
+# IDE's own Metadata binding policy rather than inventing a cross-version map.
+$ideConfigPath = Join-Path $vsRoot 'Common7\IDE\devenv.exe.config'
+$ideConfig = [Xml.XmlDocument]::new()
+$ideConfig.Load($ideConfigPath)
+$bindingNamespaces = [Xml.XmlNamespaceManager]::new($ideConfig.NameTable)
+$bindingNamespaces.AddNamespace('a', 'urn:schemas-microsoft-com:asm.v1')
+$metadataPolicies = $ideConfig.SelectNodes('//a:dependentAssembly[a:assemblyIdentity[@name="Microsoft.VisualStudio.Debugger.Metadata"]]', $bindingNamespaces)
+if ($metadataPolicies.Count -ne 1) { throw 'Expected the selected IDE to declare one Debugger.Metadata binding policy.' }
+$metadataPolicy = $metadataPolicies[0]
+$metadataIdentity = [Reflection.AssemblyName]::GetAssemblyName((Join-Path $vsRoot 'Common7\IDE\PrivateAssemblies\Microsoft.VisualStudio.Debugger.Metadata.dll'))
+if ($metadataPolicy.SelectSingleNode('a:bindingRedirect', $bindingNamespaces).GetAttribute('newVersion') -ne $metadataIdentity.Version.ToString()) {
+    throw 'The selected IDE Metadata binding policy does not match its installed assembly.'
+}
+$probeConfig = [Xml.XmlDocument]::new()
+$probeConfig.LoadXml('<configuration><runtime><assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1" /></runtime></configuration>')
+$probeConfig.DocumentElement.FirstChild.FirstChild.AppendChild($probeConfig.ImportNode($metadataPolicy, $true)) | Out-Null
+$probeConfig.Save($probeExe + '.config')
+
 function Invoke-Probe {
     param([string]$Mode, [string]$Kind = '')
     $start = New-Object Diagnostics.ProcessStartInfo
@@ -404,9 +453,7 @@ function Invoke-Probe {
         $stdout = $process.StandardOutput.ReadToEndAsync()
         $stderr = $process.StandardError.ReadToEndAsync()
         if (-not $process.WaitForExit(30000)) {
-            $process.Kill()
-            $process.WaitForExit()
-            throw "Isolated probe timed out: $Mode/$Kind"
+            throw "Owned probe did not exit after its normal-return deadline: $Mode/$Kind, PID $($process.Id). No termination was attempted."
         }
         $text = $stdout.Result
         [IO.File]::WriteAllText((Join-Path $output "$Mode-$Kind.json"), $text)
@@ -435,6 +482,9 @@ $report = [ordered]@{
     HostRoot = $vsRoot
     HostVersion = (Get-Item -LiteralPath (Join-Path $vsRoot 'Common7\IDE\devenv.exe')).VersionInfo.FileVersion
     HostLoaderSHA256 = (Get-FileHash -LiteralPath $loader -Algorithm SHA256).Hash
+    HostMetadataBindingPolicy = $metadataPolicy.OuterXml
+    HostMetadataIdentity = $metadataIdentity.FullName
+    HostConfigurationSHA256 = (Get-FileHash -LiteralPath $ideConfigPath -Algorithm SHA256).Hash
     VsixPath = $vsix
     VsixSHA256 = (Get-FileHash -LiteralPath $vsix -Algorithm SHA256).Hash
     ExtensionPathProbed = $extensionToProbe

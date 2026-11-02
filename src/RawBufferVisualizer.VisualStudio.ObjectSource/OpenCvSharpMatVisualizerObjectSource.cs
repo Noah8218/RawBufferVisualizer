@@ -35,7 +35,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
-            SerializeAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreateChunk(GetView(target), request));
+            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
         private OpenCvSharpMatView GetView(object target)

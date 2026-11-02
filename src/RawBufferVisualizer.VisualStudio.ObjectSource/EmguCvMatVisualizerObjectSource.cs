@@ -35,7 +35,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return;
             }
 
-            SerializeAsJson(outgoingData, EmguCvMatVisualizerTransfer.CreateChunk(GetView(target), request));
+            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, EmguCvMatVisualizerTransfer.CreateChunk(GetView(target), request));
         }
 
         private EmguCvMatView GetView(object target)

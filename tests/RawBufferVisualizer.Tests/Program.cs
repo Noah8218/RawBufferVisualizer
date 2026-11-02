@@ -30,6 +30,11 @@ namespace RawBufferVisualizer.Tests
         {
             try
             {
+                if (args.Length == 1 && args[0] == "--json-chunk-capacity")
+                {
+                    JsonChunkCapacityTests.RunAll();
+                    return 0;
+                }
                 if (args.Length == 1 && args[0] == "--split-pixel-inspection")
                 {
                     SplitPixelInspectionTests.RunAll();
@@ -193,6 +198,7 @@ namespace RawBufferVisualizer.Tests
                 InspectorActionTests.RunAll();
                 PixelInspectorTests.RunAll();
                 SplitPixelInspectionTests.RunAll();
+                JsonChunkCapacityTests.RunAll();
                 MappingSaveTests.RunAll();
                 PixelCorrectnessTests.RunAll();
                 HistogramTests.RunAll();

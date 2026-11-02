@@ -18,7 +18,7 @@ Supported extension targets are Visual Studio 2022 17.9+ x64 and stable Visual S
 
 ## Source Version
 
-Current source version: **2.2.3**. The project is version-managed; [the VSIX manifest](src/RawBufferVisualizer.VisualStudio.Vssdk/source.extension.vsixmanifest) owns the installation version. Source version is distinct from the version currently available on Marketplace.
+Current source version: **2.2.4**. The project is version-managed; [the VSIX manifest](src/RawBufferVisualizer.VisualStudio.Vssdk/source.extension.vsixmanifest) owns the installation version. Source version is distinct from the version currently available on Marketplace.
 
 Version 2.2.3 clears the extension's Preview label for supported Marketplace searches that exclude Preview extensions. The installation range remains VS2022 17.9+ x64.
 
@@ -30,6 +30,7 @@ Version 2.2.1 corrects debugger visualizer installation-path registration and fu
 
 | Version | Date | Changes |
 | --- | --- | --- |
+| 2.2.4 | 2026-11-02 | Inspector state persistence, layout and session recovery, compact readouts and JSON stream capacity |
 | 2.2.3 | 2026-10-01 | Cleared Preview metadata while preserving the supported installation range |
 | 2.2.2 | 2026-10-01 | Preserved user-selected docking, floating and document-tab placement |
 | 2.2.1 | 2026-10-01 | Corrected Classic visualizer loading and package registration checks |
@@ -41,7 +42,7 @@ Version 2.2.1 corrects debugger visualizer installation-path registration and fu
 | 2.0.6 | 2026-09-03 | Version progression preserving the 2.0.5 behavior |
 | 2.0.5 | 2026-09-03 | Pointer provenance, complete reads and image-array registration |
 
-See [CHANGELOG](CHANGELOG.md) for details and older history, [English overview](docs/marketplace-overview-2.2.3.md), [Korean overview](docs/marketplace-overview-2.2.3.ko.md), and [2.2.3 change notes](docs/marketplace-release-notes-2.2.3.md).
+See [CHANGELOG](CHANGELOG.md) for details and older history, [English overview](docs/marketplace-overview-2.2.4.md), [Korean overview](docs/marketplace-overview-2.2.4.ko.md), and [2.2.4 change notes](docs/marketplace-release-notes-2.2.4.md).
 
 ## Build And Contribute
 
