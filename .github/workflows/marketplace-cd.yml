@@ -58,6 +58,14 @@ jobs:
       - name: Self-test
         run: dotnet run --project .\tests\RawBufferVisualizer.Tests\RawBufferVisualizer.Tests.csproj --configuration Release --framework net8.0-windows
 
+      - name: Classic handoff contracts
+        timeout-minutes: 5
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsRoot = & $vswhere -latest -products '*' -version '[17.9,18.0)' -property installationPath
+          if ([string]::IsNullOrWhiteSpace($vsRoot)) { throw 'The Classic contract check requires installed VS2022 17.9+.' }
+          pwsh -NoProfile -File .\scripts\Test-HeadlessSnapshotVisualizer.ps1 -VisualStudioRoot ($vsRoot.Trim()) -OutputRoot (Join-Path $env:RUNNER_TEMP 'rawbuffer-classic-contract')
+
       - name: Publish Visual Studio extension package
         run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -Configuration Release -Framework net472 -ViewerFramework net472 -NoZip
 

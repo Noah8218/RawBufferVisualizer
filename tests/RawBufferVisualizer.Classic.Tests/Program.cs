@@ -27,6 +27,10 @@ internal static class Program
                 VerifyDebuggerBytes(args[1], args[2]);
                 return 0;
             }
+
+            // The fake host must establish the same paused-session admission as the docked IDE.
+            VisualizerHandoffInbox.PublishDebuggerSession(Process.GetCurrentProcess().Id, Guid.NewGuid().ToString("N"));
+
             if (args.Contains("--collection"))
             {
                 VerifyCollections();
@@ -140,6 +144,8 @@ internal static class Program
                 var request = VisualizerHandoffInbox.ReadSnapshotRequestInfo(path);
                 try
                 {
+                    Require(request.OriginSessionToken == VisualizerHandoffInbox.CaptureDebuggerSession(processId),
+                        "Collection must retain the admitted debugger session.");
                     if (request.IsError)
                     {
                         actualErrors++;
@@ -181,6 +187,8 @@ internal static class Program
             var request = VisualizerHandoffInbox.ReadSnapshotRequestInfo(path);
             try
             {
+                Require(request.OriginSessionToken == VisualizerHandoffInbox.CaptureDebuggerSession(processId),
+                    "Handoff must retain the admitted debugger session.");
                 Require(request.IsError == expectError, "Success/error result mismatch: " + request.ErrorMessage);
                 if (!expectError)
                 {
