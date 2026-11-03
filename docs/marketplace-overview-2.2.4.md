@@ -4,9 +4,9 @@
 
 Inspect image variables and raw 2D buffers directly inside Visual Studio at a breakpoint. Raw Buffer Visualizer opens `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed frames, snapshots, and supported collections in one docked viewer without debug-only image conversion code.
 
-![Inspect image memory from Visual Studio Locals in the docked viewer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/debugger-memory-image.gif)
+![Inspect image memory from Visual Studio Watch in the docked viewer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/debugger-memory-image.gif)
 
-Recorded on 2026-11-02 with Raw Buffer Visualizer 2.2.4.0 in Visual Studio 2026. The first clip opens a 1280 x 720 industrial-machine image from Locals into the docked viewer. The following clips show a manual stride correction in a snapshot file and a zoomed pixel neighborhood. The clips are edited for brevity; pauses and cuts are not processing-time measurements.
+Recorded on 2026-11-03 with the final Raw Buffer Visualizer 2.2.4.0 UI in Visual Studio 2026. The first clip opens a 1280 x 720 industrial-machine image from Watch into the docked viewer. The following clips show manual stride correction in a snapshot file and pixel inspection of a captured image after execution ends. Idle intervals are removed, the zoom sequence is accelerated, and result frames are held for readability; the clips are not processing-time measurements.
 
 ![Manually apply a known padded stride to a PCB snapshot file](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/manual-stride.gif)
 

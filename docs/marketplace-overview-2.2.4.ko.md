@@ -4,9 +4,9 @@
 
 Visual Studio 중단점에서 이미지 변수와 원시 2D 버퍼를 직접 검사합니다. Raw Buffer Visualizer는 `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, 포인터 기반 프레임, 스냅샷, 지원되는 컬렉션을 디버그용 이미지 변환 코드 없이 하나의 도킹 뷰어에서 엽니다.
 
-![Visual Studio Locals에서 메모리 이미지를 도킹 뷰어로 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/debugger-memory-image.gif)
+![Visual Studio Watch에서 메모리 이미지를 도킹 뷰어로 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/debugger-memory-image.gif)
 
-2026-11-02에 Raw Buffer Visualizer 2.2.4.0과 Visual Studio 2026에서 촬영했습니다. 첫 GIF는 Locals에서 1280 x 720 산업 장비 이미지를 도킹 뷰어로 엽니다. 이어지는 GIF는 스냅샷 파일의 스트라이드를 직접 수정하는 과정과 확대한 픽셀 주변 값을 보여 줍니다. 짧게 편집한 영상이며, 정지 구간이나 장면 전환은 처리 시간 측정이 아닙니다.
+2026-11-03에 Raw Buffer Visualizer 2.2.4.0 최종 UI를 Visual Studio 2026에서 촬영했습니다. 첫 GIF는 Watch에서 1280 x 720 산업 장비 이미지를 도킹 뷰로 엽니다. 이어지는 GIF는 스냅샷 파일의 스트라이드를 수동으로 보정하는 과정과 실행 종료 후 캡처된 이미지의 픽셀을 확인하는 모습을 담습니다. 대기 구간은 줄이고 확대 과정은 빠르게 편집했으며, 결과 화면은 읽기 쉽도록 잠시 유지합니다. 실제 처리 성능을 측정한 영상은 아닙니다.
 
 ![PCB 스냅샷 파일에 알고 있는 패딩 스트라이드를 직접 적용](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/main/docs/images/manual-stride.gif)
 
