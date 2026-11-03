@@ -4,13 +4,13 @@
 
 Visual Studio 중단점에서 이미지 변수와 원시 2D 버퍼를 직접 검사합니다. Raw Buffer Visualizer는 `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, 포인터 기반 프레임, 스냅샷, 지원되는 컬렉션을 디버그용 이미지 변환 코드 없이 하나의 도킹 뷰어에서 엽니다.
 
-![Visual Studio Locals에서 메모리 이미지를 도킹 뷰어로 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/debugger-memory-image.gif)
+![Visual Studio Watch에서 메모리 이미지를 도킹 뷰어로 열기](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/debugger-memory-image.gif)
 
-2026-11-02에 Raw Buffer Visualizer 2.2.4.0과 Visual Studio 2026에서 촬영했습니다. 첫 GIF는 Locals에서 1280 x 720 산업 장비 이미지를 도킹 뷰어로 엽니다. 이어지는 GIF는 스냅샷 파일의 스트라이드를 직접 수정하는 과정과 확대한 픽셀 주변 값을 보여 줍니다. 짧게 편집한 영상이며, 정지 구간이나 장면 전환은 처리 시간 측정이 아닙니다.
+2026-11-03에 Raw Buffer Visualizer 2.2.4.0 최종 UI를 Visual Studio 2026에서 촬영했습니다. 첫 GIF는 Watch에서 1280 x 720 산업 장비 이미지를 도킹 뷰로 엽니다. 이어지는 GIF는 스냅샷 파일의 스트라이드를 수동으로 보정하는 과정과 실행 종료 후 캡처된 이미지의 픽셀을 확인하는 모습을 담습니다. 대기 구간은 줄이고 확대 과정은 빠르게 편집했으며, 결과 화면은 읽기 쉽도록 잠시 유지합니다. 실제 처리 성능을 측정한 영상은 아닙니다.
 
-![PCB 스냅샷 파일에 알고 있는 패딩 스트라이드를 직접 적용](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/manual-stride.gif)
+![PCB 스냅샷 파일에 알고 있는 패딩 스트라이드를 직접 적용](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/manual-stride.gif)
 
-![이미지를 확대하고 픽셀 주변 값을 확인](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/pixel-neighborhood.gif)
+![이미지를 확대하고 픽셀 주변 값을 확인](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/pixel-neighborhood.gif)
 
 ## 2.2.4의 변경 사항
 
@@ -94,9 +94,9 @@ Visual Studio는 편집용 배치와 디버깅용 배치를 따로 저장합니�
 
 아래 사진은 같은 스냅샷 파일의 스트라이드를 Format에서 3,840바이트에서 3,920바이트로 직접 변경한 전후입니다. Buffer Doctor의 후보 탐색 범위는 제한되어 있으며, 이 예시는 알고 있는 값을 직접 적용합니다.
 
-![잘못된 3,840바이트 스트라이드로 해석한 PCB 스냅샷](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/manual-stride-before.png)
+![잘못된 3,840바이트 스트라이드로 해석한 PCB 스냅샷](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/manual-stride-before.png)
 
-![3,920바이트 스트라이드를 직접 적용한 같은 PCB 스냅샷](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/manual-stride-after.png)
+![3,920바이트 스트라이드를 직접 적용한 같은 PCB 스냅샷](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/manual-stride-after.png)
 
 ## Visual Studio 호환성
 

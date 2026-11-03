@@ -4,13 +4,13 @@
 
 Inspect image variables and raw 2D buffers directly inside Visual Studio at a breakpoint. Raw Buffer Visualizer opens `System.Drawing.Bitmap`, OpenCvSharp `Mat`, Emgu CV `Mat`, pointer-backed frames, snapshots, and supported collections in one docked viewer without debug-only image conversion code.
 
-![Inspect image memory from Visual Studio Locals in the docked viewer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/debugger-memory-image.gif)
+![Inspect image memory from Visual Studio Watch in the docked viewer](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/debugger-memory-image.gif)
 
-Recorded on 2026-11-02 with Raw Buffer Visualizer 2.2.4.0 in Visual Studio 2026. The first clip opens a 1280 x 720 industrial-machine image from Locals into the docked viewer. The following clips show a manual stride correction in a snapshot file and a zoomed pixel neighborhood. The clips are edited for brevity; pauses and cuts are not processing-time measurements.
+Recorded on 2026-11-03 with the final Raw Buffer Visualizer 2.2.4.0 UI in Visual Studio 2026. The first clip opens a 1280 x 720 industrial-machine image from Watch into the docked viewer. The following clips show manual stride correction in a snapshot file and pixel inspection of a captured image after execution ends. Idle intervals are removed, the zoom sequence is accelerated, and result frames are held for readability; the clips are not processing-time measurements.
 
-![Manually apply a known padded stride to a PCB snapshot file](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/manual-stride.gif)
+![Manually apply a known padded stride to a PCB snapshot file](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/manual-stride.gif)
 
-![Zoom into image details and inspect the pixel neighborhood](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/pixel-neighborhood.gif)
+![Zoom into image details and inspect the pixel neighborhood](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/pixel-neighborhood.gif)
 
 ## What's New In 2.2.4
 
@@ -95,9 +95,9 @@ If a raw image appears sheared, too dark, scrambled, or incorrectly packed, open
 
 The images below show the same snapshot file before and after manually changing its stride from 3,840 to 3,920 bytes in Format. Buffer Doctor's candidate search is bounded; this example applies a known value manually.
 
-![PCB snapshot interpreted with an incorrect 3,840-byte stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/manual-stride-before.png)
+![PCB snapshot interpreted with an incorrect 3,840-byte stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/manual-stride-before.png)
 
-![The same PCB snapshot after manually applying its 3,920-byte stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1a2e906844a0e464ab96333b512e972b6d83af58/docs/images/manual-stride-after.png)
+![The same PCB snapshot after manually applying its 3,920-byte stride](https://raw.githubusercontent.com/Noah8218/RawBufferVisualizer/1764ce8aac831a4311b7586cf742fa30425609dd/docs/images/manual-stride-after.png)
 
 ## Visual Studio Compatibility
 
