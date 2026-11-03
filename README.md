@@ -4,6 +4,8 @@ Image Watch-style debugging for C# machine vision: inspect image variables and r
 
 [Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=openvisionlab.RawBufferVisualizer) · [Developer documentation](docs/README.md) · [Changelog](CHANGELOG.md)
 
+![Open image memory from Visual Studio Watch in the docked viewer](docs/images/debugger-memory-image.gif "Raw Buffer Visualizer 2.2.4.0 final UI, VS2026, 2026-11-03. Edited demonstration; not a processing-time measurement.")
+
 ## Supported Workflow
 
 - Open Bitmap, OpenCvSharp Mat, Emgu CV Mat, RawBufferView, RawBufferSnapshot and supported collections through debugger visualizers.
@@ -13,6 +15,13 @@ Image Watch-style debugging for C# machine vision: inspect image variables and r
 - Use the separate WPF application for snapshots and explicit RAW layouts. It is not an additional application installed by the VSIX.
 
 Live pointers remain tied to their original process and allocation. Continue, disposal or process exit can invalidate them; an address is not object identity. Copied snapshots have a separate lifetime. A scan can stop only after an active debugger call returns.
+
+![Zoom into a captured image and read the pinned pixel and its neighborhood](docs/images/pixel-neighborhood.gif "5-second edited demonstration of a captured snapshot; final UI recorded 2026-11-03.")
+
+![Manually correct a PCB snapshot's known row stride from 3840 to 3920 bytes](docs/images/manual-stride.gif "5.2-second edited demonstration. The known padded stride is entered manually; the source bytes are unchanged.")
+
+<a href="docs/images/manual-stride-before.png"><img src="docs/images/manual-stride-before.png" alt="PCB snapshot before applying the known 3920-byte row stride" width="49%"></a>
+<a href="docs/images/manual-stride-after.png"><img src="docs/images/manual-stride-after.png" alt="The same PCB snapshot after applying the known 3920-byte row stride" width="49%"></a>
 
 Supported extension targets are Visual Studio 2022 17.9+ x64 and stable Visual Studio 2026 18.x. Community, Professional and Enterprise are installation targets. The manifest owns the API range. Exact-host verification must be performed on the binary being installed.
 
