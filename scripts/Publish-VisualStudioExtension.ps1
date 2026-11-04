@@ -11,6 +11,7 @@ param(
     [switch]$NoZip,
     [switch]$ValidateOnly,
     [string]$CandidateVsixPath = '',
+    [string]$TestedPayloadManifest = '',
     [string]$IlDasmPath = ''
 )
 
@@ -818,12 +819,13 @@ foreach ($entryName in $requiredEntries) {
 }
 
 $objectSourceOutput = Join-Path $buildRoot "bin\RawBufferVisualizer.VisualStudio.ObjectSource\$Configuration\netstandard2.0"
-foreach ($payloadName in @(
+$debuggeePayloadNames = @(
     'RawBufferVisualizer.Core.dll',
     'RawBufferVisualizer.Sdk.dll',
     'RawBufferVisualizer.VisualStudio.ObjectSource.dll',
     'RawBufferVisualizer.VisualStudio.ObjectSource.deps.json'
-)) {
+)
+foreach ($payloadName in $debuggeePayloadNames) {
     $builtPayloadPath = Join-Path $objectSourceOutput $payloadName
     Assert-FileExists -Path $builtPayloadPath -Message 'Fresh netstandard2.0 debugger payload was not found'
     $builtPayloadHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $builtPayloadPath).Hash
@@ -832,6 +834,22 @@ foreach ($payloadName in @(
         -EntryName "netstandard2.0/$payloadName"
     if (-not [string]::Equals($builtPayloadHash, $packagedPayloadHash, [StringComparison]::OrdinalIgnoreCase)) {
         throw "VSIX contains a stale netstandard2.0 debugger payload: $payloadName. Built SHA-256 $builtPayloadHash; packaged SHA-256 $packagedPayloadHash."
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($TestedPayloadManifest)) {
+    Assert-FileExists -Path $TestedPayloadManifest -Message 'Passed Classic payload manifest was not found'
+    $testedHashes = @{}
+    foreach ($payload in (Get-Content -Raw -LiteralPath $TestedPayloadManifest | ConvertFrom-Json)) {
+        $testedHashes[$payload.Path.Replace('\', '/')] = $payload.SHA256
+    }
+    $testedEntries = @('RawBufferVisualizer.VisualStudio.Classic.dll', 'RawBufferVisualizer.VisualStudio.dll')
+    $testedEntries += @($debuggeePayloadNames | ForEach-Object { "netstandard2.0/$_" })
+    foreach ($entryName in $testedEntries) {
+        $packagedHash = Get-VsixEntrySha256 -Path $vsixPath -EntryName $entryName
+        if ($testedHashes[$entryName] -ne $packagedHash) {
+            throw "VSIX payload differs from the tested Classic payload: $entryName. Tested SHA-256 $($testedHashes[$entryName]); packaged SHA-256 $packagedHash."
+        }
     }
 }
 

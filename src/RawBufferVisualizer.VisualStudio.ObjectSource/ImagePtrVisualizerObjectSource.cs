@@ -9,38 +9,18 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class ImagePtrVisualizerObjectSource : VisualizerObjectSource
     {
-        private readonly VisualizerViewCache<ImagePtrView> _viewCache =
-            new VisualizerViewCache<ImagePtrView>(target => ImagePtrVisualizerTransfer.CreateView(target));
+        private readonly VisualizerViewCache<ImageVisualizerTransfer> _transferCache =
+            new VisualizerViewCache<ImageVisualizerTransfer>(target => ImagePtrVisualizerTransfer.CreateImageTransfer(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(
-                outgoingData,
-                VisualizerChunkedTransfer.AttachExpressionIdentity(
-                    ImagePtrVisualizerTransfer.CreateMetadata(GetView(target)),
-                    target));
+            _transferCache.GetOrCreate(target).WriteMetadata(target, outgoingData);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
-            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
-            if (request == null)
-            {
-                throw new InvalidDataException("Chunk request is required.");
-            }
-
-            if (request.Operation == VisualizerSnapshotOperation.Preview)
-            {
-                SerializeAsJson(outgoingData, ImagePtrVisualizerTransfer.CreatePreview(GetView(target), request));
-                return;
-            }
-
-            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, ImagePtrVisualizerTransfer.CreateChunk(GetView(target), request));
-        }
-
-        private ImagePtrView GetView(object target)
-        {
-            return _viewCache.GetOrCreate(target);
+            var request = ImageVisualizerTransfer.ReadRequest(incomingData);
+            _transferCache.GetOrCreate(target).WriteData(request, outgoingData);
         }
     }
 
@@ -56,6 +36,25 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
     public static class ImagePtrVisualizerTransfer
     {
+        private static readonly string[] PointerMembers = { "Ptr", "Buffer", "Data", "DataPointer", "_ptr", "_buffer", "_data" };
+        private static readonly string[] WidthMembers = { "Width", "_width" };
+        private static readonly string[] HeightMembers = { "Height", "_height" };
+
+        internal static ImageVisualizerTransfer CreateImageTransfer(object target, string? displayName = null)
+        {
+            var view = CreateView(target);
+            if (displayName != null) view.DisplayName = displayName;
+            return CreateImageTransfer(view);
+        }
+
+        internal static ImageVisualizerTransfer CreateImageTransfer(ImagePtrView view)
+        {
+            return new ImageVisualizerTransfer(
+                () => CreateMetadata(view),
+                (request, _) => CreateChunk(view, request),
+                request => CreatePreview(view, request));
+        }
+
         public static ImagePtrView CreateView(object target)
         {
             if (target == null)
@@ -65,23 +64,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             var type = target.GetType();
             string sourcePointerLabel;
-            var ptr = GetPointerValue(
-                target,
-                out sourcePointerLabel,
-                "Ptr",
-                "Buffer",
-                "Data",
-                "DataPointer",
-                "_ptr",
-                "_buffer",
-                "_data");
+            var ptr = GetPointerValue(target, out sourcePointerLabel, PointerMembers);
             if (ptr == IntPtr.Zero)
             {
                 throw new ArgumentException("Image pointer is empty.", nameof(target));
             }
 
-            var width = GetValue<int>(target, "Width", "_width");
-            var height = GetValue<int>(target, "Height", "_height");
+            var width = GetValue<int>(target, WidthMembers);
+            var height = GetValue<int>(target, HeightMembers);
             var channels = GetOptionalInt(target, "Channels", "ChannelCount", "_channels");
             var bitDepth = GetOptionalInt(target, "BitDepth", "Depth", "ValidBits", "_bitDepth", "_depth");
             var bpp = NormalizeBpp(
@@ -92,22 +82,16 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 ? explicitFormat
                 : InferPixelFormat(bpp, channels, bitDepth);
 
-            var bytesPerPixel = GetBytesPerPixel(pixelFormat, bpp, channels, bitDepth);
-            var stride = GetOptionalInt(target, "Step", "Stride", "Pitch", "_step", "_stride", "_pitch");
-            if (stride <= 0)
-            {
-                stride = checked(width * bytesPerPixel);
-            }
-
             var descriptor = new RawImageDescriptor
             {
                 Width = width,
                 Height = height,
-                Stride = stride,
+                Stride = GetOptionalInt(target, "Step", "Stride", "Pitch", "_step", "_stride", "_pitch"),
                 PixelFormat = pixelFormat,
-                ValidBits = bitDepth > 0 ? bitDepth : GetDefaultValidBits(pixelFormat),
+                ValidBits = bitDepth > 0 ? bitDepth : RawImageDescriptor.GetDefaultValidBits(pixelFormat),
                 ByteOrder = RawByteOrder.LittleEndian
             };
+            if (descriptor.Stride <= 0) descriptor.Stride = descriptor.GetMinimumStride();
 
             var length = GetOptionalLong(target, "Length", "BufferLength", "Size", "ByteLength", "_length", "_size");
             if (length <= 0)
@@ -279,44 +263,6 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return bpp;
         }
 
-        private static int GetBytesPerPixel(RawPixelFormat pixelFormat, int bpp, int channels, int bitDepth)
-        {
-            if (bpp > 0)
-            {
-                return bpp;
-            }
-
-            if (channels > 0 && bitDepth > 0)
-            {
-                return checked(channels * ((bitDepth + 7) / 8));
-            }
-
-            return pixelFormat == RawPixelFormat.Mono16 ? 2 :
-                pixelFormat == RawPixelFormat.BGR24 || pixelFormat == RawPixelFormat.RGB24 ? 3 :
-                pixelFormat == RawPixelFormat.BGRA32 || pixelFormat == RawPixelFormat.Float32 || pixelFormat == RawPixelFormat.Int32 ? 4 :
-                1;
-        }
-
-        internal static int GetDefaultValidBits(RawPixelFormat pixelFormat)
-        {
-            switch (pixelFormat)
-            {
-                case RawPixelFormat.Mono16:
-                    return 16;
-                case RawPixelFormat.Float32:
-                case RawPixelFormat.Int32:
-                    return 32;
-                case RawPixelFormat.Binary:
-                    return 1;
-                case RawPixelFormat.Mono10PackedLsb:
-                    return 10;
-                case RawPixelFormat.Mono12PackedLsb:
-                    return 12;
-                default:
-                    return 8;
-            }
-        }
-
         private static bool TryGetPixelFormat(object target, out RawPixelFormat pixelFormat)
         {
             foreach (var name in new[] { "PixelFormat", "Format", "RawPixelFormat" })
@@ -426,6 +372,20 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             }
 
             result = default!;
+            return false;
+        }
+
+        internal static bool HasImageLayout(Type type)
+        {
+            return HasMember(type, PointerMembers) && HasMember(type, WidthMembers) && HasMember(type, HeightMembers);
+        }
+
+        private static bool HasMember(Type type, string[] names)
+        {
+            foreach (var name in names)
+            {
+                if (FindMember(type, name) != null) return true;
+            }
             return false;
         }
 

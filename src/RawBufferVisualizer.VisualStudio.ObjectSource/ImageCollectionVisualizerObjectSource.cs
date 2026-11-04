@@ -3,11 +3,11 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Sdk;
+using RawBufferVisualizer.VisualStudio.Debugger;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
@@ -183,7 +183,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             {
                 Index = index,
                 DisplayName = item.DisplayName,
-                Metadata = item.Transfer?.Metadata,
+                Metadata = item.Metadata,
                 Error = item.Error,
                 MemberInventory = item.MemberInventory,
                 ItemTypeName = item.ItemTypeName,
@@ -280,10 +280,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
                 totalCount = list.Count;
                 var count = Math.Min(totalCount, MaximumItemsPerOpen);
-                for (var index = 0; index < count; index++)
+                var array = list as Array;
+                if (array != null && array.Rank != 1) throw new NotSupportedException("Only one-dimensional image arrays are supported.");
+                var firstIndex = array?.GetLowerBound(0) ?? 0;
+                for (var offset = 0; offset < count; offset++)
                 {
+                    var index = firstIndex + offset;
                     items.Add(new ImageCollectionItem(
-                        list[index],
+                        array == null ? list[index] : array.GetValue(index),
                         "[" + index.ToString(CultureInfo.InvariantCulture) + "]",
                         mappingStore));
                 }
@@ -300,73 +304,22 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 items);
         }
 
-        internal static ImageCollectionItemTransfer CreateItemTransfer(object value, string displayName)
+        internal static ImageVisualizerTransfer CreateItemTransfer(object value, string displayName, TypeMappingStore? mappingStore)
         {
-            return CreateItemTransfer(value, displayName, TypeMappingStore.Default);
-        }
-
-        internal static ImageCollectionItemTransfer CreateItemTransfer(object value, string displayName, TypeMappingStore? mappingStore)
-        {
-            var snapshot = value as RawBufferSnapshot;
-            if (snapshot != null)
-            {
-                var metadata = VisualizerChunkedTransfer.CreateMetadata(
-                    snapshot.Descriptor,
-                    snapshot.Buffer.LongLength,
-                    typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot),
-                    displayName);
-                return new ImageCollectionItemTransfer(
-                    metadata,
-                    request => VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request),
-                    request => VisualizerChunkedTransfer.CreatePreview(
-                        snapshot.Buffer,
-                        snapshot.Descriptor,
-                        metadata.SourceType,
-                        displayName,
-                        request));
-            }
-
-            var rawView = value as RawBufferView;
-            if (rawView != null)
-            {
-                var metadata = VisualizerChunkedTransfer.CreatePointerMetadata(
-                    rawView.ToDescriptor(),
-                    rawView.GetBufferLength(),
-                    rawView.Buffer,
-                    typeof(RawBufferView).FullName ?? nameof(RawBufferView),
-                    displayName,
-                    rawView.Buffer,
-                    "Buffer");
-                return new ImageCollectionItemTransfer(
-                    metadata,
-                    request => RawBufferViewVisualizerTransfer.CreateChunk(rawView, request),
-                    request => RawBufferViewVisualizerTransfer.CreatePreview(rawView, request));
-            }
-
             var type = value.GetType();
-            switch (type.FullName)
+            var source = ImageVisualizerTypePolicy.GetObjectSource(type, allowLegacyNameMatch: true);
+            switch (source)
             {
-                case "System.Drawing.Bitmap":
-                    var bitmapView = BitmapVisualizerTransfer.CreateView(value, displayName);
-                    return new ImageCollectionItemTransfer(
-                        BitmapVisualizerTransfer.CreateMetadata(bitmapView),
-                        request => BitmapVisualizerTransfer.CreateChunk(bitmapView, request),
-                        request => BitmapVisualizerTransfer.CreatePreview(bitmapView, request),
-                        (request, buffer) => BitmapVisualizerTransfer.CreateChunk(bitmapView, request, buffer));
-
-                case "OpenCvSharp.Mat":
-                    var openCvView = OpenCvSharpMatVisualizerTransfer.CreateView(value, displayName);
-                    return new ImageCollectionItemTransfer(
-                        OpenCvSharpMatVisualizerTransfer.CreateMetadata(openCvView),
-                        request => OpenCvSharpMatVisualizerTransfer.CreateChunk(openCvView, request),
-                        request => OpenCvSharpMatVisualizerTransfer.CreatePreview(openCvView, request));
-
-                case "Emgu.CV.Mat":
-                    var emguView = EmguCvMatVisualizerTransfer.CreateView(value, displayName);
-                    return new ImageCollectionItemTransfer(
-                        EmguCvMatVisualizerTransfer.CreateMetadata(emguView),
-                        request => EmguCvMatVisualizerTransfer.CreateChunk(emguView, request),
-                        request => EmguCvMatVisualizerTransfer.CreatePreview(emguView, request));
+                case nameof(RawBufferSnapshotVisualizerObjectSource) when value is RawBufferSnapshot snapshot:
+                    return VisualizerChunkedTransfer.CreateSnapshotTransfer(snapshot, displayName);
+                case nameof(RawBufferViewVisualizerObjectSource) when value is RawBufferView view:
+                    return RawBufferViewVisualizerTransfer.CreateImageTransfer(view, displayName);
+                case nameof(BitmapVisualizerObjectSource):
+                    return BitmapVisualizerTransfer.CreateImageTransfer(value, displayName);
+                case nameof(OpenCvSharpMatVisualizerObjectSource):
+                    return OpenCvSharpMatVisualizerTransfer.CreateImageTransfer(value, displayName);
+                case nameof(EmguCvMatVisualizerObjectSource):
+                    return EmguCvMatVisualizerTransfer.CreateImageTransfer(value, displayName);
             }
 
             var mapping = mappingStore == null
@@ -384,39 +337,14 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new NotSupportedException(mappedError + " (type mapping for " + (type.FullName ?? type.Name) + ")");
             }
 
-            if (LooksLikeImagePointer(type))
+            if (ImagePtrVisualizerTransfer.HasImageLayout(type))
             {
-                var pointerView = ImagePtrVisualizerTransfer.CreateView(value);
-                pointerView.DisplayName = displayName;
-                return new ImageCollectionItemTransfer(
-                    ImagePtrVisualizerTransfer.CreateMetadata(pointerView),
-                    request => ImagePtrVisualizerTransfer.CreateChunk(pointerView, request),
-                    request => ImagePtrVisualizerTransfer.CreatePreview(pointerView, request));
+                return ImagePtrVisualizerTransfer.CreateImageTransfer(value, displayName);
             }
 
             throw new NotSupportedException("Unsupported collection image type: " + (type.FullName ?? type.Name));
         }
 
-        private static bool LooksLikeImagePointer(Type type)
-        {
-            return HasMember(type, "Ptr", "Buffer", "Data", "DataPointer", "_ptr", "_buffer", "_data")
-                && HasMember(type, "Width", "_width")
-                && HasMember(type, "Height", "_height");
-        }
-
-        private static bool HasMember(Type type, params string[] names)
-        {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic;
-            foreach (var name in names)
-            {
-                if (type.GetProperty(name, flags) != null || type.GetField(name, flags) != null)
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
     }
 
     internal sealed class ImageCollectionItem
@@ -433,7 +361,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         }
 
         public string DisplayName { get; }
-        public ImageCollectionItemTransfer? Transfer { get; private set; }
+        public ImageVisualizerTransfer? Transfer { get; private set; }
+        public VisualizerSnapshotMetadata? Metadata { get; private set; }
         public string Error { get; private set; } = string.Empty;
         public List<VisualizerMemberInventoryItem>? MemberInventory { get; private set; }
 
@@ -471,7 +400,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
             try
             {
-                Transfer = ImageCollectionVisualizerTransfer.CreateItemTransfer(_value, DisplayName, _mappingStore);
+                var transfer = ImageCollectionVisualizerTransfer.CreateItemTransfer(_value, DisplayName, _mappingStore);
+                Metadata = transfer.CreateMetadata();
+                Transfer = transfer;
             }
             catch (Exception ex)
             {
@@ -483,38 +414,8 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
         public void ReleaseTransfer()
         {
             Transfer = null;
+            Metadata = null;
             _initialized = false;
-        }
-    }
-
-    internal sealed class ImageCollectionItemTransfer
-    {
-        private readonly Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> _createChunk;
-        private readonly Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> _createPreview;
-        private readonly Func<VisualizerSnapshotChunkRequest, byte[]?, VisualizerSnapshotChunk>? _createReusableChunk;
-
-        public ImageCollectionItemTransfer(
-            VisualizerSnapshotMetadata metadata,
-            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> createChunk,
-            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotTransfer> createPreview,
-            Func<VisualizerSnapshotChunkRequest, byte[]?, VisualizerSnapshotChunk>? createReusableChunk = null)
-        {
-            Metadata = metadata;
-            _createChunk = createChunk;
-            _createPreview = createPreview;
-            _createReusableChunk = createReusableChunk;
-        }
-
-        public VisualizerSnapshotMetadata Metadata { get; }
-
-        public VisualizerSnapshotChunk CreateChunk(VisualizerSnapshotChunkRequest request, byte[]? reusableBuffer = null)
-        {
-            return _createReusableChunk == null ? _createChunk(request) : _createReusableChunk(request, reusableBuffer);
-        }
-
-        public VisualizerSnapshotTransfer CreatePreview(VisualizerSnapshotChunkRequest request)
-        {
-            return _createPreview(request);
         }
     }
 }

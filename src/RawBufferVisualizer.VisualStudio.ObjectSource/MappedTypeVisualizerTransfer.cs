@@ -7,7 +7,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     internal static class MappedTypeVisualizerTransfer
     {
-        public static ImageCollectionItemTransfer? TryCreateItemTransfer(
+        public static ImageVisualizerTransfer? TryCreateItemTransfer(
             object value,
             string displayName,
             TypeMapping mapping,
@@ -80,7 +80,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 Width = width,
                 Height = height,
                 PixelFormat = pixelFormat,
-                ValidBits = validBits > 0 ? validBits : ImagePtrVisualizerTransfer.GetDefaultValidBits(pixelFormat),
+                ValidBits = validBits > 0 ? validBits : RawImageDescriptor.GetDefaultValidBits(pixelFormat),
                 ByteOrder = byteOrder
             };
             descriptor.Stride = stride > 0 ? stride : descriptor.GetMinimumStride();
@@ -105,7 +105,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
             return CreateArrayTransfer(dataValue, descriptor, typeName, displayName, members.Data ?? string.Empty, out error);
         }
 
-        private static ImageCollectionItemTransfer? CreatePointerTransfer(
+        private static ImageVisualizerTransfer? CreatePointerTransfer(
             object value,
             Type type,
             TypeMappingMembers members,
@@ -168,10 +168,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 SourceType = typeName,
                 DisplayName = displayName
             };
-            return new ImageCollectionItemTransfer(
-                ImagePtrVisualizerTransfer.CreateMetadata(view),
-                request => ImagePtrVisualizerTransfer.CreateChunk(view, request),
-                request => ImagePtrVisualizerTransfer.CreatePreview(view, request));
+            return ImagePtrVisualizerTransfer.CreateImageTransfer(view);
         }
 
         private static bool TryValidatePointerLayoutSignals(
@@ -265,7 +262,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 : memberPath;
         }
 
-        private static ImageCollectionItemTransfer? CreateArrayTransfer(
+        private static ImageVisualizerTransfer? CreateArrayTransfer(
             object dataValue,
             RawImageDescriptor descriptor,
             string typeName,
@@ -323,10 +320,9 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 return null;
             }
 
-            var metadata = VisualizerChunkedTransfer.CreateMetadata(descriptor, buffer.LongLength, typeName, displayName);
-            return new ImageCollectionItemTransfer(
-                metadata,
-                request => VisualizerChunkedTransfer.CreateChunk(buffer, request),
+            return new ImageVisualizerTransfer(
+                () => VisualizerChunkedTransfer.CreateMetadata(descriptor, buffer.LongLength, typeName, displayName),
+                (request, _) => VisualizerChunkedTransfer.CreateChunk(buffer, request),
                 request => VisualizerChunkedTransfer.CreatePreview(buffer, descriptor, typeName, displayName, request));
         }
 

@@ -26,5 +26,6 @@ namespace Cressem.ImageModel
         public int Step { get; set; }
 
         public int Bpp { get; set; }
+        public string? PixelFormat { get; set; }
     }
 }

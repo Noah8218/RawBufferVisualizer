@@ -4,6 +4,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\Shared.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <PackageReference Include="Microsoft.VisualStudio.DebuggerVisualizers" Version="17.6.1032901" />
   </ItemGroup>
   <ItemGroup>

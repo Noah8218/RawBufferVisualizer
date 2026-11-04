@@ -4,43 +4,24 @@ using System.IO;
 using System.Reflection;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
+using RawBufferVisualizer.VisualStudio.Debugger;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class EmguCvMatVisualizerObjectSource : VisualizerObjectSource
     {
-        private readonly VisualizerViewCache<EmguCvMatView> _viewCache =
-            new VisualizerViewCache<EmguCvMatView>(target => EmguCvMatVisualizerTransfer.CreateView(target));
+        private readonly VisualizerViewCache<ImageVisualizerTransfer> _transferCache =
+            new VisualizerViewCache<ImageVisualizerTransfer>(target => EmguCvMatVisualizerTransfer.CreateImageTransfer(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(
-                outgoingData,
-                VisualizerChunkedTransfer.AttachExpressionIdentity(
-                    EmguCvMatVisualizerTransfer.CreateMetadata(GetView(target)),
-                    target));
+            _transferCache.GetOrCreate(target).WriteMetadata(target, outgoingData);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
-            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
-            if (request == null)
-            {
-                throw new InvalidDataException("Chunk request is required.");
-            }
-
-            if (request.Operation == VisualizerSnapshotOperation.Preview)
-            {
-                SerializeAsJson(outgoingData, EmguCvMatVisualizerTransfer.CreatePreview(GetView(target), request));
-                return;
-            }
-
-            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, EmguCvMatVisualizerTransfer.CreateChunk(GetView(target), request));
-        }
-
-        private EmguCvMatView GetView(object target)
-        {
-            return _viewCache.GetOrCreate(target);
+            var request = ImageVisualizerTransfer.ReadRequest(incomingData);
+            _transferCache.GetOrCreate(target).WriteData(request, outgoingData);
         }
     }
 
@@ -58,6 +39,15 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         private const string MatFullName = "Emgu.CV.Mat";
 
+        internal static ImageVisualizerTransfer CreateImageTransfer(object target, string? displayName = null)
+        {
+            var view = CreateView(target, displayName);
+            return new ImageVisualizerTransfer(
+                () => CreateMetadata(view),
+                (request, _) => CreateChunk(view, request),
+                request => CreatePreview(view, request));
+        }
+
         public static EmguCvMatView CreateView(object mat, string? displayName = null)
         {
             if (mat == null)
@@ -65,7 +55,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(mat));
             }
 
-            if (mat.GetType().FullName != MatFullName)
+            if (ImageVisualizerTypePolicy.GetObjectSource(mat.GetType(), allowLegacyNameMatch: true) != nameof(EmguCvMatVisualizerObjectSource))
             {
                 throw new NotSupportedException("Only Emgu.CV.Mat is supported.");
             }

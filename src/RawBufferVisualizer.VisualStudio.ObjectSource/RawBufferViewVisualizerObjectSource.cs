@@ -9,43 +9,37 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         public override void GetData(object target, Stream outgoingData)
         {
-            if (!(target is RawBufferView view))
-            {
-                throw new NotSupportedException("Only RawBufferView is supported.");
-            }
-
-            SerializeAsJson(
-                outgoingData,
-                VisualizerChunkedTransfer.AttachExpressionIdentity(
-                    RawBufferViewVisualizerTransfer.CreateMetadata(view),
-                    target));
+            RawBufferViewVisualizerTransfer.CreateImageTransfer(GetView(target)).WriteMetadata(target, outgoingData);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
-            if (!(target is RawBufferView view))
-            {
-                throw new NotSupportedException("Only RawBufferView is supported.");
-            }
+            var view = GetView(target);
+            var request = ImageVisualizerTransfer.ReadRequest(incomingData);
+            RawBufferViewVisualizerTransfer.CreateImageTransfer(view).WriteData(request, outgoingData);
+        }
 
-            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
-            if (request == null)
-            {
-                throw new InvalidDataException("Chunk request is required.");
-            }
-
-            if (request.Operation == VisualizerSnapshotOperation.Preview)
-            {
-                SerializeAsJson(outgoingData, RawBufferViewVisualizerTransfer.CreatePreview(view, request));
-                return;
-            }
-
-            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, RawBufferViewVisualizerTransfer.CreateChunk(view, request));
+        private static RawBufferView GetView(object target)
+        {
+            return target as RawBufferView ?? throw new NotSupportedException("Only RawBufferView is supported.");
         }
     }
 
     public static class RawBufferViewVisualizerTransfer
     {
+        internal static ImageVisualizerTransfer CreateImageTransfer(RawBufferView view, string? displayName = null)
+        {
+            return new ImageVisualizerTransfer(
+                () =>
+                {
+                    var metadata = CreateMetadata(view);
+                    if (displayName != null) metadata.DisplayName = displayName;
+                    return metadata;
+                },
+                (request, _) => CreateChunk(view, request),
+                request => CreatePreview(view, request));
+        }
+
         public static VisualizerSnapshotMetadata CreateMetadata(RawBufferView view)
         {
             if (view == null)

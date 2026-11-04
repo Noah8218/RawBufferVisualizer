@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\Shared.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <PackageReference Include="Microsoft.VisualStudio.Debugger.Engine" Version="17.8.1101801" PrivateAssets="all" />
     <PackageReference Include="Microsoft.VisualStudio.Debugger.Metadata" Version="17.8.1101801" PrivateAssets="all" />
     <PackageReference Include="Microsoft.VSSDK.Debugger.VSDConfigTool" Version="17.8.1101801" PrivateAssets="all" />

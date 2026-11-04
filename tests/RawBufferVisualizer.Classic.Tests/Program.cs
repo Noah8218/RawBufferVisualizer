@@ -1,9 +1,14 @@
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text;
 using System.Windows.Forms;
 using Microsoft.VisualStudio.DebuggerVisualizers;
@@ -12,6 +17,7 @@ using RawBufferVisualizer.Core;
 using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio;
 using RawBufferVisualizer.VisualStudio.Classic;
+using RawBufferVisualizer.VisualStudio.Debugger;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
 internal static class Program
@@ -22,10 +28,26 @@ internal static class Program
     {
         try
         {
+            if (args.Length == 1 && args[0] == "--debugger-results")
+            {
+                DebuggerResultProviderTests.RunAll();
+                return 0;
+            }
+
             if (args.Length == 3 && args[0] == "--debugger-bytes")
             {
                 VerifyDebuggerBytes(args[1], args[2]);
                 return 0;
+            }
+
+            if (args.Contains("--require-netstandard-payload"))
+            {
+                foreach (var type in new[] { typeof(RawImageDescriptor), typeof(RawBufferSnapshot), typeof(RawBufferSnapshotVisualizerObjectSource) })
+                {
+                    Require(type.Assembly.GetCustomAttribute<TargetFrameworkAttribute>()?.FrameworkName == ".NETStandard,Version=v2.0",
+                        "Expected netstandard2.0 debugger payload for " + type.Assembly.GetName().Name);
+                }
+                Console.WriteLine("PASS: running with the netstandard2.0 Core/SDK/ObjectSource payload.");
             }
 
             // The fake host must establish the same paused-session admission as the docked IDE.
@@ -45,7 +67,15 @@ internal static class Program
                 Console.WriteLine("Boundary: fake provider and pointer metadata; no full native read or installed IDE transfer is claimed.");
                 return 0;
             }
+            if (args.Contains("--supported-images"))
+            {
+                VerifySupportedImages();
+                return 0;
+            }
+            DebuggerResultProviderTests.RunAll();
             VerifyInstallPathRegistrations();
+            VerifyNativeSnapshotCapture();
+            VerifySupportedImages();
 
             var mono8 = new RawBufferSnapshot(new byte[] { 1, 2, 3, 99, 4, 5, 6, 98 }, new RawImageDescriptor
             {
@@ -118,16 +148,16 @@ internal static class Program
         {
             Width = 3, Height = 1, Stride = 3, PixelFormat = RawPixelFormat.Mono8, ValidBits = 8
         });
-        VerifyCollection(type, new object[] { snapshot, 42, null! }, snapshot, false, 1, 2);
-        VerifyCollection(type, new object[] { snapshot }, snapshot, true, 0, 1);
-        VerifyCollection(type, new object[] { snapshot }, snapshot, false, 1, 0);
-        VerifyCollection(type, Array.Empty<object>(), snapshot, false, 0, 1);
-        VerifyCollection(type, new object[] { snapshot, snapshot }, snapshot, false, 2, 0);
+        VerifyCollection(type, new object[] { snapshot, 42, null! }, _ => snapshot, false, 1, 2);
+        VerifyCollection(type, new object[] { snapshot }, _ => snapshot, true, 0, 1);
+        VerifyCollection(type, new object[] { snapshot }, _ => snapshot, false, 1, 0);
+        VerifyCollection(type, Array.Empty<object>(), _ => snapshot, false, 0, 1);
+        VerifyCollection(type, new object[] { snapshot, snapshot }, _ => snapshot, false, 2, 0);
         Console.WriteLine("PASS: 5 collection Show cases; mixed/null/error retention, empty collection, chunk failure/recovery, repeated handoff, exact bytes, zero dialog-service calls; self-targeted install-path registrations only.");
         Console.WriteLine("Boundary: real ObjectSource and Show with fake transport/context; installed IDE qualification remains required.");
     }
 
-    private static void VerifyCollection(Type type, object target, RawBufferSnapshot expected, bool failChunk, int successes, int errors)
+    private static void VerifyCollection(Type type, object target, Func<string, RawBufferSnapshot> expectedByName, bool failChunk, int successes, int errors, VisualizerObjectSource? source = null)
     {
         var dialogs = new RejectingDialogService();
         int wakes = 0;
@@ -155,8 +185,9 @@ internal static class Program
                     {
                         actualSuccesses++;
                         var stored = RawBufferSnapshot.Load(request.MetadataPath);
+                        var expected = expectedByName(request.DisplayName);
                         Require(stored.Buffer.SequenceEqual(expected.Buffer), "Collection bytes changed.");
-                        Require(stored.Descriptor.Width == expected.Descriptor.Width && stored.Descriptor.Stride == expected.Descriptor.Stride, "Collection layout changed.");
+                        VerifyLayout(stored.Descriptor, expected.Descriptor);
                     }
                 }
                 finally
@@ -168,12 +199,18 @@ internal static class Program
             Require(actualSuccesses == successes && actualErrors == errors, "Unexpected collection success/error count.");
         };
         var visualizer = Activator.CreateInstance(type, BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { mappings, wake }, null)!;
-        type.GetMethod("Show", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(visualizer, new object[] { dialogs, new SnapshotProvider(target, failChunk) });
+        type.GetMethod("Show", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(visualizer, new object[] { dialogs, new SnapshotProvider(target, failChunk, source) });
         Require(wakes == 1 && dialogs.Calls == 0, "Collection must wake the docked viewer once without any dialog call.");
         Require(!Directory.GetDirectories(VisualStudioTempStore.RootDirectory).Any(p => Path.GetFileName(p) != "Inbox"), "Collection artifacts leaked after terminal cleanup.");
     }
 
     private static void Verify(RawBufferSnapshot snapshot, bool failChunk, bool expectError)
+    {
+        VerifySingle(snapshot, snapshot, failChunk, expectError);
+        _cases++;
+    }
+
+    private static void VerifySingle(object target, RawBufferSnapshot snapshot, bool failChunk, bool expectError, VisualizerObjectSource? source = null)
     {
         var dialogs = new RejectingDialogService();
         var wakes = 0;
@@ -194,10 +231,7 @@ internal static class Program
                 {
                     var stored = RawBufferSnapshot.Load(request.MetadataPath);
                     Require(stored.Buffer.SequenceEqual(snapshot.Buffer), "Captured bytes changed.");
-                    Require(stored.Descriptor.Width == snapshot.Descriptor.Width
-                        && stored.Descriptor.Height == snapshot.Descriptor.Height
-                        && stored.Descriptor.Stride == snapshot.Descriptor.Stride
-                        && stored.Descriptor.PixelFormat == snapshot.Descriptor.PixelFormat, "Captured layout changed.");
+                    VerifyLayout(stored.Descriptor, snapshot.Descriptor);
                 }
                 else
                 {
@@ -213,11 +247,197 @@ internal static class Program
         var visualizer = (RawBufferClassicDebuggerVisualizer)Activator.CreateInstance(
             typeof(RawBufferClassicDebuggerVisualizer), BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { wake }, null)!;
         typeof(RawBufferClassicDebuggerVisualizer).GetMethod("Show", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(visualizer, new object[] { dialogs, new SnapshotProvider(snapshot, failChunk) });
+            .Invoke(visualizer, new object[] { dialogs, new SnapshotProvider(target, failChunk, source) });
         Require(wakes == 1, "Existing docked viewer must be activated once.");
         Require(dialogs.Calls == 0, "A helper window was requested.");
         Require(!Directory.GetDirectories(VisualStudioTempStore.RootDirectory).Any(p => Path.GetFileName(p) != "Inbox"), "Unowned snapshot artifacts remain after transfer/failure.");
-        _cases++;
+    }
+
+    private static void VerifyLayout(RawImageDescriptor actual, RawImageDescriptor expected)
+    {
+        Require(actual.Width == expected.Width && actual.Height == expected.Height && actual.Stride == expected.Stride
+            && actual.PixelFormat == expected.PixelFormat && actual.ValidBits == expected.ValidBits
+            && actual.ByteOrder == expected.ByteOrder, "Captured layout changed.");
+    }
+
+    private static void VerifySupportedImages()
+    {
+        var tested = new HashSet<(string? TypeName, string ObjectSource)>();
+        void Verify(string name, object target, object collection, string objectSource, RawBufferSnapshot expected)
+        {
+            VerifyImageCase(name, target, collection, objectSource, expected);
+            var type = target.GetType();
+            tested.Add(((type.IsGenericType ? type.GetGenericTypeDefinition() : type).FullName, objectSource));
+        }
+
+        var address = Marshal.AllocHGlobal(8);
+        try
+        {
+            var padded = new byte[] { 1, 2, 3, 91, 4, 5, 6 };
+            var mono = Expected(padded, 3, 2, 4, RawPixelFormat.Mono8, 8);
+            Marshal.Copy(padded, 0, address, padded.Length);
+            var view = new RawBufferView { Buffer = address, BufferLength = padded.Length, Width = 3, Height = 2, Stride = 4,
+                PixelFormat = RawPixelFormat.Mono8, BitDepth = 8, Channels = 1 };
+            var pointer = new Cressem.ImageModel.ImagePtr(address, padded.Length, 3, 2, 4, 1);
+            var packed = new Cressem.ImageModel.ImagePtr(address, 6, 2, 2, 0, 0) { PixelFormat = "Mono12PackedLsb" };
+            var nonZeroArray = Array.CreateInstance(typeof(Cressem.ImageModel.ImagePtr), new[] { 1 }, new[] { 3 });
+            nonZeroArray.SetValue(pointer, 3);
+
+            using (var bitmap = new Bitmap(4, 2, PixelFormat.Format24bppRgb))
+            using (var openCv = new OpenCvSharp.Mat(2, 3, OpenCvSharp.MatType.CV_8UC3, new OpenCvSharp.Scalar(13, 37, 99)))
+            using (var typedMat = new OpenCvSharp.Mat<byte>(2, 3, OpenCvSharp.Scalar.All(23)))
+            using (var emgu = new Emgu.CV.Mat(2, 3, Emgu.CV.CvEnum.DepthType.Cv8U, 3))
+            {
+                using (var graphics = Graphics.FromImage(bitmap)) graphics.Clear(Color.FromArgb(51, 39, 17));
+                emgu.SetTo(new Emgu.CV.Structure.MCvScalar(13, 37, 99));
+                var color = Expected(Enumerable.Repeat(new byte[] { 13, 37, 99 }, 6).SelectMany(pixel => pixel).ToArray(), 3, 2, 9, RawPixelFormat.BGR24, 8);
+                var bitmapExpected = Expected(Enumerable.Repeat(new byte[] { 17, 39, 51 }, 8).SelectMany(pixel => pixel).ToArray(), 4, 2, 12, RawPixelFormat.BGR24, 8);
+                Verify("Bitmap", bitmap, new[] { bitmap }, nameof(BitmapVisualizerObjectSource), bitmapExpected);
+                Verify("OpenCvSharp.Mat", openCv, new System.Collections.ArrayList { openCv }, nameof(OpenCvSharpMatVisualizerObjectSource), color);
+                Verify("Emgu.CV.Mat", emgu, new System.Collections.Hashtable { ["frame"] = emgu }, nameof(EmguCvMatVisualizerObjectSource), color);
+                Verify("RawBufferView", view, new List<RawBufferView> { view }, nameof(RawBufferViewVisualizerObjectSource), mono);
+                Verify("RawBufferSnapshot", mono, new Dictionary<string, object> { ["frame"] = mono }, nameof(RawBufferSnapshotVisualizerObjectSource), mono);
+                var concurrent = new System.Collections.Concurrent.ConcurrentDictionary<string, object>();
+                concurrent["frame"] = pointer;
+                Verify("ImagePtr", pointer, concurrent, nameof(ImagePtrVisualizerObjectSource), mono);
+                Verify("Mat<T>", typedMat, new[] { typedMat }, nameof(OpenCvSharpMatVisualizerObjectSource),
+                    Expected(Enumerable.Repeat((byte)23, 6).ToArray(), 3, 2, 3, RawPixelFormat.Mono8, 8));
+                Verify("packed ImagePtr", packed, new object[] { packed }, nameof(ImagePtrVisualizerObjectSource),
+                    Expected(padded.Take(6).ToArray(), 2, 2, 3, RawPixelFormat.Mono12PackedLsb, 12));
+                Verify("nonzero array ImagePtr", pointer, nonZeroArray, nameof(ImagePtrVisualizerObjectSource), mono);
+
+                var mixed = new object[] { bitmap, openCv, emgu, view, mono, pointer };
+                var collectionType = typeof(ImageCollectionClassicDebuggerVisualizer);
+                var collectionSource = ResolveObjectSource(mixed, collectionType, nameof(ImageCollectionVisualizerObjectSource));
+                var expected = new Dictionary<string, RawBufferSnapshot>
+                {
+                    ["[0]"] = bitmapExpected, ["[1]"] = color, ["[2]"] = color, ["[3]"] = mono, ["[4]"] = mono, ["[5]"] = mono
+                };
+                VerifyCollection(collectionType, mixed, name => expected[name], false, mixed.Length, 0, collectionSource);
+                Console.WriteLine("PASS: six supported image types in one object[]; every item captured with its expected index, layout and bytes.");
+            }
+        }
+        finally { Marshal.FreeHGlobal(address); }
+        var missing = ImageVisualizerTypePolicy.Registrations.Select(item => ((string?)item.TypeName, item.ObjectSource))
+            .Except(tested).Select(item => item.Item1).ToArray();
+        Require(missing.Length == 0, "Missing real transfer fixture for: " + string.Join(", ", missing));
+        Console.WriteLine("Boundary: actual native and managed image objects (ImagePtr shape fixture), real Classic Show and ObjectSource, simulated Concord callbacks/transport.");
+    }
+
+    private static RawBufferSnapshot Expected(byte[] bytes, int width, int height, int stride, RawPixelFormat format, int validBits)
+    {
+        return new RawBufferSnapshot(bytes, new RawImageDescriptor
+        {
+            Width = width, Height = height, Stride = stride, PixelFormat = format, ValidBits = validBits, ByteOrder = RawByteOrder.LittleEndian
+        });
+    }
+
+    private static void VerifyImageCase(string name, object target, object collection, string objectSource, RawBufferSnapshot expected)
+    {
+        var single = ResolveObjectSource(target, typeof(RawBufferClassicDebuggerVisualizer), objectSource);
+        var collectionSource = ResolveObjectSource(collection, typeof(ImageCollectionClassicDebuggerVisualizer), nameof(ImageCollectionVisualizerObjectSource));
+        VerifyWireTransfer(new SnapshotProvider(target, false, single), new SnapshotProvider(collection, false, collectionSource), expected);
+        VerifySingle(target, expected, false, false, single);
+        VerifyCollection(typeof(ImageCollectionClassicDebuggerVisualizer), collection, _ => expected, false, 1, 0, collectionSource);
+        Console.WriteLine("PASS: " + name + " / " + collection.GetType().Name + "; root/child/page, wire chunk and preview, single/collection Show, exact layout and bytes.");
+    }
+
+    private static void VerifyWireTransfer(SnapshotProvider single, SnapshotProvider collection, RawBufferSnapshot expected)
+    {
+        collection.TransferDeserializableObject(new VisualizerCollectionItemRequest
+        {
+            Operation = VisualizerCollectionOperation.ConfigureMappings, Mappings = new TypeMappingSnapshot()
+        });
+        var singleMetadata = single.GetDeserializableObject().ToObject<VisualizerSnapshotMetadata>();
+        var item = collection.TransferDeserializableObject(new VisualizerCollectionItemRequest { Operation = VisualizerCollectionOperation.Metadata })
+            .ToObject<VisualizerCollectionItemMetadata>();
+        var collectionMetadata = item.Metadata ?? throw new InvalidOperationException(item.Error);
+        VerifyLayout(singleMetadata.Descriptor, expected.Descriptor);
+        VerifyLayout(collectionMetadata.Descriptor, expected.Descriptor);
+        Require(singleMetadata.BufferLength == expected.Buffer.LongLength && collectionMetadata.BufferLength == expected.Buffer.LongLength
+            && singleMetadata.SourceType == collectionMetadata.SourceType && singleMetadata.SupportsDirectMemory == collectionMetadata.SupportsDirectMemory,
+            "Single and collection metadata disagree.");
+
+        var directPreview = single.TransferDeserializableObject(new VisualizerSnapshotChunkRequest
+        {
+            Operation = VisualizerSnapshotOperation.Preview, MaximumWidth = 2, MaximumHeight = 2
+        }).ToObject<VisualizerSnapshotTransfer>();
+        var itemPreview = collection.TransferDeserializableObject(new VisualizerCollectionItemRequest
+        {
+            Operation = VisualizerCollectionOperation.Preview, MaximumWidth = 2, MaximumHeight = 2
+        }).ToObject<VisualizerSnapshotTransfer>();
+        VerifyLayout(directPreview.Descriptor, itemPreview.Descriptor);
+        Require(directPreview.Buffer.Length > 0 && directPreview.Buffer.SequenceEqual(itemPreview.Buffer), "Single and collection preview pixels disagree.");
+
+        var directChunk = single.TransferDeserializableObject(new VisualizerSnapshotChunkRequest { Count = expected.Buffer.Length })
+            .ToObject<VisualizerSnapshotChunk>();
+        var itemChunk = collection.TransferDeserializableObject(new VisualizerCollectionItemRequest
+        {
+            Operation = VisualizerCollectionOperation.Chunk, Count = expected.Buffer.Length
+        }).ToObject<VisualizerSnapshotChunk>();
+        Require(directChunk.IsLastChunk && itemChunk.IsLastChunk && directChunk.Buffer.SequenceEqual(expected.Buffer)
+            && itemChunk.Buffer.SequenceEqual(expected.Buffer), "Single or collection chunk changed the input bytes.");
+    }
+
+    private static VisualizerObjectSource ResolveObjectSource(object value, Type uiType, string expectedSource)
+    {
+        var assembly = typeof(RawBufferSnapshotVisualizerObjectSource).Assembly;
+        var expectedTypeName = "RawBufferVisualizer.VisualStudio.ObjectSource." + expectedSource;
+        foreach (var entry in new[] { "root", "children", "items" })
+        {
+            var candidate = DebuggerResultProviderTests.GetCandidate(value, entry);
+            Require(candidate.DebuggeeSideVisualizerTypeName == expectedTypeName && candidate.DebuggeeSideVisualizerAssemblyName == assembly.GetName().Name
+                && candidate.UISideVisualizerTypeName == uiType.FullName, "Wrong visualizer for " + value.GetType() + " via " + entry);
+        }
+        return (VisualizerObjectSource)Activator.CreateInstance(assembly.GetType(expectedTypeName, true)!)!;
+    }
+
+    private static void VerifyNativeSnapshotCapture()
+    {
+        var descriptor = new RawImageDescriptor { Width = 3, Height = 262146, Stride = 4, PixelFormat = RawPixelFormat.Mono8, ValidBits = 8 };
+        var expected = Enumerable.Range(0, descriptor.Stride * descriptor.Height).Select(index => (byte)(index % 251)).ToArray();
+        var address = System.Runtime.InteropServices.Marshal.AllocHGlobal(expected.Length);
+        var directoriesBefore = Directory.GetDirectories(VisualStudioTempStore.RootDirectory).OrderBy(path => path).ToArray();
+        try
+        {
+            System.Runtime.InteropServices.Marshal.Copy(expected, 0, address, expected.Length);
+            var metadata = VisualizerChunkedTransfer.CreatePointerMetadata(descriptor, expected.Length, address, "native-fixture");
+            Func<VisualizerSnapshotChunkRequest, VisualizerSnapshotChunk> rejectChunk = _ => throw new InvalidOperationException("Native capture must not call the paused-target chunk transport.");
+            var path = VisualizerSnapshotStore.WriteSnapshot(metadata, rejectChunk);
+            try
+            {
+                var captured = RawBufferSnapshot.Load(path);
+                Require(captured.Buffer.SequenceEqual(expected), "Native bytes, padding or the 1 MiB copy boundary changed.");
+                Require(captured.Descriptor.Width == descriptor.Width && captured.Descriptor.Height == descriptor.Height
+                    && captured.Descriptor.Stride == descriptor.Stride, "Native snapshot descriptor changed.");
+            }
+            finally { VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(path); }
+
+            metadata.BufferAddress = 1;
+            metadata.SupportsDirectMemory = false;
+            int chunkCalls = 0;
+            path = VisualizerSnapshotStore.WriteSnapshot(metadata, request =>
+            {
+                chunkCalls++;
+                return VisualizerChunkedTransfer.CreateChunk(expected, request);
+            });
+            try { Require(chunkCalls == 1 && RawBufferSnapshot.Load(path).Buffer.SequenceEqual(expected), "A captured pointer label must not enable native reads without direct-memory capability."); }
+            finally { VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(path); }
+
+            metadata.SupportsDirectMemory = true;
+            bool failed = false;
+            try { VisualizerSnapshotStore.WriteSnapshot(metadata, rejectChunk); }
+            catch (RawImageSourceUnavailableException) { failed = true; }
+            Require(failed, "Unreadable native memory must fail instead of using target-side fallback.");
+            Require(Directory.GetDirectories(VisualStudioTempStore.RootDirectory).OrderBy(item => item).SequenceEqual(directoriesBefore), "Failed native capture leaked snapshot artifacts.");
+
+            metadata.BufferAddress = address.ToInt64();
+            path = VisualizerSnapshotStore.WriteSnapshot(metadata, rejectChunk);
+            try { Require(RawBufferSnapshot.Load(path).Buffer.SequenceEqual(expected), "Valid capture did not recover after an unreadable pointer."); }
+            finally { VisualStudioTempStore.TryDeleteSnapshotDirectoryForMetadata(path); }
+        }
+        finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(address); }
+        Console.WriteLine("PASS: native snapshot exact bytes/padding across 1 MiB, zero target chunk calls, invalid-pointer cleanup and recovery.");
     }
 
     private static void VerifyLargeHandoff(long bytes, bool previewExpected)
@@ -383,11 +603,11 @@ internal static class Program
         private readonly VisualizerSnapshotTransfer? _preview;
         private readonly bool _largeCollection;
 
-        public SnapshotProvider(object snapshot, bool failChunk)
+        public SnapshotProvider(object snapshot, bool failChunk, VisualizerObjectSource? source = null)
         {
             _snapshot = snapshot;
             _failChunk = failChunk;
-            _source = snapshot is RawBufferSnapshot ? (VisualizerObjectSource)new RawBufferSnapshotVisualizerObjectSource() : new ImageCollectionVisualizerObjectSource();
+            _source = source ?? (snapshot is RawBufferSnapshot ? (VisualizerObjectSource)new RawBufferSnapshotVisualizerObjectSource() : new ImageCollectionVisualizerObjectSource());
         }
         public SnapshotProvider(VisualizerSnapshotMetadata metadata, VisualizerSnapshotTransfer preview, bool collection = false)
         {

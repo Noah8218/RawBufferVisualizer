@@ -40,13 +40,13 @@ jobs:
           $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
           $vsRoot = & $vswhere -latest -products '*' -version '[17.9,18.0)' -property installationPath
           if ([string]::IsNullOrWhiteSpace($vsRoot)) { throw 'The Classic contract check requires installed VS2022 17.9+.' }
-          pwsh -NoProfile -File .\scripts\Test-HeadlessSnapshotVisualizer.ps1 -VisualStudioRoot ($vsRoot.Trim()) -OutputRoot (Join-Path $env:RUNNER_TEMP 'rawbuffer-classic-contract')
+          pwsh -NoProfile -File .\scripts\Test-HeadlessSnapshotVisualizer.ps1 -VisualStudioRoot ($vsRoot.Trim()) -OutputRoot (Join-Path $env:RUNNER_TEMP 'rawbuffer-classic-contract') -ExtensionBuildRoot (Join-Path $PWD '.build')
 
       - name: Publish package
         run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-Windows.ps1
 
       - name: Publish Visual Studio extension prototype
-        run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1
+        run: powershell -ExecutionPolicy Bypass -File .\scripts\Publish-VisualStudioExtension.ps1 -NoBuild -TestedPayloadManifest "$env:RUNNER_TEMP\rawbuffer-classic-contract\payload.json"
 
       - name: Create GitHub Release
         run: |

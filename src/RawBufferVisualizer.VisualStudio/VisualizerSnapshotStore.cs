@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Threading;
+using RawBufferVisualizer.Core;
 using RawBufferVisualizer.Sdk;
 using RawBufferVisualizer.VisualStudio.ObjectSource;
 
@@ -122,19 +124,29 @@ namespace RawBufferVisualizer.VisualStudio
 
                 using (var stream = File.Create(rawPath))
                 {
-                    long offset = 0;
-                    while (offset < metadata.BufferLength)
+                    if (metadata.SupportsDirectMemory && metadata.ProcessId > 0 && metadata.BufferAddress != 0)
                     {
-                        var count = (int)Math.Min(metadata.ChunkSize, metadata.BufferLength - offset);
-                        var chunk = requestChunk(new VisualizerSnapshotChunkRequest
+                        // Capture native pixels in the host rather than allocating and serializing
+                        // large chunks inside a paused debuggee's function evaluation.
+                        using (var source = RawImageSource.FromProcessMemory(metadata.ProcessId, metadata.BufferAddress, metadata.BufferLength, metadata.Descriptor))
+                            source.CopyRawTo(stream, CancellationToken.None);
+                    }
+                    else
+                    {
+                        long offset = 0;
+                        while (offset < metadata.BufferLength)
                         {
-                            Offset = offset,
-                            Count = count
-                        });
+                            var count = (int)Math.Min(metadata.ChunkSize, metadata.BufferLength - offset);
+                            var chunk = requestChunk(new VisualizerSnapshotChunkRequest
+                            {
+                                Offset = offset,
+                                Count = count
+                            });
 
-                        ValidateChunk(metadata, chunk, offset, count);
-                        stream.Write(chunk.Buffer, 0, chunk.Buffer.Length);
-                        offset += chunk.Buffer.Length;
+                            ValidateChunk(metadata, chunk, offset, count);
+                            stream.Write(chunk.Buffer, 0, chunk.Buffer.Length);
+                            offset += chunk.Buffer.Length;
+                        }
                     }
                 }
 

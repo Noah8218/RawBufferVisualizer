@@ -4,43 +4,24 @@ using System.IO;
 using System.Reflection;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
+using RawBufferVisualizer.VisualStudio.Debugger;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class OpenCvSharpMatVisualizerObjectSource : VisualizerObjectSource
     {
-        private readonly VisualizerViewCache<OpenCvSharpMatView> _viewCache =
-            new VisualizerViewCache<OpenCvSharpMatView>(target => OpenCvSharpMatVisualizerTransfer.CreateView(target));
+        private readonly VisualizerViewCache<ImageVisualizerTransfer> _transferCache =
+            new VisualizerViewCache<ImageVisualizerTransfer>(target => OpenCvSharpMatVisualizerTransfer.CreateImageTransfer(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(
-                outgoingData,
-                VisualizerChunkedTransfer.AttachExpressionIdentity(
-                    OpenCvSharpMatVisualizerTransfer.CreateMetadata(GetView(target)),
-                    target));
+            _transferCache.GetOrCreate(target).WriteMetadata(target, outgoingData);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
-            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
-            if (request == null)
-            {
-                throw new InvalidDataException("Chunk request is required.");
-            }
-
-            if (request.Operation == VisualizerSnapshotOperation.Preview)
-            {
-                SerializeAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreatePreview(GetView(target), request));
-                return;
-            }
-
-            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, OpenCvSharpMatVisualizerTransfer.CreateChunk(GetView(target), request));
-        }
-
-        private OpenCvSharpMatView GetView(object target)
-        {
-            return _viewCache.GetOrCreate(target);
+            var request = ImageVisualizerTransfer.ReadRequest(incomingData);
+            _transferCache.GetOrCreate(target).WriteData(request, outgoingData);
         }
     }
 
@@ -56,7 +37,16 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
 
     public static class OpenCvSharpMatVisualizerTransfer
     {
-        private const string MatFullName = "OpenCvSharp.Mat";
+        private const string MatFullName = ImageVisualizerTypePolicy.OpenCvSharpMatTypeName;
+
+        internal static ImageVisualizerTransfer CreateImageTransfer(object target, string? displayName = null)
+        {
+            var view = CreateView(target, displayName);
+            return new ImageVisualizerTransfer(
+                () => CreateMetadata(view),
+                (request, _) => CreateChunk(view, request),
+                request => CreatePreview(view, request));
+        }
 
         public static OpenCvSharpMatView CreateView(object mat, string? displayName = null)
         {
@@ -65,7 +55,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(mat));
             }
 
-            if (mat.GetType().FullName != MatFullName)
+            if (ImageVisualizerTypePolicy.GetObjectSource(mat.GetType(), allowLegacyNameMatch: true) != nameof(OpenCvSharpMatVisualizerObjectSource))
             {
                 throw new NotSupportedException("Only OpenCvSharp.Mat is supported.");
             }

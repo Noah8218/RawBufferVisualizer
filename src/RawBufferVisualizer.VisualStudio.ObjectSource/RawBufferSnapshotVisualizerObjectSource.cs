@@ -9,48 +9,19 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         public override void GetData(object target, Stream outgoingData)
         {
-            if (!(target is RawBufferSnapshot snapshot))
-            {
-                throw new NotSupportedException("Only RawBufferSnapshot is supported.");
-            }
-
-            SerializeAsJson(
-                outgoingData,
-                VisualizerChunkedTransfer.AttachExpressionIdentity(
-                    VisualizerChunkedTransfer.CreateMetadata(
-                        snapshot.Descriptor,
-                        snapshot.Buffer.LongLength,
-                        typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot)),
-                    target));
+            VisualizerChunkedTransfer.CreateSnapshotTransfer(GetSnapshot(target)).WriteMetadata(target, outgoingData);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
-            if (!(target is RawBufferSnapshot snapshot))
-            {
-                throw new NotSupportedException("Only RawBufferSnapshot is supported.");
-            }
+            var snapshot = GetSnapshot(target);
+            var request = ImageVisualizerTransfer.ReadRequest(incomingData);
+            VisualizerChunkedTransfer.CreateSnapshotTransfer(snapshot).WriteData(request, outgoingData);
+        }
 
-            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
-            if (request == null)
-            {
-                throw new InvalidDataException("Chunk request is required.");
-            }
-
-            if (request.Operation == VisualizerSnapshotOperation.Preview)
-            {
-                SerializeAsJson(
-                    outgoingData,
-                    VisualizerChunkedTransfer.CreatePreview(
-                        snapshot.Buffer,
-                        snapshot.Descriptor,
-                        typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot),
-                        null,
-                        request));
-                return;
-            }
-
-            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, VisualizerChunkedTransfer.CreateChunk(snapshot.Buffer, request));
+        private static RawBufferSnapshot GetSnapshot(object target)
+        {
+            return target as RawBufferSnapshot ?? throw new NotSupportedException("Only RawBufferSnapshot is supported.");
         }
     }
 }
