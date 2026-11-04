@@ -4,43 +4,24 @@ using System.Reflection;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
 using RawBufferVisualizer.Sdk;
+using RawBufferVisualizer.VisualStudio.Debugger;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
     public sealed class BitmapVisualizerObjectSource : VisualizerObjectSource
     {
-        private readonly VisualizerViewCache<BitmapVisualizerView> _viewCache =
-            new VisualizerViewCache<BitmapVisualizerView>(target => BitmapVisualizerTransfer.CreateView(target));
+        private readonly VisualizerViewCache<ImageVisualizerTransfer> _transferCache =
+            new VisualizerViewCache<ImageVisualizerTransfer>(target => BitmapVisualizerTransfer.CreateImageTransfer(target));
 
         public override void GetData(object target, Stream outgoingData)
         {
-            SerializeAsJson(
-                outgoingData,
-                VisualizerChunkedTransfer.AttachExpressionIdentity(
-                    BitmapVisualizerTransfer.CreateMetadata(GetView(target)),
-                    target));
+            _transferCache.GetOrCreate(target).WriteMetadata(target, outgoingData);
         }
 
         public override void TransferData(object target, Stream incomingData, Stream outgoingData)
         {
-            var request = DeserializeFromJson<VisualizerSnapshotChunkRequest>(incomingData);
-            if (request == null)
-            {
-                throw new InvalidDataException("Chunk request is required.");
-            }
-
-            if (request.Operation == VisualizerSnapshotOperation.Preview)
-            {
-                SerializeAsJson(outgoingData, BitmapVisualizerTransfer.CreatePreview(GetView(target), request));
-                return;
-            }
-
-            VisualizerChunkedTransfer.SerializeChunkAsJson(outgoingData, BitmapVisualizerTransfer.CreateChunk(GetView(target), request));
-        }
-
-        private BitmapVisualizerView GetView(object target)
-        {
-            return _viewCache.GetOrCreate(target);
+            var request = ImageVisualizerTransfer.ReadRequest(incomingData);
+            _transferCache.GetOrCreate(target).WriteData(request, outgoingData);
         }
     }
 
@@ -62,6 +43,15 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     {
         private const string BitmapFullName = "System.Drawing.Bitmap";
 
+        internal static ImageVisualizerTransfer CreateImageTransfer(object target, string? displayName = null)
+        {
+            var view = CreateView(target, displayName);
+            return new ImageVisualizerTransfer(
+                () => CreateMetadata(view),
+                (request, buffer) => CreateChunk(view, request, buffer),
+                request => CreatePreview(view, request));
+        }
+
         public static BitmapVisualizerView CreateView(object? bitmap, string? displayName = null)
         {
             if (bitmap == null)
@@ -69,7 +59,7 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
                 throw new ArgumentNullException(nameof(bitmap));
             }
 
-            if (bitmap.GetType().FullName != BitmapFullName)
+            if (ImageVisualizerTypePolicy.GetObjectSource(bitmap.GetType(), allowLegacyNameMatch: true) != nameof(BitmapVisualizerObjectSource))
             {
                 throw new NotSupportedException("Only System.Drawing.Bitmap is supported. Actual type: " + bitmap.GetType().FullName);
             }

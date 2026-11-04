@@ -44,6 +44,7 @@ if (-not [string]::IsNullOrWhiteSpace($InstalledExtensionPath)) {
     foreach ($relativePath in @(
         'RawBufferVisualizer.VisualStudio.Classic.dll', 'RawBufferVisualizer.VisualStudio.Debugger.dll',
         'RawBufferVisualizer.VisualStudio.Debugger.vsdconfig', 'RawBufferVisualizer.VisualStudio.Vssdk.dll',
+        'RawBufferVisualizer.VisualStudio.dll',
         'netstandard2.0\RawBufferVisualizer.Core.dll', 'netstandard2.0\RawBufferVisualizer.Sdk.dll',
         'netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.dll',
         'netstandard2.0\RawBufferVisualizer.VisualStudio.ObjectSource.deps.json'

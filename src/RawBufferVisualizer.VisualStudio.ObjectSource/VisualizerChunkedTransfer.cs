@@ -3,6 +3,7 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using Microsoft.VisualStudio.DebuggerVisualizers;
 using RawBufferVisualizer.Core;
+using RawBufferVisualizer.Sdk;
 
 namespace RawBufferVisualizer.VisualStudio.ObjectSource
 {
@@ -48,6 +49,15 @@ namespace RawBufferVisualizer.VisualStudio.ObjectSource
     public static class VisualizerChunkedTransfer
     {
         public const int DefaultChunkSize = 4 * 1024 * 1024;
+
+        internal static ImageVisualizerTransfer CreateSnapshotTransfer(RawBufferSnapshot snapshot, string? displayName = null)
+        {
+            var sourceType = typeof(RawBufferSnapshot).FullName ?? nameof(RawBufferSnapshot);
+            return new ImageVisualizerTransfer(
+                () => CreateMetadata(snapshot.Descriptor, snapshot.Buffer.LongLength, sourceType, displayName),
+                (request, _) => CreateChunk(snapshot.Buffer, request),
+                request => CreatePreview(snapshot.Buffer, snapshot.Descriptor, sourceType, displayName, request));
+        }
 
         internal static void SerializeChunkAsJson(Stream outgoingData, VisualizerSnapshotChunk chunk)
         {

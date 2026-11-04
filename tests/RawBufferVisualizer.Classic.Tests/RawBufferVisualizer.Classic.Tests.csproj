@@ -3,9 +3,14 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net472</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Debugger\ImageVisualizerResultProvider.cs" Link="ImageVisualizerResultProvider.cs" />
+    <Compile Include="..\..\src\Shared.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.VisualStudio.Classic\RawBufferVisualizer.VisualStudio.Classic.csproj" />
+    <ProjectReference Include="..\..\samples\RawBufferVisualizer.VisualizerDebuggee\RawBufferVisualizer.VisualizerDebuggee.csproj" />
   </ItemGroup>
 </Project>

@@ -1138,6 +1138,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             using (var secondaryBitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb))
             using (var primaryOpenCvMat = new Mat(height, width, MatType.CV_8UC3))
             using (var secondaryOpenCvMat = new Mat(height, width, MatType.CV_8UC3))
+            using (var typedOpenCvMat = new Mat<byte>(2, 3, Scalar.All(23)))
             using (var primaryEmguMat = new Emgu.CV.Mat(height, width, Emgu.CV.CvEnum.DepthType.Cv8U, 3))
             using (var secondaryEmguMat = new Emgu.CV.Mat(height, width, Emgu.CV.CvEnum.DepthType.Cv8U, 3))
             {
@@ -1175,8 +1176,35 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     }
                 };
 
+                var registryPointerFrame = new SampleBuffers.Frames.PointerFrame(primaryOpenCvMat.Data, (long)stride * height, width, height, stride, 3);
+                var packedPointerFrame = new SampleBuffers.Frames.PointerFrame(primaryOpenCvMat.Data, 6, 2, 2, 0, 0) { PixelFormat = "Mono12PackedLsb" };
+                var pointerFrameArrayFromIndex3 = Array.CreateInstance(typeof(SampleBuffers.Frames.PointerFrame), new[] { 1 }, new[] { 3 });
+                pointerFrameArrayFromIndex3.SetValue(registryPointerFrame, 3);
+                var nestedOwner = new
+                {
+                    Storage = new
+                    {
+                        Bitmap = primaryBitmap, OpenCv = primaryOpenCvMat, Emgu = primaryEmguMat,
+                        View = imageViewArray[0], Snapshot = registrySnapshot, PointerFrame = registryPointerFrame,
+                        TypedMat = typedOpenCvMat, PackedPointerFrame = packedPointerFrame
+                    },
+                    Images = new object[] { primaryBitmap, primaryOpenCvMat, primaryEmguMat, imageViewArray[0], registrySnapshot, registryPointerFrame }
+                };
+                var nestedOwnerArray = new[] { nestedOwner };
+                var nestedOwnerList = new List<object> { nestedOwner };
+                var nestedOwnerDictionary = new Dictionary<string, object> { ["frame"] = nestedOwner };
+                object boxedOwner = nestedOwner;
+                var pagedOwnerArray = new object[600];
+                pagedOwnerArray[512] = nestedOwner;
+
                 Debugger.Break();
 
+                GC.KeepAlive(nestedOwnerArray);
+                GC.KeepAlive(nestedOwnerList);
+                GC.KeepAlive(nestedOwnerDictionary);
+                GC.KeepAlive(boxedOwner);
+                GC.KeepAlive(pagedOwnerArray);
+                GC.KeepAlive(pointerFrameArrayFromIndex3);
                 GC.KeepAlive(imageList);
                 GC.KeepAlive(imageDictionary);
                 GC.KeepAlive(concurrentImageDictionary);

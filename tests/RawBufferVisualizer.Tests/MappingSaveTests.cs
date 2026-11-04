@@ -239,7 +239,7 @@ namespace RawBufferVisualizer.Tests
             store.Save(file, TypeMappingScope.Solution);
             var view = ImageCollectionVisualizerTransfer.CreateView(new[] { new MappedFrame() }, frozen);
             var item = view.GetMetadata(0);
-            Check(item.Metadata != null && item.Error.Length == 0, "Explicit host snapshot resolves the custom collection item independently of debuggee directories.");
+            Check(item.Metadata != null && item.Error.Length == 0, "Explicit host snapshot resolves the custom collection item independently of debuggee directories. " + item.Error);
             var chunk = view.GetChunk(0, new VisualizerSnapshotChunkRequest { Offset = 0, Count = 2 });
             Check(chunk.Buffer.SequenceEqual(new byte[] { 7, 8 }), "Transferred mappings read the intended fields.");
         }

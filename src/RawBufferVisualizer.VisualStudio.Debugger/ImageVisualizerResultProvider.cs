@@ -14,7 +14,7 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
 {
     /// <summary>
     /// 역할: C# 이미지 평가 결과에 Classic 시각화 도우미와 확장 설치 경로를 연결한다.
-    /// 흐름: 원래 평가 결과 유지 → 확장 위치의 이미지 후보 등록 → Classic 전송 경로 위임.
+    /// 흐름: 직접 평가·자식 펼치기·추가 항목 반환 → 공통 이미지 후보 등록 → Classic 전송 경로 위임.
     /// 상태: 설치된 Classic DLL의 전체 이름을 캐시하고 원래 평가 결과를 보관하여 C# 공급자에 위임한다.
     /// 연관 클래스:
     /// - DkmSuccessEvaluationResult: 원래 결과와 교체 결과의 수명 및 호출 전달.
@@ -37,65 +37,79 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
             value.GetResult(workList, declaredType, customTypeInfo, inspectionContext, formatSpecifiers,
                 resultName, resultFullName, result =>
                 {
-                    var success = result.Result as DkmSuccessEvaluationResult;
-                    if (result.ErrorCode != 0 || success == null || value.IsNull || value.Type == null)
-                    {
-                        completionRoutine(result);
-                        return;
-                    }
-
-                    DkmEvaluationResult replacement = success;
-                    try
-                    {
-                        bool collection = false;
-                        bool canPrepend = !workList.IsCanceled && CanPrependVisualizer(success.CustomUIVisualizers);
-                        string? source = canPrepend ? GetObjectSource(value, inspectionContext, out collection, workList) : null;
-                        bool ownsCandidate = success.CustomUIVisualizers != null
-                            && System.Linq.Enumerable.Any(success.CustomUIVisualizers, candidate => ImageVisualizerTypePolicy.IsOwnedObjectSource(candidate.DebuggeeSideVisualizerAssemblyName));
-                        if ((source != null || ownsCandidate) && canPrepend && !workList.IsCanceled)
-                        {
-                            var candidates = new List<DkmCustomUIVisualizerInfo>();
-                            // CLR visualizer IDs must match the array indexes used for invocation.
-                            if (source != null)
-                            {
-                                candidates.Add(DkmCustomUIVisualizerInfo.Create(0, "Raw Buffer Visualizer",
-                                    "Open image in the docked Raw Buffer Visualizer", "ClrCustomVisualizerVSHost",
-                                    collection ? CollectionVisualizerTypeName : SingleImageVisualizerTypeName,
-                                    ClassicAssemblyIdentity.Value, DkmClrCustomVisualizerAssemblyLocation.Extension,
-                                    "RawBufferVisualizer.VisualStudio.ObjectSource." + source,
-                                    "RawBufferVisualizer.VisualStudio.ObjectSource"));
-                            }
-                            if (success.CustomUIVisualizers != null)
-                            {
-                                foreach (var candidate in success.CustomUIVisualizers)
-                                {
-                                    if (ImageVisualizerTypePolicy.IsOwnedObjectSource(candidate.DebuggeeSideVisualizerAssemblyName)) continue;
-                                    candidates.Add(DkmCustomUIVisualizerInfo.Create((uint)candidates.Count,
-                                        candidate.MenuName, candidate.Description, candidate.Metric,
-                                        candidate.UISideVisualizerTypeName, candidate.UISideVisualizerAssemblyName,
-                                        candidate.UISideVisualizerAssemblyLocation, candidate.DebuggeeSideVisualizerTypeName,
-                                        candidate.DebuggeeSideVisualizerAssemblyName, candidate.ExtensionPartId));
-                                }
-                            }
-
-                            if (!workList.IsCanceled)
-                            {
-                                replacement = DkmSuccessEvaluationResult.Create(success.InspectionContext, success.StackFrame,
-                                    success.Name, success.FullName, success.Flags, success.Value, success.EditableValue,
-                                    success.Type, success.Category, success.Access, success.StorageType, success.TypeModifierFlags,
-                                    success.Address, candidates.AsReadOnly(), success.ExternalModules, success.RefreshButtonText,
-                                    new OriginalResult(success));
-                            }
-                        }
-                    }
-                    catch (Exception ex) when (ex is DkmException || ex is ArgumentException || ex is InvalidOperationException || ex is OverflowException || ex is IOException || ex is BadImageFormatException)
-                    {
-                        // Missing/unloaded metadata must never break ordinary expression evaluation.
-                        System.Diagnostics.Trace.WriteLine("Raw Buffer Visualizer candidate unavailable: " + ex.Message);
-                    }
-
-                    completionRoutine(new DkmEvaluationAsyncResult(replacement));
+                    completionRoutine(result.ErrorCode != 0 ? result
+                        : new DkmEvaluationAsyncResult(AddVisualizer(result.Result, workList, inspectionContext, value)));
                 });
+        }
+
+        private DkmEvaluationResult AddVisualizer(DkmEvaluationResult result, DkmWorkList workList, DkmInspectionContext context, DkmClrValue? value = null)
+        {
+            if (!(result is DkmSuccessEvaluationResult success) || workList.IsCanceled
+                || success.GetDataItem<OriginalResult>() != null || !CanPrependVisualizer(success.CustomUIVisualizers)) return result;
+
+            try
+            {
+                // Child results already own their CLR value. Borrow it without evaluating the
+                // expression again or closing it; arbitrary parent types need no registration.
+                value = value ?? GetClrValue(success);
+                if (value == null || value.IsNull || value.Type == null || workList.IsCanceled) return result;
+                string? source = GetObjectSource(value, context, out bool collection, workList);
+                bool ownsCandidate = success.CustomUIVisualizers != null
+                    && System.Linq.Enumerable.Any(success.CustomUIVisualizers, candidate => ImageVisualizerTypePolicy.IsOwnedObjectSource(candidate.DebuggeeSideVisualizerAssemblyName));
+                if ((source == null && !ownsCandidate) || workList.IsCanceled) return result;
+
+                var candidates = new List<DkmCustomUIVisualizerInfo>();
+                // CLR visualizer IDs must match the array indexes used for invocation.
+                if (source != null)
+                {
+                    candidates.Add(DkmCustomUIVisualizerInfo.Create(0, "Raw Buffer Visualizer",
+                        "Open image in the docked Raw Buffer Visualizer", "ClrCustomVisualizerVSHost",
+                        collection ? CollectionVisualizerTypeName : SingleImageVisualizerTypeName,
+                        ClassicAssemblyIdentity.Value, DkmClrCustomVisualizerAssemblyLocation.Extension,
+                        "RawBufferVisualizer.VisualStudio.ObjectSource." + source,
+                        "RawBufferVisualizer.VisualStudio.ObjectSource"));
+                }
+                if (success.CustomUIVisualizers != null)
+                {
+                    foreach (var candidate in success.CustomUIVisualizers)
+                    {
+                        if (ImageVisualizerTypePolicy.IsOwnedObjectSource(candidate.DebuggeeSideVisualizerAssemblyName)) continue;
+                        candidates.Add(DkmCustomUIVisualizerInfo.Create((uint)candidates.Count,
+                            candidate.MenuName, candidate.Description, candidate.Metric,
+                            candidate.UISideVisualizerTypeName, candidate.UISideVisualizerAssemblyName,
+                            candidate.UISideVisualizerAssemblyLocation, candidate.DebuggeeSideVisualizerTypeName,
+                            candidate.DebuggeeSideVisualizerAssemblyName, candidate.ExtensionPartId));
+                    }
+                }
+
+                if (!workList.IsCanceled)
+                {
+                    return DkmSuccessEvaluationResult.Create(success.InspectionContext, success.StackFrame,
+                        success.Name, success.FullName, success.Flags, success.Value, success.EditableValue,
+                        success.Type, success.Category, success.Access, success.StorageType, success.TypeModifierFlags,
+                        success.Address, candidates.AsReadOnly(), success.ExternalModules, success.RefreshButtonText,
+                        new OriginalResult(success));
+                }
+            }
+            catch (Exception ex) when (ex is DkmException || ex is ArgumentException || ex is InvalidOperationException || ex is OverflowException || ex is IOException || ex is BadImageFormatException)
+            {
+                // Missing/unloaded metadata must never break ordinary expression evaluation.
+                System.Diagnostics.Trace.WriteLine("Raw Buffer Visualizer candidate unavailable: " + ex.Message);
+            }
+            return result;
+        }
+
+        private DkmEvaluationResult[] AddVisualizers(DkmEvaluationResult[] results, DkmWorkList workList, DkmInspectionContext context)
+        {
+            DkmEvaluationResult[]? replacements = null;
+            for (int index = 0; index < results.Length && !workList.IsCanceled; index++)
+            {
+                var replacement = AddVisualizer(results[index], workList, context);
+                if (ReferenceEquals(replacement, results[index])) continue;
+                if (replacements == null) replacements = (DkmEvaluationResult[])results.Clone();
+                replacements[index] = replacement;
+            }
+            return replacements ?? results;
         }
 
         private static string ReadClassicAssemblyIdentity()
@@ -147,7 +161,7 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                 containerName = metadata.FullName;
             }
 
-            string? source = imageType == null ? null : ImageVisualizerTypePolicy.GetObjectSource(imageType.FullName, imageType.Assembly.GetName().Name);
+            string? source = GetImageObjectSource(imageType);
             if (source == null && collection && (imageType == null || (!imageType.IsValueType && !imageType.IsSealed))
                 && ContainsImage(value, containerName, context, workList)) source = "ImageCollectionVisualizerObjectSource";
             return source == null ? null : collection ? "ImageCollectionVisualizerObjectSource" : source;
@@ -257,9 +271,14 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
 
         private static bool IsImageValue(DkmClrValue value)
         {
-            if (value.IsNull || value.Type == null) return false;
-            var type = value.Type.GetLmrType();
-            return ImageVisualizerTypePolicy.GetObjectSource(type.FullName, type.Assembly.GetName().Name) != null;
+            return !value.IsNull && GetImageObjectSource(value.Type?.GetLmrType()) != null;
+        }
+
+        private static string? GetImageObjectSource(Microsoft.VisualStudio.Debugger.Metadata.Type? type)
+        {
+            if (type == null) return null;
+            var definition = type.IsGenericType ? type.GetGenericTypeDefinition() : type;
+            return ImageVisualizerTypePolicy.GetObjectSource(definition.FullName, definition.Assembly.GetName().Name);
         }
 
         private static DkmClrValue? ReadField(DkmClrValue value, DkmInspectionContext context, DkmWorkList workList, params string[] names)
@@ -283,13 +302,17 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
         public void GetChildren(DkmEvaluationResult result, DkmWorkList workList, int initialRequestSize,
             DkmInspectionContext inspectionContext, DkmCompletionRoutine<DkmGetChildrenAsyncResult> completionRoutine)
         {
-            (result.GetDataItem<OriginalResult>()?.Result ?? result).GetChildren(workList, initialRequestSize, inspectionContext, completionRoutine);
+            (result.GetDataItem<OriginalResult>()?.Result ?? result).GetChildren(workList, initialRequestSize, inspectionContext,
+                children => completionRoutine(children.ErrorCode != 0 ? children
+                    : new DkmGetChildrenAsyncResult(AddVisualizers(children.InitialChildren, workList, inspectionContext), children.EnumContext)));
         }
 
         public void GetItems(DkmEvaluationResultEnumContext enumContext, DkmWorkList workList, int startIndex, int count,
             DkmCompletionRoutine<DkmEvaluationEnumAsyncResult> completionRoutine)
         {
-            enumContext.GetItems(workList, startIndex, count, completionRoutine);
+            enumContext.GetItems(workList, startIndex, count,
+                items => completionRoutine(items.ErrorCode != 0 ? items
+                    : new DkmEvaluationEnumAsyncResult(AddVisualizers(items.Items, workList, enumContext.InspectionContext))));
         }
 
         public string? GetUnderlyingString(DkmEvaluationResult result)
