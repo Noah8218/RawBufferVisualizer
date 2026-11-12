@@ -1,25 +1,16 @@
 using System;
 
-namespace DemoFrames
+namespace RawBufferVisualizer.VisualizerDebuggee
 {
+    // A borrowed view for breakpoint samples. The caller keeps the pixel allocation alive.
     public sealed class PointerFrame
     {
-        public readonly IntPtr DataPointer;
-        public readonly long ByteLength;
-        public readonly int Width;
-        public readonly int Height;
-        public readonly int Pitch;
-        public readonly int BytesPerPixel;
-        public string PixelFormat;
-
-        public PointerFrame(IntPtr address, long byteCount, int columns, int rows, int pitch, int bytesPerPixel)
-        {
-            DataPointer = address;
-            ByteLength = byteCount;
-            Width = columns;
-            Height = rows;
-            Pitch = pitch;
-            BytesPerPixel = bytesPerPixel;
-        }
+        public IntPtr DataPointer;
+        public long ByteLength;
+        public int Width;
+        public int Height;
+        public int Pitch;
+        public int BytesPerPixel;
+        public string? Format;
     }
 }

@@ -2144,7 +2144,7 @@ namespace RawBufferVisualizer.Tests
             var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
             try
             {
-                var image = new SampleBuffers.Frames.PointerFrame(handle.AddrOfPinnedObject(), buffer.Length, 2, 1, 6, 3);
+                var image = new InferredPointerFrame { Ptr = handle.AddrOfPinnedObject(), Width = 2, Height = 1, Step = 6, Bpp = 3 };
                 var transferType = Type.GetType(
                     "RawBufferVisualizer.VisualStudio.ObjectSource.PointerFrameVisualizerTransfer, RawBufferVisualizer.VisualStudio.ObjectSource",
                     true) ?? throw new InvalidOperationException("PointerFrame visualizer transfer type was not found.");
@@ -2157,17 +2157,14 @@ namespace RawBufferVisualizer.Tests
                 Assert(descriptor.PixelFormat == RawPixelFormat.BGR24, "PointerFrame Bpp=3 should map to BGR24.");
 
                 var metadata = (VisualizerSnapshotMetadata)InvokeStatic(transferType, "CreateMetadata", view);
-                Assert(metadata.SourceType == "SampleBuffers.Frames.PointerFrame", "PointerFrame metadata source type failed.");
-                Assert(image.GetType().Assembly.GetName().Name == "SampleBuffers.Frames"
-                    && image.GetType().Assembly.GetName().Version == new Version(1, 0, 0, 0),
-                    "PointerFrame fixture must match the exact registered assembly identity.");
+                Assert(metadata.SourceType == image.GetType().FullName, "Pointer frame metadata must identify the actual debuggee type.");
                 Assert(metadata.SupportsDirectMemory
                     && metadata.ProcessId == Process.GetCurrentProcess().Id
                     && metadata.BufferAddress == handle.AddrOfPinnedObject().ToInt64(),
                     "PointerFrame direct-memory metadata failed.");
                 Assert(
                     metadata.SourcePointerAddress == handle.AddrOfPinnedObject().ToInt64()
-                    && metadata.SourcePointerLabel == "DataPointer",
+                    && metadata.SourcePointerLabel == "Ptr",
                     "PointerFrame Ptr provenance failed.");
 
                 var chunk = (VisualizerSnapshotChunk)InvokeStatic(

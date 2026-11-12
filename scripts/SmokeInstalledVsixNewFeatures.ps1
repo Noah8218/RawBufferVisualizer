@@ -4004,7 +4004,7 @@ function Invoke-PointerFrameColdStartScenario(
         try {
             $state = Get-Content -LiteralPath $sessionPath -Raw | ConvertFrom-Json
             $matches = @($state.documents | Where-Object {
-                [string]$_.sourceType -eq "SampleBuffers.Frames.PointerFrame" -and
+                [string]$_.sourceType -eq "RawBufferVisualizer.VisualizerDebuggee.PointerFrame" -and
                 -not [bool]$_.isError -and
                 [int]$_.width -eq 640 -and
                 [int]$_.height -eq 484 -and
@@ -4025,13 +4025,13 @@ function Invoke-PointerFrameColdStartScenario(
         throw "The PointerFrame visualizer did not open the Raw Buffer Visualizer Tool Window."
     }
 
-    $capturePath = Join-Path $outputRoot "pointerframe-cold-start.png"
+    $capturePath = Join-Path $outputRoot "pointer-frame-cold-start.png"
     Capture-Window $MainHandle $capturePath
 
     [ordered]@{
         scenario = "PointerFrameColdStart"
         screenshotPath = $capturePath
-        sourceType = "SampleBuffers.Frames.PointerFrame"
+        sourceType = "RawBufferVisualizer.VisualizerDebuggee.PointerFrame"
         documentCount = [int]$finalState.documentCount
         errorCount = [int]$finalState.errorCount
         width = 640
@@ -4349,7 +4349,7 @@ $scenarioArgument = switch ($Scenario) {
     "AutomaticCollections" { "--automatic-collections-debug" }
     "MultiLibraryHybrid" { "--multi-library-debug" }
     "DockRetention" { "--multi-library-debug" }
-    "PointerFrameColdStart" { "--pointerframe-cold-start-debug" }
+    "PointerFrameColdStart" { "--pointer-frame-cold-start-debug" }
     "ConcurrentDictionary" { "--concurrent-dictionary-debug" }
     "IndustrialMarketplace" {
         if (-not (Test-Path -LiteralPath $IndustrialImagePath)) {

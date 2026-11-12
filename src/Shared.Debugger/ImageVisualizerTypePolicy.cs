@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace RawBufferVisualizer.VisualStudio.Debugger
 {
@@ -18,9 +20,34 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                 ("Emgu.CV.Mat", "Emgu.CV", "EmguCvMatVisualizerObjectSource", true),
                 ("Emgu.CV.Mat", "Emgu.CV.World", "EmguCvMatVisualizerObjectSource", true),
                 ("Emgu.CV.Mat", "Emgu.CV.World.NetStandard", "EmguCvMatVisualizerObjectSource", true),
-                ("Emgu.CV.Mat", "Emgu.CV.Platform.NetStandard", "EmguCvMatVisualizerObjectSource", true),
-                ("SampleBuffers.Frames.PointerFrame", "SampleBuffers.Frames", "PointerFrameVisualizerObjectSource", false)
+                ("Emgu.CV.Mat", "Emgu.CV.Platform.NetStandard", "EmguCvMatVisualizerObjectSource", true)
             });
+
+        // Exact identity: SHA-256(UTF-8(full type name + NUL + simple assembly name)).
+        // DTE supplies only a display name. Its case-insensitive hash can suppress an automatic
+        // scan, but cannot admit a debugger visualizer. Lengths avoid hashing unrelated locals.
+        private static readonly (int TypeLength, int AssemblyLength, string IdentityHash, string ScanNameHash)[] PointerFrames =
+        {
+            (27, 18, "EC2hUpsgpEB3cmwnl6/EYEpRZsJ1gJvAXVXB9T1X03I=", "l2mZS4Pf90X/3qL5CM7lMeRo5HJakXDLVOzcLRgkI5k="),
+            // Public sample; exercises the same lookup through root, child and collection results.
+            (51, 38, "QbpYV3cBYLdFhlxwaymKlJBTgXj/ECSk+UCqq43bbf0=", "qaSEpKMSDWkcm4MTTqlLliHlGw/2SNpjvHRA7iNvgmw=")
+        };
+
+        internal static bool UsesPointerFrameVisualizer(string typeName)
+        {
+            foreach (var frame in PointerFrames)
+            {
+                if (typeName.Length == frame.TypeLength && Fingerprint(typeName.ToUpperInvariant()) == frame.ScanNameHash)
+                    return true;
+            }
+            return false;
+        }
+
+        private static string Fingerprint(string identity)
+        {
+            using var sha = SHA256.Create();
+            return Convert.ToBase64String(sha.ComputeHash(Encoding.UTF8.GetBytes(identity)));
+        }
 
         internal static string? GetObjectSource(Type type, bool allowLegacyNameMatch)
         {
@@ -60,6 +87,12 @@ namespace RawBufferVisualizer.VisualStudio.Debugger
                 if (fullName == registration.TypeName
                     && (assemblyName == registration.AssemblyName || (allowLegacyNameMatch && registration.AllowReflectionByName)))
                     return registration.ObjectSource;
+            }
+            foreach (var frame in PointerFrames)
+            {
+                if (fullName?.Length == frame.TypeLength && assemblyName?.Length == frame.AssemblyLength
+                    && Fingerprint(fullName + "\0" + assemblyName) == frame.IdentityHash)
+                    return "PointerFrameVisualizerObjectSource";
             }
             return null;
         }

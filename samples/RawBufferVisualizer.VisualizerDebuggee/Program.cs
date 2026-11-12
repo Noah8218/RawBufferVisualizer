@@ -47,7 +47,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 return RunMultiLibraryDebug();
             }
 
-            if (Array.IndexOf(args, "--pointerframe-cold-start-debug") >= 0)
+            if (Array.IndexOf(args, "--pointer-frame-cold-start-debug") >= 0)
             {
                 return RunPointerFrameColdStartDebug();
             }
@@ -120,7 +120,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             Emgu.CV.Mat? emguBgra32 = null;
             Emgu.CV.Mat? emguMono16 = null;
             Emgu.CV.Mat? emguFloat32 = null;
-            DemoFrames.PointerFrame? pointerFrameBgr24 = null;
+            PointerFrame? pointerFrameBgr24 = null;
 
             try
             {
@@ -222,14 +222,12 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 PrintCase(ref caseNumber, "rawViewBgr24 as RawBufferView / IntPtr BGR24");
                 if (shouldBreak) Debugger.Break();
 
-                pointerFrameBgr24 = new DemoFrames.PointerFrame(
-                    rawViewBgr24.Buffer,
-                    rawViewBgr24.BufferLength,
-                    rawViewBgr24.Width,
-                    rawViewBgr24.Height,
-                    rawViewBgr24.Stride,
-                    3);
-                PrintCase(ref caseNumber, "pointerFrameBgr24 as DemoFrames.PointerFrame / BGR24");
+                pointerFrameBgr24 = new PointerFrame
+                {
+                    DataPointer = rawViewBgr24.Buffer, ByteLength = rawViewBgr24.BufferLength,
+                    Width = rawViewBgr24.Width, Height = rawViewBgr24.Height, Pitch = rawViewBgr24.Stride, BytesPerPixel = 3
+                };
+                PrintCase(ref caseNumber, "pointerFrameBgr24 as PointerFrame / BGR24");
                 if (shouldBreak) Debugger.Break();
 
                 var rawViewMono16Owner = PinView(
@@ -1062,13 +1060,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
             var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
             try
             {
-                var pointerFrameBgr24 = new SampleBuffers.Frames.PointerFrame(
-                    handle.AddrOfPinnedObject(),
-                    buffer.LongLength,
-                    width,
-                    height,
-                    stride,
-                    3);
+                var pointerFrameBgr24 = new PointerFrame
+                {
+                    DataPointer = handle.AddrOfPinnedObject(), ByteLength = buffer.LongLength,
+                    Width = width, Height = height, Pitch = stride, BytesPerPixel = 3
+                };
 
                 Debugger.Break();
 
@@ -1176,9 +1172,13 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                     }
                 };
 
-                var registryPointerFrame = new SampleBuffers.Frames.PointerFrame(primaryOpenCvMat.Data, (long)stride * height, width, height, stride, 3);
-                var packedPointerFrame = new SampleBuffers.Frames.PointerFrame(primaryOpenCvMat.Data, 6, 2, 2, 0, 0) { PixelFormat = "Mono12PackedLsb" };
-                var pointerFrameArrayFromIndex3 = Array.CreateInstance(typeof(SampleBuffers.Frames.PointerFrame), new[] { 1 }, new[] { 3 });
+                var registryPointerFrame = new PointerFrame
+                {
+                    DataPointer = primaryOpenCvMat.Data, ByteLength = (long)stride * height,
+                    Width = width, Height = height, Pitch = stride, BytesPerPixel = 3
+                };
+                var packedPointerFrame = new PointerFrame { DataPointer = primaryOpenCvMat.Data, ByteLength = 6, Width = 2, Height = 2, Format = "Mono12PackedLsb" };
+                var pointerFrameArrayFromIndex3 = Array.CreateInstance(typeof(PointerFrame), new[] { 1 }, new[] { 3 });
                 pointerFrameArrayFromIndex3.SetValue(registryPointerFrame, 3);
                 var nestedOwner = new
                 {
@@ -1256,13 +1256,11 @@ namespace RawBufferVisualizer.VisualizerDebuggee
                 var openCvMetadata = OpenCvSharpMatVisualizerTransfer.CreateMetadata(openCvView);
                 var emguView = EmguCvMatVisualizerTransfer.CreateView(largeEmguMat, nameof(largeEmguMat));
                 var emguMetadata = EmguCvMatVisualizerTransfer.CreateMetadata(emguView);
-                var largePointerFrame = new SampleBuffers.Frames.PointerFrame(
-                    largeOpenCvMat.Data,
-                    openCvMetadata.BufferLength,
-                    width,
-                    height,
-                    openCvMetadata.Descriptor.Stride,
-                    1);
+                var largePointerFrame = new PointerFrame
+                {
+                    DataPointer = largeOpenCvMat.Data, ByteLength = openCvMetadata.BufferLength,
+                    Width = width, Height = height, Pitch = openCvMetadata.Descriptor.Stride, BytesPerPixel = 1
+                };
                 var pointerFrameView = PointerFrameVisualizerTransfer.CreateView(largePointerFrame);
                 var pointerFrameMetadata = PointerFrameVisualizerTransfer.CreateMetadata(pointerFrameView);
                 if (!openCvMetadata.SupportsDirectMemory || !emguMetadata.SupportsDirectMemory || !pointerFrameMetadata.SupportsDirectMemory)
@@ -1307,7 +1305,7 @@ namespace RawBufferVisualizer.VisualizerDebuggee
         private static void BreakForLargeMats(
             Mat largeOpenCvMat,
             Emgu.CV.Mat largeEmguMat,
-            SampleBuffers.Frames.PointerFrame largePointerFrame,
+            PointerFrame largePointerFrame,
             bool shouldBreak)
         {
             var largeImageCollection = new List<object> { largeOpenCvMat, largeEmguMat };

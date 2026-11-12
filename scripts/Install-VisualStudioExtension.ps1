@@ -328,7 +328,6 @@ function Test-DebuggerVisualizerVsixInstall {
         'BitmapDebuggerVisualizerProvider',
         'OpenCvSharpMatDebuggerVisualizerProvider',
         'EmguCvMatDebuggerVisualizerProvider',
-        'PointerFrameDebuggerVisualizerProvider',
         'ImageCollectionDebuggerVisualizerProvider',
         'IDebuggerVisualizerProvider'
     )) {

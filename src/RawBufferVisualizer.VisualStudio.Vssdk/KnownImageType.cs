@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using RawBufferVisualizer.VisualStudio.Debugger;
 
 namespace RawBufferVisualizer.VisualStudio.Vssdk
 {
@@ -49,10 +50,7 @@ namespace RawBufferVisualizer.VisualStudio.Vssdk
                 || string.Equals(runtimeTypeName, "OpenCvSharp.Mat", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(runtimeTypeName, "Emgu.CV.Mat", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(runtimeTypeName, "System.Drawing.Bitmap", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(
-                    runtimeTypeName,
-                    "SampleBuffers.Frames.PointerFrame",
-                    StringComparison.OrdinalIgnoreCase);
+                || ImageVisualizerTypePolicy.UsesPointerFrameVisualizer(runtimeTypeName);
         }
 
         public static AutomaticKnownImageKind GetAutomaticCaptureKind(string typeName)

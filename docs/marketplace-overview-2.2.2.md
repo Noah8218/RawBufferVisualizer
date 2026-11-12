@@ -74,7 +74,7 @@ When an application object is image-like but ambiguous, **Connect Your Buffer** 
 
 ## Pointer And Lifetime Safety
 
-The viewer validates dimensions, stride, minimum row bytes, required span, format, valid bits, and arithmetic before rendering. OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` address used to read image bytes. PointerFrame and RawBufferView show a combined pointer/pixel address when both are identical.
+The viewer validates dimensions, stride, minimum row bytes, required span, format, valid bits, and arithmetic before rendering. OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` address used to read image bytes. Registered pointer buffers and RawBufferView show a combined pointer/pixel address when both are identical.
 
 Each open reads the bytes currently stored at the address. Reusing an address does not reuse stale image content. The debuggee must remain paused and keep live memory valid while the viewer reads it.
 

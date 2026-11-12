@@ -4,6 +4,12 @@ This file records user-visible Raw Buffer Visualizer changes. The Tool Window sh
 
 ## [Unreleased]
 
+## [2.2.5] - 2026-11-12
+
+- Opens supported images inside expanded objects and later collection pages through the same docked debugger visualizer.
+- Matches registered pointer-backed frames by their exact runtime type and assembly, and uses the same pixel reader for single images and collection items.
+- Checks the packaged debugger registration metadata against the verified build.
+
 ## [2.2.4] - 2026-11-02
 
 - Preserves the inspector's last user-selected open or closed state for narrow and wide layouts across reopening and IDE restarts.
@@ -87,9 +93,9 @@ Raw Buffer Visualizer `2.0.9` removes the debugger-RPC bottleneck reported for m
 
 ### Fixed
 
-- Routes pointer-backed OpenCvSharp Mat, Emgu CV Mat, PointerFrame, and RawBufferView payloads of 8 MiB or more through the existing checked live-process-memory path instead of serializing the complete image through repeated debugger RPC snapshot requests.
+- Routes pointer-backed OpenCvSharp Mat, Emgu CV Mat, pointer frames, and RawBufferView payloads of 8 MiB or more through the existing checked live-process-memory path instead of serializing the complete image through repeated debugger RPC snapshot requests.
 - Computes an inferred 2D buffer span as `stride * (height - 1) + minimum row bytes`, so a submatrix or ROI does not read nonexistent padding after its final row.
-- Applies the same final-row rule to registered Mat transfers, inferred PointerFrame/RawBufferView values, and Automatic Inspector's known registered-image capture.
+- Applies the same final-row rule to registered Mat transfers, inferred pointer frames and RawBufferView values, and Automatic Inspector's known registered-image capture.
 - Preserves explicit caller-supplied buffer lengths and continues to reject unreadable, released, partial, or overflowed memory ranges.
 - Refreshes an existing manual error row when the same expression fails again for the same technical reason, while generating a new report ID and retaining the latest diagnostic details.
 - Leaves the permanent pinned Tool Window open across consecutive registered visualizer invocations; temporary debugger-host lifetime remains owned by Visual Studio's `VisualizerTarget` contract.
@@ -157,7 +163,7 @@ Raw Buffer Visualizer `2.0.5` distinguishes an image object's native pointer fro
 ### Added
 
 - Shows the exact debugger object/expression name above each thumbnail, including collection roots such as `imageList[0]` and `imageDictionary[key]`.
-- Shows OpenCvSharp/Emgu `Ptr` separately from `Pixels` (`Data`/`DataPointer`), uses `Ptr / Pixels` for PointerFrame, `Buffer / Pixels` for `RawBufferView`, and records Bitmap `Scan0 / Pixels` as captured provenance.
+- Shows OpenCvSharp/Emgu `Ptr` separately from `Pixels` (`Data`/`DataPointer`), uses `Ptr / Pixels` for frames exposing `Ptr`, `Buffer / Pixels` for `RawBufferView`, and records Bitmap `Scan0 / Pixels` as captured provenance.
 - Adds separate **Copy pointer address** and **Copy pixel address** actions, with the same values in Descriptor details and structured workspace export.
 - Shows the process ID and `LIVE`, `CAPTURED`, `PREVIEW`, or `UNAVAILABLE` state when source-location information is available.
 
@@ -193,7 +199,7 @@ Raw Buffer Visualizer `2.0.4` puts the full-viewer reset where accumulated image
 
 ## [2.0.3] - 2026-08-24
 
-Raw Buffer Visualizer `2.0.3` adds a direct debugger-visualizer path for concurrent image dictionaries and repairs the first registered `PointerFrame` handoff when the docked viewer has not been opened yet.
+Raw Buffer Visualizer `2.0.3` adds a direct debugger-visualizer path for concurrent image dictionaries and repairs the first registered pointer-frame handoff when the docked viewer has not been opened yet.
 
 ### Added
 
@@ -202,7 +208,7 @@ Raw Buffer Visualizer `2.0.3` adds a direct debugger-visualizer path for concurr
 
 ### Fixed
 
-- Preloads the lightweight VSSDK package when debugging begins and passively arms its handoff listener before the first visualizer click, preventing the first registered `PointerFrame` handoff from re-entering the package while it is loading.
+- Preloads the lightweight VSSDK package when debugging begins and passively arms its handoff listener before the first visualizer click, preventing the first registered pointer-frame handoff from re-entering the package while it is loading.
 - Corrected installed-package validation to inspect `RawBufferVisualizer.VisualStudio.Vssdk.dll` and its matching `.pkgdef` after the 17.9 compatibility split.
 
 ### Compatibility

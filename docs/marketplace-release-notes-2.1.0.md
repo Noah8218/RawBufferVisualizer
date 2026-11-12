@@ -23,7 +23,7 @@ Version `2.1.0` includes the `2.0.9` native-image transfer fixes and the subsequ
 
 ## Included from 2.0.9
 
-- Pointer-backed Mat, PointerFrame and RawBufferView images of 8 MiB or larger use checked live process-memory reads instead of repeated full-image debugger RPC transfer.
+- Pointer-backed Mat, pointer-frame and RawBufferView images of 8 MiB or larger use checked live process-memory reads instead of repeated full-image debugger RPC transfer.
 - Inferred ROI spans end at the final pixel row without nonexistent trailing padding. Explicit lengths and fail-closed memory validation remain authoritative.
 - Matching repeated failures refresh one error row with current details and a new report ID.
 - Consecutive registered visualizer opens preserve the pinned docked Tool Window.

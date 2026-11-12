@@ -92,10 +92,6 @@ function Assert-DebuggerVisualizerTargetTypes {
                 if ($targetType.IndexOf(',') -lt 0) {
                     throw "Debugger visualizer targetType must include an assembly name: '$targetType'"
                 }
-
-                if ($targetType -like 'SampleBuffers.Frames.PointerFrame,*' -and $targetType -notlike '*Version=*') {
-                    throw "PointerFrame targetType must be fully assembly-qualified: '$targetType'"
-                }
             }
         }
     }
@@ -169,22 +165,24 @@ function Assert-ModernDebuggerVisualizerProvidersPresent {
     param([string]$ExtensionJsonPath)
 
     $extensionJson = Get-Content -Raw -LiteralPath $ExtensionJsonPath
-    foreach ($provider in @(
+    $providers = @(($extensionJson | ConvertFrom-Json).parts |
+        Where-Object contract -eq 'Microsoft.VisualStudio.RpcContracts.DebuggerVisualizers.IDebuggerVisualizerProvider' |
+        ForEach-Object { $_.serviceMoniker.name })
+    $expectedProviders = @(
         'RawBufferSnapshotDebuggerVisualizerProvider',
         'RawBufferViewDebuggerVisualizerProvider',
         'BitmapDebuggerVisualizerProvider',
         'OpenCvSharpMatDebuggerVisualizerProvider',
         'EmguCvMatDebuggerVisualizerProvider',
-        'PointerFrameDebuggerVisualizerProvider',
         'ImageCollectionDebuggerVisualizerProvider'
-    )) {
-        if ($extensionJson -notmatch [regex]::Escape($provider)) {
+    )
+    if ($providers.Count -ne $expectedProviders.Count) {
+        throw "Unexpected set of static debugger visualizers in $ExtensionJsonPath"
+    }
+    foreach ($provider in $expectedProviders) {
+        if ($providers -cnotcontains "RawBufferVisualizer.VisualStudio.Extensibility.$provider") {
             throw "Required Marketplace debugger visualizer is missing: $provider"
         }
-    }
-
-    if ($extensionJson -notmatch [regex]::Escape('IDebuggerVisualizerProvider')) {
-        throw 'Marketplace package contains no debugger visualizer contract.'
     }
 
     foreach ($targetType in @(
@@ -901,8 +899,16 @@ if ([string]$manifest.PackageManifest.Metadata.Identity.Id -cne $sourceId -or
     [string]$packagedManifest.PackageManifest.Metadata.Identity.Id -cne $sourceId) {
     throw 'The source, generated, and packaged VSIX identities must match.'
 }
-foreach ($registration in @('extension.vsixmanifest', 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef')) {
-    $builtRegistrationHash = (Get-FileHash -LiteralPath (Join-Path $buildOutput $registration) -Algorithm SHA256).Hash
+$registrationFiles = [ordered]@{
+    'extension.vsixmanifest' = $manifestPath
+    'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef' = Join-Path $buildOutput 'RawBufferVisualizer.VisualStudio.Vssdk.pkgdef'
+    '.vsextension/extension.json' = $extensionJsonPath
+}
+foreach ($registration in $registrationFiles.Keys) {
+    if (@($entryNames -eq $registration).Count -ne 1) {
+        throw "Expected exactly one packaged registration: $registration"
+    }
+    $builtRegistrationHash = (Get-FileHash -LiteralPath $registrationFiles[$registration] -Algorithm SHA256).Hash
     $packagedRegistrationHash = Get-VsixEntrySha256 -Path $vsixPath -EntryName $registration
     if ($builtRegistrationHash -cne $packagedRegistrationHash) {
         throw "Packaged registration differs from the checked build output: $registration"

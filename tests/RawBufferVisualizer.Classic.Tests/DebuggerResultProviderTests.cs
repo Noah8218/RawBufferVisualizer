@@ -30,14 +30,21 @@ internal static class DebuggerResultProviderTests
             new[] { "Emgu.CV.Mat", "Emgu.CV", "EmguCvMatVisualizerObjectSource" },
             new[] { "Emgu.CV.Mat", "Emgu.CV.World", "EmguCvMatVisualizerObjectSource" },
             new[] { "Emgu.CV.Mat", "Emgu.CV.World.NetStandard", "EmguCvMatVisualizerObjectSource" },
-            new[] { "Emgu.CV.Mat", "Emgu.CV.Platform.NetStandard", "EmguCvMatVisualizerObjectSource" },
-            new[] { "SampleBuffers.Frames.PointerFrame", "SampleBuffers.Frames", "PointerFrameVisualizerObjectSource" }
+            new[] { "Emgu.CV.Mat", "Emgu.CV.Platform.NetStandard", "EmguCvMatVisualizerObjectSource" }
         };
         var registered = ImageVisualizerTypePolicy.Registrations.Select(item => (item.TypeName, item.AssemblyName, item.ObjectSource)).ToArray();
         var expected = new HashSet<(string, string, string)>(contracts.Select(item => (item[0], item[1], item[2])));
         Require(registered.Length == expected.Count && expected.SetEquals(registered),
             "Every registered type/assembly must have a routing case. Keep established identities when updating the matrix.");
-        foreach (var contract in contracts)
+        var pointer = typeof(RawBufferVisualizer.VisualizerDebuggee.PointerFrame);
+        string name = pointer.FullName!, assembly = pointer.Assembly.GetName().Name!;
+        var pointerContract = new[] { name, assembly, "PointerFrameVisualizerObjectSource" };
+        Require(ImageVisualizerTypePolicy.UsesPointerFrameVisualizer(name.ToUpperInvariant()), "DTE must recognize the registered display name regardless of casing.");
+        Require(ImageVisualizerTypePolicy.GetObjectSource(name, assembly.ToLowerInvariant(), true) == null
+            && ImageVisualizerTypePolicy.GetObjectSource(name.ToLowerInvariant(), assembly, true) == null
+            && ImageVisualizerTypePolicy.GetObjectSource(name, null, true) == null,
+            "An exact, case-sensitive type and assembly pair is required even with legacy name matching.");
+        foreach (var contract in contracts.Concat(new[] { pointerContract }))
         {
             var image = Activator.CreateInstance(CreateType(contract[0], contract[1]))!;
             foreach (var entry in new[] { "root", "children", "items" })
@@ -64,7 +71,7 @@ internal static class DebuggerResultProviderTests
         VerifyPreservationAndLifetime();
         VerifyFailuresAndCancellation();
         VerifyBatchIsolation();
-        Console.WriteLine("PASS: " + _checks + " debugger result checks; all " + registered.Length + " registered identities, root/initial-child/paged-item callbacks, typed and object-valued collections, arbitrary owners, preservation and recovery.");
+        Console.WriteLine("PASS: " + _checks + " debugger result checks; " + registered.Length + " named registrations and the fingerprinted sample, root/initial-child/paged-item callbacks, typed and object-valued collections, arbitrary owners, preservation and recovery.");
         Console.WriteLine("Boundary: linked production provider with deterministic engine doubles and metadata-only image fixtures; real SDK build/loader and installed-IDE interaction are separate checks.");
     }
 

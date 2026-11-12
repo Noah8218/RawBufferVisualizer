@@ -15,7 +15,6 @@
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\BufferDiagnosisCandidateItem.cs" Link="BufferDiagnosisCandidateItem.cs" />
     <Compile Include="..\..\src\Shared.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <Compile Include="..\..\src\RawBufferVisualizer.VisualStudio.Vssdk\AutomaticInspectionStatusViewModel.cs" Link="AutomaticInspectionStatusViewModel.cs" />
-    <ProjectReference Include="..\..\samples\SampleBuffers.Frames.TestFixture\SampleBuffers.Frames.TestFixture.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.BitmapAdapter\RawBufferVisualizer.BitmapAdapter.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.OpenCvSharpAdapter\RawBufferVisualizer.OpenCvSharpAdapter.csproj" />

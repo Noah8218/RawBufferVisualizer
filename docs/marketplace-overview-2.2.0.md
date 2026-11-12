@@ -29,7 +29,7 @@ Images accumulate in the list. **Clear all** removes the complete viewer list an
 | `System.Drawing.Bitmap` | 8-bit indexed, 24-bit RGB storage, and common 32-bit RGB/ARGB/PARGB formats |
 | OpenCvSharp `Mat` | `CV_8UC1`, `CV_8UC3`, `CV_8UC4`, `CV_16UC1`, `CV_32FC1`, `CV_32SC1` |
 | Emgu CV `Mat` | `Cv8U` C1/C3/C4, `Cv16U` C1, `Cv32F` C1, `Cv32S` C1 |
-| `PointerFrame` and pointer-backed frames | Direct visualization when the pointer, dimensions, stride, format, and available byte length can be validated |
+| Registered pointer-backed frames | Direct visualization when the pointer, dimensions, stride, format, and available byte length can be validated |
 | `RawBufferSnapshot` | Managed snapshots from byte, unsigned-16, float-32, signed-int-32, or pointer data |
 | `RawBufferView` | Pointer plus explicit width, height, stride, format, length, and lifetime metadata |
 | Existing application frame wrappers | Automatic Inspector recognizes safe debugger-visible layouts; ambiguous layouts can be saved once through Connect Your Buffer |
@@ -54,7 +54,7 @@ When an application object is image-like but ambiguous, **Connect Your Buffer** 
 
 ## Pointer And Lifetime Safety
 
-The viewer validates dimensions, stride, minimum row bytes, required span, format, valid bits, and arithmetic before rendering. OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` address used to read image bytes. PointerFrame and RawBufferView show a combined pointer/pixel address when both are identical.
+The viewer validates dimensions, stride, minimum row bytes, required span, format, valid bits, and arithmetic before rendering. OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` address used to read image bytes. Registered pointer buffers and RawBufferView show a combined pointer/pixel address when both are identical.
 
 Each open reads the bytes currently stored at the address. Reusing an address does not reuse stale image content. The debuggee must remain paused and keep live memory valid while the viewer reads it.
 

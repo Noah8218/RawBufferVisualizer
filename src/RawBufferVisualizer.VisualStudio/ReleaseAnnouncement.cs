@@ -7,18 +7,18 @@ namespace RawBufferVisualizer.VisualStudio
 {
     public static class ReleaseAnnouncementCatalog
     {
-        public const string CurrentVersion = "2.2.4";
+        public const string CurrentVersion = "2.2.5";
         public const string ReleaseNotesUrl =
-            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/CHANGELOG.md#224";
+            "https://github.com/Noah8218/RawBufferVisualizer/blob/main/docs/marketplace-release-notes-2.2.5.md";
 
         public const string HighlightEnvironmentCheck =
-            "Fix debugger visualizer loading for images and collections";
+            "Open supported images in expanded debugger objects";
 
         public const string HighlightColdPreview =
-            "Image collections prefer Raw Buffer; non-image lists keep their usual visualizer";
+            "Open registered pointer-backed frames from Watch and Locals";
 
         public const string HighlightPanelToggles =
-            "Measure horizontal and vertical pixel distances on full-resolution images";
+            "Inspect packed and padded rows in single frames and collections";
 
         public static bool ShouldShow(string extensionVersion, string lastSeenVersion)
         {

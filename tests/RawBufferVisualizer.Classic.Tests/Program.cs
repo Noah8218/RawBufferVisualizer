@@ -278,9 +278,15 @@ internal static class Program
             Marshal.Copy(padded, 0, address, padded.Length);
             var view = new RawBufferView { Buffer = address, BufferLength = padded.Length, Width = 3, Height = 2, Stride = 4,
                 PixelFormat = RawPixelFormat.Mono8, BitDepth = 8, Channels = 1 };
-            var pointer = new SampleBuffers.Frames.PointerFrame(address, padded.Length, 3, 2, 4, 1);
-            var packed = new SampleBuffers.Frames.PointerFrame(address, 6, 2, 2, 0, 0) { PixelFormat = "Mono12PackedLsb" };
-            var nonZeroArray = Array.CreateInstance(typeof(SampleBuffers.Frames.PointerFrame), new[] { 1 }, new[] { 3 });
+            var pointer = new RawBufferVisualizer.VisualizerDebuggee.PointerFrame
+            {
+                DataPointer = address, ByteLength = padded.Length, Width = 3, Height = 2, Pitch = 4, BytesPerPixel = 1
+            };
+            var packed = new RawBufferVisualizer.VisualizerDebuggee.PointerFrame
+            {
+                DataPointer = address, ByteLength = 6, Width = 2, Height = 2, Format = "Mono12PackedLsb"
+            };
+            var nonZeroArray = Array.CreateInstance(pointer.GetType(), new[] { 1 }, new[] { 3 });
             nonZeroArray.SetValue(pointer, 3);
 
             using (var bitmap = new Bitmap(4, 2, PixelFormat.Format24bppRgb))

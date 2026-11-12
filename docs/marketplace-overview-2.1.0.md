@@ -27,7 +27,7 @@ Version `2.1.0` brings together the native-image transfer fixes from `2.0.9` and
 
 ### Included fixes from 2.0.9
 
-- Pointer-backed OpenCvSharp Mat, Emgu CV Mat, PointerFrame, and RawBufferView payloads of **8 MiB or larger** use checked live process-memory reads instead of repeatedly transferring the complete image through debugger RPC. Smaller pointer-backed buffers and non-pointer snapshots retain chunked transfer.
+- Pointer-backed OpenCvSharp Mat, Emgu CV Mat, pointer frames, and RawBufferView payloads of **8 MiB or larger** use checked live process-memory reads instead of repeatedly transferring the complete image through debugger RPC. Smaller pointer-backed buffers and non-pointer snapshots retain chunked transfer.
 - Inferred ROI and submatrix spans end at the final pixel row, avoiding nonexistent trailing stride padding. Explicit supplied lengths remain authoritative, and unreadable, partial, released, or overflowed ranges fail closed.
 - Reopening the same expression after the same technical failure refreshes its existing error row with current details and a new report ID instead of adding duplicate rows.
 - Consecutive registered visualizer opens keep the pinned docked Tool Window open and in place.
@@ -52,7 +52,7 @@ Images accumulate in the list. **Clear all** removes the complete viewer list an
 | `System.Drawing.Bitmap` | 8-bit indexed, 24-bit RGB storage, and common 32-bit RGB/ARGB/PARGB formats |
 | OpenCvSharp `Mat` | `CV_8UC1`, `CV_8UC3`, `CV_8UC4`, `CV_16UC1`, `CV_32FC1`, `CV_32SC1` |
 | Emgu CV `Mat` | `Cv8U` C1/C3/C4, `Cv16U` C1, `Cv32F` C1, `Cv32S` C1 |
-| `PointerFrame` and pointer-backed frames | Direct visualization when the pointer, dimensions, stride, format, and available byte length can be validated |
+| Registered pointer-backed frames | Direct visualization when the pointer, dimensions, stride, format, and available byte length can be validated |
 | `RawBufferSnapshot` | Managed snapshots from byte, unsigned-16, float-32, signed-int-32, or pointer data |
 | `RawBufferView` | Pointer plus explicit width, height, stride, format, length, and lifetime metadata |
 | Existing application frame wrappers | Automatic Inspector recognizes safe debugger-visible layouts; ambiguous layouts can be saved once through Connect Your Buffer |
@@ -77,7 +77,7 @@ When an application object is image-like but ambiguous, **Connect Your Buffer** 
 
 ## Pointer And Lifetime Safety
 
-The viewer validates dimensions, stride, minimum row bytes, required span, format, valid bits, and arithmetic before rendering. OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` address used to read image bytes. PointerFrame and RawBufferView show a combined pointer/pixel address when both are identical.
+The viewer validates dimensions, stride, minimum row bytes, required span, format, valid bits, and arithmetic before rendering. OpenCvSharp and Emgu rows distinguish the native object `Ptr` from the `Pixels` address used to read image bytes. Registered pointer buffers and RawBufferView show a combined pointer/pixel address when both are identical.
 
 Each open reads the bytes currently stored at the address. Reusing an address does not reuse stale image content. The debuggee must remain paused and keep live memory valid while the viewer reads it.
 

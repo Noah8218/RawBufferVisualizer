@@ -21,7 +21,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\SampleBuffers.Frames.TestFixture\SampleBuffers.Frames.TestFixture.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Core\RawBufferVisualizer.Core.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.Sdk\RawBufferVisualizer.Sdk.csproj" />
     <ProjectReference Include="..\..\src\RawBufferVisualizer.VisualStudio.ObjectSource\RawBufferVisualizer.VisualStudio.ObjectSource.csproj" />

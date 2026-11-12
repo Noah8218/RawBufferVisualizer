@@ -11,9 +11,9 @@
     <IntermediateOutputPath>$(BaseIntermediateOutputPath)$(Configuration)\</IntermediateOutputPath>
     <CreatePkgDefAssemblyToProcess>$(BaseOutputPath)$(Configuration)\$(TargetFramework)\$(MSBuildProjectName).dll</CreatePkgDefAssemblyToProcess>
     <TargetVsixContainerName>RawBufferVisualizer.VisualStudio.Extensibility.vsix</TargetVsixContainerName>
-    <AssemblyVersion>2.2.4.0</AssemblyVersion>
-    <FileVersion>2.2.4.0</FileVersion>
-    <Version>2.2.4</Version>
+    <AssemblyVersion>2.2.5.0</AssemblyVersion>
+    <FileVersion>2.2.5.0</FileVersion>
+    <Version>2.2.5</Version>
   </PropertyGroup>
 
   <ItemGroup>
@@ -24,6 +24,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="..\Shared.Debugger\ImageVisualizerTypePolicy.cs" Link="ImageVisualizerTypePolicy.cs" />
     <VSCTCompile Include="RawBufferVisualizerCommands.vsct">
       <ResourceName>Menus.ctmenu</ResourceName>
     </VSCTCompile>

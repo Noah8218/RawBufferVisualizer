@@ -63,11 +63,6 @@ using RawBufferVisualizer.Core;
     typeof(EmguCvMatVisualizerObjectSource),
     TargetTypeName = "Emgu.CV.Mat, Emgu.CV.Platform.NetStandard",
     Description = "Raw Buffer Visualizer")]
-[assembly: DebuggerVisualizer(
-    typeof(RawBufferVisualizer.VisualStudio.Classic.RawBufferClassicDebuggerVisualizer),
-    typeof(PointerFrameVisualizerObjectSource),
-    TargetTypeName = "SampleBuffers.Frames.PointerFrame, SampleBuffers.Frames, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
-    Description = "Raw Buffer Visualizer")]
 #endif
 
 namespace RawBufferVisualizer.VisualStudio.Classic

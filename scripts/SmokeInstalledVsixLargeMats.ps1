@@ -846,7 +846,7 @@ try {
 
     $openCvResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largeOpenCvMat" "OpenCvSharp.Mat" 1 37 $openCvScreenshotPath
     $emguResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largeEmguMat" "Emgu.CV.Mat" 2 173 $finalScreenshotPath
-    $pointerFrameResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largePointerFrame" "SampleBuffers.Frames.PointerFrame" 3 37 $finalScreenshotPath
+    $pointerFrameResult = Invoke-LargeMatVisualizer $visualStudio $mainHandle "largePointerFrame" "RawBufferVisualizer.VisualizerDebuggee.PointerFrame" 3 37 $finalScreenshotPath
 
     $session = Wait-Until "docked two-image session" {
         if (-not (Test-Path -LiteralPath $sessionPath)) {
@@ -863,7 +863,7 @@ try {
     } 60
 
     $documents = @($session.documents)
-    foreach ($sourceType in @("OpenCvSharp.Mat", "Emgu.CV.Mat", "SampleBuffers.Frames.PointerFrame")) {
+    foreach ($sourceType in @("OpenCvSharp.Mat", "Emgu.CV.Mat", "RawBufferVisualizer.VisualizerDebuggee.PointerFrame")) {
         $document = $documents | Where-Object { $_.sourceType -eq $sourceType } | Select-Object -First 1
         if (-not $document) {
             throw "Session did not preserve source type: $sourceType"
